@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.09.6': [
+        'Community route names use Johannesburg when the pill or the open list can hold it on one line, and JHB when it would wrap. Opening a room no longer downloads that room\'s posts a second time, and reactions are read per visible message instead of the whole reactions tree. Unread checks stay at a minute on Community and slow to three minutes on the other tabs. Public names refresh every 10 minutes. Alert photos upload to Cloudflare R2 from Upload a photo on the channel poster, and from Insert Media. The file is served by the community worker. Deploy that worker so the nexttrain-alert-images bucket is created and the upload route is live. A photo address is https://nexttrain-community.enock.workers.dev/alerts/. Campus networks that block workers.dev will not show that photo until a custom host is added. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.09.5': [
         'Community Monitor pages the full message log. Earlier messages loads the previous 80, and the phone still listens to the newest 80. The hourly job no longer deletes older messages. Reports sits between Group chats and Reviews. A report shows who sent it and who wrote the message. Safe leaves the message up and clears the report. Hide message and Shadow ban author stay on the card. Account cards show Google or Email at the top right. Region, sign-in, and route use the in-app dropdown. Lookup and the user sheet use grouped rows. No commuter What\'s New. forceShow stays false.',
     ],

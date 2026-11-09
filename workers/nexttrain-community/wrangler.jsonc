@@ -22,5 +22,11 @@
   },
   "triggers": {
     "crons": ["*/5 * * * *", "0 * * * *"]
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "ALERT_IMAGES",
+      "bucket_name": "nexttrain-alert-images"
+    }
+  ]
 }

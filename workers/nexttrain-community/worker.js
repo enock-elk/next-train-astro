@@ -1156,6 +1156,71 @@ function newId(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const ALERT_IMAGE_MAX = 4 * 1024 * 1024;
+
+function sniffAlertImage(bytes) {
+    if (!bytes || bytes.length < 12) return null;
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { ext: 'jpg', type: 'image/jpeg' };
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return { ext: 'png', type: 'image/png' };
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return { ext: 'gif', type: 'image/gif' };
+    if (
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+        && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) {
+        return { ext: 'webp', type: 'image/webp' };
+    }
+    return null;
+}
+
+async function handleAlertImageUpload(request, env) {
+    if (!env.ALERT_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Alert image storage is not ready yet.' });
+    }
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return json(env, request, 403, { ok: false, error: 'Operators only.' });
+    }
+    const declared = Number(request.headers.get('Content-Length') || 0);
+    if (declared > ALERT_IMAGE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'Photo is too large. Max 4MB.' });
+    }
+    const buf = new Uint8Array(await request.arrayBuffer());
+    if (!buf.length || buf.length > ALERT_IMAGE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'Photo is too large. Max 4MB.' });
+    }
+    const sniff = sniffAlertImage(buf);
+    if (!sniff) {
+        return json(env, request, 400, { ok: false, error: 'Use a JPEG, PNG, GIF, or WebP photo.' });
+    }
+    const file = `${newId('img')}.${sniff.ext}`;
+    await env.ALERT_IMAGES.put(`alerts/${file}`, buf, {
+        httpMetadata: { contentType: sniff.type },
+    });
+    const origin = new URL(request.url).origin;
+    return json(env, request, 200, { ok: true, url: `${origin}/alerts/${file}` });
+}
+
+async function handleAlertImageGet(request, env, file) {
+    if (!env.ALERT_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Alert image storage is not ready yet.' });
+    }
+    const obj = await env.ALERT_IMAGES.get(`alerts/${file}`);
+    if (!obj) return json(env, request, 404, { ok: false, error: 'Not found' });
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return new Response(obj.body, { status: 200, headers });
+}
+
 async function handlePost(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -1477,6 +1542,13 @@ export default {
         const url = new URL(request.url);
         if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
             return json(env, request, 200, { ok: true, service: 'nexttrain-community' });
+        }
+        if (request.method === 'POST' && url.pathname === '/alerts/image') {
+            return handleAlertImageUpload(request, env);
+        }
+        if (request.method === 'GET') {
+            const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+            if (alertFile) return handleAlertImageGet(request, env, alertFile[1]);
         }
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);

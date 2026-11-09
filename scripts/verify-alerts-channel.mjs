@@ -126,6 +126,15 @@ const now = 1_700_000_000_000;
     assert(sanitizeAlertImageUrl('/images/alerts/../icons/x.png') === null, 'traversal blocked');
     assert(sanitizeAlertImageUrl('https://evil.example/images/alerts/x.png') === '/images/alerts/x.png', 'host stripped, path kept if alerts');
     assert(sanitizeAlertImageUrl('https://evil.example/etc/passwd') === null, 'foreign path blocked');
+    assert(sanitizeAlertImageUrl('https://evil.example/alerts/x.png') === null, 'foreign alert host blocked');
+    assert(
+        sanitizeAlertImageUrl('https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg') === 'https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg',
+        'community worker poster URL kept'
+    );
+    assert(
+        sanitizeAlertImageUrl('https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg?x=1') === 'https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg',
+        'community worker poster query stripped'
+    );
     const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'].map((id) => `/images/alerts/${id}.png`);
     const urls = collectNoticeImageUrls({
         imageUrl: '/images/alerts/legacy.png',

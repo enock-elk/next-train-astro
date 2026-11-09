@@ -125,7 +125,10 @@ export function pickAutoOpenNotice(notices) {
 
 export function resolveAlertImageSrc(path) {
     const clean = sanitizeAlertImageUrl(path);
-    if (clean) return withBase(clean.replace(/^\//, ''));
+    if (clean) {
+        if (/^https:\/\//i.test(clean)) return clean;
+        return withBase(clean.replace(/^\//, ''));
+    }
     return sanitizeInlineAlertImageUrl(path) || '';
 }
 

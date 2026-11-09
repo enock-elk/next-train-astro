@@ -40,4 +40,5 @@ jobs:
             echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set. Worker cron will not update."
             exit 0
           fi
+          npx --yes wrangler r2 bucket create nexttrain-alert-images || echo "Alert image bucket already exists, or this token cannot create R2 yet."
           npx --yes wrangler deploy

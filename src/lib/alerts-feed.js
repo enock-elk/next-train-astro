@@ -238,6 +238,13 @@ export function pickAutoOpenNotice(notices, isSeen = () => false) {
     return candidates[0] || null;
 }
 
+/** Public poster files served from the community worker's R2 bucket. */
+export function isNextTrainAlertImageHost(hostname) {
+    const host = String(hostname || '').toLowerCase();
+    return host === 'nexttrain-community.enock.workers.dev'
+        || /^nexttrain-community\.[a-z0-9-]+\.workers\.dev$/.test(host);
+}
+
 export function sanitizeAlertImageUrl(url) {
     if (!url || typeof url !== 'string') return null;
     let path = url.trim();
@@ -245,7 +252,17 @@ export function sanitizeAlertImageUrl(url) {
     try {
         if (/^https?:\/\//i.test(path)) {
             const u = new URL(path);
-            path = u.pathname || '';
+            if (u.username || u.password) return null;
+            const file = u.pathname || '';
+            if (
+                u.protocol === 'https:'
+                && isNextTrainAlertImageHost(u.hostname)
+                && /^\/alerts\/[A-Za-z0-9._-]+$/.test(file)
+                && !file.includes('..')
+            ) {
+                return `${u.origin}${file}`;
+            }
+            path = file;
         }
     } catch {
         return null;

@@ -111,6 +111,11 @@ assert.match(community, /admin_state\/\$\{encodeURIComponent\(acct\.uid\)\}\/com
 assert.match(community, /\.\.\.replyToPayload/, 'quote-reply top-level posts keep their quote when held or published');
 assert.match(worker, /rtdbUpdate\(env, \{/);
 assert.match(worker, /community_activity\/\$\{routeId\}\/\$\{postId\}/);
+assert.match(worker, /handleAlertImageUpload/, 'operators can upload an alert photo');
+assert.match(worker, /ADMIN_EMAILS\.has/, 'alert photo upload stays on the operator allowlist');
+assert.match(worker, /env\.ALERT_IMAGES/, 'alert photos use the R2 binding');
+const wrangler = await readFile(new URL('../workers/nexttrain-community/wrangler.jsonc', import.meta.url), 'utf8');
+assert.match(wrangler, /nexttrain-alert-images/, 'alert photos use the named R2 bucket');
 assert.match(worker, /isSafeRtdbKey\(routeId\)/);
 assert.match(worker, /isSafeRtdbKey\(postId\)/);
 assert.match(admin, /\[`community_activity\/\$\{routeId\}\//, 'admin approval indexes approved messages');
@@ -128,7 +133,11 @@ assert.match(community, /communityLastRoom_/, 'last community room is remembered
 assert.match(community, /syncReplyDraftForRoute/, 'quote draft is dropped when the room does not match');
 assert.match(community, /getLastCommunityRoom\(\)/, 'reopening Community restores the last room, not only the pinned route');
 assert.match(community, /post_reactions\/\$\{encodeURIComponent\(postId\)\}\.json/, 'reaction fetch falls back to per-post reads');
+assert.doesNotMatch(community, /post_reactions\.json/, 'reactions are not downloaded as one growing node');
 assert.match(community, /startRealtimeReactions/, 'reactions listen live so other users see them');
+assert.match(community, /syncVisibleReactionListeners/, 'reactions listen per visible post');
+assert.match(community, /applyFittedLabel\(/, 'community route names expand only when the line fits');
+assert.match(communityView, /id="community-route-display" class="min-w-0 flex-1/, 'route name is measured against the pill width');
 assert.match(community, /community-room-unread/, 'route list marks which room has unread');
 assert.match(community, /unread on \$\{roomNames/, 'Community badge names the unread room');
 assert.match(community, /paintCommunityQuotaHint/, 'remaining send quota is painted above the composer');

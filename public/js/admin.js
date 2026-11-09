@@ -2029,6 +2029,27 @@ const Admin = {
         };
     },
 
+    uploadAlertImage: async (file) => {
+        const prepared = await Admin.prepareSafeUpload(file);
+        if (prepared.isPdf) throw new Error('Choose a photo, not a PDF.');
+        if (file.size > 4 * 1024 * 1024) throw new Error('Photo is too large. Max 4MB.');
+        const token = await Admin.getAuthKey();
+        if (!token) throw new Error('Sign in again to upload a photo.');
+        const base = (typeof window.COMMUNITY_WORKER_URL === 'string' && window.COMMUNITY_WORKER_URL)
+            || 'https://nexttrain-community.enock.workers.dev';
+        const res = await fetch(`${base.replace(/\/$/, '')}/alerts/image`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': prepared.metadata.contentType || 'application/octet-stream',
+            },
+            body: file,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.url) throw new Error(data.error || 'Could not upload that photo.');
+        return data.url;
+    },
+
     inlineAttachmentHtml: function(url, isPdf) {
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
             ? window.sanitizeAttachmentDisplayUrl(url)
@@ -16852,7 +16873,11 @@ const Admin = {
         const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
             ? notice.imageUrls
             : (notice?.imageUrl ? [notice.imageUrl] : []);
-        return raw.filter((u) => typeof u === 'string' && u.startsWith('/images/alerts/')).slice(0, 10);
+        return raw.filter((u) => {
+            if (typeof u !== 'string') return false;
+            if (u.startsWith('/images/alerts/')) return true;
+            return /^https:\/\/nexttrain-community(?:\.[a-z0-9-]+)?\.workers\.dev\/alerts\/[A-Za-z0-9._-]+$/i.test(u.split('?')[0]);
+        }).slice(0, 10);
     },
 
     sanitizeAlertPosterPath: (url) => {
@@ -16937,7 +16962,7 @@ const Admin = {
         };
         if (selectedEl) {
             selectedEl.innerHTML = selected.length
-                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${esc(labelFor(p))}<span aria-hidden="true">×</span></button>`).join('')
+                ? selected.map((p) => `<button type="button" data-remove-poster="${esc(p)}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${esc(labelFor(p))}<span aria-hidden="true">×</span></button>`).join('')
                 : '<span class="text-xs text-gray-400">No poster yet — pick one below</span>';
             selectedEl.querySelectorAll('[data-remove-poster]').forEach((btn) => {
                 btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
@@ -16978,7 +17003,11 @@ const Admin = {
             });
         }
         if (preview) {
-            const srcFor = (path) => (typeof window.withBase === 'function' ? window.withBase(path) : path);
+            const srcFor = (path) => (
+                /^https:\/\//i.test(path)
+                    ? path
+                    : (typeof window.withBase === 'function' ? window.withBase(path) : path)
+            );
             preview.innerHTML = selected.map((p) => (
                 `<img src="${srcFor(p)}" alt="${esc(labelFor(p))}" class="mt-2 first:mt-0 w-full max-h-36 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
             )).join('');
@@ -17811,6 +17840,8 @@ const Admin = {
                             <svg id="alert-poster-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
                         <ul id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-64 overflow-y-auto custom-scrollbar text-left"></ul>
+                        <label for="alert-poster-upload" class="mt-2 flex items-center justify-center min-h-[48px] px-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500">Upload a photo</label>
+                        <input type="file" id="alert-poster-upload" accept="image/jpeg,image/png,image/webp,image/gif" class="sr-only">
                     </div>
                 </div>
                 </div>
@@ -18926,6 +18957,23 @@ const Admin = {
                         return;
                     }
 
+                    if (!prepared.isPdf) {
+                        if (typeof showToast === 'function') showToast('Uploading photo…', 'info', 30000);
+                        try {
+                            const url = await Admin.uploadAlertImage(file);
+                            if (!editor || !Admin.placeComposerAttachment(editor, url, false, savedRange)) {
+                                if (typeof showToast === 'function') showToast('Failed to insert attachment link', 'error');
+                            } else {
+                                Admin._savedRange = null;
+                                if (typeof showToast === 'function') showToast('Photo inserted.', 'success');
+                            }
+                        } catch (err) {
+                            if (typeof showToast === 'function') showToast(err.message || 'Could not upload that photo.', 'error');
+                        }
+                        this.value = '';
+                        return;
+                    }
+
                     if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
                         if (typeof showToast === 'function') showToast("Storage SDK not ready. Check connection.", "error");
                         this.value = '';
@@ -19163,6 +19211,23 @@ const Admin = {
             e.target.value = '';
             Admin.addAlertPoster(path);
         });
+        const posterUpload = document.getElementById('alert-poster-upload');
+        if (posterUpload && posterUpload.dataset.bound !== '1') {
+            posterUpload.dataset.bound = '1';
+            posterUpload.addEventListener('change', async function () {
+                const file = this.files && this.files[0];
+                this.value = '';
+                if (!file) return;
+                try {
+                    if (typeof showToast === 'function') showToast('Uploading photo…', 'info', 30000);
+                    const url = await Admin.uploadAlertImage(file);
+                    Admin.addAlertPoster(url);
+                    if (typeof showToast === 'function') showToast('Photo added to this alert.', 'success');
+                } catch (err) {
+                    if (typeof showToast === 'function') showToast(err.message || 'Could not upload that photo.', 'error');
+                }
+            });
+        }
 
         if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
 

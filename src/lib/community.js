@@ -12,7 +12,7 @@
  */
 import { APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES } from './config.js';
 import { formatAccountDisplayName } from './display-name.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
@@ -53,7 +53,7 @@ import {
 } from './community-policy.js';
 
 const BODY_MAX = COMMUNITY_BODY_MAX;
-/** Listeners and the hourly trim share this count. Bytes stay bounded without a 24h wipe. */
+/** Phone listeners share this count. The database keeps older messages for Community Monitor. */
 const FEED_LIMIT = COMMUNITY_BUCKET_DEPTH;
 const RATE_KEY = 'communityPostRateV1';
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
@@ -66,11 +66,21 @@ let communitySendMax = AUTH_GLOBAL_MAX;
 let postsUnsub = null;
 /** @type {string | null} */
 let postsListenRouteId = null;
+/** True once the live post listener has delivered a snapshot for the open room. */
+let postsSnapSeen = false;
+/** Resolves when that snapshot arrives, or false after a short wait. */
+let postsReady = Promise.resolve(false);
 /** @type {(() => void) | null} */
 let reactionsUnsub = null;
 /** @type {string | null} */
 let reactionsListenRouteId = null;
+/** @type {(() => void)[]} */
+let reactionPostUnsubs = [];
+let reactionPostKey = '';
 let reactionsPollTimer = null;
+let reactionPaintTimer = null;
+let reactionsFetchedAt = 0;
+let reactionsFetchedKey = '';
 /** Skip full "Loading…" flash on realtime patches */
 let feedSilentRepaint = false;
 
@@ -106,6 +116,8 @@ let quotaHintTimer = null;
 const UNREAD_SEEN_PREFIX = 'communityLastSeen_';
 const LAST_ROOM_PREFIX = 'communityLastRoom_';
 const UNREAD_POLL_MS = 60 * 1000;
+const UNREAD_AWAY_MS = 3 * 60 * 1000;
+let unreadPolledAt = 0;
 /** @type {Record<string, number>} */
 let cachedUnreadByRoute = {};
 
@@ -353,7 +365,21 @@ function stopRealtimePosts() {
     }
     postsUnsub = null;
     postsListenRouteId = null;
+    postsSnapSeen = false;
+    postsReady = Promise.resolve(false);
     stopRealtimeReactions();
+}
+
+function stopReactionPostListeners() {
+    reactionPostUnsubs.forEach((fn) => {
+        try { fn(); } catch { /* already gone */ }
+    });
+    reactionPostUnsubs = [];
+    reactionPostKey = '';
+    if (reactionPaintTimer) {
+        clearTimeout(reactionPaintTimer);
+        reactionPaintTimer = null;
+    }
 }
 
 function stopRealtimeReactions() {
@@ -362,6 +388,10 @@ function stopRealtimeReactions() {
     }
     reactionsUnsub = null;
     reactionsListenRouteId = null;
+    cachedReactionsByPost = {};
+    stopReactionPostListeners();
+    reactionsFetchedAt = 0;
+    reactionsFetchedKey = '';
     if (reactionsPollTimer) {
         clearInterval(reactionsPollTimer);
         reactionsPollTimer = null;
@@ -378,49 +408,64 @@ async function applyReactionsMap(routeId, reactionsMap) {
 function startReactionsPoll(routeId) {
     if (reactionsPollTimer) clearInterval(reactionsPollTimer);
     const tick = async () => {
+        if (document.hidden) return;
+        if (safeStorage.getItem('activeTab') !== 'community') return;
         const viewing = document.getElementById('community-route-select')?.value || postsListenRouteId;
         if (viewing !== routeId) return;
         const map = await fetchPostReactions(routeId, cachedFeedPosts.map((p) => p.postId));
         await applyReactionsMap(routeId, map);
     };
     tick();
-    reactionsPollTimer = setInterval(tick, 15000);
+    reactionsPollTimer = setInterval(tick, 45000);
+}
+
+function scheduleReactionPaint(routeId) {
+    if (reactionPaintTimer) return;
+    reactionPaintTimer = setTimeout(() => {
+        reactionPaintTimer = null;
+        if (reactionsListenRouteId !== routeId) return;
+        feedSilentRepaint = true;
+        applyFeedFilter(routeId);
+        feedSilentRepaint = false;
+    }, 50);
+}
+
+/** One listener per visible post. The parent reactions node grows with the kept log. */
+function syncVisibleReactionListeners(routeId) {
+    const ids = [...new Set(cachedFeedPosts.map((p) => p.postId).filter(Boolean))].sort();
+    const key = `${routeId}|${ids.join(',')}`;
+    if (key === reactionPostKey && reactionPostUnsubs.length === ids.length) return;
+    stopReactionPostListeners();
+    reactionPostKey = key;
+    if (!ids.length || !window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnValue) return;
+    ids.forEach((postId) => {
+        const ref = window.firebaseDbRef(
+            window.firebaseDb,
+            `route_community/${routeId}/post_reactions/${postId}`
+        );
+        const unsub = window.firebaseDbOnValue(ref, (snap) => {
+            if (reactionsListenRouteId !== routeId) return;
+            const val = snap?.val?.() || null;
+            if (val && typeof val === 'object') cachedReactionsByPost[postId] = val;
+            else delete cachedReactionsByPost[postId];
+            scheduleReactionPaint(routeId);
+        }, () => { /* a missing post stays quiet */ });
+        reactionPostUnsubs.push(unsub);
+    });
 }
 
 /**
- * Live RTDB reactions when the parent node is readable. Falls back to
- * per-post REST (works with path-exact .read on $postId) if the parent listen fails.
+ * Live reactions for the posts on screen. Falls back to per-post REST
+ * when the SDK is missing.
  */
 async function startRealtimeReactions(routeId) {
     stopRealtimeReactions();
     if (!routeId) return false;
     await bootFirebase();
     if (window.firebaseDb && window.firebaseDbRef && window.firebaseDbOnValue) {
-        try {
-            const ref = window.firebaseDbRef(
-                window.firebaseDb,
-                `route_community/${routeId}/post_reactions`
-            );
-            reactionsListenRouteId = routeId;
-            reactionsUnsub = window.firebaseDbOnValue(ref, (snap) => {
-                if (reactionsListenRouteId !== routeId) return;
-                cachedReactionsByPost = snap?.val?.() || {};
-                if (!cachedReactionsByPost || typeof cachedReactionsByPost !== 'object') {
-                    cachedReactionsByPost = {};
-                }
-                feedSilentRepaint = true;
-                applyFeedFilter(routeId);
-                feedSilentRepaint = false;
-            }, (err) => {
-                console.warn('Community reactions listener failed; polling REST', err);
-                reactionsUnsub = null;
-                reactionsListenRouteId = null;
-                startReactionsPoll(routeId);
-            });
-            return true;
-        } catch (e) {
-            console.warn('Community reactions start failed', e);
-        }
+        reactionsListenRouteId = routeId;
+        syncVisibleReactionListeners(routeId);
+        return true;
     }
     startReactionsPoll(routeId);
     return false;
@@ -465,25 +510,39 @@ async function startRealtimePosts(routeId) {
             : baseRef;
 
         postsListenRouteId = routeId;
-        postsUnsub = window.firebaseDbOnValue(q, (snap) => {
-            if (postsListenRouteId !== routeId) return;
-            const data = snap?.val?.() || null;
-            const acct = $account.get();
-            const myUid = acct.status === 'signed-in' ? acct.uid : null;
-            const list = data
-                ? postsVisibleFilter(Object.values(data), myUid)
-                : [];
-            cachedFeedPosts = mergeOverlayPosts(routeId, list);
-            feedSilentRepaint = true;
-            applyFeedFilter(routeId);
-            feedSilentRepaint = false;
-            if (safeStorage.getItem('activeTab') === 'community') {
-                markCommunityRouteSeen(routeId, { silent: true });
-            }
-        }, (err) => {
-            console.warn('Community realtime listener failed; falling back to REST', err);
-            stopRealtimePosts();
-            renderCommunityFeed(routeId, { forceRest: true });
+        postsSnapSeen = false;
+        postsReady = new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(false), 4000);
+            postsUnsub = window.firebaseDbOnValue(q, (snap) => {
+                postsSnapSeen = true;
+                clearTimeout(timer);
+                if (postsListenRouteId !== routeId) {
+                    resolve(true);
+                    return;
+                }
+                const data = snap?.val?.() || null;
+                const acct = $account.get();
+                const myUid = acct.status === 'signed-in' ? acct.uid : null;
+                const list = data
+                    ? postsVisibleFilter(Object.values(data), myUid)
+                    : [];
+                cachedFeedPosts = mergeOverlayPosts(routeId, list);
+                if (reactionsListenRouteId === routeId) syncVisibleReactionListeners(routeId);
+                feedSilentRepaint = true;
+                applyFeedFilter(routeId);
+                feedSilentRepaint = false;
+                if (safeStorage.getItem('activeTab') === 'community') {
+                    markCommunityRouteSeen(routeId, { silent: true });
+                }
+                resolve(true);
+            }, (err) => {
+                console.warn('Community realtime listener failed; falling back to REST', err);
+                clearTimeout(timer);
+                const hadSnapshot = postsSnapSeen;
+                stopRealtimePosts();
+                resolve(false);
+                if (hadSnapshot) renderCommunityFeed(routeId, { forceRest: true });
+            });
         });
         return true;
     } catch (e) {
@@ -497,13 +556,9 @@ export async function fetchRoutePosts(routeId) {
     if (!routeId || !navigator.onLine) return [];
     try {
         const q = await authQuery();
-        // Prefer ordered query; fall back to full route posts node
-        let res = await fetch(
+        const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json${q ? `${q}&` : '?'}orderBy="timestamp"&limitToLast=${FEED_LIMIT}`
         );
-        if (!res.ok) {
-            res = await fetch(`${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json${q}`);
-        }
         if (!res.ok) return [];
         const data = await res.json();
         if (!data) return [];
@@ -977,25 +1032,47 @@ export async function submitModerationReport(opts) {
 }
 
 function routeLabel(routeId) {
-    return formatRouteDisplayName(ROUTES[routeId]?.name || routeId || 'Route');
+    return formatRouteDisplayName(expandJhbLabel(ROUTES[routeId]?.name || routeId || 'Route'));
+}
+
+/** Johannesburg when the pill or open list can hold it on one line. */
+function fitCommunityRouteLabels() {
+    const display = document.getElementById('community-route-display');
+    const routeSel = document.getElementById('community-route-select');
+    const raw = ROUTES[routeSel?.value]?.name || '';
+    if (display && raw) {
+        applyFittedLabel(
+            display,
+            formatRouteDisplayName(raw),
+            formatRouteDisplayName(expandJhbLabel(raw)),
+            false
+        );
+    }
+    document.querySelectorAll('#community-route-list [data-route-raw]').forEach((el) => {
+        const name = el.getAttribute('data-route-raw') || '';
+        if (!name) return;
+        applyFittedLabel(
+            el,
+            formatRouteDisplayName(name),
+            formatRouteDisplayName(expandJhbLabel(name)),
+            false
+        );
+    });
 }
 
 export async function fetchPostReactions(routeId, postIds = null) {
     if (!routeId || !navigator.onLine) return {};
+    const ids = (Array.isArray(postIds) && postIds.length
+        ? postIds
+        : cachedFeedPosts.map((p) => p.postId)
+    ).filter(Boolean);
+    if (!ids.length) return {};
+    const cacheKey = `${routeId}|${ids.join(',')}`;
+    if (reactionsFetchedKey === cacheKey && Date.now() - reactionsFetchedAt < 20000 && cachedReactionsByPost) {
+        return cachedReactionsByPost;
+    }
     try {
         const q = await authQuery();
-        const res = await fetch(
-            `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/post_reactions.json${q}`
-        );
-        if (res.ok) {
-            const data = await res.json();
-            return data && typeof data === 'object' ? data : {};
-        }
-        const ids = (Array.isArray(postIds) && postIds.length
-            ? postIds
-            : cachedFeedPosts.map((p) => p.postId)
-        ).filter(Boolean);
-        if (!ids.length) return {};
         const pairs = await Promise.all(ids.map(async (postId) => {
             try {
                 const r = await fetch(
@@ -1012,6 +1089,8 @@ export async function fetchPostReactions(routeId, postIds = null) {
         pairs.forEach(([id, map]) => {
             if (map) out[id] = map;
         });
+        reactionsFetchedKey = cacheKey;
+        reactionsFetchedAt = Date.now();
         return out;
     } catch {
         return {};
@@ -1219,7 +1298,7 @@ async function loadPublicProfiles(uids) {
     const now = Date.now();
     const need = [...new Set((uids || []).filter(Boolean))].filter((uid) => {
         const hit = publicProfiles.get(uid);
-        return !hit || now - hit.fetchedAt > 20000;
+        return !hit || now - hit.fetchedAt > 10 * 60 * 1000;
     });
     if (!need.length) return false;
     let changed = false;
@@ -1613,28 +1692,6 @@ async function fetchPostsNewerThan(routeId, lastSeen) {
 async function countUnreadOnRoute(routeId, viewingId) {
     if (!routeId || routeId === viewingId) return 0;
     try {
-        if (isAdminAuthed()) {
-            const acct = $account.get();
-            const q = await authQuery();
-            if (acct?.uid && q) {
-                const [activityRes, seenRes] = await Promise.all([
-                    fetch(`${DYNAMIC_BASE_URL}community_activity/${encodeURIComponent(routeId)}.json${q}`),
-                    fetch(`${DYNAMIC_BASE_URL}admin_state/${encodeURIComponent(acct.uid)}/community_seen/${encodeURIComponent(routeId)}.json${q}`),
-                ]);
-                if (activityRes.ok && seenRes.ok) {
-                    const activity = await activityRes.json() || {};
-                    const remoteSeen = Number(await seenRes.json() || 0);
-                    if (!remoteSeen) {
-                        await markCommunityRouteSeen(routeId, { silent: true });
-                        return 0;
-                    }
-                    safeStorage.setItem(unreadSeenKey(routeId), String(remoteSeen));
-                    return Object.values(activity).filter((item) =>
-                        Number(item?.timestamp || 0) > remoteSeen
-                    ).length;
-                }
-            }
-        }
         const raw = safeStorage.getItem(unreadSeenKey(routeId));
         if (!raw) {
             safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
@@ -1691,17 +1748,32 @@ export async function refreshCommunityUnreadBadge() {
     return Object.values(next).reduce((sum, n) => sum + n, 0);
 }
 
+function unreadPollDue() {
+    const onCommunity = safeStorage.getItem('activeTab') === 'community';
+    const wait = onCommunity ? UNREAD_POLL_MS : UNREAD_AWAY_MS;
+    return Date.now() - unreadPolledAt >= wait;
+}
+
 export function startCommunityUnreadWatch() {
     if (typeof window === 'undefined' || window.__ntCommunityUnreadWatch) return;
     window.__ntCommunityUnreadWatch = true;
+    unreadPolledAt = Date.now();
     refreshCommunityUnreadBadge();
     unreadPollTimer = setInterval(() => {
-        if (document.hidden) return;
+        if (document.hidden || !unreadPollDue()) return;
+        unreadPolledAt = Date.now();
         refreshCommunityUnreadBadge();
     }, UNREAD_POLL_MS);
-    window.addEventListener('focus', () => refreshCommunityUnreadBadge());
+    window.addEventListener('focus', () => {
+        if (Date.now() - unreadPolledAt < 45000) return;
+        unreadPolledAt = Date.now();
+        refreshCommunityUnreadBadge();
+    });
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) refreshCommunityUnreadBadge();
+        if (document.hidden) return;
+        if (Date.now() - unreadPolledAt < 45000) return;
+        unreadPolledAt = Date.now();
+        refreshCommunityUnreadBadge();
     });
 }
 
@@ -1730,19 +1802,17 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
         if (emptyEl) emptyEl.classList.add('hidden');
     }
 
-    // Prefer live listener when feature is on for this route
+    // Prefer the live window. A second REST download of the same posts is skipped
+    // once that snapshot has arrived.
     if (!forceRest) {
         const live = await startRealtimePosts(routeId);
         if (live) {
-            startRealtimeReactions(routeId);
-            const posts = await fetchRoutePosts(routeId);
-            if (postsListenRouteId === routeId && posts.length && !cachedFeedPosts.length) {
-                cachedFeedPosts = posts;
+            const saw = await postsReady;
+            if (saw && postsSnapSeen && postsListenRouteId === routeId) {
+                startRealtimeReactions(routeId);
+                if (postsListenRouteId === routeId) applyFeedFilter(routeId);
+                return;
             }
-            const reactionsMap = await fetchPostReactions(routeId, cachedFeedPosts.map((p) => p.postId));
-            cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
-            if (postsListenRouteId === routeId) applyFeedFilter(routeId);
-            return;
         }
     }
 
@@ -1798,9 +1868,10 @@ function syncCommunityRoutePicker(routeId) {
                 selected
                     ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
                     : 'text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }"><span class="min-w-0 flex-1 truncate">${escapeHTML(formatRouteDisplayName(r.name || r.id))}</span>${unreadHtml}</li>`;
+            }"><span class="min-w-0 flex-1 truncate" data-route-raw="${escapeHTML(r.name || r.id)}">${escapeHTML(formatRouteDisplayName(r.name || r.id))}</span>${unreadHtml}</li>`;
         }).join('') || `<li class="px-3.5 py-3 text-sm text-gray-400">No routes</li>`;
     }
+    requestAnimationFrame(() => fitCommunityRouteLabels());
 }
 
 function setCommunityRouteListOpen(open) {
@@ -1818,6 +1889,7 @@ function setCommunityRouteListOpen(open) {
     }
     if (chevron) chevron.classList.toggle('rotate-180', open);
     if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) requestAnimationFrame(() => fitCommunityRouteLabels());
 }
 
 const KIND_PLACEHOLDER = 'Please be kind and respectful.';
@@ -2354,6 +2426,7 @@ export function bindCommunityUi() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') setCommunityRouteListOpen(false);
     });
+    window.addEventListener('resize', () => fitCommunityRouteLabels());
     document.getElementById('community-refresh-btn')?.addEventListener('click', () => {
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         renderCommunityFeed(rid);

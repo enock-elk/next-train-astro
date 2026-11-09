@@ -296,6 +296,123 @@ export function collectNoticeImageUrls(notice) {
 }
 
 /**
+ * Phones that already have the app (through V10_11.09.2) show at most four
+ * photos. A worker address in imageUrls is dropped there. The same address
+ * inside the notice text is a normal image file, which those phones already lift.
+ */
+export const LEGACY_ALERT_IMAGE_MAX = 4;
+
+function legacyInstalledSanitize(url) {
+    if (!url || typeof url !== 'string') return null;
+    let path = url.trim();
+    if (!path) return null;
+    try {
+        if (/^https?:\/\//i.test(path)) path = new URL(path).pathname || '';
+    } catch {
+        return null;
+    }
+    const q = path.indexOf('?');
+    if (q >= 0) path = path.slice(0, q);
+    const hash = path.indexOf('#');
+    if (hash >= 0) path = path.slice(0, hash);
+    if (path.includes('..') || path.includes('//')) return null;
+    if (path.startsWith(ALERT_IMAGE_PREFIX)) {
+        if (!/^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(path)) return null;
+        return path;
+    }
+    if (path.startsWith(SCHEDULE_IMAGE_PREFIX)) {
+        if (!/^\/images\/schedules\/[a-z0-9]+\/[A-Za-z0-9._-]+\.jpe?g$/i.test(path)) return null;
+        return path;
+    }
+    return null;
+}
+
+/** Photos an already-installed phone will actually paint. */
+export function legacyInstalledAlertImages(notice) {
+    const images = [];
+    const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+        ? notice.imageUrls
+        : (notice?.imageUrl ? [notice.imageUrl] : []);
+    raw.forEach((u) => {
+        const s = legacyInstalledSanitize(u);
+        if (s && !images.includes(s) && images.length < LEGACY_ALERT_IMAGE_MAX) images.push(s);
+    });
+    const hoisted = hoistAlertImagesFromHtml(String(notice?.message || notice?.text || ''));
+    hoisted.urls.forEach((u) => {
+        const clean = sanitizeInlineAlertImageUrl(u);
+        if (clean && !images.includes(clean) && images.length < LEGACY_ALERT_IMAGE_MAX) images.push(clean);
+    });
+    return images;
+}
+
+function escapeAlertImgAttr(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Copy worker photo addresses into the notice text so installed phones show them.
+ * Catalog paths stay in imageUrls only. The current app lifts the same address once.
+ */
+export function messageWithLegacyAlertImages(message, imageUrls) {
+    const body = String(message || '');
+    const present = new Set();
+    hoistAlertImagesFromHtml(body).urls.forEach((u) => {
+        const clean = sanitizeInlineAlertImageUrl(u);
+        if (clean) present.add(clean);
+    });
+    const extras = [];
+    (Array.isArray(imageUrls) ? imageUrls : []).forEach((raw) => {
+        const inline = sanitizeInlineAlertImageUrl(raw);
+        if (!inline || present.has(inline) || extras.includes(inline)) return;
+        const legacyPoster = legacyInstalledSanitize(raw);
+        if (legacyPoster && !/^https:\/\//i.test(legacyPoster)) return;
+        extras.push(inline);
+    });
+    if (!extras.length) return body;
+    const tags = extras.slice(0, LEGACY_ALERT_IMAGE_MAX).map((url) => {
+        const href = escapeAlertImgAttr(url);
+        return `<img src="${href}" data-nt-src="${href}" alt="">`;
+    }).join('');
+    return `${tags}${body}`;
+}
+
+function alertImgTag(url) {
+    const href = escapeAlertImgAttr(url);
+    return `<img src="${href}" data-nt-src="${href}" alt="">`;
+}
+
+/**
+ * Save posters so an already-installed phone shows every uploaded photo (up to four).
+ * Catalog sheets fill only the slots those photos do not use. Newer phones still
+ * receive the full list.
+ */
+export function noticeForInstalledPhones(notice) {
+    const source = notice && typeof notice === 'object' ? notice : {};
+    const raw = (Array.isArray(source.imageUrls) && source.imageUrls.length)
+        ? source.imageUrls
+        : (source.imageUrl ? [source.imageUrl] : []);
+    const worker = [];
+    const catalog = [];
+    raw.forEach((entry) => {
+        const modern = sanitizeAlertImageUrl(entry);
+        if (!modern) return;
+        if (legacyInstalledSanitize(entry)) {
+            if (!catalog.includes(modern)) catalog.push(modern);
+            return;
+        }
+        if (!worker.includes(modern)) worker.push(modern);
+    });
+    const lead = worker.slice(0, LEGACY_ALERT_IMAGE_MAX);
+    const catalogRoom = Math.max(0, LEGACY_ALERT_IMAGE_MAX - lead.length);
+    const catalogKept = catalog.slice(0, catalogRoom);
+    const catalogRest = catalog.slice(catalogRoom);
+    let message = messageWithLegacyAlertImages(source.message || source.text || '', lead);
+    if (catalogRest.length) message += catalogRest.map(alertImgTag).join('');
+    const imageUrls = [...catalogKept, ...worker].slice(0, ALERT_POSTER_MAX);
+    return { ...source, message, imageUrls, imageUrl: null };
+}
+
+/**
  * Hold-to-react should work on catalog posters and hoisted photos.
  * Reply / poll (including results) / count chips / real links stay excluded.
  */
@@ -781,6 +898,12 @@ export function listNoticesInTarget(node) {
         return [{ ...node, _key: node.id || 'legacy' }];
     }
     return [];
+}
+
+if (typeof window !== 'undefined') {
+    window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
+    window.legacyInstalledAlertImages = legacyInstalledAlertImages;
+    window.noticeForInstalledPhones = noticeForInstalledPhones;
 }
 
 export function isLegacySingleNotice(node) {

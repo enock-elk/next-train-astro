@@ -15,6 +15,10 @@ import {
     splitAlertTitleAndBody,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
+    legacyInstalledAlertImages,
+    messageWithLegacyAlertImages,
+    noticeForInstalledPhones,
+    LEGACY_ALERT_IMAGE_MAX,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
     alertVideoKind,
@@ -223,6 +227,34 @@ const now = 1_700_000_000_000;
     assert(sanitizeInlineAlertImageUrl('https://192.168.1.8/x.png') === null, 'private image host blocked');
     const internetLaid = layoutAlertPost({ message: `<p>Poster</p><img src="${imgur}">` });
     assert(internetLaid.imageUrls[0] === imgur, 'internet image file is shown on the alert');
+    assert(LEGACY_ALERT_IMAGE_MAX === 4, 'installed phones show four photos');
+    const workerPhotos = [1, 2, 3, 4].map((n) => `https://nexttrain-community.enock.workers.dev/alerts/img_${n}.jpg`);
+    const postersOnly = { message: '<p>Delays on the line.</p>', imageUrls: workerPhotos, imageUrl: null };
+    assert(legacyInstalledAlertImages(postersOnly).length === 0, 'installed phones drop worker addresses stored only as posters');
+    const shaped = noticeForInstalledPhones(postersOnly);
+    const seenByInstalled = legacyInstalledAlertImages(shaped);
+    assert(seenByInstalled.length === 4, `installed phones show all four photos, got ${seenByInstalled.length}`);
+    assert(seenByInstalled.every((url, i) => url === workerPhotos[i]), `installed photo order ${seenByInstalled.join(',')}`);
+    assert(seenByInstalled.every((url) => !url.includes('token=')), 'photo address has no token');
+    const current = layoutAlertPost(shaped);
+    assert(current.imageUrls.length === 4 && current.imageUrls.every((url, i) => url === workerPhotos[i]), 'current phones show each photo once');
+    assert(!current.body.includes('<img'), 'current phones lift the photos out of the text');
+    const withSheet = noticeForInstalledPhones({
+        message: '<p>Delays on the line.</p>',
+        imageUrls: ['/images/alerts/fare.png', ...workerPhotos],
+    });
+    const mixedInstalled = legacyInstalledAlertImages(withSheet);
+    assert(mixedInstalled.length === 4 && mixedInstalled.every((url) => url.includes('/alerts/img_')), `uploaded photos keep the four installed slots ${mixedInstalled.join(',')}`);
+    const mixedCurrent = layoutAlertPost(withSheet);
+    assert(mixedCurrent.imageUrls.includes('/images/alerts/fare.png') && mixedCurrent.imageUrls.length === 5, 'current phones still show the catalog sheet');
+    const catalogOnly = noticeForInstalledPhones({ message: '<p>Fare</p>', imageUrls: ['/images/alerts/fare.png'] });
+    assert(catalogOnly.message === '<p>Fare</p>' && catalogOnly.imageUrls[0] === '/images/alerts/fare.png', 'catalog poster stays on imageUrls');
+    assert(legacyInstalledAlertImages(catalogOnly)[0] === '/images/alerts/fare.png', 'installed phones still show a catalog poster');
+    const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(adminJs.includes('noticeForInstalledPhones'), 'posting shapes the notice for installed phones');
+    assert(adminJs.includes('accept="image/*,.pdf" multiple'), 'Media can take several files in one pick');
+    assert(adminJs.includes('id="alert-poster-upload" accept="image/jpeg,image/png,image/webp,image/gif" multiple'), 'poster upload can take several photos');
+    assert(!messageWithLegacyAlertImages('<p>Hi</p>', ['/images/alerts/fare.png']).includes('<img'), 'catalog path is not copied into the text');
     assert(sanitizeInlineAlertImageUrl('https://firebasestorage.googleapis.com/v0/b/app/o/x.png') === 'https://firebasestorage.googleapis.com/v0/b/app/o/x.png', 'firebase storage allowed');
     assert(sanitizeInlineAlertImageUrl('https://user:pass@firebasestorage.googleapis.com/v0/b/app/o/x.png') === null, 'storage URL with credentials blocked');
 

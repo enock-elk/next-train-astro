@@ -2029,12 +2029,12 @@ const Admin = {
         };
     },
 
-    uploadAlertImage: async (file) => {
+    uploadAlertImage: async (file, secret) => {
         const prepared = await Admin.prepareSafeUpload(file);
         if (prepared.isPdf) throw new Error('Choose a photo, not a PDF.');
         if (file.size > 4 * 1024 * 1024) throw new Error('Photo is too large. Max 4MB.');
-        const token = await Admin.getAuthKey();
-        if (!token) throw new Error('Sign in again to upload a photo.');
+        const token = secret || await Admin.getAuthKey();
+        if (!token) throw new Error('Sign in again to post.');
         const base = (typeof window.COMMUNITY_WORKER_URL === 'string' && window.COMMUNITY_WORKER_URL)
             || 'https://nexttrain-community.enock.workers.dev';
         const res = await fetch(`${base.replace(/\/$/, '')}/alerts/image`, {
@@ -2049,6 +2049,60 @@ const Admin = {
         if (!res.ok || !data.url) throw new Error(data.error || 'Could not upload that photo.');
         return data.url;
     },
+
+    /** Media can take up to four photos in one pick. Installed phones show four. */
+    addAlertPhotosFromFiles: async (fileList, editor) => {
+        const max = 4;
+        const files = [...(fileList || [])];
+        if (!files.length) return 0;
+        const slot = editor ? Admin.mediaSlotFor(editor) : null;
+        const existing = slot ? slot.querySelectorAll('img').length : 0;
+        const room = Math.max(0, max - existing);
+        if (!room) {
+            if (typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+            return 0;
+        }
+        const chosen = files.slice(0, room);
+        if (files.length > room && typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            if (typeof showToast === 'function') showToast('Authentication required! Sign in again.', 'error');
+            return 0;
+        }
+        if (typeof showToast === 'function') {
+            showToast(chosen.length > 1 ? 'Adding photos…' : 'Adding photo…', 'info', 30000);
+        }
+        let added = 0;
+        for (const file of chosen) {
+            try {
+                const prepared = await Admin.prepareSafeUpload(file);
+                if (prepared.isPdf) {
+                    if (typeof showToast === 'function') showToast('Choose a photo, not a PDF.', 'error');
+                    continue;
+                }
+                const url = await Admin.uploadAlertImage(file, secret);
+                const placed = editor ? Admin.addComposerImage(editor, url) : false;
+                if (!placed && editor) {
+                    if (typeof showToast === 'function') showToast('Could not add that photo.', 'error');
+                    continue;
+                }
+                Admin.addAlertPoster(url);
+                added += 1;
+            } catch (err) {
+                if (typeof showToast === 'function') showToast(err.message || 'Could not add that photo.', 'error');
+            }
+        }
+        if (added && typeof showToast === 'function') {
+            showToast(added === 1 ? 'Photo added.' : `${added} photos added.`, 'success');
+        }
+        return added;
+    },
+
+    shapeAlertNoticeForInstalledPhones: (notice) => (
+        typeof window.noticeForInstalledPhones === 'function'
+            ? window.noticeForInstalledPhones(notice || {})
+            : (notice || {})
+    ),
 
     inlineAttachmentHtml: function(url, isPdf) {
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
@@ -15863,8 +15917,8 @@ const Admin = {
             `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add an image, or a YouTube / Vimeo / video link from the internet">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
-                            <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
+            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add up to 4 photos, a PDF, or a YouTube / Vimeo / video link">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
+                            <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf" multiple>`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
         const alignC = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg>';
@@ -17841,7 +17895,7 @@ const Admin = {
                         </button>
                         <ul id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-64 overflow-y-auto custom-scrollbar text-left"></ul>
                         <label for="alert-poster-upload" class="mt-2 flex items-center justify-center min-h-[48px] px-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500">Upload a photo</label>
-                        <input type="file" id="alert-poster-upload" accept="image/jpeg,image/png,image/webp,image/gif" class="sr-only">
+                        <input type="file" id="alert-poster-upload" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="sr-only">
                     </div>
                 </div>
                 </div>
@@ -18642,7 +18696,7 @@ const Admin = {
                 weekdays: meta.weekdays,
                 monthDay: meta.monthDay,
                 untilAt: meta.untilAt,
-                notice: {
+                notice: Admin.shapeAlertNoticeForInstalledPhones({
                     title: draft.title,
                     message: draft.message,
                     suppressLinkPreview: draft.suppressLinkPreview,
@@ -18660,7 +18714,7 @@ const Admin = {
                     sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                     expiresInMs: meta.expiresInMs || 0,
                     poll: assembleComposePoll({ closesInMs: pollClosesInMs }),
-                },
+                }),
             };
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             try {
@@ -18947,30 +19001,25 @@ const Admin = {
                 if (editor) editor.focus();
 
                 if (this.files && this.files.length > 0) {
-                    const file = this.files[0];
+                    const picked = [...this.files];
+                    const file = picked[0];
+                    this.value = '';
+                    if (picked.length > 1 || !(await Admin.prepareSafeUpload(file).catch(() => null))?.isPdf) {
+                        await Admin.addAlertPhotosFromFiles(picked, editor);
+                        Admin._savedRange = null;
+                        return;
+                    }
                     let prepared;
                     try {
                         prepared = await Admin.prepareSafeUpload(file);
                     } catch (err) {
                         if (typeof showToast === 'function') showToast(err.message || 'Could not use that file.', 'error');
-                        this.value = '';
                         return;
                     }
 
                     if (!prepared.isPdf) {
-                        if (typeof showToast === 'function') showToast('Uploading photo…', 'info', 30000);
-                        try {
-                            const url = await Admin.uploadAlertImage(file);
-                            if (!editor || !Admin.placeComposerAttachment(editor, url, false, savedRange)) {
-                                if (typeof showToast === 'function') showToast('Failed to insert attachment link', 'error');
-                            } else {
-                                Admin._savedRange = null;
-                                if (typeof showToast === 'function') showToast('Photo inserted.', 'success');
-                            }
-                        } catch (err) {
-                            if (typeof showToast === 'function') showToast(err.message || 'Could not upload that photo.', 'error');
-                        }
-                        this.value = '';
+                        await Admin.addAlertPhotosFromFiles([file], editor);
+                        Admin._savedRange = null;
                         return;
                     }
 
@@ -19215,17 +19264,10 @@ const Admin = {
         if (posterUpload && posterUpload.dataset.bound !== '1') {
             posterUpload.dataset.bound = '1';
             posterUpload.addEventListener('change', async function () {
-                const file = this.files && this.files[0];
+                const files = [...(this.files || [])];
                 this.value = '';
-                if (!file) return;
-                try {
-                    if (typeof showToast === 'function') showToast('Uploading photo…', 'info', 30000);
-                    const url = await Admin.uploadAlertImage(file);
-                    Admin.addAlertPoster(url);
-                    if (typeof showToast === 'function') showToast('Photo added to this alert.', 'success');
-                } catch (err) {
-                    if (typeof showToast === 'function') showToast(err.message || 'Could not upload that photo.', 'error');
-                }
+                if (!files.length) return;
+                await Admin.addAlertPhotosFromFiles(files, document.getElementById('alert-msg'));
             });
         }
 
@@ -19253,7 +19295,7 @@ const Admin = {
             const isRepost = !!Admin._alertRepostDraft;
             const isUpdate = !!existingAlertId && !isRepost;
             const nowTs = Date.now();
-            const payload = {
+            const payload = Admin.shapeAlertNoticeForInstalledPhones({
                 id: existingAlertId || nowTs.toString(),
                 title: draft.title,
                 message: draft.message,
@@ -19272,7 +19314,7 @@ const Admin = {
                 sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                 sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                 isRepost: isRepost || false,
-            };
+            });
             if (isUpdate && Admin._reviewPostedAt) {
                 payload.postedAt = Admin._reviewPostedAt;
             } else if (!isUpdate) {

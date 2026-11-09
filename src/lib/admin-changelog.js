@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.1': [
+        'Media and Upload a photo take up to four photos in one pick. The notice stores each photo in the text as well as the poster list, so phones already on V10_11.09.2 still show all four. A catalog poster does not push one of those photos off that older screen. The photo address has no token. Posting still uses the operator sign-in the alert post already requires. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.09.6': [
         'Community route names use Johannesburg when the pill or the open list can hold it on one line, and JHB when it would wrap. Opening a room no longer downloads that room\'s posts a second time, and reactions are read per visible message instead of the whole reactions tree. Unread checks stay at a minute on Community and slow to three minutes on the other tabs. Public names refresh every 10 minutes. Alert photos upload to Cloudflare R2 from Upload a photo on the channel poster, and from Insert Media. The file is served by the community worker. Deploy that worker so the nexttrain-alert-images bucket is created and the upload route is live. A photo address is https://nexttrain-community.enock.workers.dev/alerts/. Campus networks that block workers.dev will not show that photo until a custom host is added. No commuter What\'s New. forceShow stays false.',
     ],

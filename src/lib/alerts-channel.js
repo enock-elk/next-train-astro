@@ -37,6 +37,8 @@ import {
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
+    messageWithLegacyAlertImages,
+    noticeForInstalledPhones,
     alertCopyNeedsSeeMore,
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
@@ -1497,6 +1499,8 @@ export function initAlertsChannel() {
     window.renderLazyPosterHtml = renderLazyPosterHtml;
     window.hydrateAlertPosterImages = hydrateAlertPosterImages;
     window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
+    window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
+    window.noticeForInstalledPhones = noticeForInstalledPhones;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
     window.parseNoticeBucket = parseNoticeBucket;
@@ -1513,6 +1517,8 @@ if (typeof window !== 'undefined') {
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
     window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
+    window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
+    window.noticeForInstalledPhones = noticeForInstalledPhones;
     window.renderLazyPosterHtml = renderLazyPosterHtml;
     window.hydrateAlertPosterImages = hydrateAlertPosterImages;
 }

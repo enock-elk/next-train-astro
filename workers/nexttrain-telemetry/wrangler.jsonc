@@ -10,18 +10,15 @@
       "enabled": true
     }
   },
-  // Exact regional split. Uncomment after `npx wrangler d1 create nexttrain-region-presence`
-  // and paste that command's database_id. Then apply migrations/0001_daily_region.sql
-  // and set secret REGION_PRESENCE_PEPPER. Leaving this commented keeps the current
-  // Worker deployable; the admin split reports unconfigured until the binding exists.
-  // "d1_databases": [
-  //   {
-  //     "binding": "REGION_PRESENCE_DB",
-  //     "database_name": "nexttrain-region-presence",
-  //     "database_id": "",
-  //     "migrations_dir": "migrations"
-  //   }
-  // ],
+  // Existing production database. Keep this binding in the file so a deploy does not drop it.
+  "d1_databases": [
+    {
+      "binding": "REGION_PRESENCE_DB",
+      "database_name": "nexttrain-region-presence",
+      "database_id": "5c461bd1-ba86-439c-8d8c-4ee2079653d5",
+      "migrations_dir": "migrations"
+    }
+  ],
   // Plain vars (secrets GA_PRIVATE_KEY / SENTRY_AUTH_TOKEN / CF_API_TOKEN / GH_ACTIONS_TOKEN stay in the dashboard).
   "vars": {
     "GA_CLIENT_EMAIL": "nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com",

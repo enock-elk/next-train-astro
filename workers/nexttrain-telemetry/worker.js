@@ -661,7 +661,7 @@ export default {
         const finalResponsePayload = JSON.stringify(telemetryData);
 
         const responseToCache = new Response(finalResponsePayload, {
-            headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=30' }
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=120' }
         });
         await cache.put(cacheKey, responseToCache.clone());
 

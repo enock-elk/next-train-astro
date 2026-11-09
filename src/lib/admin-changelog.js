@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.09.2': [
+        'Planner fare accuracy counts confirmed quotes and quotes still waiting. Refuted prices sit in their own accordion and stay out of the percentage. Correct quotes move into Saved corrections, and the open list is only the incorrect ones. Community hides the messages-left control until 3 remain. Account points and badges follow the features open for that person. Grid column order uses the route ends and the same controls as the rest of the hub. Live telemetry keeps the last numbers and waits longer before it says Wait. Force schedule type sits in Holiday Notices. The default ban mode sits on the Bans tab of User Accounts & Bans. Deploy the telemetry Worker so the longer cache reaches phones. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.09.1': [
         'Accounts fills the screen and can be filtered by name, region, route, and sign-in. The full name stays on the card. Regional breakdown can step back through earlier Johannesburg days, up to 35 days. Community shows the remaining messages as a dotted control that explains the try-out limit. The Irene timetable says a Kempton train starts at Kempton Park when the sheet runs toward Pretoria, and continues to Kempton Park when the sheet runs toward Irene. Route sheets sit inside Special Event Route. Notifications and Appearance no longer carry the save-as-you-switch line. Deploy the telemetry Worker so previous days load, and deploy firebase-database.rules.json so region and route can be stored on the account directory. No commuter What\'s New. forceShow stays false.',
     ],

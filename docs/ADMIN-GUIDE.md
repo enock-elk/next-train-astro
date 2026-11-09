@@ -32,7 +32,7 @@ Typical daily path:
 1. **State Monitor** — what is live right now  
 2. **Service Alerts** — post / review notices  
 3. **Commuter Feedback** — reply  
-4. **User Trust & Bans** — lookup / shadow ban  
+4. **User Accounts & Bans** — lookup / shadow ban  
 5. **Planner Telemetry** — fails, fare votes, ticket photos  
 6. **System Health** — Build notes for the version chip you see in feedback/crashes  
 7. **System Controls** — deploy / purge / nuke only when shipping
@@ -70,9 +70,9 @@ From Service Alerts hub → **Notifications**: audience (Everyone / region / pin
 
 ---
 
-## 4. User Trust & Bans
+## 4. User Accounts & Bans
 
-**Tile:** User Trust & Bans
+**Tile:** User Accounts & Bans
 
 **Tabs:** Active bans | Lookup
 
@@ -94,6 +94,7 @@ Experience modes: Fake offline / Freeze / FOUC / 404.
 Writes `users/{uid}/flags` and/or `devices/{id}/flags`.
 
 ### Active bans
+**Default ban mode** sits at the top of the Bans tab. It fills the ban dialog. Each ban still keeps its own mode.
 List + **Refresh** + **Lift**.
 
 ---
@@ -157,9 +158,8 @@ Aggregated routing fails. Expand contributors (full user ids + app version). Dev
 | **Transit Incident Manager** | CRITICAL/WARNING; stations; badge + notice; days; map; **Deploy Incident** / **Resolve** → `disruptions` |
 | **Special Event Route** | Temporary event corridor → `config/special_event` |
 | **Route sheets** | Per route, not the whole region. Sunday uses a `_Sun` tab. Special uses a `_Special` tab. Tick the routes and the dates. Empty Special dates stay on until you untick. A ticked route with no times in the tab keeps its normal sheet. → `config/route_sheets` |
-| **Holiday Notices** | Pending / Approved regional holiday day-type sheets |
+| **Holiday Notices** | Pending / Approved regional holiday day-type sheets, and Force schedule type |
 | **System Controls → Maintenance Mode** | Scoped banners; master pause |
-| **System Controls → Force schedule type** | Per-region timetable override |
 
 ---
 

@@ -1523,9 +1523,50 @@ function openBadgeHowSheet(badgeId, state, marks) {
     showAccountSheet('account-badge-how-sheet');
 }
 
+function visitorRouteIds() {
+    const ids = new Set();
+    const current = String($currentRouteId.get() || '');
+    if (current) ids.add(current);
+    for (const code of ['GP', 'WC', 'KZN', 'EC']) {
+        const pinned = safeStorage.getItem(`defaultRoute_${code}`);
+        if (pinned) ids.add(String(pinned));
+    }
+    return [...ids];
+}
+
+function pointsFeatureOn(features, key) {
+    if (features.isFeatureGranted(key)) return true;
+    const region = String($userRegion.get() || '').toUpperCase();
+    if (region && features.isFeatureEnabled(key, '', region)) return true;
+    return visitorRouteIds().some((id) => features.isFeatureEnabled(key, id));
+}
+
+function liveShareOn(features) {
+    if (features.isFeatureGranted(features.FEATURE_KEYS.RIDE_CHECKIN)) return true;
+    return visitorRouteIds().some((id) => features.isRideCheckInPinned(id));
+}
+
+export function visiblePointAction(id, features, chrome) {
+    const community = chrome?.canAccessPilotSurface?.('community') === true;
+    const share = liveShareOn(features);
+    const delay = pointsFeatureOn(features, features.FEATURE_KEYS.DELAY_REPORTS_UI);
+    if (id === 'first_community_post' || id === 'community_message') return community;
+    if (id === 'first_share_day' || id === 'join_confirm') return share;
+    if (id === 'delay_report' || id === 'delay_confirm') return delay;
+    if (id === 'streak_3day' || id === 'streak_5day') return community || share || delay;
+    return false;
+}
+
 export function paintAccountPoints(state) {
     if (typeof document === 'undefined') return;
-    import('./rider-marks.js').then((m) => {
+    Promise.all([
+        import('./rider-marks.js'),
+        import('./features.js'),
+        import('./admin-chrome.js'),
+    ]).then(([m, features, chrome]) => {
+        const actionOn = (id) => visiblePointAction(id, features, chrome);
+        const marksCard = document.getElementById('account-marks-toggle')?.closest('div.rounded-\\[12px\\]');
+        if (marksCard) marksCard.classList.toggle('hidden', !actionOn('community_message'));
         const st = state || m.readMarks();
         const tier = m.tierForPoints(st.points);
         const next = m.nextTierForPoints(st.points);
@@ -1556,9 +1597,12 @@ export function paintAccountPoints(state) {
         }
         const earn = document.getElementById('account-earn-list');
         if (earn) {
-            earn.innerHTML = m.MARK_CATALOG.map((c) => (
+            const rows = m.MARK_CATALOG.filter((c) => actionOn(c.id));
+            earn.innerHTML = rows.map((c) => (
                 `<li><span class="font-semibold text-gray-800 dark:text-gray-200">${escapeAccountHtml(c.title)}</span> · ${c.points} ${m.pointsWord(c.points)}. ${escapeAccountHtml(c.how)}</li>`
             )).join('');
+            const earnCard = earn.closest('div.rounded-\\[12px\\]');
+            if (earnCard) earnCard.classList.toggle('hidden', !rows.length);
         }
         const contrib = document.getElementById('account-contrib-list');
         if (contrib) {
@@ -1566,8 +1610,15 @@ export function paintAccountPoints(state) {
                 ? m.listContributionDays(st)
                 : [];
             const painted = new Map();
-            contrib.innerHTML = days.length
-                ? days.map((day) => {
+            const visibleDays = days.map((day) => ({
+                ...day,
+                items: (day.items || []).filter((item) => actionOn(item.action)),
+            })).filter((day) => day.items.length).map((day) => ({
+                ...day,
+                total: day.items.reduce((sum, item) => sum + (Number(item.points) || 0), 0),
+            }));
+            contrib.innerHTML = visibleDays.length
+                ? visibleDays.map((day) => {
                     const when = day.day && typeof m.formatContributionDate === 'function'
                         ? m.formatContributionDate(day.day)
                         : (day.day ? day.day : 'Earlier');
@@ -1602,7 +1653,7 @@ export function paintAccountPoints(state) {
                 { id: 'delay_confirm', kind: 'validate', title: 'Validation' },
                 { id: 'streak_3day', kind: 'streak3', title: '3-day streak' },
                 { id: 'streak_5day', kind: 'streak5', title: '5-day streak' },
-            ];
+            ].filter((b) => actionOn(b.id));
             grid.innerHTML = badges.map((b) => {
                 const progress = m.badgeProgress(b.id, st);
                 const on = progress.unlocked;
@@ -1614,6 +1665,8 @@ export function paintAccountPoints(state) {
                 if (!btn) return;
                 openBadgeHowSheet(btn.getAttribute('data-badge-id'), st, m);
             };
+            const badgeCard = grid.closest('div.rounded-\\[12px\\]');
+            if (badgeCard) badgeCard.classList.toggle('hidden', !badges.length);
         }
     }).catch(() => {});
 }

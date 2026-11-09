@@ -2299,7 +2299,6 @@ const Admin = {
             'sched-override-body',
             'auth-providers-body',
             'exp-features-body',
-            'shadow-ban-default-body',
             'deploy-live-body',
             'cf-purge-body',
             'nuke-body',
@@ -2308,7 +2307,6 @@ const Admin = {
             'sched-override-chevron',
             'auth-providers-chevron',
             'exp-features-chevron',
-            'shadow-ban-default-chevron',
             'deploy-live-chevron',
             'cf-purge-chevron',
             'nuke-chevron',
@@ -3961,6 +3959,32 @@ const Admin = {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
 
+        const telemetryGen = (Admin._telemetryGen || 0) + 1;
+        Admin._telemetryGen = telemetryGen;
+        const paintTelemetryHeadlines = (data) => {
+            if (!data) return;
+            const set = (el, value) => {
+                if (!el || value === undefined || value === null || value === '' || value === '--' || value === 'ERR' || value === 'Wait') return;
+                el.textContent = Admin.formatNumber(value);
+                el.classList.remove('animate-pulse');
+            };
+            set(stat5m, data.active5m);
+            set(stat30m, data.active30m);
+            set(statToday, data.todayUsers);
+            set(statWeekly, data.wauUsers);
+            set(statMonthly, data.mauUsers);
+            set(statAllTime, data.allTimeUsers);
+            set(statErrors, data.todayErrors);
+        };
+        try {
+            const cached = JSON.parse(sessionStorage.getItem('ntAdminTelemetrySnapshotV1') || 'null');
+            const placeholder = (el) => {
+                const t = (el?.textContent || '').trim();
+                return t === '--' || t === '' || t === 'Wait';
+            };
+            if (cached && placeholder(statToday)) paintTelemetryHeadlines(cached);
+        } catch { /* keep the placeholders */ }
+
         // Soft loading pulse only while values are still placeholders
         [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
             if (!el) return;
@@ -3978,10 +4002,23 @@ const Admin = {
 
             const res = await window.guardianFetch(fetchUrl.toString(), {
                 headers: { 'Authorization': `Bearer ${secret}` }
-            }, 6000);
+            }, 18000);
+            if (telemetryGen !== Admin._telemetryGen) return;
             
             if (res.ok) {
                 const data = await res.json();
+                if (telemetryGen !== Admin._telemetryGen) return;
+                try {
+                    sessionStorage.setItem('ntAdminTelemetrySnapshotV1', JSON.stringify({
+                        active5m: data.active5m,
+                        active30m: data.active30m,
+                        todayUsers: data.todayUsers,
+                        wauUsers: data.wauUsers,
+                        mauUsers: data.mauUsers,
+                        allTimeUsers: data.allTimeUsers,
+                        todayErrors: data.todayErrors,
+                    }));
+                } catch { /* storage quota */ }
                 
                 if(stat5m) stat5m.textContent = data.active5m !== undefined ? Admin.formatNumber(data.active5m) : '--';
                 if(stat30m) stat30m.textContent = data.active30m !== undefined ? Admin.formatNumber(data.active30m) : '--';
@@ -4324,13 +4361,11 @@ const Admin = {
                 };
             }
             
-            if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
-            if(stat30m && stat30m.textContent === '--') stat30m.textContent = "Wait";
-            if(statToday && statToday.textContent === '--') statToday.textContent = "Wait";
-            if(statWeekly && statWeekly.textContent === '--') statWeekly.textContent = "Wait";
-            if(statMonthly && statMonthly.textContent === '--') statMonthly.textContent = "Wait";
-            if(statAllTime && statAllTime.textContent === '--') statAllTime.textContent = "Wait";
-            if(statErrors && statErrors.textContent === '--') statErrors.textContent = "Wait";
+            if (telemetryGen !== Admin._telemetryGen) return;
+            const markWait = (el) => {
+                if (el && (el.textContent || '').trim() === '--') el.textContent = 'Wait';
+            };
+            [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(markWait);
 
             [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
                 if(el) el.classList.remove('animate-pulse');
@@ -8382,15 +8417,18 @@ const Admin = {
                         });
                     };
                     listDiv.innerHTML = '';
-                    const fareChecks = Object.values(Admin._cachedFareVotes || {}).filter((row) => typeof row?.agree === 'boolean');
+                    const fareChecks = Object.values(Admin._cachedFareVotes || {}).filter((row) => typeof row?.agree === 'boolean' && row.review !== 'refuted');
                     const fareMatches = fareChecks.filter((row) => row.agree === true).length;
+                    const fareRefuted = Object.values(Admin._cachedFareVotes || {}).filter((row) => row?.review === 'refuted').length;
                     const fareAccuracy = document.createElement('div');
                     fareAccuracy.className = 'mb-2 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700';
                     if (!fareChecks.length) {
-                        fareAccuracy.innerHTML = '<p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">No fare checks yet.</p>';
+                        fareAccuracy.innerHTML = fareRefuted
+                            ? '<p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">No fare checks in the accuracy count. Refuted prices are left out.</p>'
+                            : '<p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">No fare checks yet.</p>';
                     } else {
                         const pct = Math.round((fareMatches / fareChecks.length) * 100);
-                        fareAccuracy.innerHTML = `<p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Fare quote accuracy</p><p class="text-lg font-black text-gray-900 dark:text-white tabular-nums">${pct}%</p><p class="text-[11px] text-gray-500 dark:text-gray-400">${fareMatches} of ${fareChecks.length} checks said the quote was right.</p>`;
+                        fareAccuracy.innerHTML = `<p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Fare quote accuracy</p><p class="text-lg font-black text-gray-900 dark:text-white tabular-nums">${pct}%</p><p class="text-[11px] text-gray-500 dark:text-gray-400">${fareMatches} of ${fareChecks.length} checks said the quote was right.${fareRefuted ? ' Refuted prices are left out.' : ''}</p>`;
                     }
                     listDiv.appendChild(fareAccuracy);
                     Admin.paintConfirmedCorridorFares(listDiv, liveRouteFares);
@@ -8430,9 +8468,10 @@ const Admin = {
                         const livePrice = liveRow ? Number(liveRow.price) : NaN;
                         return Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
                     };
-                    const fareIsDecided = (item) => item.review === 'saved' || item.review === 'refuted' || !!item.reclassifiedAt || fareIsLive(item);
-                    const savedItems = entries.filter((item) => fareIsDecided(item));
-                    const pendingItems = entries.filter((item) => !fareIsDecided(item));
+                    const fareIsHandled = (item) => item.review === 'saved' || !!item.reclassifiedAt || fareIsLive(item);
+                    const savedItems = entries.filter((item) => item.review !== 'refuted' && (item.agree === true || fareIsHandled(item)));
+                    const refutedItems = entries.filter((item) => item.review === 'refuted');
+                    const pendingItems = entries.filter((item) => item.agree === false && item.review !== 'refuted' && !fareIsHandled(item));
                     const paintFareVoteCard = (item, host) => {
                         const card = document.createElement('div');
                         card.className = "de-fare-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-amber-300";
@@ -8603,16 +8642,30 @@ const Admin = {
                     } else {
                         savedItems.forEach((item) => paintFareVoteCard(item, savedHost));
                     }
+                    const refutedWrap = document.createElement('div');
+                    refutedWrap.className = 'mb-3';
+                    refutedWrap.innerHTML = `
+                        <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/40">
+                            <summary class="cursor-pointer list-none px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500">Refuted (${refutedItems.length})</summary>
+                            <div class="de-refuted-fares px-3 pb-3 space-y-2"></div>
+                        </details>`;
+                    listDiv.appendChild(refutedWrap);
+                    const refutedHost = refutedWrap.querySelector('.de-refuted-fares');
+                    if (!refutedItems.length) {
+                        refutedHost.innerHTML = '<p class="text-[11px] text-gray-500 italic">None refuted.</p>';
+                    } else {
+                        refutedItems.forEach((item) => paintFareVoteCard(item, refutedHost));
+                    }
                     if (pendingItems.length) {
                         const heading = document.createElement('p');
                         heading.className = 'text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 pt-2';
-                        heading.textContent = `Pending (${pendingItems.length})`;
+                        heading.textContent = `Incorrect (${pendingItems.length})`;
                         listDiv.appendChild(heading);
                         pendingItems.forEach((item) => paintFareVoteCard(item, listDiv));
                     } else {
                         const done = document.createElement('p');
                         done.className = 'text-xs text-gray-500 italic text-center py-3';
-                        done.textContent = 'No pending corrections.';
+                        done.textContent = 'No incorrect quotes waiting.';
                         listDiv.appendChild(done);
                     }
                     return;
@@ -12627,13 +12680,13 @@ const Admin = {
             <div id="ut-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('user', 'text-indigo-500 dark:text-indigo-400')}
-                    <span>User Trust &amp; Bans</span>
+                    <span>User Accounts &amp; Bans</span>
                 </span>
                 <span id="ut-unread-badge" class="admin-unread-badge hidden" aria-label="Pending deletion requests"></span>
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Bans, accounts, lookup, and deletion requests are in this panel.</p>
+                <p class="text-[13px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Accounts, bans, lookup, and deletion requests are in this panel.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
                     <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Bans</button>
                     <button type="button" id="ut-tab-accounts" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Accounts</button>
@@ -12641,6 +12694,18 @@ const Admin = {
                     <button type="button" id="ut-tab-deletions" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Deletions</button>
                 </div>
                 <div id="ut-pane-bans" role="tabpanel" class="ut-pane">
+                    <div id="shadow-ban-default-body" class="mb-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 space-y-2">
+                        <p class="text-sm font-semibold text-gray-900 dark:text-white">Default ban mode</p>
+                        <p class="text-[13px] leading-snug text-gray-500 dark:text-gray-400">This fills the ban dialog. Each ban still keeps its own mode.</p>
+                        <select id="shadow-ban-default-mode" class="w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white outline-none">
+                            <option value="offline">Fake offline / lie-fi</option>
+                            <option value="freeze">Freeze / unresponsive</option>
+                            <option value="fouc">True FOUC (unstyled)</option>
+                            <option value="lost">404 / End of the Line</option>
+                            <option value="warning">Warning (visible)</option>
+                        </select>
+                        <button type="button" id="shadow-ban-default-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save default mode</button>
+                    </div>
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Active shadow bans</span>
                         <button type="button" id="ut-bans-refresh" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
@@ -20121,35 +20186,35 @@ const Admin = {
                 <svg id="grid-order-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="grid-order-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
-                <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Route
-                    <select id="grid-order-route" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white"></select>
+                <p class="text-sm leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
+                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Route
+                    <select id="grid-order-route" class="mt-1 w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white"></select>
                 </label>
                 <div class="grid grid-cols-2 gap-2">
-                    <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Day
-                        <select id="grid-order-day" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white">
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Day
+                        <select id="grid-order-day" class="mt-1 w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white">
                             <option value="weekday">Weekday</option>
                             <option value="saturday">Saturday</option>
                             <option value="public_holiday">Public holiday</option>
                         </select>
                     </label>
-                    <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Direction
-                        <select id="grid-order-direction" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white">
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Direction
+                        <select id="grid-order-direction" class="mt-1 w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white">
                             <option value="A">To destination A</option>
                             <option value="B">To destination B</option>
                         </select>
                     </label>
                 </div>
-                <button id="grid-order-load" type="button" class="w-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Load order</button>
-                <div id="grid-order-meta" class="hidden rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-[10px] text-gray-500 dark:text-gray-400" aria-live="polite"></div>
+                <button id="grid-order-load" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Load order</button>
+                <div id="grid-order-meta" class="hidden rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-500 dark:text-gray-400" aria-live="polite"></div>
                 <ol id="grid-order-list" class="space-y-1 max-h-[52vh] overflow-y-auto custom-scrollbar" aria-label="Train column order"></ol>
                 <div id="grid-order-actions" class="hidden space-y-2">
                     <div class="grid grid-cols-2 gap-2">
-                        <button id="grid-order-reset" type="button" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Reset to fallback</button>
-                        <button id="grid-order-save" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save order</button>
+                        <button id="grid-order-reset" type="button" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Reset to fallback</button>
+                        <button id="grid-order-save" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save order</button>
                     </div>
-                    <button id="grid-order-via-all-days" type="button" class="w-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save via marks to all days</button>
-                    <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
+                    <button id="grid-order-via-all-days" type="button" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Save via marks to all days</button>
+                    <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
                 </div>
             </div>
         `;
@@ -20176,6 +20241,21 @@ const Admin = {
         routeEl.innerHTML = routes.map((route) =>
             `<option value="${ntAdminSecureEscape(route.id)}">${ntAdminSecureEscape(Admin.formatRouteLabelPlain(route.name))}</option>`
         ).join('');
+
+        const stationEnd = (raw) => String(raw || '')
+            .replace(/\s+STATION\s*$/i, '')
+            .toLowerCase()
+            .replace(/(^|[\s-])([a-z])/g, (all, sep, ch) => sep + ch.toUpperCase());
+        const paintDirectionEnds = () => {
+            const route = ROUTES?.[routeEl.value];
+            const a = stationEnd(route?.destA) || 'destination A';
+            const b = stationEnd(route?.destB) || 'destination B';
+            const optA = directionEl.querySelector('option[value="A"]');
+            const optB = directionEl.querySelector('option[value="B"]');
+            if (optA) optA.textContent = `To ${a}`;
+            if (optB) optB.textContent = `To ${b}`;
+        };
+        paintDirectionEnds();
 
         const routeSheetKey = () => {
             const route = ROUTES?.[routeEl.value];
@@ -20259,16 +20339,18 @@ const Admin = {
             listEl.innerHTML = currentOrder.map((id, index) => {
                 const via = currentVia[id] || '';
                 return `
-                <li draggable="true" data-grid-order-row="${index}" class="flex flex-col gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <li draggable="true" data-grid-order-row="${index}" class="flex flex-col gap-2 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                     <div class="flex items-center gap-2">
-                        <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none text-gray-400 px-1 focus:outline-none" aria-label="Drag train ${id}">⋮⋮</button>
-                        <span class="font-mono font-bold text-xs text-gray-800 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
-                        <button type="button" data-grid-order-up="${index}" class="min-h-10 min-w-10 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>↑</button>
-                        <button type="button" data-grid-order-down="${index}" class="min-h-10 min-w-10 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>↓</button>
+                        <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none h-11 w-11 shrink-0 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-500 focus:outline-none" aria-label="Drag train ${id}">
+                            <svg class="w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="7" r="1.4"/><circle cx="15" cy="7" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="17" r="1.4"/><circle cx="15" cy="17" r="1.4"/></svg>
+                        </button>
+                        <span class="font-mono font-semibold text-sm text-gray-900 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
+                        <button type="button" data-grid-order-up="${index}" class="h-11 min-w-11 px-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-200 disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>Up</button>
+                        <button type="button" data-grid-order-down="${index}" class="h-11 min-w-11 px-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-200 disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>Down</button>
                     </div>
-                    <label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        <span class="shrink-0 w-8">Via</span>
-                        <select data-grid-via="${ntAdminSecureEscape(id)}" class="min-w-0 flex-1 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs font-semibold normal-case text-gray-900 dark:text-white" aria-label="Via branch for train ${ntAdminSecureEscape(id)}">
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        <span class="shrink-0">Via</span>
+                        <select data-grid-via="${ntAdminSecureEscape(id)}" class="min-w-0 flex-1 h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-semibold text-gray-900 dark:text-white" aria-label="Via branch for train ${ntAdminSecureEscape(id)}">
                             <option value="" ${via ? '' : 'selected'}>None</option>
                             <option value="MONTE_VISTA" ${via === 'MONTE_VISTA' ? 'selected' : ''}>Monte Vista</option>
                             <option value="MAITLAND" ${via === 'MAITLAND' ? 'selected' : ''}>Maitland</option>
@@ -20548,6 +20630,7 @@ const Admin = {
                     Admin.gridOrderDirty = false;
                     load();
                 }
+                paintDirectionEnds();
             });
         });
         if (!window._gridOrderBeforeUnloadBound) {
@@ -24619,6 +24702,17 @@ const Admin = {
                     <button type="button" id="holiday-approvals-refresh" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 border border-blue-200 dark:border-blue-800 rounded px-2 py-1.5 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
                 <div id="holiday-approvals-list" class="space-y-3 max-h-[520px] overflow-y-auto custom-scrollbar"></div>
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <button type="button" id="sched-override-header" class="w-full px-3 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white flex items-center justify-between focus:outline-none">
+                        <span>Force schedule type</span>
+                        <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="sched-override-body" class="hidden px-3 pb-3 space-y-3">
+                        <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active. Optional dates limit the force to those calendar days only; leave dates empty to keep it on until you deactivate.</p>
+                        <div id="sched-override-regions" class="space-y-3"></div>
+                        <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save schedule overrides</button>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -25073,21 +25167,6 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Force schedule type (accordion, collapsed by default) -->
-                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden shadow-sm transition-all">
-                    <button type="button" id="sched-override-header" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-blue-900/40 text-left text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-blue-900/60">
-                        <span class="flex items-center gap-2">
-                            <span class="text-blue-600 dark:text-blue-300">${Admin.icon('calendar', 'w-4 h-4')}</span> Force schedule type
-                        </span>
-                        <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="sched-override-body" class="hidden p-4 space-y-3">
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active. Optional dates limit the force to those calendar days only; leave dates empty to keep it on until you deactivate.</p>
-                        <div id="sched-override-regions" class="space-y-3"></div>
-                        <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
-                    </div>
-                </div>
-
                 <!-- Next Train Champions (About honour roll) -->
                 <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden shadow-sm transition-all">
                     <button type="button" id="champions-header" class="w-full px-3 py-3 bg-amber-100/50 dark:bg-amber-900/40 text-left text-[10px] font-black text-amber-900 dark:text-amber-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-amber-200/50 dark:hover:bg-amber-900/60">
@@ -25144,27 +25223,6 @@ const Admin = {
                             ${Admin.renderExpFeatureAccordions()}
                         </div>
                         <button type="button" id="exp-features-save" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save experimental features</button>
-                    </div>
-                </div>
-
-                <!-- Shadow-ban default experience (accordion, collapsed by default) -->
-                <div class="bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800 overflow-hidden shadow-sm transition-all">
-                    <button type="button" id="shadow-ban-default-header" class="w-full px-3 py-3 bg-violet-100/50 dark:bg-violet-900/40 text-left text-[10px] font-black text-violet-800 dark:text-violet-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-violet-200/50 dark:hover:bg-violet-900/60">
-                        <span class="flex items-center gap-2">
-                            <span class="text-violet-600 dark:text-violet-300">${Admin.icon('ban', 'w-4 h-4')}</span> Shadow-ban default mode
-                        </span>
-                        <svg id="shadow-ban-default-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="shadow-ban-default-body" class="hidden p-4">
-                        <p class="text-[10px] text-violet-600 dark:text-violet-400 mb-3 leading-snug">Prefills the Shadow ban dialog. Per-ban mode is stored on the user/device (clients no longer read this global config publicly).</p>
-                        <select id="shadow-ban-default-mode" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none shadow-sm mb-2">
-                            <option value="offline">Fake offline / lie-fi</option>
-                            <option value="freeze">Freeze / unresponsive</option>
-                            <option value="fouc">True FOUC (unstyled)</option>
-                            <option value="lost">404 / End of the Line</option>
-                            <option value="warning">Warning (visible)</option>
-                        </select>
-                        <button type="button" id="shadow-ban-default-save" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save default mode</button>
                     </div>
                 </div>
 

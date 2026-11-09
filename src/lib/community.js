@@ -1670,6 +1670,13 @@ function paintCommunityQuotaHint() {
     }
     const limit = checkCommunityRateLimit();
     const left = Math.max(0, Number(limit.remaining) || 0);
+    const note = document.getElementById('community-quota-note');
+    if (left > 3) {
+        el.textContent = '';
+        el.hidden = true;
+        if (note) note.hidden = true;
+        return;
+    }
     el.hidden = false;
     el.textContent = `${left} left`;
     if (!limit.ok && limit.reason === 'quota' && !communityWaitCancel) {

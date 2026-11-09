@@ -3,6 +3,8 @@
  */
 import { cleanHttpUrl, externalVideoPageUrl, isPublicPreviewUrl } from './link-preview.js';
 export const ALERTS_PAGE_SIZE = 10;
+/** Posters on one alert. Catalog paths and internet image files share this cap. */
+export const ALERT_POSTER_MAX = 10;
 export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
 /** Printed timetable sheets that back in-app schedules; also postable on alerts later. */
@@ -271,7 +273,7 @@ export function collectNoticeImageUrls(notice) {
     const out = [];
     raw.forEach((u) => {
         const s = sanitizeAlertImageUrl(u);
-        if (s && !out.includes(s) && out.length < 2) out.push(s);
+        if (s && !out.includes(s) && out.length < ALERT_POSTER_MAX) out.push(s);
     });
     return out;
 }
@@ -690,7 +692,7 @@ export function layoutAlertPost(notice) {
     extracted.urls.forEach((u) => pushVideoUrl(videos, u));
     return {
         title: split.title,
-        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u)).slice(0, 4),
+        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u)).slice(0, ALERT_POSTER_MAX),
         videoUrls: videos.slice(0, 2),
         body: stripAlertSignoffHtml(extracted.body),
     };

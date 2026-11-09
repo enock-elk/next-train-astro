@@ -97,11 +97,11 @@ assert.match(admin, /status:\s*'rejected'[\s\S]{0,80}resolution:\s*'rejected'/);
 assert.match(admin, /Admin\.approveHeldFeedback\s*=\s*async/, 'feedback approval remains available');
 
 const heldPostBranch = community.slice(
-    community.indexOf("if (safety.verdict === 'review')", community.indexOf('export async function submitCommunityPost')),
+    community.indexOf("safety.verdict === 'review'", community.indexOf('export async function submitCommunityPost')),
     community.indexOf('const postId = newId', community.indexOf('export async function submitCommunityPost'))
 );
 const heldReplyBranch = community.slice(
-    community.indexOf("if (safety.verdict === 'review')", community.indexOf('export async function submitCommunityReply')),
+    community.indexOf("safety.verdict === 'review'", community.indexOf('export async function submitCommunityReply')),
     community.indexOf("const replyId = newId", community.indexOf('export async function submitCommunityReply'))
 );
 assert.match(heldPostBranch, /queueAutoModeration/);
@@ -130,19 +130,21 @@ assert.match(community, /shouldFallbackCommunityWrite/, 'client falls back to a 
 
 const handlePostSrc = workerSource.slice(
     workerSource.indexOf('async function handlePost'),
-    workerSource.indexOf('async function wipeStalePosts')
+    workerSource.indexOf('async function trimRouteBuckets')
 );
 assert.match(handlePostSrc, /ADMIN_EMAILS\.has\(String\(user\.email/, 'worker post cooldown checks ADMIN_EMAILS');
 assert.match(handlePostSrc, /isAdminPoster/, 'admins skip the community post cooldown');
 assert.match(workerSource, /thandeka05nxumalo@gmail\.com/, 'Thandeka stays on the worker admin allowlist');
 assert.match(workerSource, /enockelk@gmail\.com/, 'Enock stays on the worker admin allowlist');
-assert.match(community, /if \(!isAdminAuthed\(\)\) \{\s*const limit = checkCommunityRateLimit\(\);/, 'client cooldown skips signed-in operators');
+assert.match(community, /const operator = isAdminAuthed\(\)/, 'client cooldown knows the signed-in operator');
+assert.match(community, /if \(!operator\) \{[\s\S]{0,180}checkCommunityRateLimit\(\)/, 'client cooldown skips signed-in operators');
 assert.match(community, /awardCommunityMarks\(/, 'a published community message awards points');
 assert.match(workerSource, /sanitizeCommunityPhotoUrl/, 'worker allowlists community avatar URLs');
 assert.match(workerSource, /next-train-lab\.pages\.dev/, 'worker CORS is limited to Next Train lab previews');
 assert.doesNotMatch(workerSource, /host\.endsWith\('\.pages\.dev'\)/, 'worker CORS does not allow every pages.dev host');
-assert.match(community, /community-sheet-delete/, 'admin can delete a community message from the tab');
-assert.match(community, /Delete for everyone/, 'community delete uses the alerts label');
+assert.match(community, /community-sheet-delete/, 'a message can be deleted from the community tab');
+assert.match(community, /data-delete-as="author"/, 'the poster can delete their own message');
+assert.match(community, /Remove completely/, 'an operator can still remove a message with no bubble left');
 assert.match(admin, /ntAdminDeletePublishedCommunityMessage/, 'community tab delete uses the same RTDB delete as Community Monitor');
 
 console.log(`Community safety verified: ${cases.length} language cases, client/worker parity, held publishing paths.`);

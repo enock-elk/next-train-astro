@@ -1946,6 +1946,7 @@ html.dark .cm-bubble-name { background: rgba(255, 255, 255, 0.07); }
 }
 .cm-bubble-actions .cm-delete-message,
 .cm-bubble-actions .cm-shadow-ban { color: #dc2626; }
+.cm-msg-deleted { font-style: italic; opacity: 0.8; }
 .cm-empty { text-align: left; color: #9ca3af; padding: 0.5rem 0; }
 .mq-body-scroll {
   max-height: calc(100dvh - 8.25rem);

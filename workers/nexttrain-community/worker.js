@@ -1,12 +1,13 @@
 /**
- * Next Train — community write bouncer, scheduled alerts + 24h TTL janitor
+ * Next Train — community write bouncer, scheduled alerts, and room-depth trim
  *
  * POST /community/post
  *   Authorization: Bearer <Firebase ID token>
  *   Body: { routeId, body, displayName?, photoURL?, deviceId?, category?, replyTo?, postId? }
  *
  * Cron (every 5 minutes): publish due scheduled alerts.
- * Cron (hourly): wipe route_community posts older than POST_TTL_MS (default 24h).
+ * Cron (hourly): trim each route to COMMUNITY_BUCKET_DEPTH newest messages.
+ * POST /community/message  { op:'delete', routeId, postId, replyId?, mode:'tombstone'|'purge', as?:'author'|'admin' }
  *
  * Secrets: FIREBASE_PRIVATE_KEY (PEM; \n escaped OK)
  * Vars: FIREBASE_WEB_API_KEY, FIREBASE_DATABASE_URL, FIREBASE_CLIENT_EMAIL, …
@@ -17,6 +18,13 @@ import {
     findDisallowedUrls,
 } from '../../src/lib/content-safety-core.js';
 import { sanitizeCommunityPhotoUrl } from '../../src/lib/community-photo.js';
+import {
+    COMMUNITY_ADMIN_BODY_MAX,
+    COMMUNITY_BUCKET_DEPTH,
+    communityTombstonePatch,
+    sanitizeCommunityAttachments,
+    sanitizeCommunityLinkUrl,
+} from '../../src/lib/community-policy.js';
 
 const BODY_MAX = 280;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
@@ -109,6 +117,28 @@ export function sanitizeBody(raw) {
     }
     const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
     return { ok: true, verdict: 'allow', text: clipped.trim() };
+}
+
+/** Operators may post links. Severe language and scam packs still block. */
+export function sanitizeAdminBody(raw) {
+    const text = stripHtml(raw);
+    const scam = classifyScamContent(text);
+    if (scam.block.length) {
+        return { ok: false, verdict: 'block', error: "Couldn't post that." };
+    }
+    const safety = classifyUnsafeLanguage(text);
+    if (safety.block.length) {
+        return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
+    }
+    const clipped = text.length > COMMUNITY_ADMIN_BODY_MAX ? text.slice(0, COMMUNITY_ADMIN_BODY_MAX) : text;
+    return { ok: true, verdict: 'allow', text: clipped.trim() };
+}
+
+/** A quote is a snapshot. Keep a link that was already on the message. Drop a forged slur. */
+function quoteSnapshot(raw) {
+    const text = stripHtml(String(raw || '')).slice(0, 120);
+    if (classifyUnsafeLanguage(text).block.length) return '';
+    return text.trim();
 }
 
 function checkRate(key, windowMs, max) {
@@ -273,12 +303,20 @@ async function rtdbUpdate(env, updates) {
 }
 
 async function rtdbGet(env, path) {
+    return rtdbQuery(env, path);
+}
+
+async function rtdbQuery(env, path, params = {}) {
     const email = env.FIREBASE_CLIENT_EMAIL;
     const key = env.FIREBASE_PRIVATE_KEY;
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!email || !key || !base) throw new Error('Firebase Admin env incomplete');
     const token = await getGoogleAccessToken(email, key);
-    const res = await fetch(rtdbJsonUrl(base, path, token));
+    const url = new URL(rtdbJsonUrl(base, path, token));
+    Object.entries(params || {}).forEach(([name, value]) => {
+        if (value != null && value !== '') url.searchParams.set(name, String(value));
+    });
+    const res = await fetch(url.toString());
     if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
     return res.json();
 }
@@ -1172,7 +1210,9 @@ async function handlePost(request, env) {
         return json(env, request, 400, { ok: false, error: 'Invalid routeId' });
     }
 
-    const cleaned = sanitizeBody(body.body || '');
+    const attachments = sanitizeCommunityAttachments(body.attachments, { admin: isAdminPoster });
+    const linkUrl = isAdminPoster ? sanitizeCommunityLinkUrl(body.linkUrl) : '';
+    const cleaned = isAdminPoster ? sanitizeAdminBody(body.body || '') : sanitizeBody(body.body || '');
     if (!cleaned.ok && cleaned.verdict === 'block') {
         return json(env, request, 400, {
             ok: false,
@@ -1180,9 +1220,9 @@ async function handlePost(request, env) {
             blocked: true,
         });
     }
-    const heldForReview = cleaned.verdict === 'review';
+    const heldForReview = !isAdminPoster && cleaned.verdict === 'review';
     const text = cleaned.text;
-    if (text.length < 2) {
+    if (text.length < 2 && !attachments.length && !linkUrl) {
         return json(env, request, 400, { ok: false, error: 'Write a short message.' });
     }
 
@@ -1228,11 +1268,15 @@ async function handlePost(request, env) {
         appVersion: String(body.appVersion || '').slice(0, 40) || null,
         via: 'community_worker',
     };
+    if (attachments.length) {
+        payload.attachments = attachments.map((url) => ({ kind: 'image', url }));
+    }
+    if (linkUrl) payload.linkUrl = linkUrl;
     if (body.replyTo && typeof body.replyTo === 'object') {
         payload.replyTo = {
             postId: String(body.replyTo.postId || '').slice(0, 80),
             displayName: String(body.replyTo.displayName || '').slice(0, 80),
-            body: (sanitizeBody(String(body.replyTo.body || '')).text || '').slice(0, 120),
+            body: quoteSnapshot(body.replyTo.body),
         };
     }
 
@@ -1288,35 +1332,142 @@ async function handlePost(request, env) {
     }
 }
 
-async function wipeStalePosts(env) {
-    const ttl = Number(env.POST_TTL_MS || 86_400_000);
-    const cut = Date.now() - ttl;
-    const tree = await rtdbGet(env, 'route_community');
-    if (!tree || typeof tree !== 'object') return { deleted: 0 };
+/**
+ * Drop messages past the fixed room depth.
+ * Shallow keys, then limitToLast for the kept window, then a short page of
+ * older rows. This does not download every room in one response.
+ * Quotes already stored on newer messages are separate fields and stay.
+ */
+async function trimRouteBuckets(env) {
+    const shallow = await rtdbQuery(env, 'route_community', { shallow: 'true' });
+    if (!shallow || typeof shallow !== 'object') return { deleted: 0 };
     let deleted = 0;
-    for (const [routeId, routeNode] of Object.entries(tree)) {
-        const posts = routeNode?.posts;
-        if (!posts || typeof posts !== 'object') continue;
-        for (const [postId, post] of Object.entries(posts)) {
-            const ts = Number(post?.timestamp || 0);
-            if (ts && ts < cut) {
-                try {
-                    const updates = {
-                        [`route_community/${routeId}/posts/${postId}`]: null,
-                        [`community_activity/${routeId}/${postId}`]: null,
-                    };
-                    Object.keys(post?.replies || {}).forEach((replyId) => {
-                        updates[`community_activity/${routeId}/${replyId}`] = null;
-                    });
-                    await rtdbUpdate(env, updates);
-                    deleted += 1;
-                } catch {
-                    /* continue */
-                }
+    const depth = COMMUNITY_BUCKET_DEPTH;
+    for (const routeId of Object.keys(shallow)) {
+        if (!isSafeRtdbKey(routeId)) continue;
+        let windowPosts;
+        try {
+            windowPosts = await rtdbQuery(env, `route_community/${routeId}/posts`, {
+                orderBy: '"timestamp"',
+                limitToLast: String(depth),
+            });
+        } catch {
+            continue;
+        }
+        const keptEntries = windowPosts && typeof windowPosts === 'object' ? Object.entries(windowPosts) : [];
+        if (keptEntries.length < depth) continue;
+        let cutoff = Infinity;
+        keptEntries.forEach(([, post]) => {
+            const ts = Number(post?.timestamp) || 0;
+            if (ts && ts < cutoff) cutoff = ts;
+        });
+        if (!Number.isFinite(cutoff)) continue;
+        const keptIds = new Set(keptEntries.map(([id]) => id));
+        for (let page = 0; page < 4; page += 1) {
+            let stale;
+            try {
+                stale = await rtdbQuery(env, `route_community/${routeId}/posts`, {
+                    orderBy: '"timestamp"',
+                    endAt: String(cutoff),
+                    limitToFirst: '20',
+                });
+            } catch {
+                break;
             }
+            const rows = stale && typeof stale === 'object'
+                ? Object.entries(stale).filter(([id]) => !keptIds.has(id) && isSafeRtdbKey(id))
+                : [];
+            if (!rows.length) break;
+            const updates = {};
+            rows.forEach(([postId, post]) => {
+                updates[`route_community/${routeId}/posts/${postId}`] = null;
+                updates[`route_community/${routeId}/post_reactions/${postId}`] = null;
+                updates[`community_activity/${routeId}/${postId}`] = null;
+                Object.keys(post?.replies || {}).forEach((replyId) => {
+                    if (isSafeRtdbKey(replyId)) updates[`community_activity/${routeId}/${replyId}`] = null;
+                });
+            });
+            await rtdbUpdate(env, updates);
+            deleted += rows.length;
+            if (rows.length < 20) break;
         }
     }
     return { deleted };
+}
+
+async function handleCommunityDelete(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    const idToken = authHeader.slice(7).trim();
+    let user;
+    try {
+        user = await verifyIdToken(env, idToken);
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const routeId = String(body.routeId || '').trim();
+    const postId = String(body.postId || '').trim();
+    const replyId = String(body.replyId || '').trim();
+    const mode = body.mode === 'purge' ? 'purge' : 'tombstone';
+    if (!isSafeRtdbKey(routeId) || !isSafeRtdbKey(postId) || (replyId && !isSafeRtdbKey(replyId))) {
+        return json(env, request, 400, { ok: false, error: 'Invalid message.' });
+    }
+    const isAdmin = ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase());
+    if (!isAdmin && mode === 'purge') {
+        return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
+    }
+    if (!isAdmin && !checkRate(`del:${user.uid}`, 60_000, 12)) {
+        return json(env, request, 429, { ok: false, error: 'Please wait a moment before deleting another message.' });
+    }
+    const path = replyId
+        ? `route_community/${routeId}/posts/${postId}/replies/${replyId}`
+        : `route_community/${routeId}/posts/${postId}`;
+    let current;
+    try {
+        current = await rtdbGet(env, path);
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not read that message.' });
+    }
+    if (!current || typeof current !== 'object') {
+        return json(env, request, 200, { ok: true, missing: true });
+    }
+    if (!isAdmin && String(current.uid || '') !== user.uid) {
+        return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
+    }
+    const actor = !isAdmin || body.as === 'author' ? 'author' : 'admin';
+    try {
+        if (mode === 'purge') {
+            const updates = { [path]: null };
+            if (replyId) {
+                updates[`community_activity/${routeId}/${replyId}`] = null;
+            } else {
+                updates[`route_community/${routeId}/post_reactions/${postId}`] = null;
+                updates[`community_activity/${routeId}/${postId}`] = null;
+                Object.keys(current.replies || {}).forEach((id) => {
+                    if (isSafeRtdbKey(id)) updates[`community_activity/${routeId}/${id}`] = null;
+                });
+            }
+            await rtdbUpdate(env, updates);
+            return json(env, request, 200, { ok: true, mode: 'purge' });
+        }
+        const patch = communityTombstonePatch(actor);
+        const updates = {};
+        Object.entries(patch).forEach(([key, value]) => {
+            updates[`${path}/${key}`] = value;
+        });
+        await rtdbUpdate(env, updates);
+        return json(env, request, 200, { ok: true, mode: 'tombstone', deletedBy: actor, body: patch.body });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not delete that message.' });
+    }
 }
 
 export default {
@@ -1330,6 +1481,9 @@ export default {
         }
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/message') {
+            return handleCommunityDelete(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/admin/notifications/send') {
             return handlePushNotificationsAdmin(request, env);
@@ -1368,7 +1522,7 @@ export default {
                 return json(env, request, 401, { ok: false, error: 'Unauthorized' });
             }
             try {
-                const result = await wipeStalePosts(env);
+                const result = await trimRouteBuckets(env);
                 return json(env, request, 200, { ok: true, ...result });
             } catch (e) {
                 return json(env, request, 500, { ok: false, error: e.message });
@@ -1392,7 +1546,7 @@ export default {
         const hourly = cron === TTL_CRON || cron === '0 * * * *' || /^0 \* \* \* \*$/.test(cron);
         if (hourly) {
             tasks.push(
-                wipeStalePosts(env).catch((e) => console.error('TTL wipe failed', e))
+                trimRouteBuckets(env).catch((e) => console.error('Community bucket trim failed', e))
             );
         }
         await Promise.all(tasks);

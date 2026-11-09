@@ -67,6 +67,22 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
+            <div id="community-admin-tools" class="hidden mb-1.5">
+                <div class="flex gap-2">
+                    <button type="button" id="community-suggest-btn" class="flex-1 min-h-[2.25rem] rounded-xl bg-indigo-600 text-white text-xs font-bold focus:outline-none">Suggest reply</button>
+                    <button type="button" id="community-attach-btn" class="flex-1 min-h-[2.25rem] rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Attach</button>
+                </div>
+                <div id="community-attach-tray" class="hidden mt-1.5 space-y-1.5">
+                    <select id="community-poster-select" class="w-full min-h-[2.25rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs text-gray-900 dark:text-white px-2 focus:outline-none">
+                        <option value="">Service alert poster…</option>
+                    </select>
+                    <div class="flex gap-2">
+                        <input id="community-attach-url" type="url" inputmode="url" maxlength="400" class="flex-1 min-w-0 min-h-[2.25rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs px-2 text-gray-900 dark:text-white focus:outline-none" placeholder="https link or image address" />
+                        <button type="button" id="community-attach-add" class="shrink-0 px-3 rounded-xl bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-bold focus:outline-none">Add</button>
+                    </div>
+                    <div id="community-attach-preview" class="flex flex-wrap gap-1.5 empty:hidden"></div>
+                </div>
+            </div>
             <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 mb-1 empty:hidden empty:mb-0"></p>
             <button type="button" id="community-quota-hint" hidden class="mb-1 bg-transparent p-0 text-left text-[11px] leading-snug text-gray-500 underline decoration-dotted underline-offset-2 focus:outline-none dark:text-gray-400"></button>
             <p id="community-quota-note" hidden class="mb-2 text-[13px] font-normal leading-snug text-gray-600 dark:text-gray-300"></p>
@@ -229,6 +245,41 @@
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  .community-msg-deleted {
+    font-style: italic;
+    opacity: 0.8;
+  }
+  .community-msg-images {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    margin-bottom: 0.3rem;
+  }
+  .community-msg-images img {
+    display: block;
+    width: 100%;
+    max-height: 9rem;
+    object-fit: cover;
+    border-radius: 0.4rem;
+    background: rgba(0, 0, 0, 0.06);
+  }
+  .community-msg-link {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: underline;
+    word-break: break-all;
+  }
+  .community-attach-chip {
+    max-width: 100%;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: #eef2ff;
+    color: #3730a3;
   }
   .community-msg-time {
     float: right;

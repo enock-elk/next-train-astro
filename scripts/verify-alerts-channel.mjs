@@ -126,11 +126,12 @@ const now = 1_700_000_000_000;
     assert(sanitizeAlertImageUrl('/images/alerts/../icons/x.png') === null, 'traversal blocked');
     assert(sanitizeAlertImageUrl('https://evil.example/images/alerts/x.png') === '/images/alerts/x.png', 'host stripped, path kept if alerts');
     assert(sanitizeAlertImageUrl('https://evil.example/etc/passwd') === null, 'foreign path blocked');
+    const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'].map((id) => `/images/alerts/${id}.png`);
     const urls = collectNoticeImageUrls({
         imageUrl: '/images/alerts/legacy.png',
-        imageUrls: ['/images/alerts/a.png', '/images/alerts/b.png', '/images/alerts/c.png', '/tmp/x.png'],
+        imageUrls: [...many, '/tmp/x.png'],
     });
-    assert(urls.length === 2 && urls[0] === '/images/alerts/a.png' && urls[1] === '/images/alerts/b.png', `max 2 posters ${urls}`);
+    assert(urls.length === 10 && urls[0] === '/images/alerts/a.png' && urls[9] === '/images/alerts/j.png', `max 10 posters ${urls.length}`);
     const legacy = collectNoticeImageUrls({ imageUrl: '/images/alerts/legacy.png' });
     assert(legacy.length === 1 && legacy[0] === '/images/alerts/legacy.png', 'legacy imageUrl fallback');
 }

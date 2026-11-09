@@ -2661,15 +2661,26 @@ export function startClock() {
 
 const PULL_ARM_PX = 72;
 
-function sessionRefreshBlocked() {
+function pullRefreshBlocked() {
     if (typeof document === 'undefined') return true;
     if (document.body.classList.contains('sidenav-open')) return true;
     if (document.body.classList.contains('modal-active')) return true;
+    if (document.getElementById('app-scroll')?.classList.contains('is-tab-swiping')) return true;
     const tab = safeStorage.getItem('activeTab') || 'next-train';
-    return tab !== 'next-train' && tab !== 'trip-planner' && tab !== 'community';
+    return tab === 'map' || tab === 'options';
+}
+
+function activePullSurface() {
+    const tab = safeStorage.getItem('activeTab') || 'next-train';
+    if (tab === 'community') {
+        return document.querySelector('#view-community .community-feed-scroll')
+            || document.getElementById('app-scroll');
+    }
+    return document.getElementById('app-scroll');
 }
 
 function chainIsAtTop(start, scroller) {
+    if (!scroller) return false;
     let node = start instanceof Element ? start : null;
     while (node && node !== scroller) {
         const style = window.getComputedStyle(node);
@@ -2742,7 +2753,7 @@ function bindSheetShades() {
     });
 }
 
-/** Pull down at the top of Next Train, Trip Planner, or Community to reload this session. */
+/** Pull down at the top of every tab except Map and Options. */
 export function initSessionPullRefresh() {
     if (typeof document === 'undefined' || window.__ntPullRefreshBound) return;
     const scroller = document.getElementById('app-scroll');
@@ -2751,6 +2762,7 @@ export function initSessionPullRefresh() {
     let startY = 0;
     let startX = 0;
     let tracking = false;
+    let claimed = false;
     let armed = false;
     let hint = null;
 
@@ -2759,81 +2771,113 @@ export function initSessionPullRefresh() {
             hint = document.createElement('div');
             hint.id = 'nt-pull-refresh';
             hint.setAttribute('aria-hidden', 'true');
-            hint.style.cssText = 'height:0;overflow:hidden;text-align:center;font-size:11px;font-weight:700;line-height:56px;color:#64748b;';
-            scroller.prepend(hint);
+            document.body.appendChild(hint);
         }
-        const height = Math.min(56, Math.max(0, px));
-        hint.style.height = height ? `${height}px` : '0';
-        hint.textContent = ready ? 'Release to refresh' : '';
+        const dark = document.documentElement.classList.contains('dark');
+        const height = Math.min(32, Math.max(0, px * 0.35));
+        hint.style.cssText = [
+            'position:fixed',
+            'left:50%',
+            'transform:translateX(-50%)',
+            'z-index:120',
+            'pointer-events:none',
+            'text-align:center',
+            'font-size:11px',
+            'font-weight:700',
+            'line-height:28px',
+            'border-radius:999px',
+            'overflow:hidden',
+            'white-space:nowrap',
+            `top:calc(var(--nt-shell-top, 0px) + 4.25rem)`,
+            `height:${height ? Math.max(height, ready ? 28 : 18) : 0}px`,
+            `padding:${height ? '0 12px' : '0'}`,
+            `color:${dark ? '#cbd5e1' : '#64748b'}`,
+            `background:${dark ? 'rgba(17,24,39,.92)' : 'rgba(255,255,255,.94)'}`,
+        ].join(';');
+        hint.textContent = ready ? 'Release to refresh' : (height > 14 ? 'Pull to refresh' : '');
+    };
+
+    const refreshOpenTab = async () => {
+        const tab = safeStorage.getItem('activeTab') || 'next-train';
+        if (tab === 'community') {
+            const community = await import('./community.js');
+            const routeId = document.getElementById('community-route-select')?.value || '';
+            community.openRouteCommunity?.(routeId ? { routeId } : {});
+            return;
+        }
+        await loadAllSchedules(true);
+        if (typeof window.findNextTrains === 'function') window.findNextTrains();
+        if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+        if (tab === 'trip-planner') {
+            const results = document.getElementById('planner-results-section');
+            if (results && !results.classList.contains('hidden')) {
+                document.getElementById('planner-search-btn')?.click();
+            }
+        }
     };
 
     scroller.addEventListener('touchstart', (event) => {
-        if (sessionRefreshBlocked()) {
-            tracking = false;
-            return;
-        }
+        tracking = false;
+        claimed = false;
+        armed = false;
+        if (pullRefreshBlocked()) return;
+        const surface = activePullSurface();
         const touch = event.touches?.[0];
-        if (!touch || !chainIsAtTop(event.target, scroller)) {
-            tracking = false;
-            return;
-        }
+        if (!touch || !surface || !(event.target instanceof Element) || !surface.contains(event.target)) return;
+        if (event.target.closest('input, textarea, select, a')) return;
+        if (!chainIsAtTop(event.target, surface)) return;
         startY = touch.clientY;
         startX = touch.clientX;
         tracking = true;
-        armed = false;
-    }, { passive: true });
+    }, { capture: true, passive: true });
 
     scroller.addEventListener('touchmove', (event) => {
         if (!tracking) return;
+        if (pullRefreshBlocked()) {
+            tracking = false;
+            claimed = false;
+            armed = false;
+            paintHint(0, false);
+            return;
+        }
         const touch = event.touches?.[0];
         if (!touch) return;
         const dy = touch.clientY - startY;
         const dx = Math.abs(touch.clientX - startX);
-        if (!chainIsAtTop(event.target, scroller) || dy <= 0 || dx > dy) {
-            if (dy > 8) {
+        if (!claimed) {
+            if (dy < 8 && dx < 8) return;
+            if (dx > dy || dy <= 0) {
                 tracking = false;
-                armed = false;
                 paintHint(0, false);
+                return;
             }
-            return;
+            claimed = true;
         }
-        if (dy < 10) return;
         if (event.cancelable) event.preventDefault();
         armed = dy >= PULL_ARM_PX;
         paintHint(dy, armed);
-    }, { passive: false });
+    }, { capture: true, passive: false });
 
     const release = async () => {
-        const go = tracking && armed && !sessionRefreshBlocked();
+        const go = tracking && claimed && armed && !pullRefreshBlocked();
         tracking = false;
+        claimed = false;
         armed = false;
         paintHint(0, false);
         if (!go || window.__ntPullRefreshing) return;
         window.__ntPullRefreshing = true;
         try {
-            const tab = safeStorage.getItem('activeTab') || 'next-train';
-            await loadAllSchedules(true);
-            if (typeof window.findNextTrains === 'function') window.findNextTrains();
-            if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
-            if (tab === 'trip-planner') {
-                const results = document.getElementById('planner-results-section');
-                if (results && !results.classList.contains('hidden')) {
-                    document.getElementById('planner-search-btn')?.click();
-                }
-            }
-            if (tab === 'community') {
-                const community = await import('./community.js');
-                community.openRouteCommunity?.();
-            }
-        } catch { /* the open tab keeps the times it already has */ }
+            await refreshOpenTab();
+        } catch { /* the open tab keeps what it already showed */ }
         finally { window.__ntPullRefreshing = false; }
     };
-    scroller.addEventListener('touchend', () => { release(); }, { passive: true });
+    scroller.addEventListener('touchend', () => { release(); }, { capture: true, passive: true });
     scroller.addEventListener('touchcancel', () => {
         tracking = false;
+        claimed = false;
         armed = false;
         paintHint(0, false);
-    }, { passive: true });
+    }, { capture: true, passive: true });
 }
 
 // Attach to window namespace for backward-compatible triggers & third-party shims

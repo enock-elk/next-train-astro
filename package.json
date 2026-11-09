@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "10.11.9.3",
+  "version": "10.11.9.4",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/fetch-live-schedules-for-seo.mjs && node scripts/generate-sitemap.mjs",
@@ -51,6 +51,7 @@
     "verify:community-safety": "node scripts/verify-community-safety.mjs",
     "verify:rtdb-security": "node scripts/verify-rtdb-security.mjs",
     "verify:community-monitor": "node scripts/verify-community-monitor.mjs",
+    "verify:community-bucket": "node scripts/verify-community-bucket.mjs",
     "verify:scheduled-alerts": "node scripts/verify-scheduled-alerts.mjs",
     "verify:push": "node scripts/verify-push-notifications.mjs",
     "verify:safe-nuke": "node scripts/verify-safe-nuke.mjs",

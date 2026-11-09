@@ -10,7 +10,7 @@
  * Shadow-ban policy: rules reject writes; client still shows the author's
  * own post in a session overlay so they appear silenced without schema rewrites.
  */
-import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES } from './config.js';
 import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
@@ -39,12 +39,22 @@ import {
     showMarksInCommunity,
     showPhotoInAlerts,
 } from './rider-marks.js';
+import {
+    COMMUNITY_ADMIN_BODY_MAX,
+    COMMUNITY_ADMIN_IMAGE_MAX,
+    COMMUNITY_BODY_MAX,
+    COMMUNITY_BUCKET_DEPTH,
+    DELETED_BY_ADMIN,
+    DELETED_MESSAGE,
+    isCommunityTombstone,
+    sanitizeCommunityAttachments,
+    sanitizeCommunityImageUrl,
+    sanitizeCommunityLinkUrl,
+} from './community-policy.js';
 
-const BODY_MAX = 280;
-/** Blaze cost control — plan: limitToLast(5–10). */
-const FEED_LIMIT = 10;
-/** Pilot freshness — hide / ignore posts older than 24h (Worker cron also wipes). */
-const POST_TTL_MS = 24 * 60 * 60 * 1000;
+const BODY_MAX = COMMUNITY_BODY_MAX;
+/** Listeners and the hourly trim share this count. Bytes stay bounded without a 24h wipe. */
+const FEED_LIMIT = COMMUNITY_BUCKET_DEPTH;
 const RATE_KEY = 'communityPostRateV1';
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 8;
@@ -101,6 +111,13 @@ let cachedUnreadByRoute = {};
 
 /** @type {Record<string, object[]>} local-only posts for shadow-banned authors */
 const localOverlayByRoute = {};
+/** Operator-only composer extras. Image addresses, not file bytes. */
+const adminImages = [];
+let adminLinkUrl = '';
+
+function communityWorkerBase() {
+    return COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
+}
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown';
@@ -277,7 +294,7 @@ function syncReplyDraftForRoute(routeId) {
 }
 
 function setReplyDraft(post, routeId) {
-    if (!post?.postId) {
+    if (!post?.postId || isCommunityTombstone(post)) {
         clearReplyDraft();
         return;
     }
@@ -285,7 +302,7 @@ function setReplyDraft(post, routeId) {
         postId: post.postId,
         routeId: routeId || $currentRouteId.get(),
         displayName: post.displayName || 'Passenger',
-        body: String(post.body || '').slice(0, 120),
+        body: String(post.body || (communityImageUrls(post).length ? 'Photo' : '')).slice(0, 120),
     };
     const bar = document.getElementById('community-reply-bar');
     const nameEl = document.getElementById('community-reply-bar-name');
@@ -306,13 +323,11 @@ function findCachedPost(postId) {
 }
 
 function postsVisibleFilter(list, myUid) {
-    const cut = Date.now() - POST_TTL_MS;
     return (list || [])
-        .filter((p) => p && typeof p === 'object' && p.body)
+        .filter((p) => p && typeof p === 'object' && (p.body || p.linkUrl || (Array.isArray(p.attachments) && p.attachments.length)))
         .filter((p) => {
-            if ((p.timestamp || 0) < cut) return false;
             if (p.pendingReview) return false;
-            if (p.hidden && p.uid !== myUid) return false;
+            if (p.hidden && p.uid !== myUid && !isCommunityTombstone(p)) return false;
             if (p.shadowOnly && p.uid !== myUid) return false;
             return true;
         })
@@ -537,9 +552,65 @@ function safeCommunityWriteError(message, status) {
     return text || (status ? `Post failed (${status})` : 'Could not post.');
 }
 
+export async function deleteCommunityMessage({ routeId, postId, replyId = '', mode = 'tombstone', as = 'author' } = {}) {
+    const token = await ensureAuthToken();
+    if (!token) throw new Error('Sign in again to delete this message.');
+    const res = await fetch(`${communityWorkerBase()}/community/message`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            op: 'delete',
+            routeId,
+            postId,
+            replyId: replyId || undefined,
+            mode: mode === 'purge' ? 'purge' : 'tombstone',
+            as: as === 'author' ? 'author' : 'admin',
+        }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 404 && isAdminAuthed()) {
+        const { ensureAdminLoaded } = await import('./admin-bridge.js');
+        const Admin = await ensureAdminLoaded();
+        if (mode === 'purge') {
+            if (!Admin?.deletePublishedCommunityMessage) throw new Error('Admin tools unavailable.');
+            await Admin.deletePublishedCommunityMessage(routeId, postId, replyId || undefined);
+        } else {
+            if (!Admin?.tombstoneCommunityMessage) throw new Error('Admin tools unavailable.');
+            await Admin.tombstoneCommunityMessage(routeId, postId, replyId || undefined);
+        }
+    } else if (!res.ok || data.ok === false) {
+        throw new Error(data.error || 'Could not delete this message.');
+    }
+    if (replyId) return data;
+    if (mode === 'purge') {
+        cachedFeedPosts = cachedFeedPosts.filter((p) => String(p.postId) !== String(postId));
+        if (localOverlayByRoute[routeId]) {
+            localOverlayByRoute[routeId] = localOverlayByRoute[routeId].filter((p) => String(p.postId) !== String(postId));
+        }
+        delete cachedReactionsByPost[postId];
+    } else {
+        const label = as === 'admin' ? DELETED_BY_ADMIN : DELETED_MESSAGE;
+        const actor = as === 'admin' ? 'admin' : 'author';
+        cachedFeedPosts = cachedFeedPosts.map((p) => (
+            String(p.postId) === String(postId)
+                ? { ...p, body: label, deleted: true, deletedBy: actor, photoURL: null, attachments: null, linkUrl: null, replyTo: null }
+                : p
+        ));
+    }
+    applyFeedFilter(routeId);
+    return data;
+}
+
 export async function submitCommunityPost(body, routeId = $currentRouteId.get()) {
     const text = (body || '').trim();
     const acct = $account.get();
+    const operator = isAdminAuthed();
+    const attachments = operator ? sanitizeCommunityAttachments(adminImages, { admin: true }) : [];
+    const linkUrl = operator ? sanitizeCommunityLinkUrl(adminLinkUrl) : '';
+    const textMax = operator ? COMMUNITY_ADMIN_BODY_MAX : BODY_MAX;
     if (acct.status !== 'signed-in' || !acct.uid) {
         return { ok: false, needsAuth: true };
     }
@@ -547,30 +618,33 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         return { ok: false, message: 'Verify your email before posting. Open Account and use the link we sent.' };
     }
     if (!routeId) return { ok: false, message: 'Select a route first.' };
-    if (!text || text.length < 2) return { ok: false, message: 'Write a short message.' };
-    if (text.length > BODY_MAX) return { ok: false, message: `Max ${BODY_MAX} characters.` };
+    if ((!text || text.length < 2) && !attachments.length && !linkUrl) return { ok: false, message: 'Write a short message.' };
+    if (text.length > textMax) return { ok: false, message: `Max ${textMax} characters.` };
     if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
 
     if (isBlockedLocally(acct.uid)) {
         return { ok: false, message: 'Action not permitted.' };
     }
 
-    if (!isAdminAuthed()) {
+    if (!operator) {
         await refreshCommunitySendMax();
         const limit = checkCommunityRateLimit();
         if (!limit.ok) return limit;
     }
 
-    const replyToPayload = replyDraft?.postId ? {
+    const replyToPayload = replyDraft?.postId && !isCommunityTombstone(findCachedPost(replyDraft.postId)) ? {
         replyTo: {
             postId: replyDraft.postId,
             displayName: replyDraft.displayName,
             body: replyDraft.body,
         },
     } : {};
-    const safety = checkContentSafety(text);
-    if (safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };
-    if (safety.verdict === 'review') {
+    const safety = text ? checkContentSafety(text) : { verdict: 'allow' };
+    if (!operator && safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };
+    if (operator && safety.verdict === 'block' && safety.reason !== 'url') {
+        return { ok: false, message: safety.message, reason: safety.reason };
+    }
+    if (!operator && safety.verdict === 'review') {
         const held = await queueAutoModeration({
             source: 'community_post',
             reason: safety.reason,
@@ -624,6 +698,8 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         replyCount: 0,
         appVersion: APP_VERSION,
         ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
+        ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
+        ...(linkUrl ? { linkUrl } : {}),
         ...replyToPayload,
     };
 
@@ -1032,29 +1108,41 @@ function openReactionSheet(postId, routeId) {
     sheet.dataset.routeId = routeId;
     sheet.dataset.replyId = '';
     const post = findCachedPost(postId);
+    const tombstone = isCommunityTombstone(post);
+    const acctNow = $account.get();
+    const mine = !!(acctNow?.status === 'signed-in' && post?.uid && post.uid === acctNow.uid);
+    if (tombstone && !isAdminAuthed()) return;
     sheet.dataset.uid = post?.uid || '';
     sheet.dataset.email = post?.email || '';
     const actions = sheet.querySelector('#community-reaction-sheet-actions');
     if (actions) {
+        const ownDelete = mine && !tombstone
+            ? `<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="tombstone" data-delete-as="author">Delete</button>`
+            : '';
         const adminActions = isAdminAuthed()
             ? `<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
-                    <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white">Delete for everyone</button>`
+                    <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="purge" data-delete-as="admin">Remove completely</button>
+                    ${tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN) ? '' : '<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300" data-delete-mode="tombstone" data-delete-as="admin">Deleted by an Admin</button>'}`
             : '';
         const { myEmoji: mineNow } = summarizeReactions(postId);
-        const removeMine = mineNow
+        const removeMine = !tombstone && mineNow
             ? `<button type="button" class="community-react-btn col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${escapeHTML(mineNow)}" aria-label="Remove reaction">Remove reaction</button>`
             : '';
+        const talk = tombstone
+            ? ''
+            : `<button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
+                    <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>`;
         actions.innerHTML = `
-                    <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
-                    <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
+                    ${talk}
                     ${removeMine}
+                    ${ownDelete}
                     ${adminActions}
         `;
     }
     const { myEmoji } = summarizeReactions(postId);
     const row = sheet.querySelector('#community-reaction-sheet-emojis');
     if (row) {
-        row.innerHTML = WA_REACTIONS.map((r) => `
+        row.innerHTML = tombstone ? '' : WA_REACTIONS.map((r) => `
             <button type="button" class="community-react-btn flex-1 h-11 text-xl rounded-xl ${myEmoji === r.id ? 'bg-blue-50 dark:bg-blue-900/40 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
     }
@@ -1168,8 +1256,32 @@ function bindCommunityFeedPin() {
     }, { passive: true });
 }
 
+function communityImageUrls(post) {
+    if (isCommunityTombstone(post)) return [];
+    return sanitizeCommunityAttachments(post?.attachments, { admin: true });
+}
+
+function renderCommunityMedia(post) {
+    if (isCommunityTombstone(post)) return '';
+    const images = communityImageUrls(post);
+    const imageHtml = images.length
+        ? `<div class="community-msg-images">${images.map((url) => {
+            const src = escapeHTML(url);
+            return `<a href="${src}" target="_blank" rel="noopener noreferrer"><img src="${src}" alt="" referrerpolicy="no-referrer"></a>`;
+        }).join('')}</div>`
+        : '';
+    const link = sanitizeCommunityLinkUrl(post?.linkUrl);
+    const linkHtml = link
+        ? `<a class="community-msg-link" href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">${escapeHTML(link.replace(/^https:\/\//, ''))}</a>`
+        : '';
+    return `${imageHtml}${linkHtml}`;
+}
+
 function renderPostCard(post, routeId, { grouped = false } = {}) {
-    const body = escapeHTML(post.body || '');
+    const tombstone = isCommunityTombstone(post);
+    const body = tombstone
+        ? escapeHTML(post.deletedBy === 'admin' || post.body === DELETED_BY_ADMIN ? DELETED_BY_ADMIN : DELETED_MESSAGE)
+        : escapeHTML(post.body || '');
     const clock = formatClock24(post.timestamp);
     const postId = escapeHTML(post.postId || '');
     const uid = escapeHTML(post.uid || '');
@@ -1179,7 +1291,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
     const nameColor = nameColorFor(post.uid || shown.displayName);
-    const replyTo = post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
+    const replyTo = !tombstone && post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
     const quoteHtml = replyTo
         ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${nameColorFor(replyTo.displayName || replyTo.postId)}">
              <p class="text-[11px] font-bold truncate" style="color:${nameColorFor(replyTo.displayName || replyTo.postId)}">${escapeHTML(replyTo.displayName || 'Passenger')}</p>
@@ -1201,7 +1313,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${marksHtml}</div>`;
 
     return `
-      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}">
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}"${tombstone ? ' data-deleted="1"' : ''}>
         <div class="community-swipe-hint" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
         </div>
@@ -1212,10 +1324,11 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
               ${nameHtml}
               <div class="community-bubble-body">
                 ${quoteHtml}
-                <div class="community-msg-text">${body}<span class="community-msg-time">${clock}</span></div>
+                ${renderCommunityMedia(post)}
+                ${body ? `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${body}<span class="community-msg-time">${clock}</span></div>` : `<div class="community-msg-text"><span class="community-msg-time">${clock}</span></div>`}
               </div>
             </div>
-            ${renderReactionSummary(post.postId || '', isOwn, routeId)}
+            ${tombstone ? '' : renderReactionSummary(post.postId || '', isOwn, routeId)}
           </article>
         </div>
       </div>`;
@@ -1342,11 +1455,11 @@ function wireCommunityChatGestures(listEl) {
         if (dx >= 12) {
             e.stopPropagation();
         }
-        if (!longFired && dx >= 48) {
+        if (!longFired && dx >= 48 && row.getAttribute('data-deleted') !== '1') {
             const postId = row.getAttribute('data-post-id');
             const routeId = row.getAttribute('data-route');
             const post = findCachedPost(postId);
-            if (post) {
+            if (post && !isCommunityTombstone(post)) {
                 triggerHaptic();
                 setReplyDraft(post, routeId);
             }
@@ -1743,13 +1856,149 @@ const ACCOUNT_POST_PROMPT = {
     body: 'Would you like to quickly create a Next Train account so you can post and open more features?',
 };
 
+function paintAdminAttachPreview() {
+    const box = document.getElementById('community-attach-preview');
+    if (!box) return;
+    const images = adminImages.map((url) => (
+        `<button type="button" class="community-attach-chip" data-remove-image="${escapeHTML(url)}">Image <span aria-hidden="true">×</span></button>`
+    )).join('');
+    const link = adminLinkUrl
+        ? `<button type="button" class="community-attach-chip" data-remove-link="1">${escapeHTML(adminLinkUrl.replace(/^https:\/\//, '').slice(0, 42))} <span aria-hidden="true">×</span></button>`
+        : '';
+    box.innerHTML = `${images}${link}`;
+}
+
 function syncComposerChrome() {
     const composer = document.getElementById('community-composer');
     if (!composer) return;
     composer.disabled = false;
+    const operator = isAdminAuthed();
+    composer.maxLength = operator ? COMMUNITY_ADMIN_BODY_MAX : BODY_MAX;
+    document.getElementById('community-admin-tools')?.classList.toggle('hidden', !operator);
     restoreComposerDraft(composer);
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
+    paintAdminAttachPreview();
+}
+
+async function fillCommunityPosterSelect() {
+    const sel = document.getElementById('community-poster-select');
+    if (!sel || sel.dataset.loaded === '1') return;
+    try {
+        const base = typeof window.withBase === 'function' ? window.withBase('/images/alerts/manifest.json') : '/images/alerts/manifest.json';
+        const res = await fetch(base);
+        if (!res.ok) return;
+        const data = await res.json();
+        const posters = Array.isArray(data?.posters) ? data.posters : [];
+        sel.innerHTML = `<option value="">Service alert poster…</option>${posters.map((p) => {
+            const file = String(p?.file || '').trim();
+            if (!file) return '';
+            return `<option value="${escapeHTML(`/images/alerts/${file}`)}">${escapeHTML(p.label || file)}</option>`;
+        }).join('')}`;
+        sel.dataset.loaded = '1';
+    } catch {
+        /* the image address field still works */
+    }
+}
+
+function addAdminImage(raw) {
+    const url = sanitizeCommunityImageUrl(raw);
+    if (!url) {
+        showToast('Use a public image address, or a service alert poster.', 'error');
+        return false;
+    }
+    if (adminImages.includes(url)) return true;
+    if (adminImages.length >= COMMUNITY_ADMIN_IMAGE_MAX) {
+        showToast(`Maximum ${COMMUNITY_ADMIN_IMAGE_MAX} images on one message.`, 'warning');
+        return false;
+    }
+    adminImages.push(url);
+    paintAdminAttachPreview();
+    return true;
+}
+
+function addAdminAddress(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return;
+    if (sanitizeCommunityImageUrl(value)) {
+        addAdminImage(value);
+        return;
+    }
+    const link = sanitizeCommunityLinkUrl(value);
+    if (!link) {
+        showToast('Use a full https link.', 'error');
+        return;
+    }
+    adminLinkUrl = link;
+    paintAdminAttachPreview();
+}
+
+async function suggestCommunityReply() {
+    if (!isAdminAuthed()) return;
+    const btn = document.getElementById('community-suggest-btn');
+    const composer = document.getElementById('community-composer');
+    const errEl = document.getElementById('community-error');
+    const routeId = document.getElementById('community-route-select')?.value || $currentRouteId.get();
+    const thread = cachedFeedPosts
+        .filter((p) => p && !isCommunityTombstone(p) && (p.body || p.linkUrl))
+        .slice(-12)
+        .map((p) => {
+            const mine = $account.get()?.uid && p.uid === $account.get().uid;
+            const fromAdmin = mine || ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'].includes(String(p.email || '').toLowerCase());
+            return {
+                from: fromAdmin ? 'admin' : 'commuter',
+                text: `${p.displayName || 'Passenger'}: ${p.body || p.linkUrl || ''}`,
+                at: Number(p.timestamp) || 0,
+            };
+        });
+    if (!thread.length) {
+        if (errEl) errEl.textContent = 'Nothing in this room to answer yet.';
+        return;
+    }
+    const token = await ensureAuthToken();
+    if (!token) {
+        showToast('Sign in again to use Co-Pilot.', 'error');
+        return;
+    }
+    if (btn) btn.disabled = true;
+    if (errEl) errEl.textContent = '';
+    try {
+        const res = await fetch(`${REPLY_WORKER_URL}/suggest`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+                region: $userRegion.get() || 'GP',
+                routeId,
+                note: 'This is the public community room for one train line. Write one short reply an operator can post in that room. No email sign-off. Stay under 280 characters. Answer the latest passenger questions.',
+                thread,
+            }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Co-Pilot could not draft a reply.');
+        if (data.action === 'halt') {
+            if (errEl) errEl.textContent = data.reason || 'Co-Pilot needs a fact before it can draft this.';
+            return;
+        }
+        const draft = String(data.reply || '').trim();
+        if (!draft) {
+            if (errEl) errEl.textContent = 'Co-Pilot returned an empty draft.';
+            return;
+        }
+        if (composer) {
+            composer.value = draft.slice(0, COMMUNITY_ADMIN_BODY_MAX);
+            composer.style.height = 'auto';
+            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 44), 160)}px`;
+            rememberComposerDraft(composer.value);
+            composer.focus();
+        }
+    } catch (err) {
+        showToast(err?.message || 'Co-Pilot could not draft a reply.', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 export function openRouteCommunity(opts = {}) {
@@ -1961,6 +2210,9 @@ async function handlePostSubmit() {
     }
     rememberComposerDraft('');
     clearReplyDraft();
+    adminImages.splice(0, adminImages.length);
+    adminLinkUrl = '';
+    paintAdminAttachPreview();
     signalCommunityTyping(routeId, false);
     if (result.held) {
         showToast(result.message || 'Held for review - it won’t show until an admin approves it.', 'info');
@@ -2027,6 +2279,37 @@ export function bindCommunityUi() {
     });
 
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
+    document.getElementById('community-suggest-btn')?.addEventListener('click', () => { suggestCommunityReply(); });
+    document.getElementById('community-attach-btn')?.addEventListener('click', () => {
+        const tray = document.getElementById('community-attach-tray');
+        if (!tray || !isAdminAuthed()) return;
+        tray.classList.toggle('hidden');
+        if (!tray.classList.contains('hidden')) fillCommunityPosterSelect();
+    });
+    document.getElementById('community-attach-add')?.addEventListener('click', () => {
+        const input = document.getElementById('community-attach-url');
+        addAdminAddress(input?.value || '');
+        if (input) input.value = '';
+    });
+    document.getElementById('community-poster-select')?.addEventListener('change', (e) => {
+        const value = e.target.value;
+        if (value) addAdminImage(value);
+        e.target.value = '';
+    });
+    document.getElementById('community-attach-preview')?.addEventListener('click', (e) => {
+        const image = e.target.closest?.('[data-remove-image]');
+        if (image) {
+            const url = image.getAttribute('data-remove-image');
+            const idx = adminImages.indexOf(url);
+            if (idx >= 0) adminImages.splice(idx, 1);
+            paintAdminAttachPreview();
+            return;
+        }
+        if (e.target.closest?.('[data-remove-link]')) {
+            adminLinkUrl = '';
+            paintAdminAttachPreview();
+        }
+    });
     document.getElementById('community-route-select')?.addEventListener('change', (e) => {
         const rid = resolveCommunityRoute(e.target.value);
         if (!rid || !communityRoomAllowed(rid)) return;
@@ -2159,33 +2442,25 @@ export function bindCommunityUi() {
         const sheetDelete = t.closest?.('.community-sheet-delete');
         if (sheetDelete) {
             e.preventDefault();
-            if (!isAdminAuthed()) return;
             const sheet = document.getElementById('community-reaction-sheet');
             const postId = sheet?.dataset.postId || '';
             const routeId = sheet?.dataset.routeId || '';
             const replyId = sheet?.dataset.replyId || '';
+            const mode = sheetDelete.getAttribute('data-delete-mode') === 'purge' ? 'purge' : 'tombstone';
+            const as = sheetDelete.getAttribute('data-delete-as') === 'author' ? 'author' : 'admin';
+            if (as === 'admin' && !isAdminAuthed()) return;
             closeReactionSheet();
-            const ok = typeof window.confirm === 'function'
-                ? window.confirm(replyId ? 'Delete this reply for everyone?' : 'Delete this message for everyone?')
-                : true;
-            if (!ok || !routeId || !postId) return;
+            if (!routeId || !postId) return;
+            const prompt = mode === 'purge'
+                ? 'Remove this message completely? Quotes people already made keep their text.'
+                : (as === 'admin'
+                    ? 'Replace this message with Deleted by an Admin? Quotes people already made keep their text.'
+                    : 'Delete this message? It will say Deleted message. Quotes people already made keep their text.');
+            const ok = typeof window.confirm === 'function' ? window.confirm(prompt) : true;
+            if (!ok) return;
             try {
-                const { ensureAdminLoaded } = await import('./admin-bridge.js');
-                const Admin = await ensureAdminLoaded();
-                if (!Admin?.deletePublishedCommunityMessage) {
-                    showToast('Admin tools unavailable.', 'error');
-                    return;
-                }
-                await Admin.deletePublishedCommunityMessage(routeId, postId, replyId || undefined);
-                if (!replyId) {
-                    cachedFeedPosts = cachedFeedPosts.filter((p) => String(p.postId) !== String(postId));
-                    if (localOverlayByRoute[routeId]) {
-                        localOverlayByRoute[routeId] = localOverlayByRoute[routeId].filter((p) => String(p.postId) !== String(postId));
-                    }
-                    delete cachedReactionsByPost[postId];
-                    applyFeedFilter(routeId);
-                }
-                showToast('Message deleted for everyone.', 'success');
+                await deleteCommunityMessage({ routeId, postId, replyId, mode, as });
+                showToast(mode === 'purge' ? 'Message removed.' : 'Message deleted.', 'success');
                 triggerHaptic();
             } catch (err) {
                 showToast(err?.message || 'Could not delete this message.', 'error');

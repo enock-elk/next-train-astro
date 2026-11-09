@@ -837,6 +837,51 @@ function ntAdminSchedulePreviewText(meta) {
     return ntAdminFormatScheduleSummary(meta);
 }
 
+async function ntAdminTombstoneCommunityMessage(routeId, postId, replyId) {
+    if (!routeId || !postId) throw new Error('Missing route/post id');
+    const token = await Admin.getAuthKey();
+    if (!token) throw new Error('Not signed in');
+    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+    const workerBase = (typeof window.COMMUNITY_WORKER_URL === 'string' && window.COMMUNITY_WORKER_URL)
+        || 'https://nexttrain-community.enock.workers.dev';
+    const res = await fetch(`${workerBase.replace(/\/$/, '')}/community/message`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            op: 'delete',
+            routeId,
+            postId,
+            replyId: replyId || undefined,
+            mode: 'tombstone',
+            as: 'admin',
+        }),
+    });
+    if (res.ok) return;
+    if (res.status !== 404) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Delete failed (${res.status})`);
+    }
+    const path = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}${replyId ? `/replies/${encodeURIComponent(replyId)}` : ''}`;
+    const patch = await fetch(`${dynamicEndpoint}${path}.json?auth=${encodeURIComponent(token)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            body: 'Deleted by an Admin',
+            deleted: true,
+            deletedBy: 'admin',
+            deletedAt: Date.now(),
+            photoURL: null,
+            attachments: null,
+            linkUrl: null,
+            replyTo: null,
+        }),
+    });
+    if (!patch.ok) throw new Error(`Delete failed (${patch.status})`);
+}
+
 async function ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId) {
     if (!routeId || !postId) throw new Error('Missing route/post id');
     const token = await Admin.getAuthKey();
@@ -1337,6 +1382,8 @@ const Admin = {
 
     deletePublishedCommunityMessage: (routeId, postId, replyId) =>
         ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId),
+    tombstoneCommunityMessage: (routeId, postId, replyId) =>
+        ntAdminTombstoneCommunityMessage(routeId, postId, replyId),
 
     /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError ? app reload). */
     encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
@@ -12024,21 +12071,29 @@ const Admin = {
                     const authorHint = authorId && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(authorId) : '';
                     const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
                     const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid) : '';
-                    const quote = message.replyTo?.body
+                    const removed = message.deleted === true
+                        || message.body === 'Deleted message'
+                        || message.body === 'Deleted by an Admin';
+                    const quote = !removed && message.replyTo?.body
                         ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
                         : '';
+                    const shownBody = removed
+                        ? (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin' ? 'Deleted by an Admin' : 'Deleted message')
+                        : (message.body || '');
                     const postId = message.postId || '';
                     const mine = Admin.currentUser?.uid && message.uid === Admin.currentUser.uid;
+                    const replyAttr = isReply ? `data-reply="${esc(message.replyId || '')}"` : '';
                     return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''} ${mine ? 'cm-row-own' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
                         <div class="cm-bubble ${mine ? 'cm-bubble-own' : ''} ${message.hidden ? 'is-hidden' : ''}">
                             <div class="cm-bubble-name">
                                 <span>${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
                             </div>
                             <div class="cm-bubble-body">
-                                ${quote}<p class="cm-bubble-text">${esc(message.body || '')}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
+                                ${quote}<p class="cm-bubble-text${removed ? ' cm-msg-deleted' : ''}">${esc(shownBody)}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
                                 <div class="cm-bubble-actions">
-                                    <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
-                                    <button type="button" class="cm-delete-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
+                                    <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
+                                    <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
+                                    ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
                                     ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
                                 </div>
                             </div>
@@ -12248,21 +12303,38 @@ const Admin = {
                         const routeId = delBtn.dataset.route;
                         const postId = delBtn.dataset.post;
                         const replyId = delBtn.dataset.reply;
-                        const ok = await Admin.secureConfirm('Delete message', replyId
-                            ? 'Remove this reply from the route feed? This cannot be undone.'
-                            : 'Remove this post and its replies from the route feed? This cannot be undone.');
+                        const mode = delBtn.dataset.mode === 'tombstone' ? 'tombstone' : 'purge';
+                        const ok = await Admin.secureConfirm(
+                            mode === 'tombstone' ? 'Deleted by an Admin' : 'Remove message',
+                            mode === 'tombstone'
+                                ? 'Replace this message with Deleted by an Admin? Quotes already made keep their text.'
+                                : 'Remove this message with no bubble left behind? Quotes already made keep their text.'
+                        );
                         if (!ok) return;
                         delBtn.disabled = true;
                         try {
-                            await Admin.deletePublishedCommunityMessage(routeId, postId, replyId);
-                            const card = delBtn.closest('[data-community-message]');
-                            if (replyId) {
-                                card?.remove();
+                            if (mode === 'tombstone') {
+                                await Admin.tombstoneCommunityMessage(routeId, postId, replyId);
+                                const card = delBtn.closest('[data-community-message]');
+                                const text = card?.querySelector('.cm-bubble-text');
+                                if (text) {
+                                    text.classList.add('cm-msg-deleted');
+                                    const clock = text.querySelector('.cm-bubble-time');
+                                    text.textContent = 'Deleted by an Admin';
+                                    if (clock) text.appendChild(clock);
+                                }
+                                card?.querySelector('.cm-quote')?.remove();
                             } else {
-                                const scope = document.getElementById('mq-thread-scroll') || list;
-                                scope.querySelectorAll(communityPostSelector(postId)).forEach((el) => el.remove());
+                                await Admin.deletePublishedCommunityMessage(routeId, postId, replyId);
+                                const card = delBtn.closest('[data-community-message]');
+                                if (replyId) {
+                                    card?.remove();
+                                } else {
+                                    const scope = document.getElementById('mq-thread-scroll') || list;
+                                    scope.querySelectorAll(communityPostSelector(postId)).forEach((el) => el.remove());
+                                }
                             }
-                            if (typeof showToast === 'function') showToast('Message deleted', 'success');
+                            if (typeof showToast === 'function') showToast(mode === 'tombstone' ? 'Marked deleted by an Admin' : 'Message removed', 'success');
                         } catch (e) {
                             if (typeof showToast === 'function') showToast(e?.message || 'Delete failed', 'error');
                             delBtn.disabled = false;
@@ -16539,7 +16611,7 @@ const Admin = {
         const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
             ? notice.imageUrls
             : (notice?.imageUrl ? [notice.imageUrl] : []);
-        return raw.filter((u) => typeof u === 'string' && u.startsWith('/images/alerts/')).slice(0, 2);
+        return raw.filter((u) => typeof u === 'string' && u.startsWith('/images/alerts/')).slice(0, 10);
     },
 
     sanitizeAlertPosterPath: (url) => {
@@ -16548,7 +16620,7 @@ const Admin = {
         return /^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(s) ? s : null;
     },
 
-    getSelectedAlertPosters: () => (Array.isArray(Admin._alertPosterPaths) ? Admin._alertPosterPaths.slice(0, 2) : []),
+    getSelectedAlertPosters: () => (Array.isArray(Admin._alertPosterPaths) ? Admin._alertPosterPaths.slice(0, 10) : []),
 
     alertComposeHasBody: (html) => {
         const text = String(html || '')
@@ -16599,7 +16671,7 @@ const Admin = {
         const next = [];
         (paths || []).forEach((p) => {
             const s = Admin.sanitizeAlertPosterPath(p);
-            if (s && !next.includes(s) && next.length < 2) next.push(s);
+            if (s && !next.includes(s) && next.length < 10) next.push(s);
         });
         Admin._alertPosterPaths = next;
         Admin.renderAlertPosterPicker();
@@ -16630,7 +16702,7 @@ const Admin = {
                 btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
             });
         }
-        const atLimit = selected.length >= 2;
+        const atLimit = selected.length >= 10;
         if (display) display.textContent = atLimit ? 'Poster limit reached' : 'Add a poster…';
         if (trigger) {
             trigger.classList.toggle('opacity-50', atLimit);
@@ -16677,8 +16749,8 @@ const Admin = {
         if (!path) return;
         const cur = Admin.getSelectedAlertPosters();
         if (cur.includes(path)) return;
-        if (cur.length >= 2) {
-            if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
+        if (cur.length >= 10) {
+            if (typeof showToast === 'function') showToast('Maximum 10 posters.', 'warning');
             return;
         }
         Admin.setSelectedAlertPosters(cur.concat(path));

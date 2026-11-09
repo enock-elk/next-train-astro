@@ -950,6 +950,8 @@ export async function submitModerationReport(opts) {
         snippet: (opts.snippet || '').slice(0, 160) || null,
         reportedByUid: acct.status === 'signed-in' ? acct.uid : null,
         reportedByDeviceId: getDeviceId(),
+        reportedByName: acct.status === 'signed-in' ? communityNameFor(acct) : null,
+        reportedByEmail: acct.email || null,
         timestamp: Date.now(),
         status: 'open',
         appVersion: APP_VERSION,

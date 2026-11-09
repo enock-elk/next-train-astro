@@ -76,6 +76,8 @@ assert.match(community, /Deleted by an Admin/);
 assert.match(community, /community-suggest-btn/);
 assert.match(community, /\/community\/message/);
 assert.match(worker, /trimRouteBuckets/);
+assert.match(worker, /Community Monitor keeps the full log/);
+assert.doesNotMatch(worker, /Community bucket trim failed/);
 assert.match(worker, /shallow: 'true'/);
 assert.doesNotMatch(worker, /wipeStalePosts/);
 assert.match(worker, /pathname === '\/community\/message'/);

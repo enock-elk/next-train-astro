@@ -6,7 +6,7 @@
  *   Body: { routeId, body, displayName?, photoURL?, deviceId?, category?, replyTo?, postId? }
  *
  * Cron (every 5 minutes): publish due scheduled alerts.
- * Cron (hourly): trim each route to COMMUNITY_BUCKET_DEPTH newest messages.
+ * The phone listens to the newest 80 messages. Community Monitor pages the full log, so the hourly job does not delete messages.
  * POST /community/message  { op:'delete', routeId, postId, replyId?, mode:'tombstone'|'purge', as?:'author'|'admin' }
  *
  * Secrets: FIREBASE_PRIVATE_KEY (PEM; \n escaped OK)
@@ -30,7 +30,6 @@ const BODY_MAX = 280;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
 const JOHANNESBURG_OFFSET_MS = 2 * 60 * 60 * 1000;
 const ALERT_CRON = '*/5 * * * *';
-const TTL_CRON = '0 * * * *';
 const DEFAULT_CLAIM_LEASE_MS = 2 * 60 * 1000;
 
 /** @type {Map<string, number[]>} */
@@ -1516,23 +1515,16 @@ export default {
             }
         }
         if (request.method === 'POST' && url.pathname === '/community/ttl-wipe') {
-            // Manual ops trigger (protect with shared secret if set)
-            const secret = env.TTL_WIPE_SECRET;
-            if (secret && request.headers.get('X-TTL-Secret') !== secret) {
-                return json(env, request, 401, { ok: false, error: 'Unauthorized' });
-            }
-            try {
-                const result = await trimRouteBuckets(env);
-                return json(env, request, 200, { ok: true, ...result });
-            } catch (e) {
-                return json(env, request, 500, { ok: false, error: e.message });
-            }
+            return json(env, request, 200, {
+                ok: true,
+                deleted: 0,
+                kept: 'Community Monitor keeps the full log',
+            });
         }
         return json(env, request, 404, { ok: false, error: 'Not found' });
     },
 
-    async scheduled(event, env, ctx) {
-        const cron = String(event.cron || '');
+    async scheduled(event, env) {
         // Always publish due alerts on every cron tick. Do not require an exact
         // `event.cron === '*/5 * * * *'` match — Cloudflare can normalize the
         // expression, and a no-op here leaves Monday 00:00 jobs sitting in the queue.
@@ -1540,15 +1532,6 @@ export default {
             console.error('Scheduled alerts skipped: FIREBASE_PRIVATE_KEY / Admin env incomplete');
             return;
         }
-        const tasks = [
-            runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e)),
-        ];
-        const hourly = cron === TTL_CRON || cron === '0 * * * *' || /^0 \* \* \* \*$/.test(cron);
-        if (hourly) {
-            tasks.push(
-                trimRouteBuckets(env).catch((e) => console.error('Community bucket trim failed', e))
-            );
-        }
-        await Promise.all(tasks);
+        await runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e));
     },
 };

@@ -68,7 +68,7 @@ assert.match(admin, /deletePublishedCommunityMessage/);
 assert.match(admin, /cm-shadow-ban/);
 assert.match(admin, /community_activity\.json/);
 assert.match(admin, /moderation_queue\.json/);
-assert.match(admin, /\['closed', 'resolved', 'approved', 'rejected'\]/, 'resolved holds do not count as unread');
+assert.match(admin, /\['closed', 'resolved', 'approved', 'rejected', 'dismissed'\]/, 'resolved holds do not count as unread');
 assert.match(admin, /admin_state\/\$\{encodeURIComponent\(Admin\.currentUser\.uid\)\}\/community_seen/);
 assert.match(admin, /Admin\._communityLoadRoute/, 'route messages load on demand');
 assert.match(admin, /const missingActivity = \{\}/, 'lazy route load derives missing index entries from stored messages');
@@ -162,7 +162,11 @@ assert.match(ui, /is-tab-swiping/, 'tab swipe follows the finger and can rest mi
 assert.match(ui, /placePeer\(0, true\)/, 'a short swipe snaps back instead of changing tabs');
 assert.match(admin, /id="mq-thread"/, 'a community route opens as its own thread');
 assert.match(admin, /mq-showing-thread/, 'the monitor thread hides the route list');
-assert.match(admin, /limitToLast=80/, 'the monitor loads the latest messages, not the whole history');
+assert.match(admin, /limitToLast=80/, 'the monitor pages messages instead of downloading a whole room at once');
+assert.match(admin, /id="mq-load-earlier"/, 'the monitor can load earlier messages');
+assert.match(admin, /id="mq-tab-reports"/, 'reports sit in Community Monitor');
+assert.match(admin, /class="mq-safe"/, 'a safe report can be dismissed');
+assert.match(community, /reportedByName/, 'a report stores the reporter name');
 const mqTabbar = admin.slice(admin.indexOf('id="mq-tabbar"'), admin.indexOf('id="mq-tabbar"') + 280);
 assert.doesNotMatch(mqTabbar, /sticky/, 'the community monitor tabs scroll away with the introduction');
 

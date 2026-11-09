@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.09.5': [
+        'Community Monitor pages the full message log. Earlier messages loads the previous 80, and the phone still listens to the newest 80. The hourly job no longer deletes older messages. Reports sits between Group chats and Reviews. A report shows who sent it and who wrote the message. Safe leaves the message up and clears the report. Hide message and Shadow ban author stay on the card. Account cards show Google or Email at the top right. Region, sign-in, and route use the in-app dropdown. Lookup and the user sheet use grouped rows. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.09.4': [
         'A passenger can delete their own community message. The bubble then says Deleted message. A quote made while it was still up keeps that quoted text. An operator chooses Remove, which takes the bubble away, or Deleted by an Admin. Community rooms keep the latest 80 messages instead of dropping everything after 24 hours. The hourly trim reads route keys and a short page of older messages, not the whole community tree. Passengers stay on the existing send limit. Operators can attach up to 4 image addresses, a service alert poster, or one https link. Alerts can carry 10 posters. Suggest reply on the community composer is operator-only and drafts into the box. Pull to refresh works on Next Train, Trip Planner, and Community, and stays off Map and Options. It follows the list that is actually scrolling, and the hint no longer sits inside that list. Deploy the community Worker so deletes, operator links, and the 80-message trim run. Deploy firebase-database.rules.json so a passenger cannot attach a link and an operator reply longer than 280 characters can be saved if the Worker is unavailable. No commuter What\'s New. forceShow stays false.',
     ],

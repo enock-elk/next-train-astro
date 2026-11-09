@@ -1,15 +1,15 @@
 /**
  * Community cost and delete rules shared by the phone and the Worker.
  *
- * A room keeps a fixed number of messages, not a character budget and not a
- * 24 hour clock. Firebase bills Realtime Database for bytes downloaded.
- * limitToLast(N) is a count, so N messages is the cap the listener can
- * actually enforce. Each message is already capped (280 for a passenger,
- * 1000 for an operator), which caps the bytes inside that count.
+ * The phone listens to a fixed number of messages. Firebase bills Realtime
+ * Database for bytes downloaded. limitToLast(N) is a count, so N messages is
+ * the cap a phone can actually enforce. The database keeps the older messages
+ * so Community Monitor can page through the full log. Each message is already
+ * capped (280 for a passenger, 1000 for an operator).
  */
 import { sanitizeInlineAlertImageUrl } from './alerts-feed.js';
 
-/** Newest messages kept on a route. Listeners must use the same limitToLast. */
+/** Newest messages a phone listens to. The database keeps the rest. */
 export const COMMUNITY_BUCKET_DEPTH = 80;
 export const COMMUNITY_BODY_MAX = 280;
 export const COMMUNITY_ADMIN_BODY_MAX = 1000;

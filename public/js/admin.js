@@ -416,7 +416,7 @@ function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, r
             .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
         const routeHeld = held.filter((item) =>
             String(item?.routeId || item?.publish?.routeId || '') === routeId
-            && !['closed', 'resolved', 'approved', 'rejected'].includes(String(item?.status || 'open'))
+            && !['closed', 'resolved', 'approved', 'rejected', 'dismissed'].includes(String(item?.status || 'open'))
         );
         const latestActivity = activities[activities.length - 1] || null;
         const latestHeldAt = routeHeld.reduce((max, item) => Math.max(max, Number(item.timestamp || 0)), 0);
@@ -2890,18 +2890,18 @@ const Admin = {
         document.getElementById('admin-commuter-peek')?.remove();
         const modal = document.createElement('div');
         modal.id = 'admin-commuter-peek';
-        modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
+        modal.className = 'fixed inset-0 bg-black/40 z-[220] flex items-end justify-center backdrop-blur-sm';
         const close = () => modal.remove();
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[min(88dvh,40rem)] flex flex-col p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="commuter-peek-title" aria-modal="true">
-                <h3 id="commuter-peek-title" class="text-lg font-black text-gray-900 dark:text-white mb-1 shrink-0">User sheet</h3>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-relaxed shrink-0">Quick facts for this id. Search User Trust if you need the full profile.</p>
-                <div id="commuter-peek-body" class="space-y-1.5 text-[11px] text-gray-700 dark:text-gray-200 min-h-0 overflow-y-auto">
+            <div class="ut-peek-sheet shadow-2xl flex flex-col" role="dialog" aria-labelledby="commuter-peek-title" aria-modal="true">
+                <div class="mx-auto mt-1 mb-2 h-1.5 w-10 rounded-full bg-gray-300 dark:bg-gray-600 shrink-0" aria-hidden="true"></div>
+                <h3 id="commuter-peek-title" class="text-[22px] font-semibold tracking-tight text-gray-900 dark:text-white shrink-0">User</h3>
+                <div id="commuter-peek-body" class="text-[15px] text-gray-700 dark:text-gray-200 min-h-0 overflow-y-auto mt-2">
                     <p class="animate-pulse text-gray-400">Loading...</p>
                 </div>
-                <div class="flex flex-wrap gap-2 mt-4 shrink-0">
-                    <button type="button" id="commuter-peek-lookup" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">Look up more</button>
-                    <button type="button" id="commuter-peek-close" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Close</button>
+                <div class="ut-sheet-group mt-3 shrink-0">
+                    <button type="button" id="commuter-peek-lookup" class="ut-sheet-row justify-center text-[17px] font-semibold text-[#007aff]">Look up more</button>
+                    <button type="button" id="commuter-peek-close" class="ut-sheet-row justify-center text-[17px] text-[#007aff]">Close</button>
                 </div>
             </div>
         `;
@@ -2929,15 +2929,17 @@ const Admin = {
             if (phones.length) {
                 contactParts.push(`<span class="block text-[9px] font-black uppercase tracking-wider text-gray-400${emails.length ? ' mt-1' : ''}">Phone</span>${phones.map((ph) => esc(ph)).join('<br>')}`);
             }
+            const titleEl = document.getElementById('commuter-peek-title');
+            if (titleEl) titleEl.textContent = peek.alias || peek.displayName || 'User';
             const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
             const tile = (label, value, absent, actionId) => {
                 const tag = actionId ? 'button' : 'div';
                 const type = actionId ? ' type="button"' : '';
                 const idAttr = actionId ? ` id="${actionId}"` : '';
                 return `
-                <${tag}${type}${idAttr} class="w-full rounded-xl border px-3 py-2 text-left flex items-start gap-3 ${absent ? 'border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/40' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}${actionId ? ' cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 focus:outline-none' : ''}">
-                    <span class="w-[5.5rem] shrink-0 pt-0.5 text-[9px] font-black uppercase tracking-widest ${absent ? 'text-gray-400' : 'text-blue-700 dark:text-blue-300'}">${esc(label)}</span>
-                    <span class="min-w-0 flex-1 text-[12px] font-bold leading-snug break-words ${absent ? 'text-gray-400 font-semibold' : 'text-gray-900 dark:text-white'}">${value}</span>
+                <${tag}${type}${idAttr} class="ut-sheet-row items-start${actionId ? ' cursor-pointer focus:outline-none' : ''}">
+                    <span class="w-28 shrink-0 text-[15px] ${absent ? 'text-gray-400' : 'text-gray-500'}">${esc(label)}</span>
+                    <span class="min-w-0 flex-1 text-right text-[15px] leading-snug break-words ${absent ? 'text-gray-400' : 'text-gray-900 dark:text-white'}">${value}</span>
                 </${tag}>`;
             };
             const countLabel = (count, noun) => {
@@ -2952,7 +2954,7 @@ const Admin = {
                     ? `<p class="text-[11px]">Last activity: <b>${esc(Admin.formatDate(peek.lastActivity.ms))}</b> · ${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</p>`
                     : '<p class="text-[11px] text-gray-400">No activity on file.</p>'}
                 ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
-                <div class="flex flex-col gap-1.5 pt-1">
+                <div class="ut-sheet-group mt-2">
                     ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
                     ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
                     ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, 'commuter-peek-feedback')}
@@ -3385,7 +3387,7 @@ const Admin = {
                 const local = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem(storageKey) || '0') : '0', 10) || 0;
                 return Math.max(local, parseInt(adminState[stateKey] || '0', 10) || 0);
             };
-            const CLOSED_QUEUE = ['closed', 'resolved', 'approved', 'rejected'];
+            const CLOSED_QUEUE = ['closed', 'resolved', 'approved', 'rejected', 'dismissed'];
             const COMMUNITY_ROUTE_CAP = 24;
 
             try {
@@ -11414,6 +11416,10 @@ const Admin = {
                         Group chats
                         <span id="mq-tab-chats-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Unread group chat activity"></span>
                     </button>
+                    <button type="button" id="mq-tab-reports" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative">
+                        Reports
+                        <span id="mq-tab-reports-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Open reported messages"></span>
+                    </button>
                     <button type="button" id="mq-tab-reviews" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative">
                         Reviews
                         <span id="mq-tab-reviews-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Pending station reviews"></span>
@@ -11446,6 +11452,14 @@ const Admin = {
                         <div id="mq-thread-scroll" class="cm-thread-scroll"></div>
                     </div>
                 </div>
+                <div id="mq-reports-pane" class="hidden flex flex-col">
+                    <p class="text-[13px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Messages a passenger reported. Safe leaves the message up and clears the report.</p>
+                    <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80" role="tablist" aria-label="Report status">
+                        <button type="button" id="mq-reports-open" class="flex-1 min-h-[36px] rounded-lg text-[13px] font-semibold bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Open</button>
+                        <button type="button" id="mq-reports-dismissed" class="flex-1 min-h-[36px] rounded-lg text-[13px] font-semibold text-gray-500 dark:text-gray-400">Dismissed</button>
+                    </div>
+                    <div id="mq-reports-list" class="space-y-3 pr-1"></div>
+                </div>
                 <div id="mq-reviews-pane" class="hidden flex flex-col">
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Station SEO reviews land here as pending. Approve to publish on the station page, or reject to keep them private. Contact stays operator-only.</p>
                     <div class="flex gap-2 px-1 mb-3">
@@ -11468,46 +11482,50 @@ const Admin = {
         const refreshBtn = document.getElementById('mq-refresh-btn');
         const reviewsRefreshBtn = document.getElementById('mq-reviews-refresh-btn');
         const tabChats = document.getElementById('mq-tab-chats');
+        const tabReports = document.getElementById('mq-tab-reports');
         const tabReviews = document.getElementById('mq-tab-reviews');
         const chatsPane = document.getElementById('mq-chats-pane');
+        const reportsPane = document.getElementById('mq-reports-pane');
         const reviewsPane = document.getElementById('mq-reviews-pane');
         Admin.currentCommunityMonitorTab = Admin.currentCommunityMonitorTab || 'chats';
 
         const paintMqTab = (tab) => {
-            const active = 'border-blue-600 text-blue-600 dark:text-blue-400';
-            const idle = 'border-transparent text-gray-500 dark:text-gray-400';
-            const setBtn = (btn, on) => {
+            const paintBtn = (btn, on, badgeId) => {
                 if (!btn) return;
-                btn.classList.toggle('border-blue-600', on);
-                btn.classList.toggle('text-blue-600', on);
-                btn.classList.toggle('dark:text-blue-400', on);
-                btn.classList.toggle('border-transparent', !on);
-                btn.classList.toggle('text-gray-500', !on);
-                btn.classList.toggle('dark:text-gray-400', !on);
+                btn.className = on
+                    ? 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative'
+                    : 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
+                const badge = document.getElementById(badgeId);
+                if (badge) btn.appendChild(badge);
             };
-            setBtn(tabChats, tab === 'chats');
-            setBtn(tabReviews, tab === 'reviews');
-            // clear idle border classes that setBtn may not remove from active state leftovers
-            if (tabChats) {
-                if (tab === 'chats') tabChats.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative';
-                else tabChats.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
-                const chatsBadge = document.getElementById('mq-tab-chats-badge');
-                if (chatsBadge) tabChats.appendChild(chatsBadge);
-            }
-            if (tabReviews) {
-                if (tab === 'reviews') tabReviews.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative';
-                else tabReviews.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
-                const revBadge = document.getElementById('mq-tab-reviews-badge');
-                if (revBadge) tabReviews.appendChild(revBadge);
-            }
+            paintBtn(tabChats, tab === 'chats', 'mq-tab-chats-badge');
+            paintBtn(tabReports, tab === 'reports', 'mq-tab-reports-badge');
+            paintBtn(tabReviews, tab === 'reviews', 'mq-tab-reviews-badge');
             chatsPane?.classList.toggle('hidden', tab !== 'chats');
+            reportsPane?.classList.toggle('hidden', tab !== 'reports');
             reviewsPane?.classList.toggle('hidden', tab !== 'reviews');
+            const openBtn = document.getElementById('mq-reports-open');
+            const dismissedBtn = document.getElementById('mq-reports-dismissed');
+            const reportFilter = Admin._reportFilter === 'dismissed' ? 'dismissed' : 'open';
+            openBtn?.classList.toggle('bg-white', reportFilter === 'open');
+            openBtn?.classList.toggle('dark:bg-gray-800', reportFilter === 'open');
+            openBtn?.classList.toggle('text-gray-900', reportFilter === 'open');
+            openBtn?.classList.toggle('dark:text-white', reportFilter === 'open');
+            openBtn?.classList.toggle('shadow-sm', reportFilter === 'open');
+            openBtn?.classList.toggle('text-gray-500', reportFilter !== 'open');
+            dismissedBtn?.classList.toggle('bg-white', reportFilter === 'dismissed');
+            dismissedBtn?.classList.toggle('dark:bg-gray-800', reportFilter === 'dismissed');
+            dismissedBtn?.classList.toggle('text-gray-900', reportFilter === 'dismissed');
+            dismissedBtn?.classList.toggle('dark:text-white', reportFilter === 'dismissed');
+            dismissedBtn?.classList.toggle('shadow-sm', reportFilter === 'dismissed');
+            dismissedBtn?.classList.toggle('text-gray-500', reportFilter !== 'dismissed');
         };
 
         Admin.switchCommunityMonitorTab = (tab) => {
-            Admin.currentCommunityMonitorTab = tab === 'reviews' ? 'reviews' : 'chats';
+            Admin.currentCommunityMonitorTab = tab === 'reviews' ? 'reviews' : (tab === 'reports' ? 'reports' : 'chats');
             paintMqTab(Admin.currentCommunityMonitorTab);
             if (Admin.currentCommunityMonitorTab === 'reviews') Admin.fetchStationReviews?.();
+            else if (Admin.currentCommunityMonitorTab === 'reports' && Admin._mqCache) Admin.paintCommunityReports?.();
             else Admin.fetchModerationQueue?.();
         };
         document.getElementById('mq-thread-back')?.addEventListener('click', () => Admin._mqCloseThread?.());
@@ -11519,13 +11537,25 @@ const Admin = {
             Admin._mqCloseThread?.();
         }, true);
         tabChats?.addEventListener('click', () => Admin.switchCommunityMonitorTab('chats'));
+        tabReports?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reports'));
         tabReviews?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reviews'));
+        document.getElementById('mq-reports-open')?.addEventListener('click', () => {
+            Admin._reportFilter = 'open';
+            paintMqTab('reports');
+            Admin.paintCommunityReports?.();
+        });
+        document.getElementById('mq-reports-dismissed')?.addEventListener('click', () => {
+            Admin._reportFilter = 'dismissed';
+            paintMqTab('reports');
+            Admin.paintCommunityReports?.();
+        });
         paintMqTab(Admin.currentCommunityMonitorTab);
 
-        Admin.paintCommunityMonitorBadges = (chatUnread = 0, reviewPending = 0) => {
+        Admin.paintCommunityMonitorBadges = (chatUnread = 0, reviewPending = 0, reportOpen = Admin._reportOpen || 0) => {
             const chats = Math.max(0, Number(chatUnread) || 0);
             const reviews = Math.max(0, Number(reviewPending) || 0);
-            const total = chats + reviews;
+            const reports = Math.max(0, Number(reportOpen) || 0);
+            const total = chats + reviews + reports;
             const tile = document.getElementById('mq-unread-badge');
             if (tile) {
                 tile.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(total) : (total > 99 ? '99+' : String(total));
@@ -11541,8 +11571,14 @@ const Admin = {
                 revBadge.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(reviews) : (reviews > 99 ? '99+' : String(reviews));
                 revBadge.classList.toggle('hidden', reviews < 1);
             }
+            const reportBadge = document.getElementById('mq-tab-reports-badge');
+            if (reportBadge) {
+                reportBadge.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(reports) : (reports > 99 ? '99+' : String(reports));
+                reportBadge.classList.toggle('hidden', reports < 1);
+            }
             Admin._communityChatUnread = chats;
             Admin._stationReviewPending = reviews;
+            Admin._reportOpen = reports;
         };
 
         header.onclick = () => {
@@ -11944,6 +11980,30 @@ const Admin = {
                     ? Object.entries(queueData).map(([key, v]) => ({ ...v, _key: key })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
                     : [];
                 Admin._mqCache = Object.fromEntries(items.map((r) => [r.reportId || r._key, r]));
+                if (!Admin._reporterCache) Admin._reporterCache = {};
+                const missingReporters = items.filter((row) => row.reportedByUid && !row.reportedByName).slice(0, 30);
+                if (missingReporters.length) {
+                    Promise.all(missingReporters.map(async (row) => {
+                        const uid = String(row.reportedByUid);
+                        const cached = Admin._reporterCache[uid];
+                        if (cached) {
+                            if (cached.name) row.reportedByName = row.reportedByName || cached.name;
+                            if (cached.email) row.reportedByEmail = row.reportedByEmail || cached.email;
+                            return;
+                        }
+                        try {
+                            const res = await fetch(`${dynamicEndpoint}users/${encodeURIComponent(uid)}.json${authQ}`);
+                            const user = res.ok ? await res.json() : null;
+                            const hit = {
+                                name: String(user?.displayName || '').trim(),
+                                email: String(user?.email || '').trim(),
+                            };
+                            Admin._reporterCache[uid] = hit;
+                            if (hit.name) row.reportedByName = hit.name;
+                            if (hit.email) row.reportedByEmail = hit.email;
+                        } catch { /* the uid still shows */ }
+                    })).then(() => Admin.paintCommunityReports?.()).catch(() => {});
+                }
                 const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
                 const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
                 Admin._communityMonitorRows = rows;
@@ -11958,48 +12018,94 @@ const Admin = {
                         body: JSON.stringify(mqSeenAt),
                     });
                 } catch (e) { /* optional */ }
-                Admin.paintCommunityMonitorBadges(totalUnread, Admin._stationReviewPending || 0);
+                const openReportCount = items.filter((row) => {
+                    const type = String(row.type || '').toLowerCase();
+                    const status = String(row.status || 'open');
+                    const done = ['closed', 'resolved', 'approved', 'rejected', 'dismissed'].includes(status);
+                    return !done && type !== 'auto_hold' && (type === 'message' || type === 'user' || row.reportedByUid);
+                }).length;
+                Admin.paintCommunityMonitorBadges(totalUnread, Admin._stationReviewPending || 0, openReportCount);
                 Admin.fetchStationReviews?.({ silent: true });
 
                 const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
                 const formatWhen = (value) => value ? Admin.formatDate(Number(value)) : 'No activity yet';
+                const reportClosed = (status) => ['closed', 'resolved', 'approved', 'rejected', 'dismissed'].includes(String(status || 'open'));
                 const renderHeld = (r) => {
                     const when = r.timestamp ? Admin.formatDate(r.timestamp) : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = esc(r.snippet || r.body || r.publish?.payload?.body || '');
-                    const closed = status === 'closed' || status === 'resolved' || status === 'approved' || status === 'rejected';
+                    const closed = reportClosed(status);
                     const isFeedbackHold = (r.type === 'auto_hold' || type === 'AUTO_HOLD')
                         && (r.publish?.kind === 'feedback' || r.source === 'feedback' || r.source === 'feedback_thread');
                     const isCommunityHold = (r.type === 'auto_hold' || type === 'AUTO_HOLD')
                         && (r.publish?.kind === 'community_post' || r.publish?.kind === 'community_reply');
+                    const isPassengerReport = !isFeedbackHold && !isCommunityHold && (
+                        String(r.type || '').toLowerCase() === 'message'
+                        || String(r.type || '').toLowerCase() === 'user'
+                        || !!r.reportedByUid
+                    );
+                    const lookupUid = r.targetUid || r.publish?.payload?.uid || '';
+                    const reporterUid = r.reportedByUid || '';
+                    const reporterName = r.reportedByName || (reporterUid ? Admin.commuterLabel(reporterUid) : '');
+                    const reporterEmail = r.reportedByEmail || '';
+                    const reporterDevice = r.reportedByDeviceId || '';
+                    const routeId = r.routeId || r.publish?.routeId || '';
+                    const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
+                    const routeName = routesObj[routeId]?.name || routeId || '';
+                    const personLine = (label, name, uid, email, device) => `
+                        <div class="py-2">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">${esc(label)}</p>
+                            <p class="text-[15px] font-semibold text-gray-900 dark:text-white break-words">${esc(name || 'Unknown')}</p>
+                            ${email ? `<p class="text-[13px] text-gray-500 break-all">${esc(email)}</p>` : ''}
+                            ${uid ? `<p class="text-[12px] text-gray-400 break-all">${Admin.commuterLabelHtml(uid)}</p>` : ''}
+                            ${device && device !== uid ? `<p class="text-[12px] text-gray-400 break-all">${Admin.commuterLabelHtml(device)}</p>` : ''}
+                        </div>`;
+                    if (isPassengerReport) {
+                        const statusLabel = status === 'dismissed' ? 'Marked safe' : (closed ? 'Closed' : '');
+                        const actions = closed
+                            ? `<p class="text-[13px] text-gray-400 pt-1">${esc(statusLabel)}</p>`
+                            : `<div class="mq-report-actions">
+                                <button type="button" class="mq-safe" data-id="${esc(r.reportId || r._key)}">Safe</button>
+                                <button type="button" class="mq-hide-post" data-route="${esc(routeId)}" data-post="${esc(r.targetPostId || '')}" data-reply="${esc(r.targetReplyId || '')}">Hide message</button>
+                                ${lookupUid ? `<button type="button" class="mq-shadow-ban" data-uid="${esc(lookupUid)}">Shadow ban author</button>` : ''}
+                                ${lookupUid ? `<button type="button" class="mq-lookup-uid" data-uid="${esc(lookupUid)}">Look up author</button>` : ''}
+                                ${reporterUid ? `<button type="button" class="mq-lookup-uid" data-uid="${esc(reporterUid)}">Look up reporter</button>` : ''}
+                            </div>`;
+                        return `<article class="mq-report-card ${closed ? 'is-closed' : ''}" data-mq-id="${esc(r.reportId || r._key)}" data-community-held="false">
+                            <div class="flex items-baseline justify-between gap-3">
+                                <p class="text-[17px] font-semibold text-gray-900 dark:text-white">Reported message</p>
+                                <time class="text-[12px] text-gray-400 shrink-0">${esc(when)}</time>
+                            </div>
+                            ${routeName ? `<p class="text-[13px] text-gray-500 mt-0.5">${esc(String(routeName).replace(/\\s*<->\\s*/g, ' – '))}</p>` : ''}
+                            ${snippet ? `<p class="mq-report-quote">${snippet}</p>` : ''}
+                            ${personLine('Reported by', reporterName, reporterUid, reporterEmail, reporterDevice)}
+                            ${personLine('Author', Admin.commuterLabel(lookupUid), lookupUid, r.publish?.payload?.email || '', '')}
+                            ${actions}
+                        </article>`;
+                    }
                     const deviceId = r.deviceId || r.reportedByDeviceId || r.publish?.payload?.deviceId || '';
                     const contact = r.contact || r.publish?.payload?.email || '';
                     const sourceLabel = r.source || (isFeedbackHold ? 'feedback' : 'report');
                     const metaLine = isFeedbackHold
                         ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${Admin.commuterLabel(deviceId) || '-'} · contact: ${(contact || '-').toString().slice(0, 24)}`
                         : `target uid: ${Admin.commuterLabel(r.targetUid) || '-'} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
-                    const lookupUid = r.targetUid || r.publish?.payload?.uid || '';
                     const lookupBtn = lookupUid
                         ? `<button type="button" class="mq-lookup-uid text-[10px] font-bold text-blue-600 dark:text-blue-400 underline" data-uid="${esc(lookupUid)}">Look up</button>`
                         : '';
                     const statusLabel = status === 'approved'
                         ? (isFeedbackHold ? 'Approved to Feedback Hub' : 'Approved')
-                        : (status === 'rejected' ? 'Rejected' : (closed ? 'Closed' : ''));
+                        : (status === 'rejected' ? 'Rejected' : (status === 'dismissed' ? 'Marked safe' : (closed ? 'Closed' : '')));
                     const actions = closed ? `<span class="text-[10px] text-gray-400">${statusLabel}</span>` : (isFeedbackHold ? `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-approve-feedback text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
                                 <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
-                            </div>` : isCommunityHold ? `
-                            <div class="flex flex-wrap gap-2 mt-1">
-                                <button type="button" class="mq-approve-community text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
-                                <button type="button" class="mq-reject-community text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
-                                ${lookupBtn}
                             </div>` : `
-                            <div class="flex flex-wrap gap-2 mt-1">
-                                <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
-                                ${r.targetUid ? `<button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>` : ''}
-                                <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
+                            <div class="mq-report-actions">
+                                <button type="button" class="mq-approve-community" data-id="${esc(r.reportId || r._key)}">Approve</button>
+                                <button type="button" class="mq-reject-community" data-id="${esc(r.reportId || r._key)}">Reject</button>
+                                <button type="button" class="mq-safe" data-id="${esc(r.reportId || r._key)}">Safe</button>
+                                ${lookupBtn}
                             </div>`);
                     return `<div class="${isCommunityHold ? 'border-2 border-dashed border-amber-400 bg-amber-50/80 dark:bg-amber-950/20' : 'border border-rose-300 bg-rose-50/70 dark:bg-rose-950/20'} rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${esc(r.reportId || r._key)}" data-community-held="${isCommunityHold ? 'true' : 'false'}">
                             <div class="flex justify-between gap-2 mb-1">
@@ -12114,24 +12220,44 @@ const Admin = {
                     return `[data-community-post="${safe}"]`;
                 };
 
-                Admin._communityLoadRoute = async (details) => {
+                Admin._communityLoadRoute = async (details, opts = {}) => {
                     if (!details) return;
+                    const earlier = opts.earlier === true;
                     const routeId = details.dataset.communityRoute;
                     const target = document.getElementById('mq-thread-scroll');
                     if (!target) return;
-                    target.innerHTML = '<p class="cm-empty">Loading conversation...</p>';
+                    const prevHeight = target.scrollHeight;
+                    const prevTop = target.scrollTop;
+                    if (!earlier) target.innerHTML = '<p class="cm-empty">Loading conversation...</p>';
                     const routeAuthQ = await communityAuthSuffix();
-                    const limited = `${routeAuthQ}${routeAuthQ.includes('?') ? '&' : '?'}orderBy=%22timestamp%22&limitToLast=80`;
+                    const oldestTs = Number(details.dataset.oldestTs || 0);
+                    let limited = `${routeAuthQ}${routeAuthQ.includes('?') ? '&' : '?'}orderBy=%22timestamp%22&limitToLast=80`;
+                    if (earlier && oldestTs) limited += `&endAt=${oldestTs}`;
+                    let paged = true;
                     let routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${limited}`, {}, 8000);
-                    if (!routeRes.ok) {
+                    if (!routeRes.ok && !earlier) {
+                        paged = false;
                         routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${routeAuthQ}`, {}, 8000);
                     }
                     if (!routeRes.ok) throw new Error(`Route load failed (${routeRes.status})`);
                     const postsData = await routeRes.json() || {};
-                    const posts = Object.entries(postsData).map(([key, post]) => ({
+                    const incoming = Object.entries(postsData).map(([key, post]) => ({
                         ...(post && typeof post === 'object' ? post : {}),
                         postId: (post && post.postId) || key,
-                    })).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                    }));
+                    if (!Admin._mqThreadPosts) Admin._mqThreadPosts = {};
+                    const stored = earlier ? (Admin._mqThreadPosts[routeId] || []) : [];
+                    const seen = new Set(stored.map((post) => String(post.postId || '')));
+                    const fresh = incoming.filter((post) => post.postId && !seen.has(String(post.postId)));
+                    const posts = (earlier ? stored.concat(fresh) : incoming)
+                        .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                    Admin._mqThreadPosts[routeId] = posts;
+                    const oldest = posts.reduce((min, post) => {
+                        const ts = Number(post.timestamp) || 0;
+                        return ts && ts < min ? ts : min;
+                    }, Infinity);
+                    if (Number.isFinite(oldest)) details.dataset.oldestTs = String(oldest);
+                    details.dataset.moreHistory = paged && fresh.length >= 80 ? '1' : '0';
                     const missingActivity = {};
                     posts.forEach((post) => {
                         if (post?.postId && post.body && !post.hidden && !post.pendingReview && !activityData?.[routeId]?.[post.postId]) {
@@ -12168,7 +12294,10 @@ const Admin = {
                         }
                     }
                     let lastDay = '';
-                    target.innerHTML = posts.length ? posts.map((post) => {
+                    const earlierBtn = details.dataset.moreHistory === '1'
+                        ? '<button type="button" id="mq-load-earlier" class="cm-earlier">Earlier messages</button>'
+                        : '';
+                    target.innerHTML = earlierBtn + (posts.length ? posts.map((post) => {
                         const replies = Object.entries(post.replies || {}).map(([replyKey, reply]) => ({
                             ...(reply && typeof reply === 'object' ? reply : {}),
                             replyId: (reply && reply.replyId) || replyKey,
@@ -12180,9 +12309,16 @@ const Admin = {
                             : '';
                         lastDay = day || lastDay;
                         return `${divider}${renderMessage(post, routeId)}${replies.map((reply) => renderMessage(reply, routeId, true)).join('')}`;
-                    }).join('') : '<p class="cm-empty">No published messages on this route.</p>';
-                    target.scrollTop = target.scrollHeight;
-                    requestAnimationFrame(() => { target.scrollTop = target.scrollHeight; });
+                    }).join('') : '<p class="cm-empty">No published messages on this route.</p>');
+                    target.querySelector('#mq-load-earlier')?.addEventListener('click', () => {
+                        Admin._communityLoadRoute(details, { earlier: true });
+                    });
+                    if (earlier) {
+                        target.scrollTop = Math.max(0, target.scrollHeight - prevHeight + prevTop);
+                    } else {
+                        target.scrollTop = target.scrollHeight;
+                        requestAnimationFrame(() => { target.scrollTop = target.scrollHeight; });
+                    }
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
                 };
@@ -12350,6 +12486,31 @@ const Admin = {
 
                 const bindHeldActions = (root) => {
                 if (!root) return;
+                root.querySelectorAll('.mq-safe').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        if (!id) return;
+                        btn.disabled = true;
+                        try {
+                            const s = await Admin.getAuthKey();
+                            const put = await fetch(`${dynamicEndpoint}moderation_queue/${id}.json?auth=${s}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    status: 'dismissed',
+                                    resolution: 'safe',
+                                    dismissedAt: Date.now(),
+                                }),
+                            });
+                            if (!put.ok) throw new Error('fail');
+                            if (typeof showToast === 'function') showToast('Marked safe. The message stays up.', 'success');
+                            Admin.fetchModerationQueue();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Could not mark that report safe', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
                 root.querySelectorAll('.mq-close').forEach((btn) => {
                     btn.onclick = async () => {
                         const id = btn.getAttribute('data-id');
@@ -12474,6 +12635,25 @@ const Admin = {
                     };
                 });
                 };
+                Admin.paintCommunityReports = () => {
+                    const box = document.getElementById('mq-reports-list');
+                    if (!box) return;
+                    const mode = Admin._reportFilter === 'dismissed' ? 'dismissed' : 'open';
+                    const reports = Object.values(Admin._mqCache || {}).filter((row) => {
+                        const type = String(row?.type || '').toLowerCase();
+                        if (type === 'auto_hold') return false;
+                        const passenger = type === 'message' || type === 'user' || !!row?.reportedByUid;
+                        if (!passenger) return false;
+                        const done = reportClosed(row?.status);
+                        return mode === 'dismissed' ? done : !done;
+                    }).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+                    box.innerHTML = reports.length
+                        ? reports.map(renderHeld).join('')
+                        : `<p class="text-[15px] text-gray-400 text-center py-8">${mode === 'dismissed' ? 'No dismissed reports.' : 'No open reports.'}</p>`;
+                    bindHeldActions(box);
+                    box.onclick = list.onclick;
+                };
+                Admin.paintCommunityReports();
                 const threadScroll = document.getElementById('mq-thread-scroll');
                 if (threadScroll) threadScroll.onclick = list.onclick;
                 const threadHeld = document.getElementById('mq-thread-held');
@@ -12810,6 +12990,70 @@ const Admin = {
         return Admin.purgeAccountDeletion(uid);
     },
 
+    bindPremiumSelect: (select) => {
+        if (!select) return;
+        const paint = () => {
+            const wrap = select.closest?.('.nt-premium-select');
+            const label = wrap?.querySelector('.nt-premium-label');
+            const list = wrap?.querySelector('.nt-premium-list');
+            if (!label || !list) return;
+            const current = select.options[select.selectedIndex];
+            label.textContent = current ? current.textContent : '';
+            list.innerHTML = '';
+            Array.from(select.options).forEach((opt) => {
+                const item = document.createElement('li');
+                const choice = document.createElement('button');
+                choice.type = 'button';
+                choice.className = 'w-full text-left px-3 py-2.5 text-sm text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700/60';
+                if (opt.value === select.value) choice.classList.add('font-semibold', 'text-blue-600', 'dark:text-blue-400');
+                choice.textContent = opt.textContent || '';
+                choice.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    list.classList.add('hidden');
+                    paint();
+                });
+                item.appendChild(choice);
+                list.appendChild(item);
+            });
+        };
+        if (select.dataset.premiumBound === '1') {
+            paint();
+            return;
+        }
+        select.dataset.premiumBound = '1';
+        const span2 = select.classList.contains('col-span-2');
+        select.classList.add('sr-only');
+        select.tabIndex = -1;
+        select.classList.remove('col-span-2', 'h-10', 'h-11', 'px-2', 'px-3');
+        const wrap = document.createElement('div');
+        wrap.className = `nt-premium-select relative min-w-0${span2 ? ' col-span-2' : ''}`;
+        select.parentNode.insertBefore(wrap, select);
+        wrap.appendChild(select);
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'nt-premium-trigger w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-900 dark:text-white flex items-center justify-between gap-2 shadow-sm';
+        trigger.innerHTML = '<span class="nt-premium-label truncate"></span><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+        const list = document.createElement('ul');
+        list.className = 'nt-premium-list absolute z-[240] left-0 right-0 mt-1 max-h-60 overflow-y-auto hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl py-1 text-left';
+        wrap.appendChild(trigger);
+        wrap.appendChild(list);
+        trigger.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const opening = list.classList.contains('hidden');
+            document.querySelectorAll('.nt-premium-list').forEach((el) => el.classList.add('hidden'));
+            if (opening) list.classList.remove('hidden');
+        });
+        if (!window.__ntPremiumSelectDoc) {
+            window.__ntPremiumSelectDoc = true;
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.nt-premium-list').forEach((el) => el.classList.add('hidden'));
+            });
+        }
+        paint();
+    },
+
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
     setupUserTrustManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -12987,6 +13231,9 @@ const Admin = {
             document.getElementById(id)?.addEventListener('input', () => Admin.paintAccountDirectory());
             document.getElementById(id)?.addEventListener('change', () => Admin.paintAccountDirectory());
         });
+        ['ut-accounts-region', 'ut-accounts-provider', 'ut-accounts-route', 'shadow-ban-default-mode'].forEach((id) => {
+            Admin.bindPremiumSelect(document.getElementById(id));
+        });
         document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
         document.getElementById('ut-uid-input')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') Admin.lookupUserTrust();
@@ -13119,6 +13366,7 @@ const Admin = {
                 const previous = routeSelect.value;
                 routeSelect.innerHTML = options.join('');
                 if ([...routeSelect.options].some((opt) => opt.value === previous)) routeSelect.value = previous;
+                Admin.bindPremiumSelect(routeSelect);
             }
             const knownProviders = new Set(['google.com', 'password', 'facebook.com']);
             const filtered = rows.filter((row) => {
@@ -13169,22 +13417,29 @@ const Admin = {
                 return;
             }
             const esc = (value) => (typeof escapeHTML === 'function' ? escapeHTML(String(value || '')) : String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
-            const providerLabel = (id) => {
+            const providerMark = (id) => {
                 const key = String(id || '');
-                if (key === 'google.com') return 'Google';
-                if (key === 'facebook.com') return 'Facebook';
-                if (key === 'password') return 'Email';
-                return key || 'Account';
+                if (key === 'google.com') {
+                    return `<span class="ut-provider" title="Google" aria-label="Google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg></span>`;
+                }
+                if (key === 'password') {
+                    return `<span class="ut-provider" title="Email" aria-label="Email"><svg viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></span>`;
+                }
+                if (key === 'facebook.com') {
+                    return `<span class="ut-provider" title="Facebook" aria-label="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></span>`;
+                }
+                return '';
             };
             const regionLabel = (code) => ({ GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' }[code] || '');
             list.innerHTML = '';
             filtered.forEach((row) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3 py-2.5 focus:outline-none';
+                btn.className = 'relative w-full text-left rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 pr-12 focus:outline-none';
                 const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
                 const where = [regionLabel(row.region), row.lastRouteId ? routeName(row.lastRouteId) : ''].filter(Boolean).join(' · ');
-                btn.innerHTML = `<span class="block text-sm font-semibold text-gray-900 dark:text-white break-words">${esc(row.displayName || 'Passenger')}</span><span class="block text-[13px] text-gray-500 dark:text-gray-400 break-all">${esc(row.email || 'No email')}</span><span class="block text-[12px] text-gray-400 mt-0.5">${esc(providerLabel(row.provider))}${when ? ` · Joined ${esc(when)}` : ''}${where ? ` · ${esc(where)}` : ''}</span>`;
+                const meta = [when ? `Joined ${when}` : '', where].filter(Boolean).join(' · ');
+                btn.innerHTML = `${providerMark(row.provider)}<span class="block text-[17px] font-semibold text-gray-900 dark:text-white break-words leading-tight">${esc(row.displayName || 'Passenger')}</span><span class="block text-[15px] text-gray-500 dark:text-gray-400 break-all mt-0.5">${esc(row.email || 'No email')}</span>${meta ? `<span class="block text-[13px] text-gray-400 mt-1">${esc(meta)}</span>` : ''}`;
                 btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
                 list.appendChild(btn);
             });
@@ -13474,89 +13729,75 @@ const Admin = {
                 const bannedAtMs = Number(flags.shadowBannedAt || 0);
                 const bannedBy = flags.shadowBannedBy ? Admin.commuterEsc(String(flags.shadowBannedBy)) : '';
                 const ticketCount = (profile.fareTicketUrls || []).length;
-                const utBtn = (id, label) => (
-                    `<button type="button" id="${id}" class="ut-action-btn shrink-0 text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">${label}</button>`
-                );
-                const footBtn = (id, label, tone) => {
-                    const toneClass = tone === 'danger'
-                        ? 'text-red-700 dark:text-red-300 bg-white dark:bg-gray-900 border-red-200 dark:border-red-800'
-                        : 'text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-900 border-blue-200 dark:border-blue-800';
-                    return `<button type="button" id="${id}" class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border ${toneClass}">${label}</button>`;
-                };
-                const metricRow = (label, valueHtml, openBtn = '') => `
-                    <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <div class="min-w-0">
-                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">${label}</p>
-                            <div class="text-[11px] text-gray-800 dark:text-gray-200 mt-0.5 leading-snug">${valueHtml}</div>
-                        </div>
-                        ${openBtn ? `<div class="shrink-0 pt-0.5">${openBtn}</div>` : ''}
+                const infoRow = (label, valueHtml) => `
+                    <div class="ut-sheet-row items-start">
+                        <span class="text-[15px] text-gray-500 shrink-0 pt-0.5">${label}</span>
+                        <span class="text-right text-[15px] leading-snug min-w-0">${valueHtml}</span>
                     </div>`;
+                const navRow = (id, label, detail) => `
+                    <button type="button" id="${id}" class="ut-sheet-row">
+                        <span class="text-[17px]">${label}</span>
+                        <span class="text-[15px] text-gray-400 shrink-0">${detail}<span aria-hidden="true"> ›</span></span>
+                    </button>`;
+                const actionRow = (id, label, tone) => {
+                    const color = tone === 'danger' ? 'text-[#ff3b30]' : 'text-[#007aff]';
+                    return `<button type="button" id="${id}" class="ut-sheet-row ${color} text-[17px] font-medium justify-center">${label}</button>`;
+                };
+                const banDetail = banned
+                    ? `${expired ? 'Expired' : 'On'}${untilStr ? ` · ${untilStr}` : ''}`
+                    : 'Off';
                 out.innerHTML = `
-                    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gradient-to-b from-white to-slate-50 dark:from-gray-900 dark:to-gray-950 shadow-sm overflow-hidden">
-                        <div class="px-3.5 pt-3.5 pb-3 border-b border-gray-100 dark:border-gray-800">
-                            <p class="font-black text-base text-gray-900 dark:text-white break-words leading-tight">${heading}</p>
-                            ${profile.alias ? `<p class="text-[11px] text-gray-500 mt-1">Alias <b class="text-gray-800 dark:text-gray-200">${Admin.commuterEsc(profile.alias)}</b></p>` : '<p class="text-[11px] text-gray-400 mt-1">No feedback alias yet.</p>'}
-                            <p class="font-mono text-[10px] text-gray-400 break-all mt-1.5">${Admin.commuterEsc(uid)}</p>
+                    <div class="ut-lookup space-y-5 text-left">
+                        <div class="px-1 pt-1">
+                            <p class="text-[28px] font-semibold tracking-tight text-gray-900 dark:text-white break-words leading-tight">${heading}</p>
+                            <p class="text-[15px] text-gray-500 mt-1 break-all">${accountEmailHtml}</p>
+                            ${profile.alias ? `<p class="text-[13px] text-gray-400 mt-1">Alias ${Admin.commuterEsc(profile.alias)}</p>` : ''}
+                            <p class="font-mono text-[12px] text-gray-400 break-all mt-1">${Admin.commuterEsc(uid)}</p>
                         </div>
-                        <div class="px-3.5 py-2">
-                            ${metricRow('Email', `${accountEmailHtml}<span class="text-gray-400"> · via ${Admin.commuterEsc(viaLabel)}</span>${deviceId && deviceId !== uid ? ` · device <span class="font-mono break-all">${Admin.commuterEsc(deviceId)}</span>` : ''}`)}
-                            ${contactHtml ? metricRow('Contacts', contactHtml) : ''}
-                            ${metricRow('Joined', `<b>${joinedLabel}</b>`)}
-                            ${metricRow('Last activity', lastActivityHtml)}
-                            ${metricRow('Linked devices', `<span class="break-all">${devicesLabel}</span>`)}
-                            ${metricRow('Role / trust', `Role <b>${flags.role || 'user'}</b> · Trust score <b>${score}</b>`)}
-                            ${metricRow(
-                                'Shadow ban',
-                                `<b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` · until ${untilStr} · ${modeStr}` : ''}${bannedAtMs ? ` · since ${Admin.formatDate(bannedAtMs)}` : ''}${bannedBy ? ` · by <span class="font-mono">${bannedBy}</span>` : ''}`,
-                                utBtn('ut-open-bans-btn', 'Open bans')
-                            )}
-                            ${metricRow(
-                                'Feedback',
-                                `<b>${profile.hasChat ? `${profile.feedbackCount || 'open'} thread` : 'none'}</b>${profile.latestFeedbackAt ? ` · last ${Admin.formatDate(profile.latestFeedbackAt)}` : ''}`,
-                                profile.hasChat && chatDid ? utBtn('ut-open-chat-btn', 'Open chat') : ''
-                            )}
-                            ${metricRow(
-                                'Trip plans',
-                                `<b>${profile.tripPresent ? 'yes' : 'none'}</b>${profile.tripRegion ? ` · ${Admin.commuterEsc(profile.tripRegion)}` : ''}${profile.tripLast ? ` · ${Admin.formatDate(profile.tripLast)}` : ''}`,
-                                chatDid ? utBtn('ut-open-trips-btn', 'Open trip plans') : ''
-                            )}
-                            ${metricRow(
-                                'Fare votes',
-                                `<b>${profile.fareVotes.length}</b>${defaultRouteLabel ? ` · default <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}${ticketCount ? ` · <b>${ticketCount}</b> ticket photo${ticketCount === 1 ? '' : 's'}` : ''}`,
-                                chatDid || profile.fareVotes.length ? utBtn('ut-open-fares-btn', 'Open fare votes') : ''
-                            )}
-                            ${metricRow(
-                                'Routing fails',
-                                `<b>${profile.fails.length}</b>`,
-                                chatDid || profile.fails.length ? utBtn('ut-open-fails-btn', 'Open fails') : ''
-                            )}
-                            ${metricRow(
-                                'Crashes',
-                                `<b>${profile.crashes.length}</b>`,
-                                chatDid || profile.crashes.length ? utBtn('ut-open-crashes-btn', 'Open crashes') : ''
-                            )}
+                        <div class="ut-sheet-group">
+                            ${infoRow('Joined', `<b>${joinedLabel}</b>`)}
+                            ${infoRow('Last activity', lastActivityHtml)}
+                            ${infoRow('Found by', Admin.commuterEsc(viaLabel))}
+                            ${deviceId && deviceId !== uid ? infoRow('Device', `<span class="break-all">${Admin.commuterEsc(deviceId)}</span>`) : ''}
+                            ${infoRow('Linked devices', `<span class="break-all">${devicesLabel}</span>`)}
+                            ${contactHtml ? infoRow('Contacts', contactHtml) : ''}
+                            ${infoRow('Role', `<b>${flags.role || 'user'}</b> · ${score}`)}
+                            ${infoRow('Ban', `<b class="${banned && !expired ? 'text-[#ff3b30]' : ''}">${banDetail}</b>${banned ? ` · ${Admin.commuterEsc(modeStr)}` : ''}${bannedAtMs ? `<span class="block text-[12px] text-gray-400">since ${Admin.formatDate(bannedAtMs)}</span>` : ''}${bannedBy ? `<span class="block text-[12px] text-gray-400">${bannedBy}</span>` : ''}`)}
                         </div>
-                        <div class="px-3.5 py-3 border-t border-gray-100 dark:border-gray-800 space-y-3">
-                            <div>
-                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Live location</p>
-                                ${liveHtml}
+                        <div>
+                            <p class="px-4 pb-1.5 text-[13px] text-gray-500">Activity</p>
+                            <div class="ut-sheet-group">
+                                ${navRow('ut-open-bans-btn', 'Bans', banDetail)}
+                                ${profile.hasChat && chatDid ? navRow('ut-open-chat-btn', 'Feedback', profile.feedbackCount ? String(profile.feedbackCount) : 'Open') : infoRow('Feedback', profile.hasChat ? 'Open' : 'None')}
+                                ${chatDid ? navRow('ut-open-trips-btn', 'Trip plans', profile.tripPresent ? 'Yes' : 'None') : ''}
+                                ${(chatDid || profile.fareVotes.length) ? navRow('ut-open-fares-btn', 'Fare votes', String(profile.fareVotes.length)) : ''}
+                                ${(chatDid || profile.fails.length) ? navRow('ut-open-fails-btn', 'Routing fails', String(profile.fails.length)) : ''}
+                                ${(chatDid || profile.crashes.length) ? navRow('ut-open-crashes-btn', 'Crashes', String(profile.crashes.length)) : ''}
                             </div>
-                            <div>
-                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Community</p>
+                        </div>
+                        <div>
+                            <p class="px-4 pb-1.5 text-[13px] text-gray-500">Live location</p>
+                            <div class="ut-sheet-group px-4 py-3">${liveHtml}</div>
+                        </div>
+                        <div>
+                            <p class="px-4 pb-1.5 text-[13px] text-gray-500">Community</p>
+                            <div class="ut-sheet-group px-4 py-3">
                                 ${communityHtml}
-                                <div class="mt-2 flex items-center gap-2">
-                                    <label class="text-[11px] text-gray-600 dark:text-gray-300 shrink-0" for="ut-community-max">Messages in 30 minutes</label>
-                                    <input id="ut-community-max" type="number" min="8" max="200" step="1" value="${allowanceValue}" class="w-20 h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white" />
-                                    <button type="button" id="ut-community-max-save" class="h-9 px-3 rounded-lg bg-blue-600 text-white text-[11px] font-bold">Save</button>
+                                ${defaultRouteLabel ? `<p class="text-[13px] text-gray-500 mt-2">Usual line ${Admin.commuterEsc(defaultRouteLabel)}</p>` : ''}
+                                ${ticketCount ? `<p class="text-[13px] text-gray-500">${ticketCount} ticket photo${ticketCount === 1 ? '' : 's'}</p>` : ''}
+                                <div class="mt-3 flex items-center gap-2">
+                                    <label class="text-[15px] text-gray-700 dark:text-gray-200 shrink-0" for="ut-community-max">Messages in 30 minutes</label>
+                                    <input id="ut-community-max" type="number" min="8" max="200" step="1" value="${allowanceValue}" class="w-20 h-10 px-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-0 text-[15px] text-gray-900 dark:text-white" />
+                                    <button type="button" id="ut-community-max-save" class="h-10 px-3 rounded-xl bg-[#007aff] text-white text-[15px] font-semibold">Save</button>
                                 </div>
-                                <p class="text-[10px] text-gray-400 mt-1">Quiet. The rider is not told this number changed.</p>
+                                <p class="text-[12px] text-gray-400 mt-1">Quiet. The rider is not told this number changed.</p>
                             </div>
                         </div>
-                        <div class="px-3.5 py-3 bg-slate-50/80 dark:bg-gray-950/50 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-2">
-                            ${chatDid ? footBtn('ut-start-chat-btn', profile.hasChat ? 'Reply' : 'Start chat', 'primary') : ''}
-                            ${chatDid ? footBtn('ut-alias-btn', 'Edit alias', 'primary') : ''}
-                            ${footBtn('ut-ban-btn', 'Shadow ban', 'danger')}
-                            ${footBtn('ut-lift-btn', 'Lift ban', 'primary')}
+                        <div class="ut-sheet-group">
+                            ${chatDid ? actionRow('ut-start-chat-btn', profile.hasChat ? 'Reply' : 'Start chat', 'primary') : ''}
+                            ${chatDid ? actionRow('ut-alias-btn', 'Edit alias', 'primary') : ''}
+                            ${actionRow('ut-ban-btn', 'Shadow ban', 'danger')}
+                            ${actionRow('ut-lift-btn', 'Lift ban', 'primary')}
                         </div>
                     </div>`;
                 document.getElementById('ut-open-chat-btn')?.addEventListener('click', () => {

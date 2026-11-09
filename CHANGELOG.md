@@ -1,5 +1,10 @@
 # Changelog
 
+## V10_11.10.3 — no release notes
+
+- Dev Hub badges wait for the in-flight schedule stamp check and download, then read community activity four routes at a time.
+- Community Monitor lists routes from the shallow activity index and the newest 20 rows per route.
+
 ## V10_11.10.2
 
 - Data saving starts off. Pictures load on their own until you change that.

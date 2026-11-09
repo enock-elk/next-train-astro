@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.3': [
+        'Dev Hub badges wait until the schedule stamp check and download already running on this phone have finished, then read Firebase. They still use the shallow community_activity key list and a short page per route, four routes at a time. Community Monitor uses that same page (newest 20) instead of the whole tree. Unread on a route therefore stops at 20. Opening a route does not write older messages back into the index when that page is full. A commuter profile still reads the full activity tree. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.2': [
         'Data saving is a signed-in Account page, next to Notifications. It starts off: pictures load on their own, link cards stay on, and profile photos stay on. Only when I tap waits for a tap before a new picture download. A poster already in the alert image cache, or a picture this phone has already shown, still paints with no download chip. Link cards off skips the card and the lookup. Profile photos off skips the photo and keeps the existing placeholder. The timetable is unchanged. The map still loads its picture when that map is opened. forceShow stays false.',
     ],

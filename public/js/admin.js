@@ -3382,10 +3382,68 @@ const Admin = {
         return unread;
     },
 
+    /** Wait out a schedule stamp check or download already on the radio. Does not start one. */
+    _afterScheduleWaterfall: async () => {
+        const deadline = Date.now() + 60000;
+        while (Date.now() < deadline) {
+            const pending = typeof window.ntPendingScheduleLoad === 'function'
+                ? window.ntPendingScheduleLoad()
+                : null;
+            if (!pending || typeof pending.then !== 'function') return;
+            const left = deadline - Date.now();
+            if (left <= 0) return;
+            await Promise.race([
+                Promise.resolve(pending).then(() => {}, () => {}),
+                new Promise((resolve) => { setTimeout(resolve, left); }),
+            ]);
+            const still = typeof window.ntPendingScheduleLoad === 'function'
+                ? window.ntPendingScheduleLoad()
+                : null;
+            if (still === pending) return;
+        }
+    },
+
+    _pool: async (items, limit, worker) => {
+        const list = Array.isArray(items) ? items : [];
+        const width = Math.max(1, Math.min(Number(limit) || 1, list.length || 1));
+        const out = new Array(list.length);
+        let cursor = 0;
+        if (!list.length) return out;
+        await Promise.all(Array.from({ length: Math.min(width, list.length) }, async () => {
+            while (cursor < list.length) {
+                const index = cursor;
+                cursor += 1;
+                out[index] = await worker(list[index], index);
+            }
+        }));
+        return out;
+    },
+
+    _communityActivityRouteIds: async (secret, timeoutMs = 6000) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const params = new URLSearchParams();
+        params.set('auth', secret);
+        params.set('shallow', 'true');
+        const res = await window.guardianFetch(
+            `${dynamicEndpoint}community_activity.json?${params.toString()}`,
+            {},
+            timeoutMs,
+        );
+        if (!res || !res.ok) return null;
+        try {
+            const data = await res.json();
+            if (data == null) return [];
+            return data && typeof data === 'object' ? Object.keys(data) : null;
+        } catch {
+            return null;
+        }
+    },
+
     syncAllBadges: async () => {
         if (Admin._badgeSyncInFlight) return;
         Admin._badgeSyncInFlight = true;
         try {
+        await Admin._afterScheduleWaterfall();
         const secret = await Admin.getAuthKey();
         if (!secret) return;
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -3464,6 +3522,7 @@ const Admin = {
             };
             const CLOSED_QUEUE = ['closed', 'resolved', 'approved', 'rejected', 'dismissed'];
             const COMMUNITY_ROUTE_CAP = 24;
+            const COMMUNITY_ACTIVITY_CONCURRENCY = 4;
 
             try {
                 const drLast = stampOf('dr_last_checked', 'dr_last_checked');
@@ -3493,11 +3552,8 @@ const Admin = {
                     Admin._pendingDeletionCount = delUnread;
                 }
 
-                const activityKeys = await readBadge(await window.guardianFetch(
-                    `${dynamicEndpoint}community_activity.json?auth=${secret}&shallow=true`,
-                    {},
-                    6000,
-                ));
+                const activityRouteIds = await Admin._communityActivityRouteIds(secret, 6000);
+                const activityKeys = activityRouteIds ? Object.fromEntries(activityRouteIds.map((id) => [id, true])) : null;
                 const mqLast = stampOf('mq_last_checked', 'mq_last_checked');
                 const mqData = await readBadge(await window.guardianFetch(
                     Admin._badgeQueryUrl('moderation_queue.json', secret, { startAt: mqLast + 1 }),
@@ -3515,7 +3571,7 @@ const Admin = {
                     });
                     const queried = routeIds.slice(0, COMMUNITY_ROUTE_CAP);
                     const skipped = routeIds.slice(COMMUNITY_ROUTE_CAP);
-                    const routeResults = await Promise.all(queried.map(async (routeId) => {
+                    const routeResults = await Admin._pool(queried, COMMUNITY_ACTIVITY_CONCURRENCY, async (routeId) => {
                         const seenAt = Number(adminState.community_seen?.[routeId] || 0);
                         const data = await readBadge(await window.guardianFetch(
                             Admin._badgeQueryUrl(
@@ -3527,7 +3583,7 @@ const Admin = {
                             6000,
                         ));
                         return data ? Admin._countBadgeRows(data, seenAt) : null;
-                    }));
+                    });
                     if (routeResults.every((n) => n != null)) {
                         let chatUnread = routeResults.reduce((sum, n) => sum + n, 0);
                         skipped.forEach((routeId) => {
@@ -12040,15 +12096,38 @@ const Admin = {
                 if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const authQ = `?auth=${encodeURIComponent(secret)}`;
-                const [activityRes, queueRes, seenRes] = await Promise.all([
-                    window.guardianFetch(`${dynamicEndpoint}community_activity.json${authQ}`, {}, 8000),
+                const [activityRouteIds, queueRes, seenRes] = await Promise.all([
+                    Admin._communityActivityRouteIds(secret, 8000),
                     window.guardianFetch(`${dynamicEndpoint}moderation_queue.json${authQ}`, {}, 8000),
                     window.guardianFetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/community_seen.json${authQ}`, {}, 8000),
                 ]);
-                if (!activityRes.ok || !queueRes.ok || !seenRes.ok) {
-                    throw new Error(`HTTP ${activityRes.status}/${queueRes.status}/${seenRes.status}`);
+                if (!activityRouteIds || !queueRes.ok || !seenRes.ok) {
+                    throw new Error(`HTTP activity/${queueRes.status}/${seenRes.status}`);
                 }
-                const activityData = await activityRes.json() || {};
+                const activityPages = await Admin._pool(activityRouteIds, 4, async (routeId) => {
+                    const pageRes = await window.guardianFetch(
+                        Admin._badgeQueryUrl(
+                            `community_activity/${encodeURIComponent(routeId)}.json`,
+                            secret,
+                            { startAt: 0, limit: 20 },
+                        ),
+                        {},
+                        8000,
+                    );
+                    if (!pageRes || !pageRes.ok) return null;
+                    const page = await pageRes.json();
+                    const rows = page && typeof page === 'object' ? page : {};
+                    return { routeId, rows, complete: Object.keys(rows).length < 20 };
+                });
+                if (activityPages.some((page) => !page)) {
+                    throw new Error('community activity page failed');
+                }
+                const activityData = {};
+                const activityWindowComplete = {};
+                activityPages.forEach((page) => {
+                    activityData[page.routeId] = page.rows;
+                    activityWindowComplete[page.routeId] = page.complete;
+                });
                 const queueData = await queueRes.json();
                 const seenData = await seenRes.json() || {};
                 const items = queueData
@@ -12334,8 +12413,15 @@ const Admin = {
                     if (Number.isFinite(oldest)) details.dataset.oldestTs = String(oldest);
                     details.dataset.moreHistory = paged && fresh.length >= 80 ? '1' : '0';
                     const missingActivity = {};
+                    const indexed = activityData?.[routeId] || {};
+                    const indexedTimes = Object.values(indexed)
+                        .map((row) => Number(row?.timestamp) || 0)
+                        .filter((ts) => ts > 0);
+                    const windowFull = activityWindowComplete?.[routeId] === false && indexedTimes.length > 0;
+                    const windowFloor = windowFull ? Math.min(...indexedTimes) : 0;
+                    const outsideWindow = (ts) => windowFloor > 0 && (Number(ts) || 0) < windowFloor;
                     posts.forEach((post) => {
-                        if (post?.postId && post.body && !post.hidden && !post.pendingReview && !activityData?.[routeId]?.[post.postId]) {
+                        if (post?.postId && post.body && !post.hidden && !post.pendingReview && !indexed[post.postId] && !outsideWindow(post.timestamp)) {
                             missingActivity[`community_activity/${routeId}/${post.postId}`] = {
                                 kind: 'post',
                                 postId: post.postId,
@@ -12345,7 +12431,7 @@ const Admin = {
                         }
                         Object.entries(post?.replies || {}).forEach(([replyKey, reply]) => {
                             const replyId = (reply && reply.replyId) || replyKey;
-                            if (!replyId || !reply?.body || reply.hidden || reply.pendingReview || activityData?.[routeId]?.[replyId]) return;
+                            if (!replyId || !reply?.body || reply.hidden || reply.pendingReview || indexed[replyId] || outsideWindow(reply.timestamp)) return;
                             missingActivity[`community_activity/${routeId}/${replyId}`] = {
                                 kind: 'reply',
                                 postId: post.postId,

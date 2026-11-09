@@ -2173,6 +2173,11 @@ async function loadAllSchedulesInner(force = false) {
     }
 }
 
+/** In-flight schedule stamp check or download, or null when the radio is free. */
+export function pendingScheduleLoad() {
+    return loadAllSchedulesInFlight;
+}
+
 /** Public entry: share one in-flight load per route unless force=true. */
 export async function loadAllSchedules(force = false) {
     const routeId = $currentRouteId.get() || '';

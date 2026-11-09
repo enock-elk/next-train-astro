@@ -50,7 +50,7 @@ import {
     lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
 } from './ui.js';
 import {
-    loadAllSchedules, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
+    loadAllSchedules, pendingScheduleLoad, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
 import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
@@ -192,6 +192,7 @@ export function exposeAdminGlobals() {
     window.bindPasswordReveal = bindPasswordReveal;
     window.fillAdminPasswordFromDevice = fillAdminPasswordFromDevice;
     window.loadAllSchedules = loadAllSchedules;
+    window.ntPendingScheduleLoad = pendingScheduleLoad;
     window.parseJSONSchedule = parseJSONSchedule;
     window.updateTime = updateTime;
     window.executeRegionSwap = executeRegionSwap;

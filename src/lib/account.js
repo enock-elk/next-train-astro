@@ -1902,8 +1902,9 @@ export function bindAccountUi() {
         try {
             const next = await updateAccountDisplayName(input?.value || '');
             if (input) input.value = next;
-            const { setShowPhotoInAlerts } = await import('./rider-marks.js');
+            const { publishPublicProfile, setShowPhotoInAlerts } = await import('./rider-marks.js');
             await setShowPhotoInAlerts(!!photo?.checked);
+            await publishPublicProfile({ displayName: next });
             await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');

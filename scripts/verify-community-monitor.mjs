@@ -137,6 +137,12 @@ assert.match(community, /community-avatar-spacer/, 'grouped messages keep the av
 assert.match(communityView, /community-avatar-spacer/, 'Community CSS keeps WhatsApp-style grouped rows');
 assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
 assert.match(community, /left > 3/, 'quota hint stays hidden until 3 messages remain');
+assert.match(community, /viewing\) cachedUnreadByRoute\[viewing\] = 0/, 'the open room is cleared before a slower unread count returns');
+assert.match(community, /orderBy=%22timestamp%22&startAt=/, 'unread counts only posts newer than the last visit');
+assert.match(community, /public_profile\/\$\{encodeURIComponent\(uid\)\}/, 'community bubbles read the latest public points');
+assert.ok(rules.rules.public_profile, 'public profile rules exist');
+assert.ok(rules.rules.users.$uid.communityAllowance, 'an operator can store a higher community limit');
+assert.match(worker, /communityAllowance/, 'a raised community limit is read by the worker');
 assert.match(community, /Community is still being tried out/, 'quota hint explains that Community is still being tried out');
 assert.match(communityView, /decoration-dotted/, 'quota hint uses a dotted underline');
 assert.match(communityView, /<button type="button" id="community-quota-hint"/, 'quota hint is a button');
@@ -152,7 +158,13 @@ assert.ok(
 
 const ui = await readFile(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert.match(ui, /community-post-row/, 'tab swipe ignores message rows so swipe-to-reply does not open Map');
-assert.match(ui, /community-feed-scroll/, 'tab swipe ignores the community feed');
+assert.match(ui, /is-tab-swiping/, 'tab swipe follows the finger and can rest mid-way');
+assert.match(ui, /placePeer\(0, true\)/, 'a short swipe snaps back instead of changing tabs');
+assert.match(admin, /id="mq-thread"/, 'a community route opens as its own thread');
+assert.match(admin, /mq-showing-thread/, 'the monitor thread hides the route list');
+assert.match(admin, /limitToLast=80/, 'the monitor loads the latest messages, not the whole history');
+const mqTabbar = admin.slice(admin.indexOf('id="mq-tabbar"'), admin.indexOf('id="mq-tabbar"') + 280);
+assert.doesNotMatch(mqTabbar, /sticky/, 'the community monitor tabs scroll away with the introduction');
 
 const trust = await readFile(new URL('../src/lib/trust.js', import.meta.url), 'utf8');
 assert.match(trust, /remaining: 0/, 'exhausted quota reports remaining 0');

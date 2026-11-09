@@ -1132,16 +1132,31 @@ async function handlePost(request, env) {
         return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
     }
 
-    const windowMs = Number(env.RATE_WINDOW_MS || 60_000);
-    const max = Number(env.RATE_MAX || 4);
+    let windowMs = Number(env.RATE_WINDOW_MS || 60_000);
+    let max = Number(env.RATE_MAX || 4);
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const isAdminPoster = ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase());
-    if (!isAdminPoster && (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, max * 2))) {
+    if (!isAdminPoster) {
+        try {
+            const allowance = await rtdbGet(env, `users/${user.uid}/communityAllowance`);
+            const raised = Number(allowance?.max);
+            if (Number.isFinite(raised) && raised > 8 && raised <= 200) {
+                windowMs = 30 * 60 * 1000;
+                max = Math.floor(raised);
+            }
+        } catch {
+            /* a missing allowance keeps the short cooldown */
+        }
+    }
+    if (!isAdminPoster && (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, Math.max(max * 2, max)))) {
+        const raisedWindow = windowMs > 120000;
         return json(env, request, 429, {
             ok: false,
-            error: `Please wait ${Math.ceil(windowMs / 1000)} seconds before you can send another message.`,
+            error: raisedWindow
+                ? 'You have used your messages for now. Try again later.'
+                : `Please wait ${Math.ceil(windowMs / 1000)} seconds before you can send another message.`,
             retryAfterMs: windowMs,
-            reason: 'cooldown',
+            reason: raisedWindow ? 'quota' : 'cooldown',
         });
     }
 

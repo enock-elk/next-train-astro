@@ -37,6 +37,7 @@ import {
     readMarks,
     renderBubbleMarksHtml,
     showMarksInCommunity,
+    showPhotoInAlerts,
 } from './rider-marks.js';
 
 const BODY_MAX = 280;
@@ -48,6 +49,8 @@ const RATE_KEY = 'communityPostRateV1';
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 8;
 const AUTH_COOLDOWN_MS = 20 * 1000;
+/** Operator-raised cap from users/{uid}/communityAllowance. Default stays 8. */
+let communitySendMax = AUTH_GLOBAL_MAX;
 
 /** @type {(() => void) | null} */
 let postsUnsub = null;
@@ -119,9 +122,32 @@ export function formatRouteDisplayName(name) {
 export function checkCommunityRateLimit() {
     return checkRateLimit(RATE_KEY, {
         windowMs: AUTH_GLOBAL_MS,
-        max: AUTH_GLOBAL_MAX,
+        max: communitySendMax,
         cooldownMs: AUTH_COOLDOWN_MS,
     });
+}
+
+/** Read a quiet per-account cap. Missing or unreadable stays at 8. */
+export async function refreshCommunitySendMax() {
+    const acct = $account.get();
+    if (!acct?.uid || acct.status !== 'signed-in' || isAdminAuthed()) {
+        communitySendMax = AUTH_GLOBAL_MAX;
+        return communitySendMax;
+    }
+    try {
+        const q = await authQuery();
+        if (!q) return communitySendMax;
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}users/${encodeURIComponent(acct.uid)}/communityAllowance.json${q}`
+        );
+        if (!res.ok) return communitySendMax;
+        const data = await res.json();
+        const n = Number(data?.max);
+        if (Number.isFinite(n) && n >= AUTH_GLOBAL_MAX && n <= 200) communitySendMax = Math.floor(n);
+    } catch {
+        /* keep the last cap */
+    }
+    return communitySendMax;
 }
 
 function recordRateHit() {
@@ -530,6 +556,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     }
 
     if (!isAdminAuthed()) {
+        await refreshCommunitySendMax();
         const limit = checkCommunityRateLimit();
         if (!limit.ok) return limit;
     }
@@ -718,6 +745,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         return { ok: false, message: 'Action not permitted.' };
     }
     if (!isAdminAuthed()) {
+        await refreshCommunitySendMax();
         const limit = checkCommunityRateLimit();
         if (!limit.ok) return limit;
     }
@@ -1038,6 +1066,108 @@ function closeReactionSheet() {
     document.getElementById('community-reaction-sheet')?.classList.add('hidden');
 }
 
+const publicProfiles = new Map();
+let feedAuthorMeta = new Map();
+let communityFeedPinned = true;
+let profileRepaintRoute = '';
+
+function latestAuthorMeta(posts) {
+    const map = new Map();
+    (posts || []).forEach((post) => {
+        const uid = post?.uid;
+        if (!uid) return;
+        const ts = Number(post.timestamp) || 0;
+        const prev = map.get(uid);
+        if (prev && ts < prev.ts) return;
+        const points = Number(post.marks?.points);
+        map.set(uid, {
+            ts,
+            points: Number.isFinite(points) ? points : null,
+            tier: post.marks?.tier || '',
+            hasMarks: Number.isFinite(points),
+            photoURL: post.photoURL || '',
+            displayName: post.displayName || '',
+        });
+    });
+    return map;
+}
+
+function authorPresentation(post, isOwn) {
+    if (isOwn) {
+        const acct = $account.get();
+        return {
+            displayName: 'You',
+            photoURL: showPhotoInAlerts() ? (acct?.photoURL || '') : '',
+            marks: showMarksInCommunity() ? marksPublicSnapshot(readMarks()) : null,
+        };
+    }
+    const profile = post?.uid ? publicProfiles.get(post.uid) : null;
+    const latest = post?.uid ? feedAuthorMeta.get(post.uid) : null;
+    if (profile && !profile.missing) {
+        const showPhoto = profile.showPhoto === true;
+        const showMarks = profile.showMarks !== false;
+        const points = Number(profile.points);
+        return {
+            displayName: profile.displayName || post.displayName || latest?.displayName || 'Passenger',
+            photoURL: showPhoto ? (post.photoURL || latest?.photoURL || '') : '',
+            marks: showMarks && Number.isFinite(points)
+                ? { points, tier: profile.tier || latest?.tier || '' }
+                : null,
+        };
+    }
+    const newestHidPhoto = latest && !latest.photoURL && (post.photoURL || latest.photoURL);
+    return {
+        displayName: latest?.displayName || post.displayName || 'Passenger',
+        photoURL: newestHidPhoto ? '' : (post.photoURL || ''),
+        marks: latest?.hasMarks
+            ? { points: latest.points, tier: latest.tier }
+            : (post.marks && Number.isFinite(Number(post.marks.points)) ? post.marks : null),
+    };
+}
+
+async function loadPublicProfiles(uids) {
+    const now = Date.now();
+    const need = [...new Set((uids || []).filter(Boolean))].filter((uid) => {
+        const hit = publicProfiles.get(uid);
+        return !hit || now - hit.fetchedAt > 20000;
+    });
+    if (!need.length) return false;
+    let changed = false;
+    await Promise.all(need.slice(0, 40).map(async (uid) => {
+        try {
+            const res = await fetch(`${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(uid)}.json`);
+            if (!res.ok) return;
+            const data = await res.json();
+            publicProfiles.set(uid, {
+                ...(data && typeof data === 'object' ? data : {}),
+                missing: !data,
+                fetchedAt: Date.now(),
+            });
+            changed = true;
+        } catch {
+            /* keep the message snapshot */
+        }
+    }));
+    return changed;
+}
+
+function pinCommunityFeedToLatest() {
+    const scroller = document.querySelector('#view-community .community-feed-scroll');
+    if (!scroller) return;
+    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    if (communityFeedPinned || gap < 160) scroller.scrollTop = scroller.scrollHeight;
+}
+
+function bindCommunityFeedPin() {
+    const scroller = document.querySelector('#view-community .community-feed-scroll');
+    if (!scroller || scroller.dataset.pinBound === '1') return;
+    scroller.dataset.pinBound = '1';
+    scroller.addEventListener('scroll', () => {
+        const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        communityFeedPinned = gap < 160;
+    }, { passive: true });
+}
+
 function renderPostCard(post, routeId, { grouped = false } = {}) {
     const body = escapeHTML(post.body || '');
     const clock = formatClock24(post.timestamp);
@@ -1046,8 +1176,9 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const acct = $account.get();
     const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
     const isOwn = !!(myUid && post.uid && post.uid === myUid);
-    const photoURL = post.photoURL || (isOwn ? acct.photoURL : null) || '';
-    const nameColor = nameColorFor(post.uid || post.displayName);
+    const shown = authorPresentation(post, isOwn);
+    const photoURL = shown.photoURL || '';
+    const nameColor = nameColorFor(post.uid || shown.displayName);
     const replyTo = post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
     const quoteHtml = replyTo
         ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${nameColorFor(replyTo.displayName || replyTo.postId)}">
@@ -1062,10 +1193,8 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
             ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
             : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
-    const displayName = isOwn ? 'You' : (post.displayName || 'Passenger');
-    const marksSnap = isOwn
-        ? (showMarksInCommunity() ? marksPublicSnapshot(readMarks()) : null)
-        : (post.marks && Number.isFinite(Number(post.marks.points)) ? post.marks : null);
+    const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
+    const marksSnap = shown.marks;
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
@@ -1101,6 +1230,8 @@ function applyFeedFilter(routeId) {
     const emptyEl = document.getElementById('community-feed-empty');
     if (!listEl) return;
     const posts = cachedFeedPosts;
+    feedAuthorMeta = latestAuthorMeta(posts);
+    bindCommunityFeedPin();
 
     if (!posts.length) {
         listEl.innerHTML = '';
@@ -1132,6 +1263,16 @@ function applyFeedFilter(routeId) {
     });
     listEl.innerHTML = html;
     wireCommunityChatGestures(listEl);
+    pinCommunityFeedToLatest();
+    if (profileRepaintRoute === routeId) return;
+    const uids = posts.map((p) => p.uid);
+    loadPublicProfiles(uids).then((changed) => {
+        if (!changed) return;
+        const openId = document.getElementById('community-route-select')?.value || '';
+        if (openId !== routeId) return;
+        profileRepaintRoute = routeId;
+        try { applyFeedFilter(routeId); } finally { profileRepaintRoute = ''; }
+    }).catch(() => {});
 }
 
 function wireCommunityChatGestures(listEl) {
@@ -1277,7 +1418,7 @@ export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts 
     const seenAt = Date.now();
     safeStorage.setItem(unreadSeenKey(routeId), String(seenAt));
     cachedUnreadByRoute[routeId] = 0;
-    if (!opts.silent) paintUnreadFromCache();
+    paintUnreadFromCache();
     if (!isAdminAuthed()) return;
     try {
         const acct = $account.get();
@@ -1298,6 +1439,8 @@ export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts 
 }
 
 function paintUnreadFromCache() {
+    const viewing = viewingCommunityRouteId();
+    if (viewing) cachedUnreadByRoute[viewing] = 0;
     const rooms = Object.entries(cachedUnreadByRoute)
         .filter(([, n]) => n > 0)
         .map(([id, n]) => ({ id, n, label: routeLabel(id) }));
@@ -1341,6 +1484,17 @@ function paintCommunityUnreadBadge(count, rooms = []) {
     }
 }
 
+async function fetchPostsNewerThan(routeId, lastSeen) {
+    const q = await authQuery();
+    const joiner = q ? `${q}&` : '?';
+    const url = `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json${joiner}orderBy=%22timestamp%22&startAt=${Number(lastSeen) + 1}&limitToLast=20`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return [];
+    return Object.values(data);
+}
+
 async function countUnreadOnRoute(routeId, viewingId) {
     if (!routeId || routeId === viewingId) return 0;
     try {
@@ -1371,8 +1525,9 @@ async function countUnreadOnRoute(routeId, viewingId) {
             safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
             return 0;
         }
-        const posts = await fetchRoutePosts(routeId);
         const lastSeen = getLastSeen(routeId);
+        let posts = await fetchPostsNewerThan(routeId, lastSeen);
+        if (!posts) posts = await fetchRoutePosts(routeId);
         const myUid = $account.get()?.uid || '';
         return posts.filter((p) => {
             const ts = p.timestamp || 0;
@@ -1385,11 +1540,16 @@ async function countUnreadOnRoute(routeId, viewingId) {
     }
 }
 
+let unreadRefreshToken = 0;
+
 /**
  * Count unread posts per region room (newer than last visit) and name them on the badge.
+ * Opening a room clears that room immediately. A slower poll cannot paint it back.
  */
 export async function refreshCommunityUnreadBadge() {
+    const token = ++unreadRefreshToken;
     try { await fetchFeatures(); } catch { /* defaults */ }
+    if (token !== unreadRefreshToken) return 0;
     const routes = regionCommunityRoutes();
     if (!routes.length) {
         cachedUnreadByRoute = {};
@@ -1397,12 +1557,20 @@ export async function refreshCommunityUnreadBadge() {
         return 0;
     }
     const viewing = viewingCommunityRouteId();
-    if (viewing) await markCommunityRouteSeen(viewing, { silent: true });
+    if (viewing) {
+        cachedUnreadByRoute[viewing] = 0;
+        safeStorage.setItem(unreadSeenKey(viewing), String(Date.now()));
+        paintUnreadFromCache();
+        void markCommunityRouteSeen(viewing, { silent: true });
+    }
 
     const next = {};
     await Promise.all(routes.map(async (r) => {
         next[r.id] = await countUnreadOnRoute(r.id, viewing);
     }));
+    if (token !== unreadRefreshToken) return 0;
+    const stillViewing = viewingCommunityRouteId();
+    if (stillViewing) next[stillViewing] = 0;
     cachedUnreadByRoute = next;
     paintUnreadFromCache();
     return Object.values(next).reduce((sum, n) => sum + n, 0);
@@ -1423,6 +1591,7 @@ export function startCommunityUnreadWatch() {
 }
 
 export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts = {}) {
+    communityFeedPinned = true;
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
@@ -1506,7 +1675,7 @@ function syncCommunityRoutePicker(routeId) {
         const allRoutes = [...routes];
         list.innerHTML = allRoutes.map((r) => {
             const selected = r.id === routeSel.value;
-            const unread = cachedUnreadByRoute[r.id] || 0;
+            const unread = r.id === routeSel.value ? 0 : (cachedUnreadByRoute[r.id] || 0);
             const unreadHtml = unread > 0
                 ? `<span class="community-room-unread">${unread > 99 ? '99+' : unread}</span>`
                 : '';
@@ -1619,11 +1788,12 @@ async function openRouteCommunityNow(opts = {}) {
     }
 
     triggerHaptic();
+    communityFeedPinned = true;
     renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
-    if (activeRoute) markCommunityRouteSeen(activeRoute, { silent: true });
+    if (activeRoute) markCommunityRouteSeen(activeRoute);
     refreshCommunityUnreadBadge();
-    paintCommunityQuotaHint();
+    refreshCommunitySendMax().finally(() => paintCommunityQuotaHint());
     startQuotaHintWatch();
 }
 
@@ -1694,7 +1864,7 @@ function bindCommunityQuotaNote() {
         const open = note.hidden;
         note.hidden = !open;
         if (!open) return;
-        note.textContent = 'Community is still being tried out. Each account can send 8 messages in 30 minutes. This is how many you have left.';
+        note.textContent = `Community is still being tried out. Each account can send ${communitySendMax} messages in 30 minutes. This is how many you have left.`;
     });
 }
 
@@ -1868,7 +2038,8 @@ export function bindCommunityUi() {
         syncReplyDraftForRoute(rid);
         renderCommunityFeed(rid);
         joinCommunityPresence(rid);
-        if (rid) markCommunityRouteSeen(rid, { silent: true });
+        communityFeedPinned = true;
+        if (rid) markCommunityRouteSeen(rid);
         refreshCommunityUnreadBadge();
         paintCommunityQuotaHint();
     });

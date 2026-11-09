@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.09.3': [
+        'Opening a community room clears that room\'s unread count straight away, including when the latest messages are still below the screen. The room opens on the latest message. Community Monitor scrolls its introduction and search away, and a route opens as a full conversation with the latest message at the bottom. Community bubbles use the rider\'s latest points, and a photo stays hidden once they turn Show my photo next to my name off. Account, Lookup, Bans, and Deletions sit in that order. The account list shows the total, and a Gauteng filter shows the Gauteng total. The main tabs follow a finger and can rest between two tabs. Lookup can quietly raise how many community messages an account may send in 30 minutes. Deploy firebase-database.rules.json so the public points and the higher limit can be saved, and deploy the community Worker so the higher limit is not cut back to four a minute. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.09.2': [
         'Planner fare accuracy counts confirmed quotes and quotes still waiting. Refuted prices sit in their own accordion and stay out of the percentage. Correct quotes move into Saved corrections, and the open list is only the incorrect ones. Community hides the messages-left control until 3 remain. Account points and badges follow the features open for that person. Grid column order uses the route ends and the same controls as the rest of the hub. Live telemetry keeps the last numbers and waits longer before it says Wait. Force schedule type sits in Holiday Notices. The default ban mode sits on the Bans tab of User Accounts & Bans. Deploy the telemetry Worker so the longer cache reaches phones. No commuter What\'s New. forceShow stays false.',
     ],

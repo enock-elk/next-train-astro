@@ -453,25 +453,62 @@ function authUid() {
     return safeStorage.getItem('authUid') || null;
 }
 
+async function profileAuth() {
+    const uid = authUid();
+    if (!uid || typeof window === 'undefined') return null;
+    if (!window.firebaseAuth) await bootFirebase();
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || user.uid !== uid) return null;
+    const token = window.firebaseGetIdToken
+        ? await window.firebaseGetIdToken(user, false)
+        : null;
+    if (!token) return null;
+    return { uid, token };
+}
+
+/** Public points and photo/name flags. Guests can read this. Marks history stays private. */
+export async function publishPublicProfile(extra = {}) {
+    try {
+        const auth = await profileAuth();
+        if (!auth) return;
+        const state = extra.state || readMarks();
+        const body = {
+            points: Number(state.points) || 0,
+            tier: tierForPoints(state.points).id,
+            showMarks: showMarksInCommunity(),
+            showPhoto: showPhotoInAlerts(),
+            updatedAt: Date.now(),
+        };
+        const name = String(extra.displayName || '').trim();
+        if (name) body.displayName = name.slice(0, 80);
+        await fetch(
+            `${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(auth.uid)}.json?auth=${encodeURIComponent(auth.token)}`,
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }
+        );
+    } catch {
+        /* the private marks copy still saved */
+    }
+}
+
 async function persistRemote(state) {
     const uid = authUid();
     if (!uid || typeof window === 'undefined') return;
     try {
-        if (!window.firebaseAuth) await bootFirebase();
-        const user = window.firebaseAuth?.currentUser;
-        if (!user || user.isAnonymous || user.uid !== uid) return;
-        const token = window.firebaseGetIdToken
-            ? await window.firebaseGetIdToken(user, false)
-            : null;
-        if (!token) return;
+        const auth = await profileAuth();
+        if (!auth) return;
         await fetch(
-            `${DYNAMIC_BASE_URL}users/${encodeURIComponent(uid)}/marks.json?auth=${encodeURIComponent(token)}`,
+            `${DYNAMIC_BASE_URL}users/${encodeURIComponent(uid)}/marks.json?auth=${encodeURIComponent(auth.token)}`,
             {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(state),
             }
         );
+        await publishPublicProfile({ state });
     } catch {
         /* local copy is enough */
     }
@@ -511,6 +548,8 @@ export async function hydrateRemoteMarks({ persist = false } = {}) {
         const historyChanged = (merged.history || []).length !== (remote.history || []).length;
         if (persist || merged.points !== (remote.points || 0) || merged.updatedAt !== (remote.updatedAt || 0) || historyChanged) {
             await persistRemote(merged);
+        } else {
+            await publishPublicProfile();
         }
         syncRiderMarksUi(merged);
         return merged;
@@ -537,14 +576,16 @@ export async function setShowPhotoInAlerts(on) {
     try {
         if (!window.firebaseAuth) await bootFirebase();
         const user = window.firebaseAuth?.currentUser;
-        if (!user || user.isAnonymous || user.uid !== uid || !window.firebaseDb) return;
-        await window.firebaseDbUpdate(
-            window.firebaseDbRef(window.firebaseDb, `users/${uid}/prefs`),
-            { showPhotoInAlerts: !!on, updatedAt: Date.now() }
-        );
+        if (user && !user.isAnonymous && user.uid === uid && window.firebaseDb) {
+            await window.firebaseDbUpdate(
+                window.firebaseDbRef(window.firebaseDb, `users/${uid}/prefs`),
+                { showPhotoInAlerts: !!on, updatedAt: Date.now() }
+            );
+        }
     } catch {
         /* local pref is enough */
     }
+    await publishPublicProfile();
 }
 
 export async function setShowMarksInCommunity(on) {
@@ -555,14 +596,16 @@ export async function setShowMarksInCommunity(on) {
     try {
         if (!window.firebaseAuth) await bootFirebase();
         const user = window.firebaseAuth?.currentUser;
-        if (!user || user.isAnonymous || user.uid !== uid || !window.firebaseDb) return;
-        await window.firebaseDbUpdate(
-            window.firebaseDbRef(window.firebaseDb, `users/${uid}/prefs`),
-            { showMarksInCommunity: !!on, updatedAt: Date.now() }
-        );
+        if (user && !user.isAnonymous && user.uid === uid && window.firebaseDb) {
+            await window.firebaseDbUpdate(
+                window.firebaseDbRef(window.firebaseDb, `users/${uid}/prefs`),
+                { showMarksInCommunity: !!on, updatedAt: Date.now() }
+            );
+        }
     } catch {
         /* local pref is enough */
     }
+    await publishPublicProfile();
 }
 
 function bumpServiceStreak(state, now = new Date()) {

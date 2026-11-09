@@ -415,12 +415,25 @@
       }
     },
 
+    "public_profile": {
+      "$uid": {
+        ".read": true,
+        ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous'",
+        ".validate": "newData.hasChildren(['points', 'updatedAt']) && newData.child('points').isNumber() && newData.child('points').val() >= 0 && newData.child('points').val() <= 100000 && newData.child('updatedAt').isNumber() && (!newData.hasChild('tier') || (newData.child('tier').isString() && newData.child('tier').val().length <= 24)) && (!newData.hasChild('showMarks') || newData.child('showMarks').isBoolean()) && (!newData.hasChild('showPhoto') || newData.child('showPhoto').isBoolean()) && (!newData.hasChild('displayName') || (newData.child('displayName').isString() && newData.child('displayName').val().length <= 80))"
+      }
+    },
+
     "users": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       ".indexOn": ["deletionRequestedAt"],
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "communityAllowance": {
+          ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChild('max') && newData.child('max').isNumber() && newData.child('max').val() >= 8 && newData.child('max').val() <= 200 && (!newData.hasChild('updatedAt') || newData.child('updatedAt').isNumber()))"
+        },
         "flags": {
           ".read": "auth != null",
           ".write": "(auth != null && auth.uid === $uid && !data.exists() && newData.child('shadowBanned').val() == false && newData.child('role').val() === 'user') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"

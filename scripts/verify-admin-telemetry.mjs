@@ -263,7 +263,10 @@ ok(adminJs.includes('Saved corrections'), 'Fares tab keeps a saved corrections s
 ok(adminJs.includes('>Refuted ('), 'Fares tab has a refuted accordion');
 ok(adminJs.includes("row.review !== 'refuted'"), 'refuted fare votes stay out of the accuracy percentage');
 ok(adminJs.includes('User Accounts &amp; Bans'), 'the accounts panel is titled User Accounts & Bans');
-ok(adminJs.indexOf('id="ut-pane-bans"') < adminJs.indexOf('id="shadow-ban-default-body"') && adminJs.indexOf('id="shadow-ban-default-body"') < adminJs.indexOf('id="ut-pane-accounts"'), 'default ban mode sits on the Bans tab');
+ok(adminJs.indexOf('id="ut-tab-accounts"') < adminJs.indexOf('id="ut-tab-lookup"') && adminJs.indexOf('id="ut-tab-lookup"') < adminJs.indexOf('id="ut-tab-bans"') && adminJs.indexOf('id="ut-tab-bans"') < adminJs.indexOf('id="ut-tab-deletions"'), 'account tabs run Account, Lookup, Bans, Deletions');
+ok(adminJs.indexOf('id="ut-pane-bans"') < adminJs.indexOf('id="shadow-ban-default-body"') && adminJs.indexOf('id="shadow-ban-default-body"') < adminJs.indexOf('id="ut-pane-deletions"'), 'default ban mode sits on the Bans tab');
+ok(adminJs.includes('id="ut-accounts-count"'), 'account list shows a total');
+ok(adminJs.includes('ut-community-max'), 'lookup can raise a community send limit');
 ok(adminJs.indexOf('id="holiday-approvals-body"') < adminJs.indexOf('id="sched-override-header"') && adminJs.indexOf('id="sched-override-header"') < adminJs.indexOf('id="holiday-approvals-list"') + 2500, 'force schedule type sits in Holiday Notices');
 ok(adminJs.includes("review: 'saved'"), 'saving a fare correction files it as saved');
 ok(adminJs.includes('Admin.approvePlannerFare'), 'Fares tab can approve a correction');

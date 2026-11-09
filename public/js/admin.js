@@ -11361,8 +11361,8 @@ const Admin = {
                 <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread community activity and pending reviews"></span>
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
-            <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3 shrink-0">
+            <div id="mq-body" class="hidden mt-4 flex flex-col mq-body-scroll">
+                <div id="mq-tabbar" class="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 pt-1 mb-3 shrink-0">
                     <button type="button" id="mq-tab-chats" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative">
                         Group chats
                         <span id="mq-tab-chats-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Unread group chat activity"></span>
@@ -11372,7 +11372,8 @@ const Admin = {
                         <span id="mq-tab-reviews-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Pending station reviews"></span>
                     </button>
                 </div>
-                <div id="mq-chats-pane" class="flex flex-col">
+                <div id="mq-chats-pane" class="flex flex-col min-h-0">
+                    <div id="mq-chats-home">
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
                     <label class="px-1 mb-2">
                         <span class="sr-only">Search community routes and messages</span>
@@ -11385,7 +11386,18 @@ const Admin = {
                     <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                         <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                     </div>
-                    <div id="mq-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                    <div id="mq-list" class="space-y-2 pr-1"></div>
+                    </div>
+                    <div id="mq-thread" class="cm-thread" hidden>
+                        <div class="cm-thread-bar">
+                            <button type="button" id="mq-thread-back" class="cm-thread-back" aria-label="Back to routes">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <p id="mq-thread-title" class="cm-thread-title"></p>
+                        </div>
+                        <div id="mq-thread-held" class="px-2 pt-2 space-y-2"></div>
+                        <div id="mq-thread-scroll" class="cm-thread-scroll"></div>
+                    </div>
                 </div>
                 <div id="mq-reviews-pane" class="hidden flex flex-col">
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Station SEO reviews land here as pending. Approve to publish on the station page, or reject to keep them private. Contact stays operator-only.</p>
@@ -11451,6 +11463,14 @@ const Admin = {
             if (Admin.currentCommunityMonitorTab === 'reviews') Admin.fetchStationReviews?.();
             else Admin.fetchModerationQueue?.();
         };
+        document.getElementById('mq-thread-back')?.addEventListener('click', () => Admin._mqCloseThread?.());
+        document.getElementById('dev-modal')?.addEventListener('click', (event) => {
+            if (!event.target.closest?.('#drill-back-btn')) return;
+            if (!document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) return;
+            event.preventDefault();
+            event.stopPropagation();
+            Admin._mqCloseThread?.();
+        }, true);
         tabChats?.addEventListener('click', () => Admin.switchCommunityMonitorTab('chats'));
         tabReviews?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reviews'));
         paintMqTab(Admin.currentCommunityMonitorTab);
@@ -11960,8 +11980,7 @@ const Admin = {
                 };
                 const previews = await Promise.all(rows.map(fetchPreview));
                 list.innerHTML = rows.map((row, index) => `
-                    <details class="community-monitor-route border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden" data-community-route="${esc(row.routeId)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
-                        <summary class="cursor-pointer list-none p-3 flex items-start justify-between gap-3">
+                    <button type="button" class="community-monitor-route w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden p-3 flex items-start justify-between gap-3" data-community-route="${esc(row.routeId)}" data-community-name="${esc(row.routeName)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
                             <span class="min-w-0">
                                 <span class="block text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.routeName)}</span>
                                 <span class="block text-[11px] text-gray-600 dark:text-gray-300 truncate mt-0.5">${esc(previews[index] || (row.held.length ? 'Held item awaiting review' : 'No published messages'))}</span>
@@ -11971,14 +11990,32 @@ const Admin = {
                                 ${row.held.length ? `<span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[9px] font-black">${row.held.length} held</span>` : ''}
                                 <span class="community-route-unread ${row.unread ? '' : 'hidden'} rounded-full bg-emerald-500 text-white min-w-5 h-5 px-1 inline-flex items-center justify-center text-[9px] font-black">${row.unread}</span>
                             </span>
-                        </summary>
-                        <div class="community-monitor-route-body border-t border-gray-100 dark:border-gray-700 p-3 space-y-2">
-                            ${row.held.map(renderHeld).join('')}
-                            <div class="community-route-conversation cm-chat text-left">Open to load conversation.</div>
-                        </div>
-                    </details>
+                    </button>
                 `).join('');
 
+                const threadClock = (value) => {
+                    const n = Number(value);
+                    if (!n) return '';
+                    try {
+                        return new Intl.DateTimeFormat('en-GB', {
+                            hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Johannesburg',
+                        }).format(new Date(n));
+                    } catch (e) {
+                        return formatWhen(value);
+                    }
+                };
+                const threadDay = (value) => {
+                    const n = Number(value);
+                    if (!n) return '';
+                    const day = new Date(n);
+                    const today = new Date();
+                    const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+                    if (same(day, today)) return 'Today';
+                    const y = new Date(today);
+                    y.setDate(today.getDate() - 1);
+                    if (same(day, y)) return 'Yesterday';
+                    return formatWhen(value);
+                };
                 const renderMessage = (message, routeId, isReply = false) => {
                     const category = message.category && message.category !== 'general'
                         ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
@@ -11991,14 +12028,14 @@ const Admin = {
                         ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
                         : '';
                     const postId = message.postId || '';
-                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
-                        <div class="cm-bubble ${message.hidden ? 'is-hidden' : ''}">
+                    const mine = Admin.currentUser?.uid && message.uid === Admin.currentUser.uid;
+                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''} ${mine ? 'cm-row-own' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                        <div class="cm-bubble ${mine ? 'cm-bubble-own' : ''} ${message.hidden ? 'is-hidden' : ''}">
                             <div class="cm-bubble-name">
                                 <span>${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
-                                <span class="cm-bubble-time">${esc(formatWhen(message.timestamp))}</span>
                             </div>
                             <div class="cm-bubble-body">
-                                ${quote}<p class="cm-bubble-text">${esc(message.body || '')}</p>
+                                ${quote}<p class="cm-bubble-text">${esc(message.body || '')}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
                                 <div class="cm-bubble-actions">
                                     <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
                                     <button type="button" class="cm-delete-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
@@ -12023,12 +12060,17 @@ const Admin = {
                 };
 
                 Admin._communityLoadRoute = async (details) => {
-                    if (!details || details.dataset.loaded === 'true') return;
+                    if (!details) return;
                     const routeId = details.dataset.communityRoute;
-                    const target = details.querySelector('.community-route-conversation');
-                    target.innerHTML = '<p class="py-3">Loading conversation...</p>';
+                    const target = document.getElementById('mq-thread-scroll');
+                    if (!target) return;
+                    target.innerHTML = '<p class="cm-empty">Loading conversation...</p>';
                     const routeAuthQ = await communityAuthSuffix();
-                    const routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${routeAuthQ}`, {}, 8000);
+                    const limited = `${routeAuthQ}${routeAuthQ.includes('?') ? '&' : '?'}orderBy=%22timestamp%22&limitToLast=80`;
+                    let routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${limited}`, {}, 8000);
+                    if (!routeRes.ok) {
+                        routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${routeAuthQ}`, {}, 8000);
+                    }
                     if (!routeRes.ok) throw new Error(`Route load failed (${routeRes.status})`);
                     const postsData = await routeRes.json() || {};
                     const posts = Object.entries(postsData).map(([key, post]) => ({
@@ -12057,7 +12099,7 @@ const Admin = {
                             };
                         });
                     });
-                    if (Object.keys(missingActivity).length) {
+                    if (details.dataset.loaded !== 'true' && Object.keys(missingActivity).length) {
                         try {
                             const backfillAuthQ = await communityAuthSuffix();
                             const backfillRes = await fetch(`${dynamicEndpoint}.json${backfillAuthQ}`, {
@@ -12070,17 +12112,57 @@ const Admin = {
                             console.warn('Community activity backfill failed', e);
                         }
                     }
+                    let lastDay = '';
                     target.innerHTML = posts.length ? posts.map((post) => {
                         const replies = Object.entries(post.replies || {}).map(([replyKey, reply]) => ({
                             ...(reply && typeof reply === 'object' ? reply : {}),
                             replyId: (reply && reply.replyId) || replyKey,
                             postId: post.postId,
                         })).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-                        return `${renderMessage(post, routeId)}${replies.map((reply) => renderMessage(reply, routeId, true)).join('')}`;
+                        const day = threadDay(post.timestamp);
+                        const divider = day && day !== lastDay
+                            ? `<div class="cm-day">${esc(day)}</div>`
+                            : '';
+                        lastDay = day || lastDay;
+                        return `${divider}${renderMessage(post, routeId)}${replies.map((reply) => renderMessage(reply, routeId, true)).join('')}`;
                     }).join('') : '<p class="cm-empty">No published messages on this route.</p>';
                     target.scrollTop = target.scrollHeight;
+                    requestAnimationFrame(() => { target.scrollTop = target.scrollHeight; });
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
+                };
+
+                const setMonitorThread = (open, routeName) => {
+                    const mqBody = document.getElementById('mq-body');
+                    const thread = document.getElementById('mq-thread');
+                    if (mqBody) mqBody.classList.toggle('mq-showing-thread', !!open);
+                    if (thread) thread.hidden = !open;
+                    const title = document.querySelector('#dev-modal h3 span.truncate');
+                    if (title) {
+                        if (!title.dataset.mqHomeTitle) title.dataset.mqHomeTitle = title.textContent || 'Community Monitor';
+                        title.textContent = open ? (routeName || 'Community') : title.dataset.mqHomeTitle;
+                    }
+                };
+                Admin._mqCloseThread = () => setMonitorThread(false);
+                Admin._mqOpenThread = async (card) => {
+                    if (!card) return;
+                    const routeId = card.dataset.communityRoute;
+                    const row = (Admin._communityMonitorRows || []).find((item) => item.routeId === routeId);
+                    const threadTitle = document.getElementById('mq-thread-title');
+                    const routeLabel = card.dataset.communityName || row?.routeName || routeId;
+                    if (threadTitle) threadTitle.textContent = routeLabel;
+                    setMonitorThread(true, routeLabel);
+                    const held = document.getElementById('mq-thread-held');
+                    if (held) {
+                        held.innerHTML = row ? (row.held || []).map(renderHeld).join('') : '';
+                        bindHeldActions(held);
+                    }
+                    try {
+                        await Promise.all([Admin._communityLoadRoute(card), markRouteSeen(card)]);
+                    } catch (e) {
+                        const target = document.getElementById('mq-thread-scroll');
+                        if (target && card.dataset.loaded !== 'true') target.textContent = e?.message || 'Could not load route.';
+                    }
                 };
 
                 const markRouteSeen = async (details) => {
@@ -12104,18 +12186,6 @@ const Admin = {
                     }
                 };
 
-                list.querySelectorAll('.community-monitor-route').forEach((details) => {
-                    details.addEventListener('toggle', async () => {
-                        if (!details.open) return;
-                        try {
-                            await Promise.all([Admin._communityLoadRoute(details), markRouteSeen(details)]);
-                        } catch (e) {
-                            const target = details.querySelector('.community-route-conversation');
-                            if (target && details.dataset.loaded !== 'true') target.textContent = e?.message || 'Could not load route.';
-                        }
-                    });
-                });
-
                 const runMonitorLookup = (raw) => {
                     const q = String(raw || '').trim();
                     if (!q) return;
@@ -12133,14 +12203,9 @@ const Admin = {
                 });
                 const search = document.getElementById('mq-search');
                 if (search) {
-                    search.oninput = async () => {
+                    search.oninput = () => {
                         const query = search.value.trim().toLowerCase();
                         const cards = Array.from(list.querySelectorAll('.community-monitor-route'));
-                        if (query.length >= 3) {
-                            await Promise.all(cards.filter((card) =>
-                                card.dataset.loaded !== 'true'
-                            ).map((card) => Admin._communityLoadRoute(card).catch(() => {})));
-                        }
                         cards.forEach((card) => {
                             card.classList.toggle('hidden', !!query && !String(card.dataset.communitySearch || '').includes(query));
                         });
@@ -12150,6 +12215,12 @@ const Admin = {
                 Admin.deletePublishedCommunityMessage = ntAdminDeletePublishedCommunityMessage;
 
                 list.onclick = async (event) => {
+                    const routeBtn = event.target.closest?.('.community-monitor-route');
+                    if (routeBtn) {
+                        event.preventDefault();
+                        Admin._mqOpenThread?.(routeBtn);
+                        return;
+                    }
                     const lookupUidBtn = event.target.closest?.('.mq-lookup-uid');
                     if (lookupUidBtn) {
                         event.preventDefault();
@@ -12188,7 +12259,8 @@ const Admin = {
                             if (replyId) {
                                 card?.remove();
                             } else {
-                                list.querySelectorAll(communityPostSelector(postId)).forEach((el) => el.remove());
+                                const scope = document.getElementById('mq-thread-scroll') || list;
+                                scope.querySelectorAll(communityPostSelector(postId)).forEach((el) => el.remove());
                             }
                             if (typeof showToast === 'function') showToast('Message deleted', 'success');
                         } catch (e) {
@@ -12204,7 +12276,9 @@ const Admin = {
                     }
                 };
 
-                list.querySelectorAll('.mq-close').forEach((btn) => {
+                const bindHeldActions = (root) => {
+                if (!root) return;
+                root.querySelectorAll('.mq-close').forEach((btn) => {
                     btn.onclick = async () => {
                         const id = btn.getAttribute('data-id');
                         if (!id) return;
@@ -12224,7 +12298,7 @@ const Admin = {
                     };
                 });
 
-                list.querySelectorAll('.mq-approve-feedback').forEach((btn) => {
+                root.querySelectorAll('.mq-approve-feedback').forEach((btn) => {
                     btn.onclick = async () => {
                         const id = btn.getAttribute('data-id');
                         if (!id) return;
@@ -12246,7 +12320,7 @@ const Admin = {
                     };
                 });
 
-                list.querySelectorAll('.mq-approve-community').forEach((btn) => {
+                root.querySelectorAll('.mq-approve-community').forEach((btn) => {
                     btn.onclick = async () => {
                         const id = btn.getAttribute('data-id');
                         const report = id ? Admin._mqCache?.[id] : null;
@@ -12263,7 +12337,7 @@ const Admin = {
                     };
                 });
 
-                list.querySelectorAll('.mq-reject-community').forEach((btn) => {
+                root.querySelectorAll('.mq-reject-community').forEach((btn) => {
                     btn.onclick = async () => {
                         const id = btn.getAttribute('data-id');
                         const report = id ? Admin._mqCache?.[id] : null;
@@ -12288,7 +12362,7 @@ const Admin = {
                     };
                 });
 
-                list.querySelectorAll('.mq-hide-post').forEach((btn) => {
+                root.querySelectorAll('.mq-hide-post').forEach((btn) => {
                     btn.onclick = async () => {
                         const routeId = btn.getAttribute('data-route');
                         const postId = btn.getAttribute('data-post');
@@ -12311,7 +12385,7 @@ const Admin = {
                     };
                 });
 
-                list.querySelectorAll('.mq-shadow-ban').forEach((btn) => {
+                root.querySelectorAll('.mq-shadow-ban').forEach((btn) => {
                     btn.onclick = async () => {
                         const uid = btn.getAttribute('data-uid');
                         const mqId = btn.closest('[data-mq-id]')?.getAttribute('data-mq-id');
@@ -12327,6 +12401,11 @@ const Admin = {
                         }
                     };
                 });
+                };
+                const threadScroll = document.getElementById('mq-thread-scroll');
+                if (threadScroll) threadScroll.onclick = list.onclick;
+                const threadHeld = document.getElementById('mq-thread-held');
+                if (threadHeld) threadHeld.onclick = list.onclick;
             } catch (e) {
                 list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
             }
@@ -12688,12 +12767,12 @@ const Admin = {
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
                 <p class="text-[13px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Accounts, bans, lookup, and deletion requests are in this panel.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
-                    <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Bans</button>
-                    <button type="button" id="ut-tab-accounts" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Accounts</button>
+                    <button type="button" id="ut-tab-accounts" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Account</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
+                    <button type="button" id="ut-tab-bans" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Bans</button>
                     <button type="button" id="ut-tab-deletions" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Deletions</button>
                 </div>
-                <div id="ut-pane-bans" role="tabpanel" class="ut-pane">
+                <div id="ut-pane-bans" role="tabpanel" class="ut-pane hidden">
                     <div id="shadow-ban-default-body" class="mb-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 space-y-2">
                         <p class="text-sm font-semibold text-gray-900 dark:text-white">Default ban mode</p>
                         <p class="text-[13px] leading-snug text-gray-500 dark:text-gray-400">This fills the ban dialog. Each ban still keeps its own mode.</p>
@@ -12714,7 +12793,7 @@ const Admin = {
                         <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans...</p>
                     </div>
                 </div>
-                <div id="ut-pane-accounts" role="tabpanel" class="ut-pane hidden">
+                <div id="ut-pane-accounts" role="tabpanel" class="ut-pane">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
                         <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">People who created an account. This list does not include guests.</p>
                         <button type="button" id="ut-accounts-refresh" class="shrink-0 text-[11px] font-semibold text-blue-600 dark:text-blue-400 px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
@@ -12740,6 +12819,7 @@ const Admin = {
                             <option value="">All routes</option>
                         </select>
                     </div>
+                    <p id="ut-accounts-count" class="text-[13px] font-semibold text-gray-800 dark:text-gray-100 px-1 mb-2"></p>
                     <div id="ut-accounts-list" class="space-y-2 px-1">
                         <p class="text-xs text-gray-400 text-center py-3">Open this tab to load accounts.</p>
                     </div>
@@ -12765,9 +12845,9 @@ const Admin = {
         const body = document.getElementById('ut-body');
         const chevron = document.getElementById('ut-chevron');
         const utTabs = [
-            { id: 'bans', btn: document.getElementById('ut-tab-bans'), pane: document.getElementById('ut-pane-bans') },
             { id: 'accounts', btn: document.getElementById('ut-tab-accounts'), pane: document.getElementById('ut-pane-accounts') },
             { id: 'lookup', btn: document.getElementById('ut-tab-lookup'), pane: document.getElementById('ut-pane-lookup') },
+            { id: 'bans', btn: document.getElementById('ut-tab-bans'), pane: document.getElementById('ut-pane-bans') },
             { id: 'deletions', btn: document.getElementById('ut-tab-deletions'), pane: document.getElementById('ut-pane-deletions') },
         ];
         const paintUtTab = (btn, on) => {
@@ -12785,7 +12865,7 @@ const Admin = {
             btn.classList.toggle('dark:text-gray-400', !on);
         };
         const setUtTab = (which) => {
-            const active = utTabs.some((tab) => tab.id === which) ? which : 'bans';
+            const active = utTabs.some((tab) => tab.id === which) ? which : 'accounts';
             utTabs.forEach((tab) => {
                 const on = tab.id === active;
                 paintUtTab(tab.btn, on);
@@ -12825,7 +12905,7 @@ const Admin = {
             body.classList.toggle('hidden');
             chevron.classList.toggle('-rotate-90', body.classList.contains('hidden'));
             header.classList.toggle('mb-4', !body.classList.contains('hidden'));
-            if (!body.classList.contains('hidden')) setUtTab('bans');
+            if (!body.classList.contains('hidden')) setUtTab('accounts');
         };
 
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
@@ -12978,6 +13058,36 @@ const Admin = {
                 if (route && row.lastRouteId !== route) return false;
                 return true;
             });
+            const countEl = document.getElementById('ut-accounts-count');
+            if (countEl) {
+                const tally = { GP: 0, WC: 0, KZN: 0, EC: 0, none: 0 };
+                rows.forEach((row) => {
+                    if (tally[row.region] != null && row.region !== 'none') tally[row.region] += 1;
+                    else tally.none += 1;
+                });
+                const cap = Admin._accountCapped ? ' in the latest 200' : '';
+                const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+                if (!rows.length) {
+                    countEl.textContent = '';
+                } else if (regionNames[region]) {
+                    const total = tally[region] || 0;
+                    countEl.textContent = filtered.length === total
+                        ? `${regionNames[region]} ${total}${cap}`
+                        : `${regionNames[region]} ${total}${cap} · ${filtered.length} shown`;
+                } else if (region === 'none') {
+                    countEl.textContent = filtered.length === tally.none
+                        ? `No region yet ${tally.none}${cap}`
+                        : `No region yet ${tally.none}${cap} · ${filtered.length} shown`;
+                } else {
+                    const parts = ['GP', 'WC', 'KZN', 'EC'].filter((code) => tally[code]).map((code) => `${regionNames[code]} ${tally[code]}`);
+                    if (tally.none) parts.push(`No region ${tally.none}`);
+                    const headline = `${rows.length} account${rows.length === 1 ? '' : 's'}${cap}`;
+                    const breakdown = parts.length ? ` · ${parts.join(' · ')}` : '';
+                    countEl.textContent = filtered.length === rows.length
+                        ? `${headline}${breakdown}`
+                        : `${headline}${breakdown} · ${filtered.length} shown`;
+                }
+            }
             if (!rows.length) {
                 list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No accounts yet. Someone appears here after they create an account and open Next Train.</p>';
                 return;
@@ -13287,6 +13397,8 @@ const Admin = {
                         return `<p class="text-[11px] text-gray-700 dark:text-gray-300">${Admin.commuterEsc(c.kind || 'post')} on <b>${Admin.commuterEsc(routeLabel)}</b> · ${Admin.formatDate(c.timestamp)}</p>`;
                     }).join('')
                     : '<p class="text-[11px] text-gray-400">No community posts matched this id.</p>';
+                const allowanceMax = Number(user?.communityAllowance?.max);
+                const allowanceValue = Number.isFinite(allowanceMax) && allowanceMax >= 8 ? Math.min(200, Math.floor(allowanceMax)) : 8;
                 const bannedAtMs = Number(flags.shadowBannedAt || 0);
                 const bannedBy = flags.shadowBannedBy ? Admin.commuterEsc(String(flags.shadowBannedBy)) : '';
                 const ticketCount = (profile.fareTicketUrls || []).length;
@@ -13360,6 +13472,12 @@ const Admin = {
                             <div>
                                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Community</p>
                                 ${communityHtml}
+                                <div class="mt-2 flex items-center gap-2">
+                                    <label class="text-[11px] text-gray-600 dark:text-gray-300 shrink-0" for="ut-community-max">Messages in 30 minutes</label>
+                                    <input id="ut-community-max" type="number" min="8" max="200" step="1" value="${allowanceValue}" class="w-20 h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white" />
+                                    <button type="button" id="ut-community-max-save" class="h-9 px-3 rounded-lg bg-blue-600 text-white text-[11px] font-bold">Save</button>
+                                </div>
+                                <p class="text-[10px] text-gray-400 mt-1">Quiet. The rider is not told this number changed.</p>
                             </div>
                         </div>
                         <div class="px-3.5 py-3 bg-slate-50/80 dark:bg-gray-950/50 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-2">
@@ -13396,6 +13514,28 @@ const Admin = {
                 document.getElementById('ut-alias-btn')?.addEventListener('click', async () => {
                     await Admin.setCommuterAlias(chatDid, profile.alias || '');
                     Admin.lookupUserTrust();
+                });
+                document.getElementById('ut-community-max-save')?.addEventListener('click', async () => {
+                    const input = document.getElementById('ut-community-max');
+                    const next = Math.floor(Number(input?.value));
+                    if (!Number.isFinite(next) || next < 8 || next > 200) {
+                        if (typeof showToast === 'function') showToast('Use a number from 8 to 200', 'error');
+                        return;
+                    }
+                    try {
+                        const secret = await Admin.getAuthKey();
+                        if (!secret) throw new Error('Not signed in');
+                        const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                        const put = await fetch(`${endpoint}users/${encodeURIComponent(uid)}/communityAllowance.json?auth=${encodeURIComponent(secret)}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ max: next, updatedAt: Date.now() }),
+                        });
+                        if (!put.ok) throw new Error(`Save failed (${put.status})`);
+                        if (typeof showToast === 'function') showToast(`Community limit is ${next}`, 'success');
+                    } catch (err) {
+                        if (typeof showToast === 'function') showToast(err?.message || 'Could not save the limit', 'error');
+                    }
                 });
                 document.getElementById('ut-ban-btn').onclick = async () => {
                     await Admin.applyShadowBan(uid, { deviceId: deviceId || (/^usr_/i.test(uid) ? uid : null) });

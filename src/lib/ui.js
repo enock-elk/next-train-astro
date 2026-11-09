@@ -2248,13 +2248,38 @@ export function initTabIndicator() {
     requestAnimationFrame(updateIndicator);
 }
 
+function swipeTabOrder() {
+    const order = ['next-train', 'trip-planner'];
+    const mapBtn = document.getElementById('bottom-nav-map');
+    const communityBtn = document.getElementById('bottom-nav-community');
+    if (mapBtn && !mapBtn.classList.contains('hidden')) order.push('map');
+    if (communityBtn && !communityBtn.classList.contains('hidden')) order.push('community');
+    return order;
+}
+
+function swipeViewId(tab) {
+    if (tab === 'next-train') return 'view-next-train';
+    if (tab === 'map') return 'view-map';
+    if (tab === 'community') return 'view-community';
+    return 'view-trip-planner';
+}
+
 export function setupSwipeNavigation() {
     if (typeof document === 'undefined') return;
     let touchStartX = 0;
     let touchStartY = 0;
+    let lastX = 0;
+    let lastT = 0;
+    let tracking = false;
+    let horizontal = false;
     let swipeIgnore = false;
+    let peer = null;
+    let current = null;
+    let direction = 0;
+    let edgeForward = false;
     const contentArea = document.getElementById('main-content');
-    if (!contentArea) return;
+    const scroller = document.getElementById('app-scroll');
+    if (!contentArea || !scroller) return;
 
     const swipeBlocked = () => {
         const mapModal = document.getElementById('map-modal');
@@ -2265,46 +2290,168 @@ export function setupSwipeNavigation() {
     };
 
     const swipeIgnoreFrom = (target) => !!target?.closest?.(
-        'input, textarea, select, [contenteditable="true"], .community-post-row, .community-feed-scroll, #community-reaction-sheet, #community-route-list, #community-reply-bar'
+        'input, textarea, select, [contenteditable="true"], .community-post-row, #community-reaction-sheet, #community-route-list, #community-reply-bar, #map-tab-frame, .map-tab-pane, iframe'
     );
 
+    const clearSwipe = () => {
+        scroller.classList.remove('is-tab-swiping');
+        [current, peer].forEach((el) => {
+            if (!el) return;
+            el.classList.remove('is-swipe-current', 'is-swipe-peer');
+            el.style.transform = '';
+            el.style.transition = '';
+            el.style.top = '';
+            el.style.height = '';
+        });
+        peer = null;
+        current = null;
+        direction = 0;
+        horizontal = false;
+        tracking = false;
+        edgeForward = false;
+        syncBottomNavActive(safeStorage.getItem('activeTab') || 'next-train');
+    };
+
+    const placePeer = (dx, animate) => {
+        if (!current || !peer) return;
+        const width = current.offsetWidth || scroller.clientWidth || 1;
+        peer.style.top = `${current.offsetTop}px`;
+        peer.style.height = `${current.offsetHeight}px`;
+        const transition = animate ? 'transform 0.22s ease' : 'none';
+        current.style.transition = transition;
+        peer.style.transition = transition;
+        current.style.transform = `translateX(${dx}px)`;
+        peer.style.transform = `translateX(${dx + (direction * width)}px)`;
+        const order = swipeTabOrder();
+        const cur = safeStorage.getItem('activeTab') || 'next-train';
+        const safeCur = order.includes(cur) ? cur : 'next-train';
+        const next = order[Math.max(0, order.indexOf(safeCur)) + direction];
+        const navId = {
+            'next-train': 'bottom-nav-home',
+            'trip-planner': 'bottom-nav-plan',
+            map: 'bottom-nav-map',
+            community: 'bottom-nav-community',
+        };
+        const passed = Math.abs(dx) > width * 0.2;
+        document.getElementById(navId[safeCur])?.classList.toggle('is-active', !passed);
+        if (next) document.getElementById(navId[next])?.classList.toggle('is-active', passed);
+    };
+
     contentArea.addEventListener('touchstart', (e) => {
-        if (swipeBlocked()) return;
+        if (swipeBlocked() || e.touches.length !== 1) return;
         swipeIgnore = swipeIgnoreFrom(e.target);
         if (swipeIgnore) return;
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
+        clearSwipe();
+        tracking = true;
+        horizontal = false;
+        touchStartX = e.touches[0].screenX;
+        touchStartY = e.touches[0].screenY;
+        lastX = touchStartX;
+        lastT = Date.now();
     }, { passive: true });
 
-    contentArea.addEventListener('touchend', (e) => {
-        if (swipeIgnore || swipeBlocked()) return;
-
-        const endX = e.changedTouches[0].screenX;
-        const endY = e.changedTouches[0].screenY;
-        const diffX = endX - touchStartX;
-        const diffY = endY - touchStartY;
-        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-            // Include Map; Community when the top tab is visible (lab).
-            const order = ['next-train', 'trip-planner'];
-            const mapBtn = document.getElementById('bottom-nav-map');
-            const communityBtn = document.getElementById('bottom-nav-community');
-            if (mapBtn && !mapBtn.classList.contains('hidden')) order.push('map');
-            if (communityBtn && !communityBtn.classList.contains('hidden')) order.push('community');
+    contentArea.addEventListener('touchmove', (e) => {
+        if (!tracking || swipeIgnore || swipeBlocked() || e.touches.length !== 1) return;
+        const x = e.touches[0].screenX;
+        const y = e.touches[0].screenY;
+        const dx = x - touchStartX;
+        const dy = y - touchStartY;
+        lastX = x;
+        lastT = Date.now();
+        if (!horizontal) {
+            if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+            if (Math.abs(dy) > Math.abs(dx)) {
+                tracking = false;
+                return;
+            }
+            horizontal = true;
+            const order = swipeTabOrder();
             const cur = safeStorage.getItem('activeTab') || 'next-train';
             const safeCur = order.includes(cur) ? cur : 'next-train';
             const idx = Math.max(0, order.indexOf(safeCur));
-            if (diffX > 0) {
-                switchTab(order[Math.max(0, idx - 1)]);
+            direction = dx < 0 ? 1 : -1;
+            const nextIdx = idx + direction;
+            if (nextIdx < 0 || nextIdx >= order.length) {
+                edgeForward = direction > 0 && Math.abs(dx) > 24;
+                tracking = false;
+                horizontal = false;
                 return;
             }
-            // Last content tab: swipe forward opens Options (side nav).
-            // Commuter last tab is Trip Planner; operator last tab is Community (or Map).
-            const lastTab = order[order.length - 1];
-            if (safeCur === lastTab) {
-                import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
+            current = document.getElementById(swipeViewId(safeCur));
+            peer = document.getElementById(swipeViewId(order[nextIdx]));
+            if (!current || !peer) {
+                tracking = false;
                 return;
             }
-            switchTab(order[Math.min(order.length - 1, idx + 1)]);
+            scroller.classList.add('is-tab-swiping');
+            current.classList.add('is-swipe-current');
+            peer.classList.add('is-swipe-peer');
+        }
+        if (!horizontal) return;
+        if (e.cancelable) e.preventDefault();
+        const width = current?.offsetWidth || 1;
+        const clamped = Math.max(-width, Math.min(width, dx));
+        placePeer(clamped);
+    }, { passive: false });
+
+    const finish = (e) => {
+        const endX = e.changedTouches?.[0]?.screenX ?? lastX;
+        const dx = endX - touchStartX;
+        if (edgeForward && dx < -50 && !horizontal) {
+            edgeForward = false;
+            tracking = false;
+            import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
+            return;
+        }
+        if (!tracking || swipeIgnore) {
+            tracking = false;
+            return;
+        }
+        const width = current?.offsetWidth || scroller.clientWidth || 1;
+        const dt = Math.max(1, Date.now() - lastT);
+        const velocity = (endX - lastX) / dt;
+        const commit = horizontal && (Math.abs(dx) > width * 0.28 || Math.abs(velocity) > 0.45);
+        if (!commit || !peer || !current) {
+            if (horizontal && current && peer) {
+                placePeer(0, true);
+                const done = () => clearSwipe();
+                current.addEventListener('transitionend', done, { once: true });
+                setTimeout(done, 260);
+            } else {
+                clearSwipe();
+            }
+            return;
+        }
+        const order = swipeTabOrder();
+        const cur = safeStorage.getItem('activeTab') || 'next-train';
+        const safeCur = order.includes(cur) ? cur : 'next-train';
+        const idx = Math.max(0, order.indexOf(safeCur));
+        const nextTab = order[idx + direction];
+        current.style.transition = 'transform 0.2s ease';
+        peer.style.transition = 'transform 0.2s ease';
+        const end = direction < 0 ? width : -width;
+        current.style.transform = `translateX(${end}px)`;
+        peer.style.transform = 'translateX(0px)';
+        let settled = false;
+        const settle = () => {
+            if (settled) return;
+            settled = true;
+            clearSwipe();
+            if (nextTab) switchTab(nextTab);
+        };
+        peer.addEventListener('transitionend', settle, { once: true });
+        setTimeout(settle, 240);
+        tracking = false;
+        horizontal = false;
+    };
+
+    contentArea.addEventListener('touchend', finish, { passive: true });
+    contentArea.addEventListener('touchcancel', () => {
+        if (horizontal && current && peer) {
+            placePeer(0, true);
+            setTimeout(clearSwipe, 240);
+        } else {
+            clearSwipe();
         }
     }, { passive: true });
 }

@@ -347,6 +347,7 @@ function ntAdminCanonicalPanelId(panelId) {
     const id = String(panelId || '');
     if (id === 'alert-panel--inapp') return 'alert-panel';
     if (id === 'account-deletions-panel') return 'user-trust-panel';
+    if (id === 'route-sheet-panel') return 'event-panel';
     return id;
 }
 
@@ -355,6 +356,7 @@ function ntAdminDrillPanelTitle(panelId, headerText) {
     const id = String(panelId || '');
     if (id === 'push-notifications-panel') return 'Notifications';
     if (id === 'alert-panel--inapp') return 'In-app alerts';
+    if (id === 'route-sheet-panel') return 'Route sheets';
     const fromHeader = String(headerText || '').replace(/\s+/g, ' ').trim();
     if (fromHeader) return fromHeader;
     if (id === 'alert-panel') return 'Service Alerts';
@@ -3617,7 +3619,15 @@ const Admin = {
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
                             <p id="region-metric-label" class="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Reporting devices by selected region</p>
-                            <p id="region-today-total" class="text-center text-xs font-black text-gray-800 dark:text-gray-200 mb-1">Reporting devices today: --</p>
+                            <div class="flex items-center justify-center gap-2 mb-1">
+                                <button type="button" id="region-day-prev" class="h-8 w-8 shrink-0 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 focus:outline-none" aria-label="Previous day">
+                                    <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                </button>
+                                <p id="region-today-total" class="text-center text-sm font-semibold text-gray-800 dark:text-gray-200 min-w-0">Reporting devices today: --</p>
+                                <button type="button" id="region-day-next" class="h-8 w-8 shrink-0 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-700 dark:text-gray-200 focus:outline-none" aria-label="Next day" disabled>
+                                    <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                            </div>
                             <p id="region-today-sessions" class="text-center text-[10px] font-bold text-gray-500 mb-4">People today (Analytics): --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
@@ -3661,6 +3671,8 @@ const Admin = {
                         Admin.deepLinkToPanel('telemetry-chart-panel');
                     }, 300);
                 };
+                document.getElementById('region-day-prev').onclick = () => Admin.shiftRegionDay(1);
+                document.getElementById('region-day-next').onclick = () => Admin.shiftRegionDay(-1);
             }
 
             const cycleBtn = document.getElementById('trend-cycle-btn');
@@ -3988,8 +4000,11 @@ const Admin = {
                 
                 // GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
-                    Admin.currentRegionalBreakdown = data.regionalBreakdown;
-                    Admin.updateRegionalModal();
+                    Admin._regionalToday = data.regionalBreakdown;
+                    if (!Admin.regionDayOffset) {
+                        Admin.currentRegionalBreakdown = data.regionalBreakdown;
+                        Admin.updateRegionalModal();
+                    }
                 }
 
                 if (syncEl) {
@@ -4477,6 +4492,64 @@ const Admin = {
         }
     },
 
+    regionDayOffset: 0,
+
+    johannesburgDayOffset: (offsetDays) => {
+        const ms = Date.now() - (Math.max(0, Number(offsetDays) || 0) * 86400000);
+        const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Africa/Johannesburg',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).formatToParts(new Date(ms));
+        const pick = (type) => parts.find((part) => part.type === type)?.value || '';
+        return `${pick('year')}-${pick('month')}-${pick('day')}`;
+    },
+
+    shiftRegionDay: async (delta) => {
+        const next = Math.max(0, Math.min(34, (Number(Admin.regionDayOffset) || 0) + Number(delta || 0)));
+        if (next === (Number(Admin.regionDayOffset) || 0) && next !== 0) return;
+        Admin.regionDayOffset = next;
+        if (next === 0 && Admin._regionalToday) {
+            Admin.currentRegionalBreakdown = Admin._regionalToday;
+            Admin.updateRegionalModal();
+            return;
+        }
+        const day = Admin.johannesburgDayOffset(next);
+        const secret = await Admin.getAuthKey();
+        if (!secret) return;
+        try {
+            const res = await window.guardianFetch(`https://nexttrain-telemetry.enock.workers.dev/admin/region-split?day=${encodeURIComponent(day)}`, {
+                headers: { Authorization: `Bearer ${secret}` },
+            }, 6000);
+            const payload = res.ok ? await res.json() : null;
+            if (!payload || payload.error) {
+                Admin.currentRegionalBreakdown = {
+                    GP: 0, WC: 0, KZN: 0, EC: 0,
+                    reportingDevices: 0,
+                    metric: 'reportingDevices',
+                    exact: false,
+                    status: 'error',
+                    day,
+                    detail: 'Previous days need the telemetry Worker update.',
+                };
+            } else {
+                Admin.currentRegionalBreakdown = { ...payload, day: payload.day || day, metric: 'reportingDevices' };
+            }
+        } catch (e) {
+            Admin.currentRegionalBreakdown = {
+                GP: 0, WC: 0, KZN: 0, EC: 0,
+                reportingDevices: 0,
+                metric: 'reportingDevices',
+                exact: false,
+                status: 'error',
+                day,
+                detail: 'Could not read that day.',
+            };
+        }
+        Admin.updateRegionalModal();
+    },
+
     // --- GROWTH SPRINT: REGIONAL BREAKDOWN MODAL LOGIC ---
     openRegionalModal: () => {
         if (typeof triggerHaptic === 'function') triggerHaptic();
@@ -4522,8 +4595,30 @@ const Admin = {
             showRegionNote('These cards are the previous overlapping region report. Deploy the telemetry Worker before reading them as one device per region.');
             return;
         }
-        if (todayEl) todayEl.textContent = `Reporting devices today: ${n(reporting)}`;
-        if (gaEl) gaEl.textContent = `People today (Analytics): ${n(gaPeople)}`;
+        const dayOffset = Math.max(0, Number(Admin.regionDayOffset) || 0);
+        const formatRegionDay = (iso) => {
+            const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+            if (!match) return '';
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${Number(match[3])} ${months[Number(match[2]) - 1] || ''} ${match[1]}`;
+        };
+        const dayLabel = dayOffset > 0 && data.day ? formatRegionDay(data.day) : '';
+        if (todayEl) todayEl.textContent = dayLabel
+            ? `Reporting devices, ${dayLabel}: ${n(reporting)}`
+            : `Reporting devices today: ${n(reporting)}`;
+        const prevBtn = document.getElementById('region-day-prev');
+        const nextBtn = document.getElementById('region-day-next');
+        if (prevBtn) prevBtn.disabled = dayOffset >= 34;
+        if (nextBtn) nextBtn.disabled = dayOffset <= 0;
+        if (gaEl) {
+            if (dayOffset > 0) {
+                gaEl.textContent = '';
+                gaEl.classList.add('hidden');
+            } else {
+                gaEl.classList.remove('hidden');
+                gaEl.textContent = `People today (Analytics): ${n(gaPeople)}`;
+            }
+        }
         if (data.status === 'error') {
             showRegionNote(data.detail
                 ? `Could not read the reporting-device split. ${data.detail}`
@@ -6500,6 +6595,9 @@ const Admin = {
         }
         if (domId === 'push-notifications-panel') {
             Admin.paintDrillTitle('Notifications');
+        }
+        if (requestedId === 'route-sheet-panel' && typeof Admin.setEventTab === 'function') {
+            Admin.setEventTab('sheets');
         }
         if (quiet) return true;
         if (panelId === 'feedback-panel' && typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
@@ -12553,10 +12651,31 @@ const Admin = {
                 </div>
                 <div id="ut-pane-accounts" role="tabpanel" class="ut-pane hidden">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">People who created an account. This list does not include guests.</p>
-                        <button type="button" id="ut-accounts-refresh" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                        <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">People who created an account. This list does not include guests.</p>
+                        <button type="button" id="ut-accounts-refresh" class="shrink-0 text-[11px] font-semibold text-blue-600 dark:text-blue-400 px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
-                    <div id="ut-accounts-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
+                    <div class="grid grid-cols-2 gap-2 mb-2 px-1">
+                        <input type="search" id="ut-accounts-q" class="col-span-2 h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none" placeholder="Name or email" autocomplete="off">
+                        <select id="ut-accounts-region" class="h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                            <option value="">All regions</option>
+                            <option value="GP">Gauteng</option>
+                            <option value="WC">Western Cape</option>
+                            <option value="KZN">KwaZulu-Natal</option>
+                            <option value="EC">Eastern Cape</option>
+                            <option value="none">No region yet</option>
+                        </select>
+                        <select id="ut-accounts-provider" class="h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                            <option value="">All sign-in</option>
+                            <option value="google.com">Google</option>
+                            <option value="password">Email</option>
+                            <option value="facebook.com">Facebook</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <select id="ut-accounts-route" class="col-span-2 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                            <option value="">All routes</option>
+                        </select>
+                    </div>
+                    <div id="ut-accounts-list" class="space-y-2 px-1">
                         <p class="text-xs text-gray-400 text-center py-3">Open this tab to load accounts.</p>
                     </div>
                 </div>
@@ -12647,6 +12766,10 @@ const Admin = {
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
         document.getElementById('ut-bans-refresh')?.addEventListener('click', () => Admin.fetchActiveBans());
         document.getElementById('ut-accounts-refresh')?.addEventListener('click', () => Admin.fetchAccountDirectory());
+        ['ut-accounts-q', 'ut-accounts-region', 'ut-accounts-provider', 'ut-accounts-route'].forEach((id) => {
+            document.getElementById(id)?.addEventListener('input', () => Admin.paintAccountDirectory());
+            document.getElementById(id)?.addEventListener('change', () => Admin.paintAccountDirectory());
+        });
         document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
         document.getElementById('ut-uid-input')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') Admin.lookupUserTrust();
@@ -12671,12 +12794,16 @@ const Admin = {
             const list = document.getElementById('ut-accounts-list');
             if (!list) return;
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Loading accounts...</p>';
+            const pickText = (value, max) => {
+                const text = String(value || '').trim();
+                return text ? text.slice(0, max) : '';
+            };
             const accountsFromUsers = (users) => {
                 const out = {};
                 Object.entries(users || {}).forEach(([uid, row]) => {
                     if (!row || typeof row !== 'object' || String(uid).startsWith('_')) return;
-                    const email = String(row.email || '').trim();
-                    const displayName = String(row.displayName || '').trim();
+                    const email = pickText(row.email, 160);
+                    const displayName = pickText(row.displayName, 80);
                     if (!email && !displayName) return;
                     if (String(row.provider || '') === 'anonymous') return;
                     out[uid] = {
@@ -12684,6 +12811,9 @@ const Admin = {
                         email,
                         createdAt: Number(row.createdAt) || Number(row.updatedAt) || 0,
                         provider: row.provider || (email ? 'password' : ''),
+                        region: pickText(row.region, 8).toUpperCase(),
+                        lastRouteId: pickText(row.lastRouteId, 40),
+                        appVersion: pickText(row.appVersion, 24),
                     };
                 });
                 return out;
@@ -12703,51 +12833,119 @@ const Admin = {
                     return (await res.json()) || {};
                 };
                 let data;
+                let users = null;
                 try {
-                    data = await readJson(`${dynamicEndpoint}account_directory.json?orderBy=%22createdAt%22&limitToLast=50&${auth}`);
+                    data = await readJson(`${dynamicEndpoint}account_directory.json?orderBy=%22createdAt%22&limitToLast=200&${auth}`);
                 } catch (err) {
                     if (err.status !== 401 && err.status !== 400) throw err;
                     try {
                         data = await readJson(`${dynamicEndpoint}account_directory.json?${auth}`);
                     } catch (err2) {
                         if (err2.status !== 401 && err2.status !== 400) throw err2;
-                        data = accountsFromUsers(await readJson(`${dynamicEndpoint}users.json?${auth}`));
+                        users = await readJson(`${dynamicEndpoint}users.json?${auth}`);
+                        data = accountsFromUsers(users);
                     }
+                }
+                if (!users) {
+                    try { users = await readJson(`${dynamicEndpoint}users.json?${auth}`); } catch { users = null; }
                 }
                 const rows = Object.entries(data)
                     .filter(([, row]) => row && typeof row === 'object')
-                    .map(([uid, row]) => ({ uid, ...row }))
+                    .map(([uid, row]) => {
+                        const user = users && users[uid] && typeof users[uid] === 'object' ? users[uid] : {};
+                        const displayName = pickText(row.displayName, 80) || pickText(user.displayName, 80);
+                        return {
+                            uid,
+                            displayName,
+                            email: pickText(row.email, 160) || pickText(user.email, 160),
+                            createdAt: Number(row.createdAt) || Number(user.createdAt) || Number(row.updatedAt) || 0,
+                            provider: row.provider || user.provider || '',
+                            region: pickText(row.region, 8).toUpperCase() || pickText(user.region, 8).toUpperCase(),
+                            lastRouteId: pickText(row.lastRouteId, 40) || pickText(user.lastRouteId, 40),
+                            appVersion: pickText(row.appVersion, 24) || pickText(user.appVersion, 24),
+                        };
+                    })
+                    .filter((row) => row.displayName || row.email)
+                    .filter((row) => String(row.provider || '') !== 'anonymous')
                     .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
-                if (!rows.length) {
-                    list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No accounts yet. Someone appears here after they create an account and open Next Train.</p>';
-                    return;
-                }
-                const esc = (value) => (typeof escapeHTML === 'function' ? escapeHTML(String(value || '')) : String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
-                const providerLabel = (id) => {
-                    const key = String(id || '');
-                    if (key === 'google.com') return 'Google';
-                    if (key === 'facebook.com') return 'Facebook';
-                    if (key === 'password') return 'Email';
-                    return key || 'Account';
-                };
-                list.innerHTML = '';
-                rows.forEach((row) => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3 py-2 focus:outline-none';
-                    const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
-                    btn.innerHTML = `<span class="block text-xs font-bold text-gray-900 dark:text-white truncate">${esc(row.displayName || 'Passenger')}</span><span class="block text-[11px] text-gray-500 dark:text-gray-400 truncate">${esc(row.email || 'No email')}</span><span class="block text-[10px] text-gray-400 mt-0.5">${esc(providerLabel(row.provider))}${when ? ` · Joined ${esc(when)}` : ''}</span>`;
-                    btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
-                    list.appendChild(btn);
-                });
-                if (rows.length >= 50) {
-                    const more = document.createElement('p');
-                    more.className = 'text-[10px] text-gray-400 text-center py-2';
-                    more.textContent = 'Showing the latest 50. Use Lookup for anyone else.';
-                    list.appendChild(more);
-                }
+                Admin._accountRows = rows;
+                Admin._accountCapped = rows.length >= 200;
+                Admin.paintAccountDirectory();
             } catch (e) {
                 list.innerHTML = `<p class="text-xs text-red-500 text-center py-3">${(typeof escapeHTML === 'function' ? escapeHTML(e?.message || 'Could not load accounts') : 'Could not load accounts')}</p>`;
+            }
+        };
+
+        Admin.paintAccountDirectory = () => {
+            const list = document.getElementById('ut-accounts-list');
+            if (!list) return;
+            const rows = Array.isArray(Admin._accountRows) ? Admin._accountRows : [];
+            const q = String(document.getElementById('ut-accounts-q')?.value || '').trim().toLowerCase();
+            const region = String(document.getElementById('ut-accounts-region')?.value || '');
+            const provider = String(document.getElementById('ut-accounts-provider')?.value || '');
+            const route = String(document.getElementById('ut-accounts-route')?.value || '');
+            const routeSelect = document.getElementById('ut-accounts-route');
+            const routeName = (id) => {
+                const known = (typeof ROUTES !== 'undefined' && ROUTES[id]) ? ROUTES[id] : null;
+                return String(known?.name || id || '').replace(/\s*<->\s*/g, ' – ');
+            };
+            if (routeSelect) {
+                const seen = new Set();
+                rows.forEach((row) => { if (row.lastRouteId) seen.add(row.lastRouteId); });
+                const options = ['<option value="">All routes</option>'].concat(
+                    [...seen].sort((a, b) => routeName(a).localeCompare(routeName(b))).map((id) => {
+                        const escId = typeof escapeHTML === 'function' ? escapeHTML(id) : id;
+                        const label = typeof escapeHTML === 'function' ? escapeHTML(routeName(id)) : routeName(id);
+                        return `<option value="${escId}">${label}</option>`;
+                    })
+                );
+                const previous = routeSelect.value;
+                routeSelect.innerHTML = options.join('');
+                if ([...routeSelect.options].some((opt) => opt.value === previous)) routeSelect.value = previous;
+            }
+            const knownProviders = new Set(['google.com', 'password', 'facebook.com']);
+            const filtered = rows.filter((row) => {
+                if (q && !`${row.displayName || ''} ${row.email || ''}`.toLowerCase().includes(q)) return false;
+                if (region === 'none' && row.region) return false;
+                if (region && region !== 'none' && row.region !== region) return false;
+                if (provider === 'other' && knownProviders.has(String(row.provider || ''))) return false;
+                if (provider && provider !== 'other' && row.provider !== provider) return false;
+                if (route && row.lastRouteId !== route) return false;
+                return true;
+            });
+            if (!rows.length) {
+                list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No accounts yet. Someone appears here after they create an account and open Next Train.</p>';
+                return;
+            }
+            if (!filtered.length) {
+                list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No accounts match these filters.</p>';
+                return;
+            }
+            const esc = (value) => (typeof escapeHTML === 'function' ? escapeHTML(String(value || '')) : String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+            const providerLabel = (id) => {
+                const key = String(id || '');
+                if (key === 'google.com') return 'Google';
+                if (key === 'facebook.com') return 'Facebook';
+                if (key === 'password') return 'Email';
+                return key || 'Account';
+            };
+            const regionLabel = (code) => ({ GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' }[code] || '');
+            list.innerHTML = '';
+            filtered.forEach((row) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3 py-2.5 focus:outline-none';
+                const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
+                const where = [regionLabel(row.region), row.lastRouteId ? routeName(row.lastRouteId) : ''].filter(Boolean).join(' · ');
+                btn.innerHTML = `<span class="block text-sm font-semibold text-gray-900 dark:text-white break-words">${esc(row.displayName || 'Passenger')}</span><span class="block text-[13px] text-gray-500 dark:text-gray-400 break-all">${esc(row.email || 'No email')}</span><span class="block text-[12px] text-gray-400 mt-0.5">${esc(providerLabel(row.provider))}${when ? ` · Joined ${esc(when)}` : ''}${where ? ` · ${esc(where)}` : ''}</span>`;
+                btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
+                list.appendChild(btn);
+            });
+            if (Admin._accountCapped) {
+                const more = document.createElement('p');
+                more.className = 'text-[12px] text-gray-400 text-center py-2';
+                more.textContent = 'Showing the latest 200. Use Lookup for anyone else.';
+                list.appendChild(more);
             }
         };
 
@@ -21404,35 +21602,41 @@ const Admin = {
             </button>
 
             <div id="event-body" class="hidden mt-4 space-y-4">
-                <div class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                    <div>
-                        <span class="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Enable Event Route</span>
-                    </div>
-                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                        <input type="checkbox" id="event-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
-                        <label for="event-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
-                    </div>
+                <div class="flex p-1 rounded-xl bg-gray-100 dark:bg-gray-900" role="tablist" aria-label="Special event sections">
+                    <button type="button" id="event-tab-event" class="flex-1 h-9 rounded-lg text-sm font-semibold bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white focus:outline-none">Event</button>
+                    <button type="button" id="event-tab-sheets" class="flex-1 h-9 rounded-lg text-sm font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Route sheets</button>
                 </div>
-                
-                <div>
-                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Event Name</label>
-                    <input type="text" id="event-name" class="w-full h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g., Loftus Rugby Special">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Destination A</label>
-                        <input type="text" id="event-dest-a" class="w-full h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g., PRETORIA STATION">
+                <div id="event-pane-event" class="space-y-4">
+                    <div class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-xl border border-yellow-200 dark:border-yellow-800">
+                        <span class="text-[15px] font-semibold text-yellow-900 dark:text-yellow-100">Enable Event Route</span>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" id="event-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                            <label for="event-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Destination B</label>
-                        <input type="text" id="event-dest-b" class="w-full h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g., LOFTUS STATION">
+                        <label class="block text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase mb-1.5" for="event-name">Event Name</label>
+                        <input type="text" id="event-name" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white outline-none" placeholder="e.g., Loftus Rugby Special">
                     </div>
-                </div>
-                
-                <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
-                    <button id="event-save-btn" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase mb-1.5" for="event-dest-a">Destination A</label>
+                            <input type="text" id="event-dest-a" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white outline-none" placeholder="e.g., PRETORIA STATION">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase mb-1.5" for="event-dest-b">Destination B</label>
+                            <input type="text" id="event-dest-b" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white outline-none" placeholder="e.g., LOFTUS STATION">
+                        </div>
+                    </div>
+                    <button id="event-save-btn" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 rounded-xl shadow-md transition-colors text-sm tracking-wide">
                         Publish Event
                     </button>
+                </div>
+                <div id="event-pane-sheets" class="hidden space-y-3">
+                    <p class="text-sm leading-snug text-gray-600 dark:text-gray-300">Sunday and Special run only on the lines you turn on. Other lines keep their normal day. Add the spreadsheet tabs named under each line, then sync. Leave Sunday dates empty for every Sunday. Leave Special dates empty for every day until you turn it off. A line with no times in that tab stays on its normal sheet.</p>
+                    <div id="route-sheet-regions" class="flex gap-2"></div>
+                    <div id="route-sheet-list" class="space-y-2"></div>
+                    <button id="route-sheet-save" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md transition-colors text-sm">Save route sheets</button>
                 </div>
             </div>
         `;
@@ -21457,6 +21661,29 @@ const Admin = {
                 header.classList.add('mb-4');
             }
         };
+
+        const paintEventTab = (which) => {
+            const sheets = which === 'sheets';
+            document.getElementById('event-pane-event')?.classList.toggle('hidden', sheets);
+            document.getElementById('event-pane-sheets')?.classList.toggle('hidden', !sheets);
+            const eventBtn = document.getElementById('event-tab-event');
+            const sheetsBtn = document.getElementById('event-tab-sheets');
+            const on = ['bg-white', 'text-gray-900', 'shadow-sm', 'dark:bg-gray-800', 'dark:text-white'];
+            const off = ['text-gray-500', 'dark:text-gray-400'];
+            [eventBtn, sheetsBtn].forEach((btn) => {
+                if (!btn) return;
+                on.concat(off).forEach((name) => btn.classList.remove(name));
+            });
+            on.forEach((name) => (sheets ? sheetsBtn : eventBtn)?.classList.add(name));
+            off.forEach((name) => (sheets ? eventBtn : sheetsBtn)?.classList.add(name));
+            if (header.style.display === 'none' && typeof Admin.paintDrillTitle === 'function') {
+                Admin.paintDrillTitle(sheets ? 'Route sheets' : 'Special Event Route');
+            }
+            if (sheets && typeof Admin.loadRouteSheets === 'function') Admin.loadRouteSheets();
+        };
+        Admin.setEventTab = paintEventTab;
+        document.getElementById('event-tab-event')?.addEventListener('click', () => paintEventTab('event'));
+        document.getElementById('event-tab-sheets')?.addEventListener('click', () => paintEventTab('sheets'));
 
         if (typeof ROUTES !== 'undefined' && ROUTES['special_event']) {
             const ev = ROUTES['special_event'];
@@ -21513,18 +21740,11 @@ const Admin = {
 
     // --- 6b. PER-ROUTE SUNDAY AND SPECIAL SHEETS ---
     setupRouteSheetManager: () => {
-        const alertPanel = document.getElementById('alert-panel');
-        if (!alertPanel || !alertPanel.parentNode) return;
-
-        let panel = document.getElementById('route-sheet-panel');
-        if (!panel) {
-            panel = document.createElement('div');
-            panel.id = 'route-sheet-panel';
-            alertPanel.parentNode.appendChild(panel);
-        }
-        if (panel.dataset.loaded === 'true') return;
-        panel.dataset.loaded = 'true';
-        panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        const list = document.getElementById('route-sheet-list');
+        const regionBox = document.getElementById('route-sheet-regions');
+        const saveBtn = document.getElementById('route-sheet-save');
+        if (!list || !regionBox || !saveBtn || list.dataset.loaded === 'true') return;
+        list.dataset.loaded = 'true';
 
         const esc = (str) => {
             const raw = String(str || '').replace(/\$\{/g, '');
@@ -21543,29 +21763,6 @@ const Admin = {
         let draft = {};
         let regionCode = 'GP';
 
-        panel.innerHTML = `
-            <button id="route-sheet-header" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center">
-                    ${Admin.tileIcon('calendar', 'text-blue-500 dark:text-blue-400')}
-                    <span>Route sheets</span>
-                </span>
-                <svg id="route-sheet-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            <div id="route-sheet-body" class="hidden mt-4 space-y-3">
-                <p class="text-[11px] leading-snug text-gray-500 dark:text-gray-400">Turn Sunday or Special on for the lines that are running. Other lines stay on their normal day. Add tabs such as <span class="font-mono">PTA-to-PIEN_Sun</span> and <span class="font-mono">PTA-to-PIEN_Special</span>, then sync the spreadsheet. Empty dates on Special means every day until you turn it off. Empty dates on Sunday means every Sunday. A ticked route with no times in the tab stays on its normal sheet.</p>
-                <div id="route-sheet-regions" class="flex gap-1"></div>
-                <div id="route-sheet-list" class="space-y-2 max-h-[28rem] overflow-y-auto"></div>
-                <button id="route-sheet-save" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide">Save route sheets</button>
-            </div>
-        `;
-
-        const header = document.getElementById('route-sheet-header');
-        const body = document.getElementById('route-sheet-body');
-        const chevron = document.getElementById('route-sheet-chevron');
-        const regionBox = document.getElementById('route-sheet-regions');
-        const list = document.getElementById('route-sheet-list');
-        const saveBtn = document.getElementById('route-sheet-save');
-
         const scrape = () => {
             list.querySelectorAll('[data-route-sheet]').forEach((row) => {
                 const id = row.getAttribute('data-route-sheet');
@@ -21574,7 +21771,7 @@ const Admin = {
                 const sunday = prev.sunday || {};
                 const special = prev.special || {};
                 const title = (row.querySelector('.route-sheet-title')?.value || '').trim();
-                const message = (row.querySelector('.route-sheet-body')?.value || '').trim();
+                const message = (row.querySelector('.route-sheet-message')?.value || '').trim();
                 draft[id] = {
                     sunday: {
                         active: !!row.querySelector('.route-sheet-sun')?.checked,
@@ -21596,7 +21793,7 @@ const Admin = {
 
         const paintRegions = () => {
             regionBox.innerHTML = ['GP', 'WC', 'KZN', 'EC'].map((code) => `
-                <button type="button" data-route-sheet-region="${code}" class="px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${code === regionCode ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}">${code}</button>
+                <button type="button" data-route-sheet-region="${code}" class="h-9 px-3 rounded-lg text-xs font-semibold ${code === regionCode ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}">${code}</button>
             `).join('');
             regionBox.querySelectorAll('[data-route-sheet-region]').forEach((btn) => {
                 btn.onclick = () => {
@@ -21620,24 +21817,25 @@ const Admin = {
                 const specialTabs = `${tabName(route, 'special', 'a')} · ${tabName(route, 'special', 'b')}`;
                 const title = special.title || sunday.title || '';
                 const message = special.body || sunday.body || '';
+                const field = 'w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white outline-none';
                 return `
-                    <div data-route-sheet="${esc(route.id)}" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 space-y-2">
+                    <div data-route-sheet="${esc(route.id)}" class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-3">
                         <div class="flex items-center gap-2">
-                            <button type="button" data-route-sheet-open class="flex-1 text-left text-[11px] font-bold text-gray-800 dark:text-gray-100">${esc(route.name || route.id)}</button>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-gray-600 dark:text-gray-300"><input type="checkbox" class="route-sheet-sun" ${sunday.active ? 'checked' : ''}> Sun</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-gray-600 dark:text-gray-300"><input type="checkbox" class="route-sheet-special" ${special.active ? 'checked' : ''}> Special</label>
+                            <button type="button" data-route-sheet-open class="flex-1 text-left text-sm font-semibold text-gray-900 dark:text-white">${esc(route.name || route.id)}</button>
+                            <label class="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" class="route-sheet-sun" ${sunday.active ? 'checked' : ''}> Sun</label>
+                            <label class="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" class="route-sheet-special" ${special.active ? 'checked' : ''}> Special</label>
                         </div>
-                        <div class="route-sheet-detail hidden space-y-1">
-                            <p class="text-[10px] font-mono text-gray-500 break-all">Sun: ${esc(sunTabs)}</p>
-                            <textarea class="route-sheet-sun-dates w-full min-h-[36px] px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-mono" placeholder="Sunday dates, empty = every Sunday">${esc((sunday.dates || []).join('\n'))}</textarea>
-                            <p class="text-[10px] font-mono text-gray-500 break-all">Special: ${esc(specialTabs)}</p>
-                            <textarea class="route-sheet-special-dates w-full min-h-[36px] px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-mono" placeholder="YYYY-MM-DD, empty = every day while on">${esc((special.dates || []).join('\n'))}</textarea>
-                            <input type="text" class="route-sheet-title w-full h-8 px-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px]" placeholder="Chip title, optional" value="${esc(title)}">
-                            <textarea class="route-sheet-body w-full min-h-[44px] px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px]" placeholder="Message when someone taps the day chip, optional">${esc(message)}</textarea>
+                        <div class="route-sheet-detail hidden space-y-2">
+                            <p class="text-xs font-medium text-gray-500 break-all">Sunday tabs: ${esc(sunTabs)}</p>
+                            <textarea class="route-sheet-sun-dates ${field} min-h-[44px] font-mono" placeholder="Sunday dates, empty = every Sunday">${esc((sunday.dates || []).join('\n'))}</textarea>
+                            <p class="text-xs font-medium text-gray-500 break-all">Special tabs: ${esc(specialTabs)}</p>
+                            <textarea class="route-sheet-special-dates ${field} min-h-[44px] font-mono" placeholder="YYYY-MM-DD, empty = every day while on">${esc((special.dates || []).join('\n'))}</textarea>
+                            <input type="text" class="route-sheet-title ${field} h-11" placeholder="Chip title, optional" value="${esc(title)}">
+                            <textarea class="route-sheet-message ${field} min-h-[64px]" placeholder="Message when someone taps the day chip, optional">${esc(message)}</textarea>
                         </div>
                     </div>
                 `;
-            }).join('') || '<p class="text-[11px] text-gray-500">No routes in this region.</p>';
+            }).join('') || '<p class="text-sm text-gray-500">No routes in this region.</p>';
             list.querySelectorAll('[data-route-sheet-open]').forEach((btn) => {
                 btn.onclick = () => btn.parentElement?.nextElementSibling?.classList.toggle('hidden');
             });
@@ -21656,14 +21854,10 @@ const Admin = {
             paintRoutes();
         };
 
-        header.onclick = () => {
-            if (Admin.isGridMode) return;
-            body.classList.toggle('hidden');
-            chevron.classList.toggle('-rotate-90', body.classList.contains('hidden'));
-            if (!body.classList.contains('hidden') && !panel.dataset.hydrated) {
-                panel.dataset.hydrated = 'true';
-                load();
-            }
+        Admin.loadRouteSheets = () => {
+            if (list.dataset.hydrated === '1') return;
+            list.dataset.hydrated = '1';
+            load();
         };
 
         saveBtn.onclick = async () => {

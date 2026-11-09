@@ -148,6 +148,17 @@ export async function pushSignedInOps({ force = false, now = Date.now() } = {}) 
     if ('lat' in patch || 'lon' in patch || 'latitude' in patch || 'longitude' in patch) return false;
     try {
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), patch);
+        try {
+            await window.firebaseDbUpdate(
+                window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`),
+                {
+                    region: patch.region,
+                    lastRouteId: patch.lastRouteId,
+                    appVersion: patch.appVersion,
+                    updatedAt: now,
+                }
+            );
+        } catch { /* directory rules may lag the users row */ }
         return true;
     } catch {
         return false;
@@ -516,6 +527,7 @@ export async function ensureUserProfile(user, opts = {}) {
 
         try {
             const provider = user.providerData?.[0]?.providerId || (user.email ? 'password' : '');
+            const ops = accountOpsFields(now);
             await window.firebaseDbUpdate(
                 window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`),
                 {
@@ -523,6 +535,9 @@ export async function ensureUserProfile(user, opts = {}) {
                     email: user.email || existing?.email || null,
                     createdAt: existing?.createdAt || now,
                     provider: String(provider || '').slice(0, 40) || null,
+                    region: ops.region,
+                    lastRouteId: ops.lastRouteId,
+                    appVersion: ops.appVersion,
                     updatedAt: now,
                 }
             );

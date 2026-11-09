@@ -565,6 +565,29 @@ if (!ui.includes('flex-col items-start text-left') || !ui.includes('Via ${escape
     fail('planner train name must stack Via under the train on a narrow card');
 }
 if (!gridJs.includes('Irene is not the last stop')) fail('KEMP tap must explain the train continues');
+if (!gridJs.includes('Irene is not the first stop')) fail('KEMP tap toward Pretoria must say the train starts at Kempton Park');
+if (kempHtml.includes('data-kemp-from="1"') || !kempHtml.includes('Irene is not the last stop')) {
+    fail('Pretoria toward Irene must keep the continues-to-Kempton advisory');
+}
+const dbNow = $fullDatabase.get();
+dbNow.kemp_to_pta_weekday = [
+    { STATION: 'KEMPTON PARK', '0603': '4:40:00' },
+    { STATION: 'IRENE', '0603': '5:02:00' },
+    { STATION: 'PRETORIA', '0603': '5:27:00' },
+];
+$fullDatabase.set(dbNow);
+const towardPretoria = {
+    headers: ['STATION', '0626'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'IRENE', '0626': '6:10:00' },
+        { STATION: 'PRETORIA', '0626': '6:40:00' },
+    ],
+};
+const fromKempHtml = Renderer._buildGridHTML(towardPretoria, 'irene_to_pta_weekday', 'pta-irene', 1, false, false, 'weekday');
+if (!fromKempHtml.includes('data-kemp-from="1"') || !fromKempHtml.includes('data-kemp-train="0603"') || !fromKempHtml.includes('starts at Kempton Park')) {
+    fail('Irene toward Pretoria must say a KEMP train starts at Kempton Park');
+}
 globalThis.window = { isTrainProvisional: (train) => train === '0626' };
 const provHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
 const provExport = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, true, 'weekday');

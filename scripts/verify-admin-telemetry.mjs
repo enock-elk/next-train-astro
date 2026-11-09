@@ -23,7 +23,7 @@ import {
     retentionFloorDay,
     sentryStatusFromResult,
 } from '../workers/nexttrain-telemetry/region-presence.js';
-import { handleRegionPresence, readRegionalSplit } from '../workers/nexttrain-telemetry/region-store.js';
+import { handleRegionPresence, readRegionalSplit, resolveRegionalDay } from '../workers/nexttrain-telemetry/region-store.js';
 import { formatFeedbackDiagLine, stationChoiceLabel } from '../src/lib/feedback-diag-line.js';
 import {
     computeDeployPhase,
@@ -196,6 +196,9 @@ ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popu
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
 ok(adminJs.includes('Reporting devices by selected region'), 'regional modal names reporting devices');
 ok(adminJs.includes('Reporting devices today:'), 'regional modal total is reporting devices');
+ok(adminJs.includes('id="region-day-prev"') && adminJs.includes('/admin/region-split'), 'regional modal can open a previous Johannesburg day');
+ok(adminJs.includes('id="ut-accounts-region"') && adminJs.includes('break-words'), 'account list filters by region and keeps the full name');
+ok(adminJs.includes('id="event-tab-sheets"') && !adminJs.includes('id="route-sheet-panel"'), 'route sheets live inside the special event panel');
 ok(adminJs.includes('People today (Analytics):'), 'Analytics people stay beside the exact split');
 ok(!adminJs.includes('No region on the hit'), 'regional modal no longer shows an overlapping unset bucket');
 ok(adminJs.includes('hideRegionNote'), 'an exact Worker split clears the overlapping-region warning');
@@ -470,6 +473,12 @@ ok(formatFeedbackDiagLine({
     const blocked = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'GP' }, 'https://evil.example');
     const invalid = await post({ deviceId: 'nope', region: 'GP' });
     const split = await readRegionalSplit(db, now);
+    const yesterday = resolveRegionalDay(now, '2026-11-06');
+    const future = resolveRegionalDay(now, '2026-11-08');
+    const pastSplit = await readRegionalSplit(db, now, '2026-11-06');
+    ok(yesterday.ok === true && yesterday.day === '2026-11-06', 'a stored Johannesburg day can be read');
+    ok(future.ok === false, 'a future day is refused');
+    ok(pastSplit.day === '2026-11-06' && pastSplit.reportingDevices === 0 && pastSplit.exact === true, 'an earlier day does not reuse today\'s cards');
     ok(first.status === 200 && moved.status === 200 && other.status === 200, 'valid presence reports are stored');
     ok(blocked.status === 403, 'presence route rejects a foreign origin');
     ok(invalid.status === 400, 'presence route rejects a bad device id');

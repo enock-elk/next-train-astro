@@ -1009,6 +1009,13 @@ export const Renderer = {
                 }
             }
         }
+        // Irene toward Pretoria: a KEMP train started at Kempton Park.
+        // Pretoria toward Irene: the same train continues past Irene to Kempton Park.
+        const kempStartsAtKempton = /(?:irene_to_pta|kemp_to_pta)/.test(String(sheetName || ''));
+        const kempAria = (train) => (kempStartsAtKempton
+            ? `Train ${escapeHTML(String(train || ''))} starts at Kempton Park. Irene is not the first stop.`
+            : `Train ${escapeHTML(String(train || ''))} continues to Kempton Park. Irene is not the last stop.`);
+        const kempFromAttr = kempStartsAtKempton ? ' data-kemp-from="1"' : '';
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
         const masterStations = (typeof window !== 'undefined' && typeof window.routeGeometryStations === 'function')
             ? (window.routeGeometryStations(routeId) || [])
@@ -1191,7 +1198,7 @@ export const Renderer = {
                                 ? ` data-prov-open="1" data-prov-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} is provisional"`
                                 : '';
                             const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion && !provisional)
-                                ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} continues to Kempton Park"`
+                                ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}"${kempFromAttr} tabindex="0" role="button" aria-label="${kempAria(h)}"`
                                 : '';
                             const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp && !provisional);
                             const viaHeadAttrs = (!isExport && viaColumn)
@@ -1316,7 +1323,7 @@ export const Renderer = {
                             ? ` data-prov-open="1" data-prov-train="${escapeHTML(String(col || ''))}"`
                             : '';
                         const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion && !colProvisional)
-                            ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"`
+                            ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"${kempFromAttr}`
                             : '';
                         const viaForCol = variantByTrain[String(col)] || '';
                         const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)) && !colProvisional)

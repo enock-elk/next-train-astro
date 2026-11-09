@@ -33,8 +33,33 @@ export async function countDailyRegions(db, day) {
     return tallyRegionCounts(query?.results || []);
 }
 
-export async function readRegionalSplit(db, nowMs = Date.now()) {
-    const day = johannesburgDay(nowMs);
+/** A past Johannesburg day inside the 35-day record. Empty means today. */
+export function resolveRegionalDay(nowMs = Date.now(), dayOverride = '') {
+    const today = johannesburgDay(nowMs);
+    const raw = String(dayOverride || '').trim();
+    if (!raw) return { day: today, ok: true };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return { day: today, ok: false, detail: 'Day must be YYYY-MM-DD' };
+    }
+    if (raw > today) return { day: today, ok: false, detail: 'That day has not happened yet' };
+    const floor = retentionFloorDay(nowMs);
+    if (raw < floor) return { day: raw, ok: false, detail: 'That day is outside the 35-day record' };
+    return { day: raw, ok: true };
+}
+
+export async function readRegionalSplit(db, nowMs = Date.now(), dayOverride = '') {
+    const picked = resolveRegionalDay(nowMs, dayOverride);
+    const day = picked.day;
+    if (!picked.ok) {
+        return {
+            GP: 0, WC: 0, KZN: 0, EC: 0,
+            reportingDevices: 0,
+            day,
+            status: 'error',
+            detail: picked.detail,
+            exact: false,
+        };
+    }
     if (!db) {
         return {
             GP: 0, WC: 0, KZN: 0, EC: 0,

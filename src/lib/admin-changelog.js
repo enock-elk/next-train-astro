@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.09.1': [
+        'Accounts fills the screen and can be filtered by name, region, route, and sign-in. The full name stays on the card. Regional breakdown can step back through earlier Johannesburg days, up to 35 days. Community shows the remaining messages as a dotted control that explains the try-out limit. The Irene timetable says a Kempton train starts at Kempton Park when the sheet runs toward Pretoria, and continues to Kempton Park when the sheet runs toward Irene. Route sheets sit inside Special Event Route. Notifications and Appearance no longer carry the save-as-you-switch line. Deploy the telemetry Worker so previous days load, and deploy firebase-database.rules.json so region and route can be stored on the account directory. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.18': [
         'Feedback Hub messages store the station selected on the Next Train home board. Build notes then read Pretoria ↔ Pienaarspoort · Pretoria (Auto), or (man) when the station was picked from the list. A message already saved without a station stays on the route line. No commuter What\'s New. forceShow stays false.',
     ],

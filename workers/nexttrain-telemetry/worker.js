@@ -211,6 +211,34 @@ export default {
             return handleRegionPresence(request, env);
         }
 
+        // One Johannesburg day of the exact device split. Admin day paging uses this
+        // so a previous day does not refetch the whole analytics payload.
+        if (request.method === 'GET' && url.pathname === '/admin/region-split') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: false });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            try {
+                const split = await readRegionalSplit(env.REGION_PRESENCE_DB, Date.now(), url.searchParams.get('day') || '');
+                return json(200, {
+                    ...split,
+                    metric: 'reportingDevices',
+                    source: 'selected-region',
+                });
+            } catch (e) {
+                return json(200, {
+                    GP: 0, WC: 0, KZN: 0, EC: 0,
+                    reportingDevices: 0,
+                    metric: 'reportingDevices',
+                    source: 'selected-region',
+                    exact: false,
+                    status: 'error',
+                    day: url.searchParams.get('day') || null,
+                    detail: String(e?.message || e).slice(0, 180),
+                });
+            }
+        }
+
         // Admin: start production publish (GitHub workflow_dispatch). Token never
         // leaves this Worker. Live host push still uses repo secret METRORAIL_APP_DEPLOY_TOKEN.
         if (request.method === 'POST' && url.pathname === '/admin/deploy-production') {

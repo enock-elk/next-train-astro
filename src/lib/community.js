@@ -1659,10 +1659,13 @@ let communityWaitCancel = null;
 function paintCommunityQuotaHint() {
     const el = document.getElementById('community-quota-hint');
     if (!el) return;
+    bindCommunityQuotaNote();
     const signed = $account.get().status === 'signed-in';
     if (!signed || isAdminAuthed()) {
         el.textContent = '';
         el.hidden = true;
+        const note = document.getElementById('community-quota-note');
+        if (note) note.hidden = true;
         return;
     }
     const limit = checkCommunityRateLimit();
@@ -1672,6 +1675,25 @@ function paintCommunityQuotaHint() {
     if (!limit.ok && limit.reason === 'quota' && !communityWaitCancel) {
         paintCommunityWait(limit);
     }
+}
+
+function bindCommunityQuotaNote() {
+    const btn = document.getElementById('community-quota-hint');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+        const note = document.getElementById('community-quota-note');
+        if (!note) return;
+        const open = note.hidden;
+        note.hidden = !open;
+        if (!open) return;
+        note.textContent = 'Community is still being tried out. Each account can send 8 messages in 30 minutes. This is how many you have left.';
+    });
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindCommunityQuotaNote, { once: true });
+    else bindCommunityQuotaNote();
 }
 
 function startQuotaHintWatch() {

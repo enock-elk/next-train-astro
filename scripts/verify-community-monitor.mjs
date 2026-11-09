@@ -136,6 +136,9 @@ assert.match(community, /uid === prevUid/, 'consecutive community messages from 
 assert.match(community, /community-avatar-spacer/, 'grouped messages keep the avatar column');
 assert.match(communityView, /community-avatar-spacer/, 'Community CSS keeps WhatsApp-style grouped rows');
 assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
+assert.match(community, /Community is still being tried out/, 'quota hint explains that Community is still being tried out');
+assert.match(communityView, /decoration-dotted/, 'quota hint uses a dotted underline');
+assert.match(communityView, /<button type="button" id="community-quota-hint"/, 'quota hint is a button');
 assert.match(communityView, /id="community-route-unread"/, 'route picker shows unread that is not on the open room');
 assert.ok(
     communityView.indexOf('id="community-quota-hint"') < communityView.indexOf('id="community-composer"'),

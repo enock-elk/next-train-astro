@@ -258,9 +258,12 @@ function bindGridKempNotes() {
     grid.dataset.kempBound = '1';
     const open = (el) => {
         const train = el?.getAttribute?.('data-kemp-train') || 'This train';
+        const fromKempton = el?.getAttribute?.('data-kemp-from') === '1';
         openTrainMarkSheet({
             train,
-            body: `Train ${train} continues to Kempton Park. Irene is not the last stop.`,
+            body: fromKempton
+                ? `Train ${train} starts at Kempton Park. Irene is not the first stop.`
+                : `Train ${train} continues to Kempton Park. Irene is not the last stop.`,
             badge: 'KEMP',
         });
     };

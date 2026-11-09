@@ -807,7 +807,7 @@ assert(
 );
 assert(hubModals.includes('id="account-open-notifications"') && hubModals.includes('id="account-notifications-slot"'), 'Notifications open their own page');
 assert(hubModals.includes('id="account-open-appearance"') && hubModals.includes('id="account-appearance-slot"'), 'Appearance opens its own page');
-assert(hubModals.includes('Changes save as you switch. No Save button needed.'), 'notification switches save on their own');
+assert(!hubModals.includes('Changes save as you switch. No Save button needed.'), 'account pages do not explain that switches save themselves');
 assert(accountJs.includes('#account-notifications') && accountJs.includes('#account-appearance') && accountJs.includes('#account-profile'), 'account inner pages push their own history entry');
 assert(hubModals.includes('privacy.html') && hubModals.includes('terms.html') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer links the public privacy and terms pages');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');

@@ -121,6 +121,35 @@ const activityPayloadSource = community.slice(
 );
 assert.doesNotMatch(activityPayloadSource, /body/, 'activity index does not duplicate message bodies');
 assert.match(community, /admin_state\/\$\{encodeURIComponent\(acct\.uid\)\}\/community_seen/);
+assert.match(community, /users\/\$\{encodeURIComponent\(acct\.uid\)\}\/community_seen/, 'a signed-in account keeps its own seen cursor');
+assert.doesNotMatch(community, /setItem\(unreadSeenKey\(routeId\), String\(Date\.now\(\)\)\);\s*return 0/, 'a first visit does not stamp every room as seen');
+{
+    const start = community.indexOf('function communityUnreadCursor');
+    const end = community.indexOf('let accountSeenCache');
+    assert.ok(start > 0 && end > start, 'unread cursor helpers are extractable');
+    const unread = {};
+    new Function(`${community.slice(start, end).replace(/^export /gm, '')}
+this.cursor = communityUnreadCursor;
+this.count = countCommunityUnreadPosts;
+`).call(unread);
+    assert.equal(unread.cursor(null, null).established, false, 'no cursor means the room is still unseen');
+    assert.equal(unread.cursor('100', null).lastSeen, 100);
+    assert.equal(unread.cursor(null, 250).established, true, 'another signed-in session can clear the room');
+    assert.equal(unread.cursor('100', 250).lastSeen, 250);
+    const posts = [
+        { timestamp: 10, body: 'old', uid: 'a' },
+        {
+            timestamp: 30,
+            body: 'new',
+            uid: 'b',
+            replies: { r1: { timestamp: 40, body: 'reply', uid: 'c' } },
+        },
+        { timestamp: 50, body: 'mine', uid: 'me' },
+    ];
+    assert.equal(unread.count(posts, '', 0), 4, 'an unseen room counts posts and nested replies');
+    assert.equal(unread.count(posts, 'me', 20), 2, 'messages after the cursor stay unread, including a reply');
+}
+assert.match(rules.rules.users.$uid.community_seen.$routeId['.validate'], /newData\.isNumber/, 'account seen cursors are timestamps');
 assert.match(community, /\.\.\.replyToPayload/, 'quote-reply top-level posts keep their quote when held or published');
 assert.match(worker, /rtdbUpdate\(env, \{/);
 assert.match(worker, /community_activity\/\$\{routeId\}\/\$\{postId\}/);

@@ -445,6 +445,11 @@
         "marks": {
           ".read": "auth != null && auth.uid === $uid",
           ".validate": "newData.hasChildren(['points']) && newData.child('points').isNumber() && newData.child('points').val() >= 0 && newData.child('points').val() <= 100000"
+        },
+        "community_seen": {
+          "$routeId": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          }
         }
       }
     },

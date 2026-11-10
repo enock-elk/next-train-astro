@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_11.10.5 — no release notes
+
+- Community unread badges stay for a session that has not opened that route. A signed-in account shares its seen cursor. A signed-out phone keeps its own.
+
 ## V10_11.10.4 — no release notes
 
 - Data saving calls the web-address card Link Previews.

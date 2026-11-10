@@ -1664,11 +1664,68 @@ function unreadSeenKey(routeId) {
     return UNREAD_SEEN_PREFIX + routeId;
 }
 
-function getLastSeen(routeId) {
-    if (!routeId) return Date.now();
-    const raw = safeStorage.getItem(unreadSeenKey(routeId));
-    const n = raw ? parseInt(raw, 10) : NaN;
-    return Number.isFinite(n) ? n : 0;
+/**
+ * A missing cursor means this session has not opened the route.
+ * A signed-in account cursor counts as already seen on another session.
+ * Never invent a "seen now" stamp just because the cursor is missing.
+ */
+export function communityUnreadCursor(localRaw, remoteSeen) {
+    const local = localRaw == null || localRaw === '' ? NaN : parseInt(localRaw, 10);
+    const remote = Number(remoteSeen);
+    const hasLocal = Number.isFinite(local) && local > 0;
+    const hasRemote = Number.isFinite(remote) && remote > 0;
+    if (!hasLocal && !hasRemote) return { lastSeen: 0, established: false };
+    return {
+        lastSeen: Math.max(hasLocal ? local : 0, hasRemote ? remote : 0),
+        established: true,
+    };
+}
+
+function communityMessageCountsAsUnread(message, myUid, lastSeen) {
+    const ts = Number(message?.timestamp) || 0;
+    if (ts <= lastSeen) return false;
+    if (message?.pendingReview || message?.shadowOnly) return false;
+    if (message?.hidden && message.uid !== myUid) return false;
+    if (myUid && message.uid === myUid) return false;
+    return !!(message?.body || message?.linkUrl || (Array.isArray(message?.attachments) && message.attachments.length));
+}
+
+/** Posts in this page, plus replies already nested on those posts. */
+export function countCommunityUnreadPosts(posts, myUid, lastSeen) {
+    let total = 0;
+    (posts || []).forEach((post) => {
+        if (communityMessageCountsAsUnread(post, myUid, lastSeen)) total += 1;
+        const replies = post?.replies && typeof post.replies === 'object' ? Object.values(post.replies) : [];
+        replies.forEach((reply) => {
+            if (communityMessageCountsAsUnread(reply, myUid, lastSeen)) total += 1;
+        });
+    });
+    return total;
+}
+
+let accountSeenCache = { uid: '', at: 0, map: null };
+
+async function readAccountCommunitySeen() {
+    const acct = $account.get();
+    if (acct?.status !== 'signed-in' || !acct.uid) return null;
+    const now = Date.now();
+    if (accountSeenCache.uid === acct.uid && accountSeenCache.map && now - accountSeenCache.at < 60 * 1000) {
+        return accountSeenCache.map;
+    }
+    try {
+        const q = await authQuery();
+        if (!q) return accountSeenCache.uid === acct.uid ? accountSeenCache.map : null;
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}users/${encodeURIComponent(acct.uid)}/community_seen.json${q}`
+        );
+        if (!res.ok) return accountSeenCache.uid === acct.uid ? accountSeenCache.map : null;
+        const data = await res.json();
+        const map = data && typeof data === 'object' ? data : {};
+        accountSeenCache = { uid: acct.uid, at: now, map };
+        return map;
+    } catch {
+        return accountSeenCache.uid === acct.uid ? accountSeenCache.map : null;
+    }
 }
 
 export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts = {}) {
@@ -1677,9 +1734,30 @@ export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts 
     safeStorage.setItem(unreadSeenKey(routeId), String(seenAt));
     cachedUnreadByRoute[routeId] = 0;
     paintUnreadFromCache();
+    const acct = $account.get();
+    if (acct?.status === 'signed-in' && acct.uid) {
+        if (accountSeenCache.uid === acct.uid && accountSeenCache.map) {
+            accountSeenCache.map[routeId] = seenAt;
+            accountSeenCache.at = Date.now();
+        }
+        try {
+            const q = await authQuery();
+            if (q) {
+                await fetch(
+                    `${DYNAMIC_BASE_URL}users/${encodeURIComponent(acct.uid)}/community_seen/${encodeURIComponent(routeId)}.json${q}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(seenAt),
+                    }
+                );
+            }
+        } catch {
+            /* this device still has the local cursor */
+        }
+    }
     if (!isAdminAuthed()) return;
     try {
-        const acct = $account.get();
         if (!acct?.uid) return;
         const q = await authQuery();
         if (!q) return;
@@ -1753,24 +1831,18 @@ async function fetchPostsNewerThan(routeId, lastSeen) {
     return Object.values(data);
 }
 
-async function countUnreadOnRoute(routeId, viewingId) {
+async function countUnreadOnRoute(routeId, viewingId, accountSeen) {
     if (!routeId || routeId === viewingId) return 0;
     try {
-        const raw = safeStorage.getItem(unreadSeenKey(routeId));
-        if (!raw) {
-            safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
-            return 0;
-        }
-        const lastSeen = getLastSeen(routeId);
-        let posts = await fetchPostsNewerThan(routeId, lastSeen);
+        const cursor = communityUnreadCursor(
+            safeStorage.getItem(unreadSeenKey(routeId)),
+            accountSeen ? accountSeen[routeId] : null
+        );
+        let posts = await fetchPostsNewerThan(routeId, cursor.established ? cursor.lastSeen : 0);
         if (!posts) posts = await fetchRoutePosts(routeId);
-        const myUid = $account.get()?.uid || '';
-        return posts.filter((p) => {
-            const ts = p.timestamp || 0;
-            if (ts <= lastSeen) return false;
-            if (myUid && p.uid === myUid) return false;
-            return true;
-        }).length;
+        const acct = $account.get();
+        const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
+        return countCommunityUnreadPosts(posts, myUid, cursor.established ? cursor.lastSeen : 0);
     } catch {
         return 0;
     }
@@ -1795,14 +1867,14 @@ export async function refreshCommunityUnreadBadge() {
     const viewing = viewingCommunityRouteId();
     if (viewing) {
         cachedUnreadByRoute[viewing] = 0;
-        safeStorage.setItem(unreadSeenKey(viewing), String(Date.now()));
         paintUnreadFromCache();
         void markCommunityRouteSeen(viewing, { silent: true });
     }
 
+    const accountSeen = await readAccountCommunitySeen();
     const next = {};
     await Promise.all(routes.map(async (r) => {
-        next[r.id] = await countUnreadOnRoute(r.id, viewing);
+        next[r.id] = await countUnreadOnRoute(r.id, viewing, accountSeen);
     }));
     if (token !== unreadRefreshToken) return 0;
     const stillViewing = viewingCommunityRouteId();

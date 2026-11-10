@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.5': [
+        'A community unread badge stays until that session opens the route. A first visit no longer stamps every room as seen. A signed-in account stores users/{uid}/community_seen so another signed-in session on the same account starts clear. A signed-out phone uses only its own cursor. A newer post, or a reply on a post in the newest page, raises the badge again. The open room still clears immediately. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.4': [
         'Data saving labels the web-address card Link Previews. The stored choice is unchanged. Community Monitor drops the second route title, fills the beige chat, and moves Hide, Remove, Deleted by an Admin, and Shadow ban into Options. Linked device ids sit in a collapsed row. Admin panels with tabs swipe between those tabs. An accepted community message writes one public points total from the community worker. The bubble reads that total. A stored 0 on an older message is not shown when the public total is missing. Private marks still upload only when that ledger changes, and that upload does not replace a higher public total. Name colours in one chat reading stay on the same person, including a quote. Picture tap still uses the Photo outline. No commuter What\'s New. forceShow stays false.',
     ],

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.12': [
+        'A bare network map with no saved region, no ?region=, and no region already chosen this visit shows a 2 by 2 province grid and does not draw Gauteng. It does not write userRegion until a province is tapped. Back on that grid stays Back to Next Train, so a first visit opens the welcome screen. The general routes index is not the Back target: the control is already the app door, and a chosen region still returns to that region\'s timetable page. A saved region, ?region=, the in-app map tab, and a station preview are unchanged. The in-app tab and a station preview still fall back to GP in memory only, and that fallback is not saved. forceShow stays false.',
+    ],
     'V10_11.10.11': [
         'Swiping across alert pictures keeps the next picture in the frame while the finger moves, the same way the home tabs slide. The stage no longer goes black and then loads. Service alert, Transit Incident Manager, Feedback, and the other admin text fields use a field fill that sits off the hub background, in light and dark. No commuter What\'s New. forceShow stays false.',
     ],

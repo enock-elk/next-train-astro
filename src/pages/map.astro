@@ -254,6 +254,54 @@ const regionSeoSlugs = Object.fromEntries(
         z-index: 50; transition: opacity 0.5s ease;
       }
       html.dark #map-placeholder { background-color: #111827; }
+      /* First visit: ask for a region before any province map is drawn. */
+      html.nt-map-needs-region #map-placeholder,
+      html.nt-map-needs-region #region-picker,
+      html.nt-map-needs-region #legend-container,
+      html.nt-map-needs-region #custom-locate-btn,
+      html.nt-map-needs-region #nt-track-editor-toggle,
+      html.nt-map-needs-region .map-theme-stack { display: none !important; }
+      html.nt-map-needs-region #map-region-gate { display: flex !important; }
+      #map-region-gate {
+        position: absolute; inset: 0; z-index: 80;
+        display: none; align-items: center; justify-content: center;
+        padding: max(4.5rem, calc(env(safe-area-inset-top, 0px) + 3.5rem)) 1rem 1.5rem;
+        background: #f3f4f6;
+      }
+      html.dark #map-region-gate { background: #111827; }
+      .map-region-gate-card {
+        width: 100%; max-width: 24rem;
+        background: #fff; color: #0f172a;
+        border: 1px solid #e5e7eb; border-radius: 1.25rem;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+        padding: 1.25rem 1.1rem 1.15rem;
+      }
+      html.dark .map-region-gate-card {
+        background: #1f2937; color: #f8fafc; border-color: #374151;
+      }
+      #map-region-gate-title {
+        margin: 0; font-size: 1.35rem; line-height: 1.2; font-weight: 900; letter-spacing: -0.02em;
+      }
+      .map-region-gate-card p {
+        margin: 0.45rem 0 1rem; font-size: 0.9rem; line-height: 1.4; color: #64748b;
+      }
+      html.dark .map-region-gate-card p { color: #cbd5e1; }
+      .map-region-gate-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+      }
+      .map-region-gate-grid button {
+        min-height: 5.6rem; margin: 0; padding: 0.8rem;
+        display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 0.4rem;
+        text-align: left; font: inherit; font-size: 0.95rem; font-weight: 800; line-height: 1.15;
+        color: #0f172a; background: #f8fafc;
+        border: 1px solid #dbe3ef; border-radius: 1rem; cursor: pointer;
+      }
+      .map-region-gate-grid button:hover { border-color: #93c5fd; background: #eff6ff; }
+      .map-region-gate-grid button:active { transform: scale(0.98); }
+      html.dark .map-region-gate-grid button {
+        color: #f8fafc; background: #111827; border-color: #334155;
+      }
+      html.dark .map-region-gate-grid button:hover { background: #172033; border-color: #60a5fa; }
       /* Station SEO isolate: quiet loader — no network copy. */
       html.nt-map-station-focus #map-placeholder [data-map-loading-extra] { display: none !important; }
       html.nt-map-station-focus #map-placeholder h3 { font-size: 1rem; margin-bottom: 0.75rem; }
@@ -763,6 +811,41 @@ const regionSeoSlugs = Object.fromEntries(
         if (!document.documentElement.classList.contains('nt-map-station-focus')) return;
         var title = document.getElementById('map-loading-title');
         if (title) title.textContent = 'Loading map';
+      } catch (e) {}
+    })();
+  </script>
+
+  <div id="map-region-gate" class="hidden" role="dialog" aria-modal="true" aria-labelledby="map-region-gate-title">
+    <div class="map-region-gate-card">
+      <h2 id="map-region-gate-title">Which region do you want to view?</h2>
+      <p>Choose a province to open its network map.</p>
+      <div class="map-region-gate-grid">
+        <button type="button" data-region="GP"><span class="region-code">GP</span><span>Gauteng</span></button>
+        <button type="button" data-region="WC"><span class="region-code">WC</span><span>Western Cape</span></button>
+        <button type="button" data-region="KZN"><span class="region-code">KZN</span><span>KwaZulu-Natal</span></button>
+        <button type="button" data-region="EC"><span class="region-code">EC</span><span>Eastern Cape</span></button>
+      </div>
+    </div>
+  </div>
+  <script is:inline>
+    (function () {
+      try {
+        if (document.documentElement.classList.contains('nt-map-embedded')) return;
+        var q = new URLSearchParams(location.search);
+        if (q.get('embed') === '1' || String(q.get('station') || '').trim()) return;
+        var known = ['GP', 'WC', 'KZN', 'EC'];
+        var region = String(q.get('region') || '').toUpperCase();
+        if (known.indexOf(region) >= 0) return;
+        var saved = '';
+        var session = '';
+        try { saved = localStorage.getItem('userRegion') || ''; } catch (e) {}
+        try { session = sessionStorage.getItem('nt_mapViewRegion') || ''; } catch (e) {}
+        if (known.indexOf(saved) >= 0 || known.indexOf(session) >= 0) return;
+        document.documentElement.classList.add('nt-map-needs-region');
+        var gate = document.getElementById('map-region-gate');
+        if (gate) gate.classList.remove('hidden');
+        var placeholder = document.getElementById('map-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
       } catch (e) {}
     })();
   </script>

@@ -2664,7 +2664,10 @@ export function startClock() {
     }
 }
 
-const PULL_ARM_PX = 72;
+const PULL_ARM_PX = 168;
+const PULL_CLAIM_PX = 36;
+const PULL_RING_R = 16;
+const PULL_RING_C = 2 * Math.PI * PULL_RING_R;
 
 function pullRefreshBlocked() {
     if (typeof document === 'undefined') return true;
@@ -2776,30 +2779,28 @@ export function initSessionPullRefresh() {
             hint = document.createElement('div');
             hint.id = 'nt-pull-refresh';
             hint.setAttribute('aria-hidden', 'true');
+            hint.innerHTML = `<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+                <circle class="nt-pull-ring" cx="24" cy="24" r="${PULL_RING_R}" fill="none" stroke-width="3" stroke-linecap="round" transform="rotate(-90 24 24)"></circle>
+                <path class="nt-pull-arrow" d="M30.5 18.5a8.2 8.2 0 1 1-2.4-3.6" fill="none" stroke-width="2.2" stroke-linecap="round"></path>
+                <path class="nt-pull-arrow" d="M28 11.5v5.2h-5.2" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>`;
             document.body.appendChild(hint);
         }
-        const dark = document.documentElement.classList.contains('dark');
-        const height = Math.min(32, Math.max(0, px * 0.35));
-        hint.style.cssText = [
-            'position:fixed',
-            'left:50%',
-            'transform:translateX(-50%)',
-            'z-index:120',
-            'pointer-events:none',
-            'text-align:center',
-            'font-size:11px',
-            'font-weight:700',
-            'line-height:28px',
-            'border-radius:999px',
-            'overflow:hidden',
-            'white-space:nowrap',
-            `top:calc(var(--nt-shell-top, 0px) + 4.25rem)`,
-            `height:${height ? Math.max(height, ready ? 28 : 18) : 0}px`,
-            `padding:${height ? '0 12px' : '0'}`,
-            `color:${dark ? '#cbd5e1' : '#64748b'}`,
-            `background:${dark ? 'rgba(17,24,39,.92)' : 'rgba(255,255,255,.94)'}`,
-        ].join(';');
-        hint.textContent = ready ? 'Release to refresh' : (height > 14 ? 'Pull to refresh' : '');
+        const progress = Math.max(0, Math.min(1, px / PULL_ARM_PX));
+        if (progress <= 0) {
+            hint.hidden = true;
+            hint.classList.remove('is-ready');
+            return;
+        }
+        hint.hidden = false;
+        hint.classList.toggle('is-ready', !!ready);
+        const travel = Math.round(progress * 56);
+        hint.style.top = `calc(var(--nt-shell-top, 0px) + 3.15rem + ${travel}px)`;
+        const ring = hint.querySelector('.nt-pull-ring');
+        if (ring) {
+            ring.style.strokeDasharray = `${PULL_RING_C}`;
+            ring.style.strokeDashoffset = `${PULL_RING_C * (1 - progress)}`;
+        }
     };
 
     const refreshOpenTab = async () => {
@@ -2850,8 +2851,14 @@ export function initSessionPullRefresh() {
         const dy = touch.clientY - startY;
         const dx = Math.abs(touch.clientX - startX);
         if (!claimed) {
-            if (dy < 8 && dx < 8) return;
-            if (dx > dy || dy <= 0) {
+            if (dy < PULL_CLAIM_PX) {
+                if (dx > dy && dy > 12) {
+                    tracking = false;
+                    paintHint(0, false);
+                }
+                return;
+            }
+            if (dx > dy) {
                 tracking = false;
                 paintHint(0, false);
                 return;

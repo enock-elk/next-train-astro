@@ -213,6 +213,14 @@ assert.match(ui, /is-tab-swiping/, 'tab swipe follows the finger and can rest mi
 assert.match(ui, /placePeer\(0, true\)/, 'a short swipe snaps back instead of changing tabs');
 assert.match(admin, /id="mq-thread"/, 'a community route opens as its own thread');
 assert.match(admin, /mq-showing-thread/, 'the monitor thread hides the route list');
+assert.match(admin, /_mqThreadPushed/, 'opening a monitor route pushes a history entry');
+assert.match(ui, /mq-showing-thread/, 'back from a monitor route closes the thread before Dev Mode');
+assert.match(community, /bestKnownPoints/, 'an older 0 snapshot uses a higher points total already seen');
+assert.match(community, /PRIORITY:/, 'suggest reply marks the held message');
+assert.match(community, /community-sheet-suggest/, 'suggest reply is on the hold menu');
+assert.match(worker, /\/community\/points-seen/, 'a higher points total can be saved for older messages');
+assert.match(worker, /\/admin\/account-name/, 'an admin can read the Google name');
+assert.match(admin, /ut-feedback-plus/, 'Feedback None can start a message');
 assert.match(admin, /limitToLast=80/, 'the monitor pages messages instead of downloading a whole room at once');
 assert.match(admin, /id="mq-load-earlier"/, 'the monitor can load earlier messages');
 assert.match(admin, /id="mq-tab-reports"/, 'reports sit in Community Monitor');

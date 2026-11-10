@@ -158,12 +158,12 @@ function toBase64Url(obj) {
     return btoa(s).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-async function getGoogleAccessToken(clientEmail, privateKey) {
+async function getGoogleAccessToken(clientEmail, privateKey, scope) {
     const header = { alg: 'RS256', typ: 'JWT' };
     const now = Math.floor(Date.now() / 1000);
     const payload = {
         iss: clientEmail,
-        scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
+        scope: scope || 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
         aud: 'https://oauth2.googleapis.com/token',
         exp: now + 3600,
         iat: now,
@@ -1452,6 +1452,121 @@ async function applyCommunityPublicPoints(env, { uid, eventId, snapshotPoints, d
     return next.points;
 }
 
+/** Lift a public total up to a number already stored on a message. Does not add a new award. */
+async function raiseSeenPublicPoints(env, uid, points) {
+    if (!hasFirebaseAdminEnv(env)) return null;
+    const nextPoints = Math.max(0, Math.min(100000, Math.floor(Number(points) || 0)));
+    if (!nextPoints) return null;
+    const profile = await rtdbGet(env, `public_profile/${uid}`);
+    const have = Number(profile?.points);
+    const base = Number.isFinite(have) ? have : 0;
+    if (base >= nextPoints && profile?.communityFirst === true) return base;
+    const stored = Math.max(base, nextPoints);
+    await rtdbUpdate(env, {
+        [`public_profile/${uid}/points`]: stored,
+        [`public_profile/${uid}/tier`]: tierForCommunityPoints(stored),
+        [`public_profile/${uid}/updatedAt`]: Date.now(),
+        [`public_profile/${uid}/communityFirst`]: true,
+    });
+    return stored;
+}
+
+/** Google or Facebook name from Auth. A custom display name does not replace providerUserInfo. */
+async function lookupAuthAccountName(env, uid) {
+    if (!hasFirebaseAdminEnv(env)) return null;
+    const token = await getGoogleAccessToken(
+        env.FIREBASE_CLIENT_EMAIL,
+        env.FIREBASE_PRIVATE_KEY,
+        'https://www.googleapis.com/auth/identitytoolkit'
+    );
+    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ localId: [uid] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return null;
+    const user = data.users?.[0];
+    if (!user) return null;
+    const providers = Array.isArray(user.providerUserInfo) ? user.providerUserInfo : [];
+    const google = providers.find((row) => row?.providerId === 'google.com' && row.displayName);
+    const facebook = providers.find((row) => row?.providerId === 'facebook.com' && row.displayName);
+    const picked = google || facebook || null;
+    return {
+        providerName: String(picked?.displayName || '').trim().slice(0, 80),
+        providerId: String(picked?.providerId || providers[0]?.providerId || '').slice(0, 40),
+        email: String(user.email || '').trim().slice(0, 160),
+    };
+}
+
+async function handleAdminAccountName(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return json(env, request, 403, { ok: false, error: 'Not allowed' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const uid = String(body.uid || '').slice(0, 128);
+    if (!uid || /[.#$[\]/\s]/.test(uid)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid rider' });
+    }
+    try {
+        const account = await lookupAuthAccountName(env, uid);
+        return json(env, request, 200, account || { providerName: '', providerId: '', email: '' });
+    } catch {
+        return json(env, request, 200, { providerName: '', providerId: '', email: '' });
+    }
+}
+
+async function handleCommunityPointsSeen(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const uid = String(body.uid || '').slice(0, 80);
+    if (!isSafeRtdbKey(uid)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid rider' });
+    }
+    const email = String(user.email || '').trim().toLowerCase();
+    if (user.uid !== uid && !ADMIN_EMAILS.has(email)) {
+        return json(env, request, 403, { ok: false, error: 'Not allowed' });
+    }
+    try {
+        const points = await raiseSeenPublicPoints(env, uid, body.points);
+        return json(env, request, 200, { ok: true, points });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Points update failed' });
+    }
+}
+
 async function handleCommunityPoints(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -1836,6 +1951,12 @@ export default {
         }
         if (request.method === 'POST' && url.pathname === '/community/points') {
             return handleCommunityPoints(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/points-seen') {
+            return handleCommunityPointsSeen(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/admin/account-name') {
+            return handleAdminAccountName(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/community/message') {
             return handleCommunityDelete(request, env);

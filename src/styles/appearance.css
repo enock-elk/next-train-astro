@@ -2990,3 +2990,37 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
   background: rgba(0, 0, 0, 0.62);
   color: #fff;
 }
+
+/* Pull to refresh: an empty ring that closes when the pull is long enough. */
+#nt-pull-refresh {
+  position: fixed;
+  left: 50%;
+  z-index: 120;
+  width: 48px;
+  height: 48px;
+  margin-left: -24px;
+  pointer-events: none;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+}
+html.dark #nt-pull-refresh {
+  background: #1f2937;
+}
+#nt-pull-refresh svg {
+  display: block;
+}
+#nt-pull-refresh .nt-pull-ring,
+#nt-pull-refresh .nt-pull-arrow {
+  stroke: #94a3b8;
+}
+#nt-pull-refresh .nt-pull-arrow {
+  opacity: 0;
+}
+#nt-pull-refresh.is-ready .nt-pull-ring,
+#nt-pull-refresh.is-ready .nt-pull-arrow {
+  stroke: #2563eb;
+}
+#nt-pull-refresh.is-ready .nt-pull-arrow {
+  opacity: 1;
+}

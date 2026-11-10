@@ -1254,8 +1254,12 @@ function openReactionSheet(postId, routeId) {
         const ownDelete = mine && !tombstone
             ? `<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="tombstone" data-delete-as="author">Delete</button>`
             : '';
+        const suggestBtn = isAdminAuthed() && !tombstone
+            ? `<button type="button" class="community-sheet-suggest col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white">Suggest reply</button>`
+            : '';
         const adminActions = isAdminAuthed()
-            ? `<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
+            ? `${suggestBtn}
+                    <button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
                     <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="purge" data-delete-as="admin">Remove completely</button>
                     ${tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN) ? '' : '<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300" data-delete-mode="tombstone" data-delete-as="admin">Deleted by an Admin</button>'}`
             : '';
@@ -1293,6 +1297,51 @@ const publicProfiles = new Map();
 let feedAuthorMeta = new Map();
 let communityFeedPinned = true;
 let profileRepaintRoute = '';
+const BEST_POINTS_KEY = 'nt-public-points-v1';
+const bestPublicPoints = new Map();
+const hintedPointUids = new Set();
+
+function loadBestPublicPoints() {
+    if (bestPublicPoints.size || typeof localStorage === 'undefined') return;
+    try {
+        const data = JSON.parse(localStorage.getItem(BEST_POINTS_KEY) || '{}');
+        Object.entries(data || {}).forEach(([uid, value]) => {
+            const points = Number(value);
+            if (uid && Number.isFinite(points) && points > 0) bestPublicPoints.set(uid, points);
+        });
+    } catch {
+        /* a missing memory just uses the message or the public total */
+    }
+}
+
+function rememberPublicPoints(uid, points) {
+    loadBestPublicPoints();
+    const n = Number(points);
+    if (!uid || !Number.isFinite(n) || n <= 0) return 0;
+    const prev = bestPublicPoints.get(uid) || 0;
+    if (n <= prev) return prev;
+    bestPublicPoints.set(uid, n);
+    try {
+        const obj = {};
+        bestPublicPoints.forEach((value, key) => { obj[key] = value; });
+        localStorage.setItem(BEST_POINTS_KEY, JSON.stringify(obj));
+    } catch {
+        /* the in-memory total still covers this visit */
+    }
+    return n;
+}
+
+function bestKnownPoints(uid, profile, post, latest) {
+    loadBestPublicPoints();
+    const candidates = [
+        Number(profile && !profile.missing ? profile.points : NaN),
+        Number(post?.marks?.points),
+        Number(latest?.points),
+        bestPublicPoints.get(uid) || 0,
+    ].filter((n) => Number.isFinite(n) && n > 0);
+    if (!candidates.length) return 0;
+    return rememberPublicPoints(uid, Math.max(...candidates));
+}
 
 function latestAuthorMeta(posts) {
     const map = new Map();
@@ -1301,27 +1350,25 @@ function latestAuthorMeta(posts) {
         if (!uid) return;
         const ts = Number(post.timestamp) || 0;
         const prev = map.get(uid);
-        if (prev && ts < prev.ts) return;
         const points = Number(post.marks?.points);
+        const pointValue = Number.isFinite(points) && points > 0 ? points : 0;
+        if (pointValue > 0) rememberPublicPoints(uid, pointValue);
+        const newer = !prev || ts >= prev.ts;
         map.set(uid, {
-            ts,
-            points: Number.isFinite(points) ? points : null,
-            tier: post.marks?.tier || '',
-            hasMarks: Number.isFinite(points),
-            photoURL: post.photoURL || '',
-            displayName: post.displayName || '',
+            ts: newer ? ts : prev.ts,
+            points: Math.max(prev?.points || 0, pointValue) || null,
+            tier: (pointValue > 0 ? post.marks?.tier : '') || prev?.tier || '',
+            hasMarks: pointValue > 0 || !!prev?.hasMarks,
+            photoURL: newer ? (post.photoURL || prev?.photoURL || '') : (prev?.photoURL || post.photoURL || ''),
+            displayName: newer ? (post.displayName || prev?.displayName || '') : (prev?.displayName || post.displayName || ''),
         });
     });
     return map;
 }
 
 function publicMarksFromPost(post, latest) {
-    const fromLatest = Number(latest?.points);
-    const fromPost = Number(post?.marks?.points);
-    const points = Number.isFinite(fromLatest) && fromLatest > 0
-        ? fromLatest
-        : (Number.isFinite(fromPost) && fromPost > 0 ? fromPost : null);
-    if (points == null) return null;
+    const points = bestKnownPoints(post?.uid, null, post, latest);
+    if (!points) return null;
     return { points, tier: latest?.tier || post?.marks?.tier || '' };
 }
 
@@ -1339,12 +1386,13 @@ function authorPresentation(post, isOwn) {
     if (profile && !profile.missing) {
         const showPhoto = profile.showPhoto === true;
         const showMarks = profile.showMarks !== false;
-        const points = Number(profile.points);
+        const points = showMarks ? bestKnownPoints(post.uid, profile, post, latest) : 0;
+        if (showMarks && points > Number(profile.points || 0)) hintPublicPoints(post.uid, points);
         return {
             displayName: profile.displayName || post.displayName || latest?.displayName || 'Passenger',
             photoURL: showPhoto ? (post.photoURL || latest?.photoURL || '') : '',
-            marks: showMarks && Number.isFinite(points)
-                ? { points, tier: profile.tier || latest?.tier || '' }
+            marks: showMarks && points > 0
+                ? { points, tier: profile.tier || latest?.tier || post?.marks?.tier || '' }
                 : null,
         };
     }
@@ -1370,8 +1418,12 @@ async function loadPublicProfiles(uids) {
             const res = await fetch(`${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(uid)}.json`);
             if (!res.ok) return;
             const data = await res.json();
+            const row = data && typeof data === 'object' ? data : {};
+            loadBestPublicPoints();
+            if (Number(row.points) > 0) rememberPublicPoints(uid, row.points);
+            else if ((bestPublicPoints.get(uid) || 0) > Number(row.points || 0)) hintPublicPoints(uid, bestPublicPoints.get(uid));
             publicProfiles.set(uid, {
-                ...(data && typeof data === 'object' ? data : {}),
+                ...row,
                 missing: !data,
                 fetchedAt: Date.now(),
             });
@@ -1381,6 +1433,40 @@ async function loadPublicProfiles(uids) {
         }
     }));
     return changed;
+}
+
+/** An admin, or the rider, can lift a missing public total up to a number already on a message. */
+function hintPublicPoints(uid, points) {
+    const n = Number(points);
+    if (!uid || !Number.isFinite(n) || n <= 0 || hintedPointUids.has(uid)) return;
+    const mine = $account.get()?.status === 'signed-in' && $account.get()?.uid === uid;
+    if (!mine && !isAdminAuthed()) return;
+    hintedPointUids.add(uid);
+    const base = communityWorkerBase();
+    if (!base) return;
+    ensureAuthToken().then(async (token) => {
+        if (!token) return;
+        const res = await fetch(`${base}/community/points-seen`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ uid, points: n }),
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const stored = Number(data.points);
+        if (!Number.isFinite(stored) || stored <= 0) return;
+        rememberPublicPoints(uid, stored);
+        const prev = publicProfiles.get(uid);
+        publicProfiles.set(uid, {
+            ...(prev && typeof prev === 'object' ? prev : {}),
+            points: Math.max(stored, Number(prev?.points) || 0),
+            missing: false,
+            fetchedAt: Date.now(),
+        });
+    }).catch(() => {});
 }
 
 function pinCommunityFeedToLatest() {
@@ -2143,21 +2229,43 @@ function addAdminAddress(raw) {
     paintAdminAttachPreview();
 }
 
-async function suggestCommunityReply() {
+async function communityPostsSince(routeId, since) {
+    const cached = (cachedFeedPosts || []).filter((p) => p && (Number(p.timestamp) || 0) >= since);
+    try {
+        const url = `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json?orderBy=%22timestamp%22&startAt=${since}&limitToLast=80`;
+        const res = await fetch(url);
+        if (!res.ok) return cached;
+        const data = await res.json();
+        const rows = data && typeof data === 'object' ? Object.values(data) : [];
+        return rows.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+    } catch {
+        return cached;
+    }
+}
+
+async function suggestCommunityReply(focusPostId = '') {
     if (!isAdminAuthed()) return;
     const btn = document.getElementById('community-suggest-btn');
     const composer = document.getElementById('community-composer');
     const errEl = document.getElementById('community-error');
     const routeId = document.getElementById('community-route-select')?.value || $currentRouteId.get();
-    const thread = cachedFeedPosts
-        .filter((p) => p && !isCommunityTombstone(p) && (p.body || p.linkUrl))
-        .slice(-12)
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const loaded = routeId ? await communityPostsSince(routeId, since) : [];
+    const focus = findCachedPost(focusPostId) || loaded.find((p) => p?.postId === focusPostId) || null;
+    const windowPosts = loaded
+        .filter((p) => p && !isCommunityTombstone(p) && (p.body || p.linkUrl) && (Number(p.timestamp) || 0) >= since)
+        .slice(-60);
+    if (focus && !isCommunityTombstone(focus) && !windowPosts.some((p) => p.postId === focus.postId)) {
+        windowPosts.push(focus);
+    }
+    const thread = windowPosts
         .map((p) => {
             const mine = $account.get()?.uid && p.uid === $account.get().uid;
             const fromAdmin = mine || ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'].includes(String(p.email || '').toLowerCase());
+            const priority = focus && p.postId === focus.postId;
             return {
                 from: fromAdmin ? 'admin' : 'commuter',
-                text: `${p.displayName || 'Passenger'}: ${p.body || p.linkUrl || ''}`,
+                text: `${priority ? 'PRIORITY: ' : ''}${p.displayName || 'Passenger'}: ${p.body || p.linkUrl || ''}`,
                 at: Number(p.timestamp) || 0,
             };
         });
@@ -2182,7 +2290,9 @@ async function suggestCommunityReply() {
             body: JSON.stringify({
                 region: $userRegion.get() || 'GP',
                 routeId,
-                note: 'This is the public community room for one train line. Write one short reply an operator can post in that room. No email sign-off. Stay under 280 characters. Answer the latest passenger questions.',
+                note: focus
+                    ? 'This is the public community room for one train line. The line marked PRIORITY is the message to answer. The other lines are the past 24 hours, for context only. Answer the priority message first. One short reply an operator can post. No email sign-off. Stay under 280 characters.'
+                    : 'This is the public community room for one train line. Write one short reply an operator can post in that room. No email sign-off. Stay under 280 characters. Answer the latest passenger questions.',
                 thread,
             }),
         });
@@ -2676,6 +2786,17 @@ export function bindCommunityUi() {
             } catch (err) {
                 showToast(err?.message || 'Could not delete this message.', 'error');
             }
+            return;
+        }
+
+        const sheetSuggest = t.closest?.('.community-sheet-suggest');
+        if (sheetSuggest) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const sheet = document.getElementById('community-reaction-sheet');
+            const focusId = sheet?.dataset.postId || '';
+            closeReactionSheet();
+            suggestCommunityReply(focusId);
             return;
         }
 

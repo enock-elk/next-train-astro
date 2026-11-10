@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_11.10.6";
+export const APP_VERSION = "V10_11.10.7";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -994,6 +994,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V10_11.10.7",
+        title: "Refresh and sign in",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "Pull down further to refresh. A circle fills in as you pull, and it completes when the refresh is ready.",
+            "If a password does not match, the message tells you to tap Forgot password."
+        ]
+    },
     {
         id: "V10_11.10.6",
         title: "Picture preview",

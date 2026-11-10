@@ -1,5 +1,10 @@
 # Changelog
 
+## V10_11.10.7
+
+- Pull down further to refresh. A circle fills in as you pull, and it completes when the refresh is ready.
+- If a password does not match, the message tells you to tap Forgot password.
+
 ## V10_11.10.6
 
 - A picture that is waiting to download shows a blurred preview and the file size.

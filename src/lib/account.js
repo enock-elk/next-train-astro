@@ -356,6 +356,23 @@ function cleanPhotoUrl(value) {
     return url;
 }
 
+/** Google keeps its own name on providerData after a custom display name is saved. */
+export function providerLegalName(user) {
+    const rows = Array.isArray(user?.providerData) ? user.providerData : [];
+    for (const row of rows) {
+        const providerId = String(row?.providerId || '');
+        if (providerId !== 'google.com' && providerId !== 'facebook.com') continue;
+        const name = String(row?.displayName || '').trim();
+        if (name) return name.slice(0, 80);
+    }
+    return '';
+}
+
+function providerIdOf(user) {
+    const rows = Array.isArray(user?.providerData) ? user.providerData : [];
+    return String(rows.find((row) => row?.providerId)?.providerId || (user?.email ? 'password' : '')).slice(0, 40);
+}
+
 /** Google often leaves the picture on providerData after user.photoURL is empty. */
 export function resolveAuthPhotoURL(user) {
     const direct = cleanPhotoUrl(user?.photoURL);
@@ -466,10 +483,14 @@ export async function ensureUserProfile(user, opts = {}) {
         const ops = accountOpsFields(now);
         const photoURL = (await adoptProviderPhoto(user)) || cleanPhotoUrl(existing?.photoURL) || null;
 
+        const legalName = providerLegalName(user);
+        const provider = providerIdOf(user);
         if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
                 displayName,
                 displayNameCustom: !!customName,
+                ...(legalName ? { providerName: legalName } : {}),
+                ...(provider ? { provider } : {}),
                 photoURL,
                 email: user.email || null,
                 createdAt: now,
@@ -493,6 +514,8 @@ export async function ensureUserProfile(user, opts = {}) {
             if (!existing.displayNameCustom) {
                 patch.displayName = displayName;
             }
+            if (legalName) patch.providerName = legalName;
+            if (provider) patch.provider = provider;
             if (deviceId && existing.deviceIds?.[deviceId] == null) {
                 patch[`deviceIds/${deviceId}`] = now;
             }
@@ -537,6 +560,7 @@ export async function ensureUserProfile(user, opts = {}) {
                 window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`),
                 {
                     displayName: displayName || null,
+                    ...(legalName ? { providerName: legalName } : {}),
                     email: user.email || existing?.email || null,
                     createdAt: existing?.createdAt || now,
                     provider: String(provider || '').slice(0, 40) || null,
@@ -1797,7 +1821,7 @@ export function bindAccountUi() {
             const code = e?.code || '';
             if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(code)) {
                 showAccountGuestScreen('invalid');
-                showErr('Those details did not match. Try again, or create an account.');
+                showErr('Those details did not match. Try again, or create an account. If you forgot your password, please tap Forgot password.');
             } else {
                 showErr(friendlyAuthError(e));
             }
@@ -2111,9 +2135,9 @@ function friendlyAuthError(e) {
     const code = e?.code || '';
     if (code === 'auth/invalid-email') return 'Invalid email address.';
     if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        return 'Wrong email or password.';
+        return 'Wrong email or password. If you forgot your password, please tap Forgot password.';
     }
-    if (code === 'auth/email-already-in-use') return 'Email already registered - try Sign in.';
+    if (code === 'auth/email-already-in-use') return 'Email already registered. Try Sign in. If you forgot your password, please tap Forgot password.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
     if (code === 'auth/network-request-failed') return 'Network error - try again.';
     if (code === 'auth/unauthorized-domain') return 'This site cannot sign in. Open nexttrain.co.za.';

@@ -542,6 +542,25 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        // A community monitor route sits on the panel. Back closes that route,
+        // not the whole Dev Mode grid.
+        if (document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) {
+            window.Admin?._mqCloseThread?.({ fromPop: true });
+            const stillPanel = window.Admin?.panelIdFromDevHash?.(hashNow) === 'moderation-queue-panel';
+            if (!stillPanel && window.Admin) {
+                window.Admin._drillStack = ['moderation-queue-panel'];
+                try {
+                    history.pushState(
+                        { adminPanel: 'moderation-queue-panel', drillStack: ['moderation-queue-panel'] },
+                        '',
+                        '#dev-moderation-queue-panel'
+                    );
+                } catch { /* the thread is already closed */ }
+                window.Admin.showDrilledPanel?.('moderation-queue-panel', { quiet: true });
+            }
+            return;
+        }
+
         // Drilled admin hash: restore that panel (Roadmap ← Feedback, GSM ← Review)
         const adminPanelId = window.Admin && typeof window.Admin.panelIdFromDevHash === 'function'
             ? window.Admin.panelIdFromDevHash(hashNow)

@@ -6894,6 +6894,10 @@ const Admin = {
     /** Back/←: previous drilled panel when there is one, otherwise the Dev Mode grid. */
     stepDrillBack: (opts = {}) => {
         const fromPopState = !!opts.fromPopState;
+        if (document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) {
+            Admin._mqCloseThread?.({ fromPop: fromPopState });
+            return true;
+        }
         if (window._adminLightboxOpen && typeof Admin.closeLightbox === 'function') {
             Admin.closeLightbox();
             return true;
@@ -11698,13 +11702,13 @@ const Admin = {
             else if (Admin.currentCommunityMonitorTab === 'reports' && Admin._mqCache) Admin.paintCommunityReports?.();
             else Admin.fetchModerationQueue?.();
         };
-        document.getElementById('mq-thread-back')?.addEventListener('click', () => Admin._mqCloseThread?.());
+        document.getElementById('mq-thread-back')?.addEventListener('click', () => Admin.stepDrillBack?.());
         document.getElementById('dev-modal')?.addEventListener('click', (event) => {
             if (!event.target.closest?.('#drill-back-btn')) return;
             if (!document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) return;
             event.preventDefault();
             event.stopPropagation();
-            Admin._mqCloseThread?.();
+            Admin.stepDrillBack?.();
         }, true);
         ntBindAdminTabSwipe(body, {
             getOrder: () => ['chats', 'reports', 'reviews'],
@@ -12570,7 +12574,13 @@ const Admin = {
                         title.textContent = open ? (routeName || 'Community') : title.dataset.mqHomeTitle;
                     }
                 };
-                Admin._mqCloseThread = () => setMonitorThread(false);
+                Admin._mqCloseThread = (opts = {}) => {
+                    const pushed = Admin._mqThreadPushed === true;
+                    Admin._mqThreadPushed = false;
+                    setMonitorThread(false);
+                    if (opts.fromPop || !pushed) return;
+                    try { history.back(); } catch { /* the thread is already closed */ }
+                };
                 Admin._mqOpenThread = async (card) => {
                     if (!card) return;
                     const routeId = card.dataset.communityRoute;
@@ -12579,6 +12589,16 @@ const Admin = {
                     const routeLabel = card.dataset.communityName || row?.routeName || routeId;
                     if (threadTitle) threadTitle.textContent = routeLabel;
                     setMonitorThread(true, routeLabel);
+                    if (!Admin._mqThreadPushed) {
+                        try {
+                            history.pushState(
+                                { mqThread: routeId, adminPanel: 'moderation-queue-panel', drillStack: (Admin._drillStack || []).slice() },
+                                '',
+                                '#dev-moderation-queue-panel'
+                            );
+                            Admin._mqThreadPushed = true;
+                        } catch { /* back still closes the thread in stepDrillBack */ }
+                    }
                     const held = document.getElementById('mq-thread-held');
                     if (held) {
                         held.innerHTML = row ? (row.held || []).map(renderHeld).join('') : '';
@@ -13943,9 +13963,38 @@ const Admin = {
                 const lastActivityHtml = lastActivity
                     ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="block text-[10px] text-gray-500 mt-0.5">${Admin.commuterEsc(lastActivity.label)}</span>`
                     : '<span class="text-gray-400">No activity on file</span>';
+                let authAccount = null;
+                try {
+                    const secret = await Admin.getAuthKey();
+                    const base = String(window.COMMUNITY_WORKER_URL || 'https://nexttrain-community.enock.workers.dev').replace(/\/$/, '');
+                    if (secret) {
+                        const nameRes = await fetch(`${base}/admin/account-name`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${secret}`,
+                            },
+                            body: JSON.stringify({ uid }),
+                            signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+                        });
+                        if (nameRes.ok) authAccount = await nameRes.json();
+                    }
+                } catch { authAccount = null; }
                 const heading = profile.alias
                     ? Admin.commuterEsc(profile.alias)
                     : name;
+                const providerName = String(authAccount?.providerName || user.providerName || '').trim();
+                const providerId = String(authAccount?.providerId || user.provider || '').trim().toLowerCase();
+                const emailLocal = accountEmailRaw.includes('@')
+                    ? accountEmailRaw.split('@')[0].replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim()
+                    : '';
+                const legalLabel = providerName
+                    ? (providerId === 'facebook.com' ? 'Facebook name' : (providerId === 'password' ? 'Sign-in name' : 'Google name'))
+                    : 'Email name';
+                const legalValue = providerName || emailLocal;
+                const knownGender = String(user.gender || '').trim();
+                const knownAge = Number(user.age);
+                const knownBirthYear = Number(user.birthYear);
                 const chatDid = profile.chatDevice || deviceId || (/^usr_/i.test(uid) ? uid : '');
                 const defaultRouteLabel = Admin.inboxRouteLabel(profile.defaultRoute) || profile.defaultRoute;
                 const accountEmailRaw = String(user.email || '').trim();
@@ -14019,6 +14068,10 @@ const Admin = {
                             ${deviceId && deviceId !== uid ? infoRow('Device', `<span class="break-all">${Admin.commuterEsc(deviceId)}</span>`) : ''}
                             ${linkedIds.length ? `<details class="ut-devices"><summary class="ut-sheet-row"><span class="text-[15px] text-gray-500">Linked devices</span><span class="text-[15px] text-gray-400 shrink-0">${linkedIds.length}<span aria-hidden="true"> ›</span></span></summary><div class="ut-devices-list">${linkedIds.map((id) => `<p class="font-mono text-[12px] break-all text-gray-700 dark:text-gray-300">${Admin.commuterLabelHtml(id)}</p>`).join('')}</div></details>` : infoRow('Linked devices', 'none')}
                             ${contactHtml ? infoRow('Contacts', contactHtml) : ''}
+                            ${legalValue ? infoRow(legalLabel, `<b>${Admin.commuterEsc(legalValue)}</b>`) : ''}
+                            ${knownGender ? infoRow('Gender', `<b>${Admin.commuterEsc(knownGender)}</b>`) : ''}
+                            ${Number.isFinite(knownAge) && knownAge > 0 ? infoRow('Age', `<b>${Math.floor(knownAge)}</b>`) : ''}
+                            ${!(Number.isFinite(knownAge) && knownAge > 0) && Number.isFinite(knownBirthYear) && knownBirthYear > 1900 ? infoRow('Birth year', `<b>${Math.floor(knownBirthYear)}</b>`) : ''}
                             ${infoRow('Role', `<b>${flags.role || 'user'}</b> · ${score}`)}
                             ${infoRow('Ban', `<b class="${banned && !expired ? 'text-[#ff3b30]' : ''}">${banDetail}</b>${banned ? ` · ${Admin.commuterEsc(modeStr)}` : ''}${bannedAtMs ? `<span class="block text-[12px] text-gray-400">since ${Admin.formatDate(bannedAtMs)}</span>` : ''}${bannedBy ? `<span class="block text-[12px] text-gray-400">${bannedBy}</span>` : ''}`)}
                         </div>
@@ -14026,7 +14079,7 @@ const Admin = {
                             <p class="px-4 pb-1.5 text-[13px] text-gray-500">Activity</p>
                             <div class="ut-sheet-group">
                                 ${navRow('ut-open-bans-btn', 'Bans', banDetail)}
-                                ${profile.hasChat && chatDid ? navRow('ut-open-chat-btn', 'Feedback', profile.feedbackCount ? String(profile.feedbackCount) : 'Open') : infoRow('Feedback', profile.hasChat ? 'Open' : 'None')}
+                                ${profile.hasChat && chatDid ? navRow('ut-open-chat-btn', 'Feedback', profile.feedbackCount ? String(profile.feedbackCount) : 'Open') : `<div class="ut-sheet-row items-center"><span class="text-[17px]">Feedback</span><span class="flex items-center gap-2 shrink-0"><span class="text-[15px] text-gray-400">None</span>${chatDid ? '<button type="button" id="ut-feedback-plus" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#007aff] text-white text-[18px] font-semibold leading-none" aria-label="Start a message">+</button>' : ''}</span></div>`}
                                 ${chatDid ? navRow('ut-open-trips-btn', 'Trip plans', profile.tripPresent ? 'Yes' : 'None') : ''}
                                 ${(chatDid || profile.fareVotes.length) ? navRow('ut-open-fares-btn', 'Fare votes', String(profile.fareVotes.length)) : ''}
                                 ${(chatDid || profile.fails.length) ? navRow('ut-open-fails-btn', 'Routing fails', String(profile.fails.length)) : ''}
@@ -14080,6 +14133,9 @@ const Admin = {
                     Admin.setUtTab?.('bans');
                 });
                 document.getElementById('ut-start-chat-btn')?.addEventListener('click', () => {
+                    Admin.startFeedbackChat(chatDid, profile.latestFeedbackId);
+                });
+                document.getElementById('ut-feedback-plus')?.addEventListener('click', () => {
                     Admin.startFeedbackChat(chatDid, profile.latestFeedbackId);
                 });
                 document.getElementById('ut-alias-btn')?.addEventListener('click', async () => {

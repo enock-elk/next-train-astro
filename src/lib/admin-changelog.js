@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.14': [
+        'Live telemetry has an Ad revenue block. The Clever script id stays in the Worker secret CLEVER_SCRIPT_ID. A search can start at the first hit. Ranges longer than 3 months are stitched on the Worker and drawn with the existing telemetry graph. A pasted Next Train planner, timetable, or live-train link in Community, Feedback, and the admin inbox becomes a short chip. A live chip opens the Map tab only while that train is still being shared, including when Map is off for that person or route. A stopped train does not open Map. Admins can still post other https links. Account cards keep both ends of the route on one row. Trains near you opens from the bottom, at the same height. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.13': [
         'The first-visit map region grid uses the welcome sheet: white page, blue glow, app mark, and raised tiles. Back is the chevron. The choice itself is unchanged. GitHub Pages preview deploy for V10_11.10.12 timed out while GitHub was still syncing files. The Astro build succeeded and Cloudflare Pages deployed. That timeout is not a map code failure. forceShow stays false.',
     ],

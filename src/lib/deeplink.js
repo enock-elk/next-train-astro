@@ -100,18 +100,19 @@ function stripHashKeepQuery() {
 }
 
 /** Capture legacy + short share links before any UI mutates location.search. */
-export function snapshotShareDeeplink(searchOverride) {
+export function snapshotShareDeeplink(searchOverride, opts = {}) {
     if (typeof window === 'undefined') return null;
     try {
         const search = searchOverride != null
             ? searchOverride
             : (typeof location !== 'undefined' ? location.search : '');
         const snap = parseShareFromSearch(search);
+        if (snap && opts.prefer) snap.prefer = true;
         const existing = peekShareDeeplinkSnapshot();
         if (snap) {
-            // First Facebook/IAB hop is often `/` with no params; a later launch
-            // URL must be allowed to replace that empty/stale snapshot.
-            if (shareFingerprint(existing) !== shareFingerprint(snap)) {
+            // A chip click always wins, even when an older snapshot has the same link.
+            // A later launch URL still replaces an empty Facebook hop.
+            if (opts.prefer || shareFingerprint(existing) !== shareFingerprint(snap)) {
                 sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
             }
             return snap;

@@ -15,6 +15,7 @@ import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-saver.js';
+import { renderTextWithShareChips, shareChipHtml } from './share-chips.js';
 import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
@@ -1582,7 +1583,7 @@ function renderCommunityMedia(post) {
         : '';
     const link = sanitizeCommunityLinkUrl(post?.linkUrl);
     const linkHtml = link
-        ? `<a class="community-msg-link" href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">${escapeHTML(link.replace(/^https:\/\//, ''))}</a>`
+        ? (shareChipHtml(link) || `<a class="community-msg-link" href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">${escapeHTML(link.replace(/^https:\/\//, ''))}</a>`)
         : '';
     return `${imageHtml}${linkHtml}`;
 }
@@ -1591,7 +1592,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const tombstone = isCommunityTombstone(post);
     const body = tombstone
         ? escapeHTML(post.deletedBy === 'admin' || post.body === DELETED_BY_ADMIN ? DELETED_BY_ADMIN : DELETED_MESSAGE)
-        : escapeHTML(post.body || '');
+        : renderTextWithShareChips(post.body || '');
     const clock = formatClock24(post.timestamp);
     const postId = escapeHTML(post.postId || '');
     const uid = escapeHTML(post.uid || '');

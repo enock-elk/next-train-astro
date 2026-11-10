@@ -18,6 +18,7 @@ import {
 import { rememberPicture, shouldHoldPicture } from './data-saver.js';
 import { imageMetaForUrl } from './picture-preview.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
+import { renderTextWithShareChips } from './share-chips.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -1851,7 +1852,7 @@ function renderMessagesThread(list) {
             ? inboxMediaFromHtml('', extraUrls)
             : inboxMediaFromHtml(sanitizeHTML(stripAdminSignoff(raw)), extraUrls);
         const body = mine
-            ? escapeHTML(commuterFeedbackText(raw))
+            ? renderTextWithShareChips(commuterFeedbackText(raw))
             : (laid.body || '');
         const media = laid.media || '';
         const clock = inboxClock(m.timestamp);

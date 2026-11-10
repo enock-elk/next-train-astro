@@ -399,10 +399,13 @@ export function parseRouteDeepLink() {
     const snap = peekShareDeeplinkSnapshot();
     if (snap && snap.kind === 'live') return null;
     const fromUrl = parseRouteDeepLinkParams(location.search);
-    // URL wins over a leftover share snapshot so a Hercules page cannot open Pretoria.
-    const raw = (fromUrl && fromUrl.routeId)
-        ? fromUrl
-        : ((snap && snap.kind === 'route') ? snap : null);
+    // A chip click sets prefer so the pasted timetable wins over the page URL.
+    // Otherwise the page URL wins, so a Hercules page cannot open Pretoria.
+    const raw = (snap && snap.kind === 'route' && snap.prefer)
+        ? snap
+        : ((fromUrl && fromUrl.routeId)
+            ? fromUrl
+            : ((snap && snap.kind === 'route') ? snap : null));
     if (!raw || !ROUTES[raw.routeId]) return null;
     // Grid day: sat/sun deep links use saturday; WC can deep-link public_holiday
     let day = 'weekday';

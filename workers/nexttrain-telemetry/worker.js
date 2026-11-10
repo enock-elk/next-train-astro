@@ -16,6 +16,7 @@
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
+import { isoTodayUtc, loadCleverRange } from './clever-ads.js';
 import { dispatchProductionDeploy, getDeployStatus } from './deploy-github.js';
 import { sentryStatusFromResult, safeSentryDetail } from './region-presence.js';
 import { handleRegionPresence, readRegionalSplit } from './region-store.js';
@@ -295,6 +296,27 @@ export default {
                 triggeredBy: auth.email,
                 at: Date.now(),
             });
+        }
+
+        // Ad revenue. The Clever script id is CLEVER_SCRIPT_ID on this Worker.
+        // A search longer than 3 months is stitched here. The phone never sees the token.
+        if (request.method === 'GET' && url.pathname === '/admin/ads') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: true });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            const scriptId = String(env.CLEVER_SCRIPT_ID || '').trim();
+            if (!scriptId) {
+                return json(503, { error: 'Ad stats are not configured' });
+            }
+            const end = url.searchParams.get('end') || isoTodayUtc();
+            const start = url.searchParams.get('start') || `${end.slice(0, 8)}01`;
+            try {
+                const stats = await loadCleverRange(scriptId, start, end);
+                return json(200, stats);
+            } catch (e) {
+                return json(e.status || 502, { error: String(e.message || 'Could not load ad stats').slice(0, 180) });
+            }
         }
 
         // Legacy admin clients POST here after notice/alert edits. Clear this
@@ -629,29 +651,6 @@ export default {
         } else {
             Object.assign(telemetryData, sentryStatusFromResult({ configured: false }));
         }
-
-        telemetryTasks.push((async () => {
-            try {
-                const cleverRes = await fetch("https://c2p.cleverwebserver.com/dashboard/ZmI0MWI3OTc5MjkzODk2MWVlZmE2NGZiY2I=", {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-                    }
-                });
-                if (cleverRes.ok) {
-                    const cleverHtml = await cleverRes.text();
-                    const revMatch = cleverHtml.match(/Estimated Reven(?:ue)?[\s\S]{0,200}?([\d.,]+\s*USD)/i);
-                    if (revMatch && revMatch[1]) {
-                        telemetryData.cleverRevenue = revMatch[1].trim();
-                    }
-                    const hitsMatch = cleverHtml.match(/Total Hits[\s\S]{0,200}?(\d+)/i);
-                    if (hitsMatch && hitsMatch[1]) {
-                        telemetryData.cleverHits = hitsMatch[1].trim();
-                    }
-                }
-            } catch (e) {
-                console.error("CleverAds Fetch Error:", e.message);
-            }
-        })());
 
         await Promise.allSettled(telemetryTasks);
 

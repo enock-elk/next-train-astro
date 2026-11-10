@@ -2295,6 +2295,40 @@ html.dark .admin-sheet-tabs { background: #111827; }
   font-weight: 700;
 }
 .ut-account-card { padding-right: 2.6rem; }
+.admin-sheet-card-meta.ut-account-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+.ut-account-route svg { flex-shrink: 0; }
+.community-share-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 0.15rem 0;
+  padding: 0.35rem 0.65rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.78);
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+.community-bubble-own .community-share-chip,
+.inbox-bubble-own .community-share-chip {
+  background: rgba(255, 255, 255, 0.55);
+  color: #14532d;
+}
+html.dark .community-share-chip {
+  background: rgba(15, 23, 42, 0.35);
+  color: #bfdbfe;
+}
 .nt-ls-session.is-live { border-color: rgba(37, 99, 235, 0.35); }
 .nt-ls-session-chevron {
   width: 1.1rem;
@@ -3162,6 +3196,11 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #schedule-modal {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
 }
+/* Trains near you docks on the viewport bottom, same as the trip fare sheet.
+   The generic modal clearance above the tab bar left a gap under this card. */
+#nt-nearby-trains-modal {
+  padding-bottom: 0;
+}
 /* Centered info cards (What's New, Today's schedule, and the same type) sit
    in the middle of the scrim. The bottom-nav clearance left a blank slab
    under the card. Bottom sheets and tall lists keep the clearance below. */
@@ -3190,7 +3229,7 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #profile-modal > div {
   max-height: min(85dvh, calc(var(--nt-app-h, 100dvh) - 1.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))) !important;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal),
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal):not(#nt-nearby-trains-modal),
 #nt-on-train-sheet {
   padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;

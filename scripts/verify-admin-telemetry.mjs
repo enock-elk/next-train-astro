@@ -30,6 +30,7 @@ import {
     dispatchProductionDeploy,
     shaMatches,
 } from '../workers/nexttrain-telemetry/deploy-github.js';
+import { cleverWindows, mergeCleverParts } from '../workers/nexttrain-telemetry/clever-ads.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -500,6 +501,32 @@ const storeJs = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/region-stor
 ok(storeJs.includes('ON CONFLICT(day, device_hash)'), 'daily region upsert moves a device instead of inserting another row');
 const prefsJs = readFileSync(join(ROOT, 'src/lib/prefs.js'), 'utf8');
 ok(prefsJs.includes('region-presence-client.js'), 'selected region changes report the exact daily assignment');
+
+const adWindows = cleverWindows('2026-04-30', '2026-11-10');
+ok(adWindows.length >= 3, 'ad history from the first hit is more than one Clever window');
+ok(adWindows.every((w) => w.start <= w.end), 'each ad window has a start and end');
+ok(adWindows[0].start === '2026-04-30' && adWindows[adWindows.length - 1].end === '2026-11-10', 'stitched ad windows cover the whole search');
+const spanDays = (w) => (Date.parse(`${w.end}T00:00:00Z`) - Date.parse(`${w.start}T00:00:00Z`)) / 86400000;
+ok(adWindows.every((w) => spanDays(w) < 92), 'each ad window stays inside the 3 month cap');
+function adPart(hits, value, day, desktop, mobile) {
+    return {
+        payload: {
+            globalPerformance: { hits, value, coin: 'USD', dealType: 'CPM', firstHit: '2026-04-30' },
+            browsers: { dataset: { label: ['Desktop', 'Mobile'], series: [{ data: [desktop, mobile] }] } },
+            visitors: { dataset: { label: [day], series: { hits: [hits] } } },
+            countries: { dataset: { label: ['ZA'], series: { value: [hits] } } },
+        },
+    };
+}
+const mergedAds = mergeCleverParts([
+    adPart(100, 1.5, '2026-04-30', 10, 90),
+    adPart(50, 0.25, '2026-08-01', 0, 100),
+]);
+ok(mergedAds.hits === 150 && mergedAds.revenue === 1.75, 'stitched ad windows add hits and revenue');
+ok(mergedAds.series.length === 2 && mergedAds.geos[0].hits === 150, 'stitched ad windows keep daily hits and geos');
+ok(!workerJs.includes('ZmI0MWI3') && !workerJs.includes('cleverwebserver.com/dashboard'), 'the Clever dashboard token is not in the worker');
+ok(workerJs.includes("url.pathname === '/admin/ads'") && workerJs.includes('CLEVER_SCRIPT_ID'), 'ad stats are an admin route that reads the worker secret');
+ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('loadAdRevenue'), 'live telemetry draws its own ad revenue search');
 
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));

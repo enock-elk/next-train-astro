@@ -3721,6 +3721,80 @@ const Admin = {
     },
 
     // --- 0.2 TELEMETRY REFRESH ENGINE & EXPORT ---
+    loadAdRevenue: async () => {
+        const note = document.getElementById('ad-revenue-note');
+        const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+        const start = document.getElementById('ad-revenue-start')?.value || '';
+        const end = document.getElementById('ad-revenue-end')?.value || '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+            if (note) note.textContent = 'Choose a start and end date.';
+            return;
+        }
+        if (note) note.textContent = 'Loading…';
+        try {
+            const key = await Admin.getAuthKey();
+            const res = await window.guardianFetch(`https://nexttrain-telemetry.enock.workers.dev/admin/ads?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
+                headers: { 'Authorization': `Bearer ${key}` }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not load ad stats');
+            Admin._adFirstHit = data.firstHit || Admin._adFirstHit || '';
+            if (data.start && document.getElementById('ad-revenue-start') && data.start !== start) {
+                document.getElementById('ad-revenue-start').value = data.start;
+            }
+            const money = Number(data.revenue || 0).toLocaleString('en-US', { style: 'currency', currency: data.coin || 'USD' });
+            set('ad-revenue-value', money);
+            set('ad-revenue-hits', Admin.formatNumber(data.hits || 0));
+            set('ad-revenue-deal', data.dealType || '--');
+            const first = String(data.firstHit || '');
+            set('ad-revenue-first', first ? `${first.slice(8, 10)}/${first.slice(5, 7)}/${first.slice(0, 4)}` : '--');
+            const sync = document.getElementById('ad-revenue-sync');
+            if (sync) {
+                const synced = data.lastSyncedAt ? new Date(data.lastSyncedAt) : null;
+                sync.textContent = synced && !Number.isNaN(synced.getTime())
+                    ? `Last sync ${synced.toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                    : '';
+            }
+            const desktop = Number(data.desktop || 0);
+            const mobile = Number(data.mobile || 0);
+            const devices = document.getElementById('ad-revenue-devices');
+            if (devices) {
+                devices.innerHTML = `
+                    <div class="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex">
+                        <div class="bg-blue-600 h-full" style="width:${desktop}%"></div>
+                        <div class="bg-emerald-500 h-full" style="width:${mobile}%"></div>
+                    </div>
+                    <div class="mt-1 flex justify-between"><span>Desktop ${desktop.toFixed(2)}%</span><span>Mobile ${mobile.toFixed(2)}%</span></div>`;
+            }
+            const labels = Array.isArray(data.labels) ? data.labels : [];
+            const series = Array.isArray(data.series) ? data.series : [];
+            const chart = document.getElementById('ad-revenue-chart');
+            if (chart) {
+                const short = labels.map((day) => `${String(day).slice(8, 10)}/${String(day).slice(5, 7)}`);
+                chart.innerHTML = series.length
+                    ? Admin._buildLineGraphSVG(series, short, 'Viewable impressions', -1, true)
+                    : '<span class="text-xs text-gray-400">No impressions in this period.</span>';
+            }
+            const geos = document.getElementById('ad-revenue-geos');
+            if (geos) {
+                const names = (typeof Intl !== 'undefined' && Intl.DisplayNames)
+                    ? new Intl.DisplayNames(['en'], { type: 'region' })
+                    : null;
+                const rows = (data.geos || []).slice(0, 8);
+                const total = rows.reduce((sum, row) => sum + Number(row.hits || 0), 0) || 1;
+                geos.innerHTML = rows.map((row) => {
+                    const label = names?.of(row.code) || row.code;
+                    const pct = ((Number(row.hits || 0) / total) * 100).toFixed(0);
+                    return `<div class="flex items-center justify-between gap-3"><span class="truncate">${label}</span><span class="font-bold tabular-nums">${Admin.formatNumber(row.hits)} · ${pct}%</span></div>`;
+                }).join('');
+            }
+            const windows = Number(data.windows || 0);
+            if (note) note.textContent = windows > 1 ? `Combined from ${windows} periods.` : '';
+        } catch (e) {
+            if (note) note.textContent = String(e?.message || 'Could not load ad stats').slice(0, 180);
+        }
+    },
+
     setupTelemetry: () => {
         const telPanel = document.getElementById('telemetry-panel');
         if (!telPanel) return;
@@ -3791,6 +3865,81 @@ const Admin = {
                 </div>
             `;
             telBody.appendChild(trendWrapper);
+
+            if (!document.getElementById('ad-revenue-panel')) {
+                const adPanel = document.createElement('div');
+                adPanel.id = 'ad-revenue-panel';
+                adPanel.className = 'mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 space-y-3';
+                const field = 'w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] font-semibold text-gray-800 dark:text-gray-100 focus:outline-none';
+                const pill = 'px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold uppercase tracking-wide text-gray-600 dark:text-gray-300 focus:outline-none';
+                adPanel.innerHTML = `
+                    <div class="flex items-center justify-between px-1 gap-2">
+                        <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Ad revenue</span>
+                        <span id="ad-revenue-sync" class="text-[10px] font-semibold text-gray-400 truncate"></span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input id="ad-revenue-start" type="date" class="${field}" aria-label="From">
+                        <input id="ad-revenue-end" type="date" class="${field}" aria-label="To">
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" data-ad-preset="month" class="${pill}">This month</button>
+                        <button type="button" data-ad-preset="last" class="${pill}">Last month</button>
+                        <button type="button" data-ad-preset="all" class="${pill}">All</button>
+                        <button type="button" id="ad-revenue-search" class="${pill} ml-auto bg-blue-600 text-white border-blue-600">Search</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Revenue</span>
+                            <span id="ad-revenue-value" class="text-2xl font-black text-gray-800 dark:text-gray-200">--</span>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Impressions</span>
+                            <span id="ad-revenue-hits" class="text-2xl font-black text-gray-800 dark:text-gray-200">--</span>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Deal</span>
+                            <span id="ad-revenue-deal" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">First hit</span>
+                            <span id="ad-revenue-first" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
+                        </div>
+                    </div>
+                    <div id="ad-revenue-devices" class="text-[11px] font-semibold text-gray-500"></div>
+                    <div id="ad-revenue-chart" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center">
+                        <span class="text-xs text-gray-400">Loading graph...</span>
+                    </div>
+                    <div id="ad-revenue-geos" class="text-[12px] text-gray-600 dark:text-gray-300 space-y-1"></div>
+                    <p id="ad-revenue-note" class="text-[10px] text-gray-400"></p>
+                `;
+                telBody.appendChild(adPanel);
+                const today = Admin.johannesburgDayOffset(0);
+                const startInput = document.getElementById('ad-revenue-start');
+                const endInput = document.getElementById('ad-revenue-end');
+                if (startInput) startInput.value = `${today.slice(0, 8)}01`;
+                if (endInput) endInput.value = today;
+                adPanel.addEventListener('click', (event) => {
+                    const preset = event.target?.closest?.('[data-ad-preset]')?.getAttribute('data-ad-preset');
+                    if (!preset) return;
+                    const end = Admin.johannesburgDayOffset(0);
+                    if (preset === 'month') {
+                        if (startInput) startInput.value = `${end.slice(0, 8)}01`;
+                        if (endInput) endInput.value = end;
+                    } else if (preset === 'last') {
+                        const [y, m] = end.split('-').map(Number);
+                        const first = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
+                        const last = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+                        if (startInput) startInput.value = first;
+                        if (endInput) endInput.value = last;
+                    } else if (preset === 'all') {
+                        if (startInput) startInput.value = Admin._adFirstHit || '2026-01-01';
+                        if (endInput) endInput.value = end;
+                    }
+                    Admin.loadAdRevenue();
+                });
+                document.getElementById('ad-revenue-search')?.addEventListener('click', () => Admin.loadAdRevenue());
+                Admin.loadAdRevenue();
+            }
             
             // Full-height analytics drill: part of admin navigation, not an overlay modal.
             let chartPanel = document.getElementById('telemetry-chart-panel');
@@ -13848,8 +13997,11 @@ const Admin = {
                 const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
                 const known = (typeof ROUTES !== 'undefined' && row.lastRouteId && ROUTES[row.lastRouteId]) ? ROUTES[row.lastRouteId] : null;
                 const routeHtml = known ? Admin.formatRouteLabelHtml(known.name) : (row.lastRouteId ? esc(routeName(row.lastRouteId)) : '');
-                const place = [regionLabel(row.region), routeHtml].filter(Boolean).join(' · ');
-                btn.innerHTML = `${providerMark(row.provider)}<span class="admin-sheet-card-title">${esc(row.displayName || 'Passenger')}</span><span class="admin-sheet-card-body">${esc(row.email || 'No email')}</span><span class="admin-sheet-card-meta">${when ? `Joined ${esc(when)}` : ''}${when && place ? ' · ' : ''}${place}</span>`;
+                const region = regionLabel(row.region);
+                const routeRow = routeHtml ? `<span class="admin-sheet-card-meta ut-account-route">${routeHtml}</span>` : '';
+                const whenBits = [when ? `Joined ${esc(when)}` : '', region].filter(Boolean).join(' · ');
+                const whenRow = whenBits ? `<span class="admin-sheet-card-meta">${whenBits}</span>` : '';
+                btn.innerHTML = `${providerMark(row.provider)}<span class="admin-sheet-card-title">${esc(row.displayName || 'Passenger')}</span><span class="admin-sheet-card-body">${esc(row.email || 'No email')}</span>${routeRow}${whenRow}`;
                 btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
                 list.appendChild(btn);
             });
@@ -23272,6 +23424,17 @@ const Admin = {
                         if (typeof window.sanitizeRichHtml === 'function') {
                             parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
                         }
+                        if (typeof window.ntShareChipHtml === 'function') {
+                            parsedAdminText = String(parsedAdminText || '').split(/(<[^>]+>)/g).map((part, i) => {
+                                if (i % 2) return part;
+                                return part.replace(/https?:\/\/[^\s<>"']+/gi, (full) => {
+                                    const url = full.replace(/[),.;]+$/, '');
+                                    const trail = full.slice(url.length);
+                                    const chip = window.ntShareChipHtml(url);
+                                    return chip ? `${chip}${trail}` : full;
+                                });
+                            }).join('');
+                        }
 
                         const adminExtra = Admin.feedbackAttachmentList(item);
                         const adminMedia = Admin.layoutInboxMedia(parsedAdminText, adminExtra);
@@ -23532,20 +23695,20 @@ const Admin = {
                             .replace(/&#39;/gi, "'")
                             .trim();
 
-                        let rawText = plainBody ? secureEscape(plainBody) : (quoteBlockHtml ? '' : 'No content');
+                        let rawText = plainBody
+                            ? (typeof window.ntShareTextHtml === 'function' ? window.ntShareTextHtml(plainBody) : secureEscape(plainBody))
+                            : (quoteBlockHtml ? '' : 'No content');
 
-                        // GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
-                        rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
-
-                        // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
-                        rawText = rawText.replace(/(?:^|\s|\()(?:\+?27|0)[\s-]*([6-8]\d)[\s-]*(\d{3})[\s-]*(\d{4})(?=\s|$|[.,!?\)])/g, (match, p1, p2, p3) => {
+                        // Link emails and numbers in the text only. Share chips are already HTML.
+                        const outsideTags = (html, replacer) => String(html || '').split(/(<[^>]+>)/g).map((part, i) => (i % 2 ? part : replacer(part))).join('');
+                        rawText = outsideTags(rawText, (part) => part.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>'));
+                        rawText = outsideTags(rawText, (part) => part.replace(/(?:^|\s|\()(?:\+?27|0)[\s-]*([6-8]\d)[\s-]*(\d{3})[\s-]*(\d{4})(?=\s|$|[.,!?\)])/g, (match, p1, p2, p3) => {
                             const fullNum = `27${p1}${p2}${p3}`;
                             const displayNum = `0${p1} ${p2} ${p3}`;
                             const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : '';
                             return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline inline-flex items-center gap-1" onclick="event.stopPropagation()">${Admin.icon('message', 'w-3 h-3')} ${displayNum}</a>`;
-                        });
-
-                        rawText = rawText.replace(/\n/g, '<br>');
+                        }));
+                        rawText = outsideTags(rawText, (part) => part.replace(/\n/g, '<br>'));
 
                         const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
                         const uniqueAttach = Admin.feedbackAttachmentList(item);

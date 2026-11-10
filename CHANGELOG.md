@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_11.10.8 — no release notes
+
+- Community placeholders use a letter in that person's colour. A renamed account shows the new name on older messages.
+
 ## V10_11.10.7
 
 - Pull down further to refresh. A circle fills in as you pull, and it completes when the refresh is ready.

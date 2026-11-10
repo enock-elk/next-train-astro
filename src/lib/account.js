@@ -582,6 +582,11 @@ export async function ensureUserProfile(user, opts = {}) {
             chatDeviceId,
             photoURL,
         });
+        if (displayName) {
+            import('./rider-marks.js')
+                .then((m) => m.publishPublicProfile({ displayName }))
+                .catch(() => {});
+        }
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);

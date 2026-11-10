@@ -312,15 +312,36 @@ function communityNameFor(acct) {
     return acct?.displayName || formatAccountDisplayName(acct?.email ? String(acct.email).split('@')[0] : 'Passenger');
 }
 
-function renderAvatarHtml(photoURL) {
+function avatarInitial(name) {
+    const ch = Array.from(String(name || '').trim())[0] || '';
+    if (!ch || !/^[\p{L}\p{N}]$/u.test(ch)) return '';
+    return ch.toLocaleUpperCase();
+}
+
+function avatarInk(color) {
+    return /^#[0-9a-fA-F]{6}$/.test(String(color || '')) ? String(color) : '#64748b';
+}
+
+/** Letter in this person's colour. A small disc when the name has no letter. No person emoji. */
+function avatarMarkHtml(name, color) {
+    const ink = avatarInk(color);
+    const letter = avatarInitial(name);
+    if (!letter) {
+        return `<span class="community-avatar-mark" style="background:${ink}" aria-hidden="true"></span>`;
+    }
+    return `<span class="community-avatar-letter" style="color:${ink}">${escapeHTML(letter)}</span>`;
+}
+
+function renderAvatarHtml(photoURL, name, color) {
+    const mark = avatarMarkHtml(name, color);
     const safePhoto = profilePhotosOn() ? sanitizeCommunityPhotoUrl(photoURL) : '';
     if (safePhoto) {
         return `<span class="relative inline-flex w-8 h-8 shrink-0">
             <img src="${escapeHTML(safePhoto)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
-            <span class="avatar-fallback hidden absolute inset-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base" aria-hidden="true">🙍</span>
+            <span class="avatar-fallback hidden absolute inset-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">${mark}</span>
         </span>`;
     }
-    return `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0" aria-hidden="true">🙍</span>`;
+    return `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0">${mark}</span>`;
 }
 
 async function publicCommuterPhoto(acct) {
@@ -1331,6 +1352,64 @@ function rememberPublicPoints(uid, points) {
     return n;
 }
 
+const PUBLIC_NAMES_KEY = 'nt-public-names-v1';
+const bestPublicNames = new Map();
+
+function loadBestPublicNames() {
+    if (bestPublicNames.size || typeof localStorage === 'undefined') return;
+    try {
+        const data = JSON.parse(localStorage.getItem(PUBLIC_NAMES_KEY) || '{}');
+        Object.entries(data || {}).forEach(([uid, row]) => {
+            const name = String(row?.name || '').trim();
+            const ts = Number(row?.ts) || 0;
+            if (uid && name) bestPublicNames.set(uid, { name: name.slice(0, 80), ts });
+        });
+    } catch {
+        /* a missing memory uses the name stored on the message */
+    }
+}
+
+function persistPublicNames() {
+    try {
+        const rows = [...bestPublicNames.entries()]
+            .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0))
+            .slice(0, 200);
+        const obj = {};
+        rows.forEach(([uid, row]) => { obj[uid] = row; });
+        localStorage.setItem(PUBLIC_NAMES_KEY, JSON.stringify(obj));
+    } catch {
+        /* the in-memory name still covers this visit */
+    }
+}
+
+function rememberPublicName(uid, name, ts) {
+    const clean = String(name || '').trim().slice(0, 80);
+    const when = Number(ts) || 0;
+    if (!uid || !clean || clean === 'Passenger' || clean === 'You') return '';
+    loadBestPublicNames();
+    const prev = bestPublicNames.get(uid);
+    if (prev && prev.ts > when) return prev.name;
+    if (prev && prev.ts === when && prev.name === clean) return prev.name;
+    bestPublicNames.set(uid, { name: clean, ts: when });
+    persistPublicNames();
+    return clean;
+}
+
+/** Current account name, then the newest name already seen for this person. */
+function syncedDisplayName(uid, profile, post, latest) {
+    const profileName = String(profile && !profile.missing ? profile.displayName || '' : '').trim();
+    if (profileName) {
+        rememberPublicName(uid, profileName, Math.max(Number(profile.updatedAt) || 0, Date.now()));
+        return profileName.slice(0, 80);
+    }
+    const latestName = String(latest?.displayName || '').trim();
+    const postName = String(post?.displayName || '').trim();
+    if (latestName) rememberPublicName(uid, latestName, Number(latest?.ts) || 0);
+    if (postName) rememberPublicName(uid, postName, Number(post?.timestamp) || 0);
+    loadBestPublicNames();
+    return bestPublicNames.get(uid)?.name || latestName || postName || 'Passenger';
+}
+
 function bestKnownPoints(uid, profile, post, latest) {
     loadBestPublicPoints();
     const candidates = [
@@ -1362,6 +1441,8 @@ function latestAuthorMeta(posts) {
             photoURL: newer ? (post.photoURL || prev?.photoURL || '') : (prev?.photoURL || post.photoURL || ''),
             displayName: newer ? (post.displayName || prev?.displayName || '') : (prev?.displayName || post.displayName || ''),
         });
+        const chosen = map.get(uid);
+        if (chosen?.displayName) rememberPublicName(uid, chosen.displayName, chosen.ts);
     });
     return map;
 }
@@ -1389,7 +1470,7 @@ function authorPresentation(post, isOwn) {
         const points = showMarks ? bestKnownPoints(post.uid, profile, post, latest) : 0;
         if (showMarks && points > Number(profile.points || 0)) hintPublicPoints(post.uid, points);
         return {
-            displayName: profile.displayName || post.displayName || latest?.displayName || 'Passenger',
+            displayName: syncedDisplayName(post.uid, profile, post, latest),
             photoURL: showPhoto ? (post.photoURL || latest?.photoURL || '') : '',
             marks: showMarks && points > 0
                 ? { points, tier: profile.tier || latest?.tier || post?.marks?.tier || '' }
@@ -1398,7 +1479,7 @@ function authorPresentation(post, isOwn) {
     }
     const newestHidPhoto = latest && !latest.photoURL && (post.photoURL || latest.photoURL);
     return {
-        displayName: latest?.displayName || post.displayName || 'Passenger',
+        displayName: syncedDisplayName(post.uid, null, post, latest),
         photoURL: newestHidPhoto ? '' : (post.photoURL || ''),
         marks: publicMarksFromPost(post, latest),
     };
@@ -1420,6 +1501,7 @@ async function loadPublicProfiles(uids) {
             const data = await res.json();
             const row = data && typeof data === 'object' ? data : {};
             loadBestPublicPoints();
+            if (row.displayName) rememberPublicName(uid, row.displayName, Number(row.updatedAt) || Date.now());
             if (Number(row.points) > 0) rememberPublicPoints(uid, row.points);
             else if ((bestPublicPoints.get(uid) || 0) > Number(row.points || 0)) hintPublicPoints(uid, bestPublicPoints.get(uid));
             publicProfiles.set(uid, {
@@ -1517,14 +1599,23 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const isOwn = !!(myUid && post.uid && post.uid === myUid);
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
-    const nameColor = nameColorFor(authorColorKey(post.uid, shown.displayName));
+    const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
+    const nameColor = nameColorFor(authorColorKey(post.uid, displayName));
     const replyTo = !tombstone && post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
+    const quoteShown = replyTo
+        ? syncedDisplayName(
+            replyTo.uid,
+            replyTo.uid ? publicProfiles.get(replyTo.uid) : null,
+            { displayName: replyTo.displayName, timestamp: 0, uid: replyTo.uid },
+            replyTo.uid ? feedAuthorMeta.get(replyTo.uid) : null,
+        )
+        : '';
     const quoteColor = replyTo
-        ? nameColorFor(authorColorKey(replyTo.uid, replyTo.displayName, replyTo.postId))
+        ? nameColorFor(authorColorKey(replyTo.uid, quoteShown, replyTo.postId))
         : nameColor;
     const quoteHtml = replyTo
         ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${quoteColor}">
-             <p class="text-[11px] font-bold truncate" style="color:${quoteColor}">${escapeHTML(replyTo.displayName || 'Passenger')}</p>
+             <p class="text-[11px] font-bold truncate" style="color:${quoteColor}">${escapeHTML(quoteShown || 'Passenger')}</p>
              <p class="text-[11px] opacity-80 truncate">${escapeHTML(String(replyTo.body || '').slice(0, 100))}</p>
            </div>`
         : '';
@@ -1533,9 +1624,8 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         ? ''
         : grouped
             ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
-            : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
+            : `<div class="community-avatar">${renderAvatarHtml(photoURL, displayName, nameColor)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
-    const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
     const marksSnap = shown.marks;
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
@@ -2325,6 +2415,19 @@ export function openRouteCommunity(opts = {}) {
     void openRouteCommunityNow(opts);
 }
 
+let publishedCommunityName = '';
+
+/** Write this account's current name so older messages in every room pick it up. */
+function publishOwnCommunityName() {
+    const acct = $account.get();
+    const name = String(acct?.displayName || '').trim();
+    if (acct?.status !== 'signed-in' || !acct.uid || !name || name === publishedCommunityName) return;
+    publishedCommunityName = name;
+    import('./rider-marks.js')
+        .then((m) => m.publishPublicProfile({ displayName: name }))
+        .catch(() => { publishedCommunityName = ''; });
+}
+
 async function openRouteCommunityNow(opts = {}) {
     try { await fetchFeatures(); } catch { /* defaults */ }
     const requested = opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
@@ -2355,6 +2458,8 @@ async function openRouteCommunityNow(opts = {}) {
         window.switchTab('community');
         return;
     }
+
+    publishOwnCommunityName();
 
     triggerHaptic();
     communityFeedPinned = true;

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.8': [
+        'Community avatars use the first letter of the display name in that person\'s existing colour, taken from their account id. A name with no letter gets a small disc in that colour. The shared person emoji is gone. A profile photo still shows only when the rider has opted in. A display name change is written to public_profile on sign-in, on save, and when Community opens. Older messages use that current name, or the newest name already seen for that person when the profile has no name yet. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.7': [
         'Back from a Community Monitor route returns to the route list. It no longer drops out to the Dev Mode grid. Pull to refresh waits for a longer pull. An empty circle closes as the finger moves and completes at the threshold. Suggest reply leaves the community composer and sits on the admin hold menu. That draft sends the past 24 hours of the room and marks the held message as the priority. User Accounts asks the community worker for the Google or Facebook name on the Auth record, and also stores that name on the next sign-in. Until that name is available the card shows the email name, beside the display name. Gender and age are shown only when a record already has them. Google sign-in does not include them, and we do not ask. Feedback None has a plus that starts a message. Sign-in and create-account errors mention Forgot password. A community points chip uses the highest total already seen for that person, including a later message, so an older post stored as 0 still shows the real total. An admin view of that higher number asks the community worker to save it on public_profile. Deploy that worker so /community/points-seen is live. No gender collection. forceShow stays false.',
     ],

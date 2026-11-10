@@ -185,6 +185,9 @@ assert.match(community, /unread on \$\{roomNames/, 'Community badge names the un
 assert.match(community, /paintCommunityQuotaHint/, 'remaining send quota is painted above the composer');
 assert.match(community, /uid === prevUid/, 'consecutive community messages from the same person are grouped');
 assert.match(community, /community-avatar-spacer/, 'grouped messages keep the avatar column');
+assert.match(community, /community-avatar-letter/, 'a community avatar uses the first letter');
+assert.match(community, /syncedDisplayName/, 'older messages use the current display name');
+assert.match(community, /publishOwnCommunityName/, 'opening Community writes the current display name');
 assert.match(communityView, /community-avatar-spacer/, 'Community CSS keeps WhatsApp-style grouped rows');
 assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
 assert.match(community, /left > 3/, 'quota hint stays hidden until 3 messages remain');

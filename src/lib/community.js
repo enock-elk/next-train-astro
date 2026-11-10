@@ -15,6 +15,7 @@ import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-saver.js';
+import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
@@ -1696,6 +1697,7 @@ function applyFeedFilter(routeId) {
     });
     listEl.innerHTML = html;
     settleDeferredPictures(listEl);
+    armGifPlayers(listEl);
     wireCommunityChatGestures(listEl);
     pinCommunityFeedToLatest();
     if (profileRepaintRoute === routeId) return;

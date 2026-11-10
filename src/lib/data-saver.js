@@ -4,6 +4,7 @@
  */
 import { COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL } from './config.js';
 import { formatDownloadSize, sanitizePicturePreview } from './picture-preview.js';
+import { armGifPlayers, isGifUrl } from './gif-play.js';
 import { escapeHTML, safeStorage } from './utils.js';
 
 export const DATA_SAVER_KEY = 'ntDataSaver';
@@ -243,6 +244,7 @@ function revealDeferredPicture(node) {
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
     img.src = url;
+    if (isGifUrl(url)) img.dataset.ntGifSrc = url;
     if (node.getAttribute('data-nt-defer-link') === '1') {
         const anchor = document.createElement('a');
         anchor.href = url;
@@ -250,9 +252,11 @@ function revealDeferredPicture(node) {
         anchor.rel = 'noopener noreferrer';
         anchor.appendChild(img);
         node.replaceWith(anchor);
+        armGifPlayers(anchor);
         return;
     }
     node.replaceWith(img);
+    armGifPlayers(img.parentElement || img);
 }
 
 /** If the alert cache already has the file, paint it. Otherwise show the download outline. */

@@ -54,7 +54,7 @@ import {
 } from './logic.js';
 import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
-import { ADMIN_CHANGELOG, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
+import { ADMIN_CHANGELOG, adminBuildSnapshot, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
 import { formatFeedbackDiagLine, stationChoiceLabel } from './feedback-diag-line.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
@@ -204,6 +204,7 @@ export function exposeAdminGlobals() {
     window.DEFAULT_ZONE_KM_BANDS = DEFAULT_ZONE_KM_BANDS;
     window.ZONE_KM_RANGE_LABELS = ZONE_KM_RANGE_LABELS;
     window.ADMIN_CHANGELOG = ADMIN_CHANGELOG;
+    window.adminBuildSnapshot = adminBuildSnapshot;
     window.lookupAdminChangelog = lookupAdminChangelog;
     window.listAdminChangelogVersions = listAdminChangelogVersions;
     window.normalizeAdminChangelogKey = normalizeAdminChangelogKey;

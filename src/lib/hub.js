@@ -609,6 +609,9 @@ export function closeAppHub(skipHistory = false) {
 }
 
 export function openAppHub() {
+    const account = document.getElementById('account-modal');
+    if (account && !account.classList.contains('hidden')) return;
+    if (document.documentElement.classList.contains('nt-full-overlay')) return;
     triggerHaptic();
     try { window.cancelPendingGridOpen?.(); } catch { /* ignore */ }
     // Sign-in / account chrome lives in a deferred chunk — kick it as soon as

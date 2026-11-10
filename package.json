@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "10.11.10.9",
+  "version": "10.11.10.10",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/fetch-live-schedules-for-seo.mjs && node scripts/generate-sitemap.mjs",
@@ -15,6 +15,7 @@
     "verify:notice-toast": "node scripts/verify-notice-toast.mjs",
     "verify:imports": "node scripts/verify-module-imports.mjs",
     "verify:alerts": "node scripts/verify-alerts-channel.mjs",
+    "verify:gif-play": "node scripts/verify-gif-play.mjs",
     "verify:alert-impressions": "node scripts/verify-alert-impressions.mjs",
     "verify:schedule": "node scripts/verify-schedule-source.mjs",
     "verify:route-sheets": "node scripts/verify-route-sheets.mjs",

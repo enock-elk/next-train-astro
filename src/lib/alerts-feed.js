@@ -418,7 +418,7 @@ export function noticeForInstalledPhones(notice) {
  */
 export function shouldIgnoreAlertLongPress(target) {
     if (!target || typeof target.closest !== 'function') return true;
-    if (target.closest('[data-alert-video]')) return true;
+    if (target.closest('[data-alert-video], [data-nt-gif-replay]')) return true;
     if (target.closest('[data-alert-lightbox]')) return false;
     if (target.closest('[data-alert-media]')) return false;
     if (target.closest('button[onclick*="openLightbox"]')) return false;

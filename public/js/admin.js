@@ -401,7 +401,13 @@ function ntAdminDrillBackAction(stack, hashPanelId, fromPopState) {
     return { action: 'grid', stack: [] };
 }
 
-function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, routes) {
+function ntAdminCommunityOwnActivity(item, viewerUid) {
+    const me = String(viewerUid || '').trim();
+    const uid = String(item?.uid || '').trim();
+    return !!(me && uid && me === uid);
+}
+
+function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, routes, viewerUid) {
     const routeMap = routes && typeof routes === 'object' ? routes : {};
     const held = Array.isArray(heldItems) ? heldItems : [];
     const ids = new Set([
@@ -428,7 +434,7 @@ function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, r
             held: routeHeld,
             latestActivity,
             latestAt: Math.max(Number(latestActivity?.timestamp || 0), latestHeldAt),
-            unread: activities.filter((item) => Number(item.timestamp || 0) > seenAt).length,
+            unread: activities.filter((item) => Number(item.timestamp || 0) > seenAt && !ntAdminCommunityOwnActivity(item, viewerUid)).length,
         };
     }).sort((a, b) => (b.latestAt - a.latestAt)
         || String(a.routeName).localeCompare(String(b.routeName)));
@@ -2117,20 +2123,22 @@ const Admin = {
         return data.url;
     },
 
-    /** Media can take up to four photos in one pick. Installed phones show four. */
+    /** Media and Upload a photo. Newer phones show ten. Installed phones still keep four. */
+    composerImageMax: 10,
+
     addAlertPhotosFromFiles: async (fileList, editor) => {
-        const max = 4;
+        const max = Admin.composerImageMax || 10;
         const files = [...(fileList || [])];
         if (!files.length) return 0;
         const slot = editor ? Admin.mediaSlotFor(editor) : null;
         const existing = slot ? slot.querySelectorAll('img').length : 0;
         const room = Math.max(0, max - existing);
         if (!room) {
-            if (typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+            if (typeof showToast === 'function') showToast(`Maximum ${max} images.`, 'warning');
             return 0;
         }
         const chosen = files.slice(0, room);
-        if (files.length > room && typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+        if (files.length > room && typeof showToast === 'function') showToast(`Maximum ${max} images.`, 'warning');
         const secret = await Admin.getAuthKey();
         if (!secret) {
             if (typeof showToast === 'function') showToast('Authentication required! Sign in again.', 'error');
@@ -3650,7 +3658,7 @@ const Admin = {
                             {},
                             6000,
                         ));
-                        return data ? Admin._countBadgeRows(data, seenAt) : null;
+                        return data ? Admin._countBadgeRows(data, seenAt, (item) => !ntAdminCommunityOwnActivity(item, Admin.currentUser?.uid)) : null;
                     });
                     if (routeResults.every((n) => n != null)) {
                         let chatUnread = routeResults.reduce((sum, n) => sum + n, 0);
@@ -12277,7 +12285,8 @@ const Admin = {
                     })).then(() => Admin.paintCommunityReports?.()).catch(() => {});
                 }
                 const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
-                const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
+                const viewerUid = String(Admin.currentUser?.uid || '');
+                const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj, viewerUid);
                 const quietRows = rows.filter((row) => !row.latestAt);
                 const activityBackfill = {};
                 await Admin._pool(quietRows, 4, async (row) => {
@@ -12304,7 +12313,7 @@ const Admin = {
                         row.latestActivity = preview.activity;
                         row.peekedFromPosts = true;
                         const seenAt = Number(seenData?.[row.routeId] || 0);
-                        if (preview.timestamp > seenAt) row.unread += 1;
+                        if (preview.timestamp > seenAt && !ntAdminCommunityOwnActivity(preview.activity, viewerUid)) row.unread += 1;
                         const messageId = preview.activity.kind === 'reply'
                             ? preview.activity.replyId
                             : preview.activity.postId;
@@ -16276,7 +16285,7 @@ const Admin = {
             `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add up to 4 photos, a PDF, or a YouTube / Vimeo / video link">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
+            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add up to ${Admin.composerImageMax || 10} photos, a GIF, a PDF, or a YouTube / Vimeo / video link">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf" multiple>`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
@@ -16479,8 +16488,9 @@ const Admin = {
             slot.classList.remove('hidden');
             return true;
         }
-        if (slot.querySelectorAll('img').length >= 4) {
-            if (typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+        const imageMax = Admin.composerImageMax || 10;
+        if (slot.querySelectorAll('img').length >= imageMax) {
+            if (typeof showToast === 'function') showToast(`Maximum ${imageMax} images.`, 'warning');
             return false;
         }
         const fig = document.createElement('figure');
@@ -16489,6 +16499,8 @@ const Admin = {
         slot.appendChild(fig);
         slot.classList.remove('hidden');
         Admin.ensureComposerImageOpen();
+        if (typeof window.armGifPlayers === 'function') window.armGifPlayers(slot);
+        if (document.getElementById('alert-poster-preview')) Admin.renderAlertPosterPicker();
         return true;
     },
 
@@ -16758,6 +16770,7 @@ const Admin = {
             const slot = fig?.parentElement;
             fig?.remove();
             if (slot && !slot.querySelector('img')) slot.classList.add('hidden');
+            if (document.getElementById('alert-poster-preview')) Admin.renderAlertPosterPicker();
         });
     },
 
@@ -17358,6 +17371,25 @@ const Admin = {
         return next;
     },
 
+    posterPathKey: (raw) => {
+        const s = String(raw || '').trim();
+        if (!s || s.startsWith('blob:') || s.startsWith('data:')) return '';
+        try {
+            return new URL(s, 'https://nexttrain.co.za').pathname.replace(/\/+$/, '');
+        } catch {
+            return s.split('?')[0].split('#')[0];
+        }
+    },
+
+    composerPosterKeys: () => {
+        const keys = new Set();
+        document.querySelectorAll('#alert-body [data-nt-media-slot] img, #alert-msg img, #disr-msg img').forEach((img) => {
+            const key = Admin.posterPathKey(img.getAttribute('data-nt-src') || img.getAttribute('src') || '');
+            if (key) keys.add(key);
+        });
+        return keys;
+    },
+
     renderAlertPosterPicker: () => {
         const selectedEl = document.getElementById('alert-poster-selected');
         const select = document.getElementById('alert-poster-select');
@@ -17455,7 +17487,9 @@ const Admin = {
                     ? path
                     : (typeof window.withBase === 'function' ? window.withBase(path) : path)
             );
-            preview.innerHTML = selected.map((p) => (
+            const shown = Admin.composerPosterKeys();
+            const extra = selected.filter((p) => !shown.has(Admin.posterPathKey(p)) && !shown.has(Admin.posterPathKey(srcFor(p))));
+            preview.innerHTML = extra.map((p) => (
                 `<img src="${srcFor(p)}" alt="${esc(labelFor(p))}" class="mt-2 first:mt-0 w-full max-h-36 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
             )).join('');
         }
@@ -18434,7 +18468,7 @@ const Admin = {
                             <svg id="alert-poster-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
                         <div id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-[70vh] overflow-y-auto custom-scrollbar text-left"></div>
-                        <label for="alert-poster-upload" class="mt-2 flex items-center justify-center min-h-[48px] px-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500">Upload a photo</label>
+                        <label for="alert-poster-upload" title="Add up to 10 photos, including a GIF" class="mt-2 flex items-center justify-center min-h-[48px] px-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500">Upload a photo</label>
                         <input type="file" id="alert-poster-upload" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="sr-only">
                     </div>
                 </div>
@@ -23917,6 +23951,7 @@ const Admin = {
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95 flex flex-col overflow-hidden max-h-[min(85dvh,var(--nt-vv-h,85dvh))]">
                     <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-1 shrink-0"></h3>
+                    <div id="admin-changelog-preview" class="hidden text-[12px] leading-snug mb-2 shrink-0"></div>
                     <p id="admin-changelog-meta" class="hidden text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-1 shrink-0"></p>
                     <p id="admin-changelog-diag" class="hidden text-[11px] leading-snug text-gray-500 dark:text-gray-400 break-words mb-2 shrink-0"></p>
                     <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 min-h-0 flex-1 overflow-y-auto custom-scrollbar overscroll-contain"></div>
@@ -23953,6 +23988,29 @@ const Admin = {
         }
         const body = modal.querySelector('#admin-changelog-notes');
         if (title) title.textContent = key || 'Unknown version';
+        let previewEl = modal.querySelector('#admin-changelog-preview');
+        if (!previewEl && title) {
+            previewEl = document.createElement('div');
+            previewEl.id = 'admin-changelog-preview';
+            previewEl.className = 'hidden text-[12px] leading-snug mb-2 shrink-0';
+            title.insertAdjacentElement('afterend', previewEl);
+        }
+        if (previewEl) {
+            const snap = (typeof window.adminBuildSnapshot === 'function') ? window.adminBuildSnapshot(key) : null;
+            const href = snap && typeof snap.url === 'string' ? snap.url : '';
+            const frozen = /^https:\/\/[a-f0-9]{8}\.next-train-lab\.pages\.dev$/i.test(href);
+            if (frozen) {
+                const label = snap.released ? 'Open what commuters on this build see' : 'Open this operator preview';
+                const note = snap.released
+                    ? 'Commuters still on this build see this copy. The address does not move.'
+                    : 'Not released to commuters. This address stays on this build.';
+                previewEl.className = 'text-[12px] leading-snug mb-2 shrink-0';
+                previewEl.innerHTML = `<a href="${href}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-700 dark:text-blue-300 underline">${label}</a><span class="block mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">${note}</span>`;
+            } else {
+                previewEl.className = 'text-[11px] leading-snug mb-2 shrink-0 text-gray-400';
+                previewEl.textContent = 'No frozen preview for this build.';
+            }
+        }
         if (meta) {
             const routeLabel = String(ctx.routeLabel || ctx.route || '').trim();
             const station = String(ctx.station || '').trim();

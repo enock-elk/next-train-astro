@@ -2303,13 +2303,15 @@ export function setupSwipeNavigation() {
     const swipeBlocked = () => {
         const mapModal = document.getElementById('map-modal');
         const tripMapModal = document.getElementById('trip-map-modal');
+        if (document.documentElement.classList.contains('nt-full-overlay')) return true;
+        if (document.querySelector('div[id$="-modal"].fixed:not(.hidden)')) return true;
         return document.body.classList.contains('sidenav-open') ||
             (mapModal && !mapModal.classList.contains('hidden')) ||
             (tripMapModal && !tripMapModal.classList.contains('hidden'));
     };
 
     const swipeIgnoreFrom = (target) => !!target?.closest?.(
-        'input, textarea, select, [contenteditable="true"], .community-post-row, #community-reaction-sheet, #community-route-list, #community-reply-bar, #map-tab-frame, .map-tab-pane, iframe'
+        'input, textarea, select, [contenteditable="true"], #account-modal, .community-post-row, #community-reaction-sheet, #community-route-list, #community-reply-bar, #map-tab-frame, .map-tab-pane, iframe'
     );
 
     const clearSwipe = () => {

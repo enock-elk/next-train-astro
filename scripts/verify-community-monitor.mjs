@@ -7,7 +7,7 @@ const community = await readFile(new URL('../src/lib/community.js', import.meta.
 const worker = await readFile(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
 const rules = JSON.parse(await readFile(new URL('../firebase-database.rules.json', import.meta.url), 'utf8'));
 
-const start = admin.indexOf('function ntAdminCommunityActivityRows');
+const start = admin.indexOf('function ntAdminCommunityOwnActivity');
 const end = admin.indexOf('const NT_ADMIN_WEEKDAY_LABELS', start);
 assert.ok(start >= 0 && end > start, 'community monitor helpers are extractable');
 const helpers = {};
@@ -46,6 +46,10 @@ const operatorOne = helpers.rows(activity, { routeA: 150, routeB: 250 }, held, r
 assert.deepEqual(operatorOne.map((row) => row.routeId), ['routeC', 'routeA', 'routeB', 'routeD']);
 assert.equal(operatorOne.find((row) => row.routeId === 'routeA').unread, 1);
 assert.equal(operatorOne.find((row) => row.routeId === 'routeB').unread, 0);
+const ownReply = helpers.rows(activity, { routeA: 150 }, held, routes, 'u2');
+assert.equal(ownReply.find((row) => row.routeId === 'routeA').unread, 0, 'the viewing operator does not get a badge for their own reply');
+const otherOperator = helpers.rows(activity, { routeA: 150 }, held, routes, 'u1');
+assert.equal(otherOperator.find((row) => row.routeId === 'routeA').unread, 1, 'another operator still raises the badge');
 assert.equal(operatorOne.find((row) => row.routeId === 'routeC').held.length, 1);
 assert.ok(operatorOne.some((row) => row.routeId === 'routeD'), 'routes without activity remain accessible');
 
@@ -109,6 +113,8 @@ assert.match(admin, /windowFloor > 0 && \(Number\(ts\) \|\| 0\) < windowFloor/, 
 assert.match(admin, /moderation_queue\.json/);
 assert.match(admin, /\['closed', 'resolved', 'approved', 'rejected', 'dismissed'\]/, 'resolved holds do not count as unread');
 assert.match(admin, /admin_state\/\$\{encodeURIComponent\(Admin\.currentUser\.uid\)\}\/community_seen/);
+assert.match(admin, /ntAdminCommunityOwnActivity\(item, Admin\.currentUser\?\.uid\)/, 'the Dev Hub badge skips the signed-in operator');
+assert.match(admin, /ntAdminCommunityOwnActivity\(preview\.activity, viewerUid\)/, 'a peeked own message does not count as unread');
 assert.match(admin, /Admin\._communityLoadRoute/, 'route messages load on demand');
 assert.match(admin, /const missingActivity = \{\}/, 'lazy route load derives missing index entries from stored messages');
 assert.match(admin, /Activity backfill failed/, 'backfill is best effort and does not replace source messages');

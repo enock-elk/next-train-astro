@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.10': [
+        'The account screen parks the side menu before it opens, so Welcome back no longer flashes that menu. A swipe on the account screen does not open it either. Build notes link a frozen lab preview when one is saved. A deployment address is eight hex characters and does not move. A branch preview is not used. A build that was not released says so, and still offers the operator preview when that frozen address exists. Community Monitor unread skips the signed-in operator\'s own posts and replies. Another operator\'s message still counts. A service alert hides the small poster preview when that picture is already in the message. The small preview stays when the poster is only selected. A GIF in Alerts, Community, and Feedback plays three times, then rests on the frame it reached, with a replay control in the middle. Media and Upload a photo take up to 10 pictures, including a GIF. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.9': [
         'Community Monitor reads the newest stored post when a route has no activity index, so an older room such as Hercules to Koedoespoort still shows its message and time. That missing index row is written back. Route, delay, live share, account, ban, and train-order cards use the same sheet layout as Feedback. Live sharing and the other admin lists scroll with the page. The grey block under the session list is gone. Lookup no longer fails on accountEmailRaw before initialization. No commuter What\'s New. forceShow stays false.',
     ],
@@ -1039,6 +1042,31 @@ export function normalizeAdminChangelogKey(version) {
         .split(' · ')[0]
         .split(' ·')[0]
         .trim();
+}
+
+/**
+ * Frozen Cloudflare Pages deployment for one build.
+ * Only an 8-hex deployment host is accepted. A branch preview moves when the branch moves, so it is not stored.
+ * released false means commuters were not shipped this build. The link is an operator preview of that exact code.
+ */
+export const ADMIN_BUILD_SNAPSHOTS = {
+    'V10_11.10.9': {
+        url: 'https://bb34866e.next-train-lab.pages.dev',
+        released: false,
+    },
+};
+
+export function frozenLabPreviewUrl(raw) {
+    const s = String(raw || '').trim().replace(/\/$/, '');
+    return /^https:\/\/[a-f0-9]{8}\.next-train-lab\.pages\.dev$/i.test(s) ? s : '';
+}
+
+export function adminBuildSnapshot(version) {
+    const key = normalizeAdminChangelogKey(version);
+    const row = key ? ADMIN_BUILD_SNAPSHOTS[key] : null;
+    const url = frozenLabPreviewUrl(row?.url);
+    if (!url) return { key, url: '', released: false, known: false };
+    return { key, url, released: row.released === true, known: true };
 }
 
 export function lookupAdminChangelog(version) {

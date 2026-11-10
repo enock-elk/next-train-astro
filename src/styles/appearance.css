@@ -1671,6 +1671,13 @@ html.dark .dark\:text-gray-200 {
   background-color: var(--nt-surface) !important;
   color: var(--nt-text);
 }
+/* Account, messages, and Dev Mode sit in the page. The fixed drawer would paint over them for a frame. */
+html.nt-full-overlay #sidenav,
+html.nt-full-overlay #sidenav-overlay {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
 body.nav-bottom:not(.nt-immersive) #sidenav {
   border-bottom-left-radius: 1.25rem;
   overflow: hidden;
@@ -3218,4 +3225,62 @@ html.dark #nt-pull-refresh {
 }
 #nt-pull-refresh.is-ready .nt-pull-arrow {
   opacity: 1;
+}
+
+/* GIF: play, then rest on the frame it reached. Replay sits in the middle. */
+.nt-gif {
+  position: relative;
+  display: block;
+  max-width: 100%;
+}
+.nt-gif.is-fill {
+  position: absolute;
+  inset: 0;
+}
+.nt-gif-still {
+  display: none;
+  width: 100%;
+  height: auto;
+  border-radius: inherit;
+}
+.nt-gif.is-fill > .nt-gif-still,
+.nt-gif.is-fill > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.nt-gif.is-resting > img {
+  display: none !important;
+}
+.nt-gif.is-resting > .nt-gif-still {
+  display: block;
+}
+.nt-gif-replay {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.28);
+  cursor: pointer;
+}
+.nt-gif.is-resting .nt-gif-replay {
+  display: flex;
+}
+.nt-gif-replay svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-left: 0.12rem;
 }

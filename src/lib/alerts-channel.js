@@ -12,6 +12,7 @@ import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
 import { pictureWasShown, picturesWaitForTap, posterLoadPlan, rememberPicture, heldPictureAskInnerHtml, settleHeldPicture, loadPicturePreview } from './data-saver.js';
+import { armGifPlayers, isGifUrl } from './gif-play.js';
 import { imageMetaForUrl, sanitizePicturePreview, tinyJpegFromBlob, imageMetaKey, imageMetaRow } from './picture-preview.js';
 import { groupScheduleSheets, scheduleRouteTitle, scheduleSheetRowLabel } from './schedule-sheet-list.js';
 import {
@@ -412,6 +413,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
         if (!originalSrc) return;
+        if (isGifUrl(originalSrc)) img.dataset.ntGifSrc = originalSrc;
         const startLoad = () => {
             if (img.dataset.ntPosterStarted === '1') return;
             img.dataset.ntPosterStarted = '1';
@@ -473,6 +475,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             img.classList.remove('opacity-0');
             img.classList.add('opacity-100');
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+            armGifPlayers(host || img);
             host?.setAttribute('data-alert-ready', '1');
             const live = img.currentSrc || img.src || '';
             if (live.startsWith('blob:')) host?.setAttribute('data-alert-object-url', live);
@@ -515,6 +518,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             setTimeout(kick, 4000);
         }
     });
+    armGifPlayers(root);
 }
 
 function watchAlertPosterHydration(root) {

@@ -950,7 +950,32 @@ export async function offerNextTrainAccount({ title, body, wait = false } = {}) 
     return waitForSignedIn(180000);
 }
 
+/** The hub is a fixed drawer. The account sheet sits in the page, so the drawer paints over it unless it is parked first. */
+function parkHubForAccount() {
+    if (typeof document === 'undefined') return;
+    const sidenav = document.getElementById('sidenav');
+    const overlay = document.getElementById('sidenav-overlay');
+    const hubOpen = document.body.classList.contains('sidenav-open')
+        || !!sidenav?.classList.contains('translate-x-0')
+        || !!sidenav?.classList.contains('open');
+    if (sidenav) {
+        sidenav.style.transition = 'none';
+        sidenav.classList.remove('translate-x-0', 'open', '-translate-x-full');
+        sidenav.classList.add('translate-x-full');
+    }
+    if (overlay) {
+        overlay.classList.add('hidden', 'opacity-0');
+        overlay.classList.remove('open');
+    }
+    document.body.classList.remove('sidenav-open');
+    if (sidenav) requestAnimationFrame(() => { sidenav.style.transition = ''; });
+    if (hubOpen && typeof location !== 'undefined' && location.hash === '#sidenav') {
+        try { history.replaceState({ view: 'home' }, '', '#home'); } catch { /* ignore */ }
+    }
+}
+
 export function openAccountModal() {
+    parkHubForAccount();
     const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
     if (modal) {
         modal.style.removeProperty('top');

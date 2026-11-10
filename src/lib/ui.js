@@ -1393,6 +1393,56 @@ function rememberLightboxSlides(host) {
     lbDragX = 0;
 }
 
+function ensureLightboxStrip() {
+    const { stage, img } = lightboxEls();
+    if (!stage || !img) return null;
+    let strip = document.getElementById('alert-image-lightbox-strip');
+    if (strip) return strip;
+    strip = document.createElement('div');
+    strip.id = 'alert-image-lightbox-strip';
+    const makePeer = (id) => {
+        const el = document.createElement('img');
+        el.id = id;
+        el.alt = '';
+        el.draggable = false;
+        el.decoding = 'async';
+        el.className = 'max-w-full max-h-full object-contain select-none pointer-events-none';
+        return el;
+    };
+    stage.insertBefore(strip, img);
+    strip.append(makePeer('alert-image-lightbox-prev'), img, makePeer('alert-image-lightbox-next'));
+    return strip;
+}
+
+function placeLightboxStrip(dx, animate) {
+    const strip = ensureLightboxStrip();
+    if (!strip) return;
+    strip.style.transition = animate ? 'transform 180ms ease' : 'none';
+    strip.style.transform = `translateX(${dx}px)`;
+}
+
+function assignLightboxFrame(el, src) {
+    if (!el) return;
+    if (!src) {
+        if (el.getAttribute('src')) el.removeAttribute('src');
+        return;
+    }
+    if (el.getAttribute('src') !== src) el.src = src;
+}
+
+/** The picture on either side is already in the stage, so a sideways swipe reveals it. */
+function primeLightboxNeighbors() {
+    ensureLightboxStrip();
+    assignLightboxFrame(
+        document.getElementById('alert-image-lightbox-prev'),
+        slideDisplaySrc(lbSlides[lbSlide - 1]),
+    );
+    assignLightboxFrame(
+        document.getElementById('alert-image-lightbox-next'),
+        slideDisplaySrc(lbSlides[lbSlide + 1]),
+    );
+}
+
 function showLightboxSlide(index) {
     if (index < 0 || index >= lbSlides.length) return;
     const slide = lbSlides[index];
@@ -1401,21 +1451,70 @@ function showLightboxSlide(index) {
     lbDragX = 0;
     lbStepping = false;
     resetAlertLightboxTransform();
+    placeLightboxStrip(0, false);
     paintLightboxImage(slideDisplaySrc(slide));
+    primeLightboxNeighbors();
     announceLightboxNotice(slide.host);
+}
+
+/**
+ * The neighbour element already holds the next picture. Promote that element
+ * so the settle does not clear the stage and wait on a new download.
+ */
+function adoptLightboxNeighbor(index) {
+    const goingNext = index > lbSlide;
+    const prev = document.getElementById('alert-image-lightbox-prev');
+    const current = document.getElementById('alert-image-lightbox-img');
+    const next = document.getElementById('alert-image-lightbox-next');
+    const incoming = goingNext ? next : prev;
+    const recycle = goingNext ? prev : next;
+    const hasFrame = !!(incoming && incoming.getAttribute('src'));
+    if (hasFrame && current && recycle) {
+        incoming.id = 'alert-image-lightbox-img';
+        current.id = goingNext ? 'alert-image-lightbox-prev' : 'alert-image-lightbox-next';
+        recycle.id = goingNext ? 'alert-image-lightbox-next' : 'alert-image-lightbox-prev';
+        incoming.style.transform = '';
+        current.style.transform = '';
+        recycle.style.transform = '';
+    }
+    const slide = lbSlides[index];
+    lbSlide = index;
+    lbAxis = '';
+    lbDragX = 0;
+    resetAlertLightboxTransform();
+    placeLightboxStrip(0, false);
+    if (!hasFrame) paintLightboxImage(slideDisplaySrc(slide));
+    else hideLightboxStatus();
+    primeLightboxNeighbors();
+    announceLightboxNotice(slide.host);
+    lbStepping = false;
 }
 
 function finishLightboxStep(index, exitX) {
     if (lbStepping || index < 0 || index >= lbSlides.length) return;
     lbStepping = true;
-    const { img } = lightboxEls();
-    if (img) img.style.transition = 'transform 180ms ease';
+    primeLightboxNeighbors();
     lbScale = 1;
+    lbX = 0;
     lbY = 0;
     lbDismissY = 0;
-    lbX = exitX;
-    applyAlertLightboxTransform();
-    window.setTimeout(() => showLightboxSlide(index), 170);
+    const { img } = lightboxEls();
+    if (img) {
+        img.style.transition = 'none';
+        img.style.transform = 'translate(0px, 0px) scale(1)';
+    }
+    placeLightboxStrip(exitX, true);
+    const strip = document.getElementById('alert-image-lightbox-strip');
+    let settled = false;
+    const done = (event) => {
+        if (event && event.target !== strip) return;
+        if (settled) return;
+        settled = true;
+        strip?.removeEventListener('transitionend', done);
+        adoptLightboxNeighbor(index);
+    };
+    strip?.addEventListener('transitionend', done);
+    window.setTimeout(() => done(), 220);
 }
 
 function commitLightboxDrag() {
@@ -1432,7 +1531,12 @@ function commitLightboxDrag() {
         finishLightboxStep(lbSlide - 1, width);
         return true;
     }
-    applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+    lbX = 0;
+    lbY = 0;
+    lbDismissY = 0;
+    const { img } = lightboxEls();
+    if (img) img.style.transform = 'translate(0px, 0px) scale(1)';
+    placeLightboxStrip(0, true);
     return true;
 }
 
@@ -1449,13 +1553,16 @@ function followLightboxDrag(dx) {
     const atEnd = lbSlide >= lbSlides.length - 1 && drag < 0;
     if (lbSlides.length < 2 || atStart || atEnd) drag *= 0.28;
     lbDragX = drag;
-    lbX = drag;
+    lbX = 0;
     lbY = 0;
     lbDismissY = 0;
     const { img, overlay } = lightboxEls();
-    if (img) img.style.transition = 'none';
+    if (img) {
+        img.style.transition = 'none';
+        img.style.transform = 'translate(0px, 0px) scale(1)';
+    }
     if (overlay) overlay.style.transition = '';
-    applyAlertLightboxTransform();
+    placeLightboxStrip(drag, false);
 }
 
 function bindAlertImageLightbox() {
@@ -1787,9 +1894,12 @@ export function openLightbox(url, host) {
     }
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
+    ensureLightboxStrip();
+    placeLightboxStrip(0, false);
     paintLightboxImage(displaySrc);
     announceLightboxNotice(wrap || host);
     rememberLightboxSlides(wrap || host);
+    primeLightboxNeighbors();
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -1808,6 +1918,9 @@ export function closeLightbox(fromPopState = false) {
             delete overlay.dataset.ntAdminLift;
         }
         resetAlertLightboxTransform();
+        placeLightboxStrip(0, false);
+        assignLightboxFrame(document.getElementById('alert-image-lightbox-prev'), '');
+        assignLightboxFrame(document.getElementById('alert-image-lightbox-next'), '');
         lbSlides = [];
         lbSlide = 0;
         lbAxis = '';

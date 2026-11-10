@@ -1430,6 +1430,58 @@ html.dark .nt-brief-fact dd {
 #alert-msg {
   white-space: pre-wrap;
 }
+/* Gallery swipe keeps the next picture in the stage, the same way a tab
+   swipe keeps the next page beside the current one. The stage clips it. */
+#alert-image-lightbox-strip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  will-change: transform;
+}
+#alert-image-lightbox-prev,
+#alert-image-lightbox-next {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: contain;
+}
+#alert-image-lightbox-prev { left: -100%; }
+#alert-image-lightbox-next { left: 100%; }
+/* The hub page is #f9fafb and dark #111827. Fields used that same fill, so a
+   text box disappeared into the sheet. A cool field fill keeps the edge. */
+#dev-modal :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]),
+#dev-modal div.bg-gray-50.border.rounded-lg,
+#dev-modal button.bg-gray-50.border,
+#dev-modal .focus-within\:ring-blue-500,
+#dev-modal .bg-gray-100.border-b,
+#dev-modal [contenteditable="true"],
+#admin-reply-modal :is(input, textarea):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+#admin-reply-modal .bg-gray-100.border-b,
+#admin-reply-modal [contenteditable="true"],
+#admin-reply-guide-modal textarea,
+#admin-write-text {
+  background-color: #e7eef8 !important;
+  border-color: #c3d0e4;
+}
+html.dark #dev-modal :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]),
+html.dark #dev-modal div.bg-gray-50.border.rounded-lg,
+html.dark #dev-modal button.bg-gray-50.border,
+html.dark #dev-modal .focus-within\:ring-blue-500,
+html.dark #dev-modal .bg-gray-100.border-b,
+html.dark #dev-modal [contenteditable="true"],
+html.dark #admin-reply-modal :is(input, textarea):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+html.dark #admin-reply-modal .bg-gray-100.border-b,
+html.dark #admin-reply-modal [contenteditable="true"],
+html.dark #admin-reply-guide-modal textarea,
+html.dark #admin-write-text {
+  background-color: #243044 !important;
+  border-color: #3d4f66;
+}
 [data-nt-title-slot] [data-nt-title] {
   min-height: 2.4rem;
   padding: 0.55rem 0.65rem 0.4rem;

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.11': [
+        'Swiping across alert pictures keeps the next picture in the frame while the finger moves, the same way the home tabs slide. The stage no longer goes black and then loads. Service alert, Transit Incident Manager, Feedback, and the other admin text fields use a field fill that sits off the hub background, in light and dark. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.10': [
         'The account screen parks the side menu before it opens, so Welcome back no longer flashes that menu. A swipe on the account screen does not open it either. Build notes link a frozen lab preview when one is saved. A deployment address is eight hex characters and does not move. A branch preview is not used. A build that was not released says so, and still offers the operator preview when that frozen address exists. Community Monitor unread skips the signed-in operator\'s own posts and replies. Another operator\'s message still counts. A service alert hides the small poster preview when that picture is already in the message. The small preview stays when the poster is only selected. A GIF in Alerts, Community, and Feedback plays three times, then rests on the frame it reached, with a replay control in the middle. Media and Upload a photo take up to 10 pictures, including a GIF. No commuter What\'s New. forceShow stays false.',
     ],

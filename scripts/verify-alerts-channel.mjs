@@ -483,6 +483,8 @@ const now = 1_700_000_000_000;
     assert(ui.includes('lbDismissY') && ui.includes('closeLightbox()'), 'a downward swipe closes the image preview');
     assert(ui.includes('collectChannelSlides') && ui.includes('[data-alert-lightbox], [data-alert-video]'), 'full view walks posters and video previews on the channel');
     assert(ui.includes('if (index < 0 || index >= lbSlides.length) return'), 'full view moves one picture at a time and does not wrap');
+    assert(ui.includes('alert-image-lightbox-strip') && ui.includes('primeLightboxNeighbors'), 'a sideways swipe already has the next picture in the stage');
+    assert(ui.includes('adoptLightboxNeighbor'), 'settling a swipe keeps the picture that was already on screen');
     assert(ui.includes('videoPreviewStill') && !ui.includes('alertVideoEmbedUrl'), 'a swiped video stays on its preview still');
     assert(js.includes("!e.target.closest?.('[data-alert-video-play-chip]')"), 'tapping the preview still opens full view');
     assert(js.includes('window.openLightbox(\'\', host)'), 'the preview still opens without starting playback');
@@ -504,6 +506,9 @@ const now = 1_700_000_000_000;
     assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(appearance.includes('#alert-image-lightbox-next { left: 100%; }'), 'the next picture sits one stage width off to the side');
+    assert(appearance.includes('background-color: #e7eef8 !important;'), 'admin text fields use a fill that is not the hub page');
+    assert(appearance.includes('background-color: #243044 !important;'), 'admin text fields stay separate in dark mode');
     assert(appearance.includes('html.nt-keyboard #alert-image-lightbox-dock'), 'the photo reply lifts with the keyboard');
     assert(appearance.includes('bottom: var(--nt-kb-h, 0px);'), 'the photo reply docks to the keyboard height');
     assert(/\.nt-poll\s*\{[\s\S]*?background:\s*color-mix/.test(appearance), 'poll well uses pack tokens');

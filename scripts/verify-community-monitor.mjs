@@ -15,6 +15,7 @@ new Function(`${admin.slice(start, end)}
 this.rows = ntAdminCommunityActivityRows;
 this.path = ntAdminCommunityActivityPath;
 this.seenPatch = ntAdminCommunitySeenPatch;
+this.preview = ntAdminCommunityPostPreview;
 `).call(helpers);
 
 const activity = {
@@ -55,6 +56,36 @@ assert.deepEqual(helpers.seenPatch('operator1', 'routeA', 500), {
     'admin_state/operator1/community_seen/routeA': 500,
 });
 assert.equal(helpers.path('routeA', activity.routeA.reply1), 'route_community/routeA/posts/post1/replies/reply1');
+const hercules = helpers.preview('post-old', {
+    postId: 'post-old',
+    body: 'Hello Hercules, testing.',
+    uid: 'enock',
+    timestamp: 1757196300000,
+});
+assert.equal(hercules.body, 'Hello Hercules, testing.');
+assert.equal(hercules.activity.kind, 'post');
+assert.equal(hercules.activity.postId, 'post-old');
+const replied = helpers.preview('post1', {
+    postId: 'post1',
+    body: 'older post',
+    uid: 'u1',
+    timestamp: 100,
+    replies: { r1: { replyId: 'r1', body: 'newer reply', uid: 'u2', timestamp: 500 } },
+});
+assert.equal(replied.body, 'newer reply');
+assert.equal(replied.activity.kind, 'reply');
+assert.equal(replied.activity.replyId, 'r1');
+assert.match(admin, /quietRows/, 'routes with no activity index still load their newest post');
+assert.match(admin, /route_community\/\$\{encodeURIComponent\(row\.routeId\)\}\/posts\.json/);
+assert.match(admin, /class="community-monitor-route admin-sheet-card/);
+assert.match(css, /\.admin-sheet-list \{\s*display: flex;/, 'admin lists are not capped by an inner scroll box');
+assert.doesNotMatch(admin, /id="ls-log-list" class="[^"]*max-h-/, 'live share sessions are not clipped by a max height');
+{
+    const emailDecl = admin.indexOf("const accountEmailRaw = String(user.email || '').trim();");
+    const emailUse = admin.indexOf('accountEmailRaw.includes');
+    assert.ok(emailDecl > 0 && emailUse > emailDecl, 'account email is declared before lookup reads it');
+    assert.equal(admin.split('const accountEmailRaw').length - 1, 1, 'account email is declared once');
+}
 
 assert.match(admin, />Community Monitor</);
 assert.match(admin, /data-community-held=/, 'held cards have a distinct marker');

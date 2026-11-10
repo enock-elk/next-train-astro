@@ -470,6 +470,49 @@ function ntAdminPendingStationReviewCount(rows) {
     return (Array.isArray(rows) ? rows : []).filter((row) => String(row?.status || '') === 'pending').length;
 }
 
+/**
+ * Newest stored post or reply when community_activity has no row for the route.
+ * The index is only the newest page, and a message written before that index
+ * (Hercules, 6 Sept) still lives under route_community.
+ */
+function ntAdminCommunityPostPreview(postId, post) {
+    if (!post || typeof post !== 'object') return null;
+    const id = String(post.postId || postId || '');
+    const candidates = [];
+    const push = (kind, messageId, message, parentPostId) => {
+        if (!message || typeof message !== 'object') return;
+        const ts = Number(message.timestamp) || 0;
+        const body = String(message.body || '').trim();
+        if (!ts && !body) return;
+        candidates.push({
+            kind,
+            messageId: String(messageId || ''),
+            postId: String(parentPostId || id),
+            uid: String(message.uid || ''),
+            timestamp: ts,
+            body,
+        });
+    };
+    push('post', id, post, id);
+    Object.entries(post.replies || {}).forEach(([replyKey, reply]) => {
+        push('reply', (reply && reply.replyId) || replyKey, reply, id);
+    });
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => a.timestamp - b.timestamp);
+    const latest = candidates[candidates.length - 1];
+    return {
+        body: latest.body,
+        timestamp: latest.timestamp,
+        activity: {
+            kind: latest.kind,
+            postId: latest.postId,
+            uid: latest.uid,
+            timestamp: latest.timestamp,
+            ...(latest.kind === 'reply' && latest.messageId ? { replyId: latest.messageId } : {}),
+        },
+    };
+}
+
 const NT_ADMIN_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function ntAdminParseTimeOfDay(hhmm) {
@@ -7147,7 +7190,7 @@ const Admin = {
                             <button id="crash-clear-btn" class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Clear DB</button>
                         </div>
                     </div>
-                    <div id="crash-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar"></div>
+                    <div id="crash-list" class="admin-sheet-list"></div>
                 </div>
             `;
         
@@ -8102,7 +8145,7 @@ const Admin = {
                         </div>
                     </div>
                 </div>
-                <div id="de-list" class="space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar"></div>
+                <div id="de-list" class="admin-sheet-list"></div>
             </div>
         `;
         
@@ -10981,7 +11024,7 @@ const Admin = {
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="dr-refresh-btn" class="flex-1 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
-                <div id="dr-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                <div id="dr-list" class="admin-sheet-list"></div>
             </div>
         `;
 
@@ -11044,30 +11087,30 @@ const Admin = {
                 };
 
                 list.innerHTML = items.slice(0, 80).map((r) => {
-                    const when = r.timestamp ? Admin.formatDate(r.timestamp) : '-';
+                    const when = r.timestamp ? Admin.formatDate(r.timestamp) : '';
                     const sev = (r.severity || 'moderate').toUpperCase();
-                    const sevColor = r.severity === 'severe' ? 'text-red-600 dark:text-red-400' : (r.severity === 'minor' ? 'text-yellow-700 dark:text-yellow-400' : 'text-amber-700 dark:text-amber-400');
+                    const sevClass = r.severity === 'severe' ? 'is-severe' : (r.severity === 'minor' ? 'is-minor' : 'is-moderate');
                     const status = r.status || 'open';
                     const note = r.note ? String(r.note).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '<span class="italic text-gray-400">No note</span>';
-                    const who = r.isGuest ? `guest - ${(r.deviceId || '').slice(0, 8)}` : `uid - ${(r.uid || '').slice(0, 10)}`;
-                    const closedCls = status === 'closed' ? 'opacity-50' : '';
+                    const who = r.isGuest ? `Guest ${(r.deviceId || '').slice(0, 8)}` : `Account ${(r.uid || '').slice(0, 10)}`;
+                    const title = Admin.formatRouteLabelHtml(routeName(r.routeId)) || routeName(r.routeId);
                     return `
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closedCls}" data-report-id="${r.reportId || r._key}">
-                            <div class="flex justify-between items-start gap-2 mb-1">
-                                <div class="min-w-0">
-                                    <p class="text-xs font-black text-gray-900 dark:text-white truncate">${routeName(r.routeId)}</p>
-                                    <p class="text-[10px] font-bold ${sevColor}">${sev} - ${status} - ${r.source || 'app'}</p>
-                                </div>
-                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
+                        <article class="admin-sheet-card${status === 'closed' ? ' is-quiet' : ''}" data-report-id="${r.reportId || r._key}">
+                            <p class="admin-sheet-card-title">${title}</p>
+                            <p class="admin-sheet-card-body">${note}</p>
+                            <div class="admin-sheet-pills">
+                                <span class="admin-sheet-pill ${sevClass}">${sev}</span>
+                                <span class="admin-sheet-pill">${status}</span>
+                                <span class="admin-sheet-pill">${r.source || 'app'}</span>
+                                ${r.verified ? '<span class="admin-sheet-pill is-ok">Verified</span>' : ''}
                             </div>
-                            <p class="text-[11px] text-gray-700 dark:text-gray-300 mb-1">${note}</p>
-                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` - near ${String(r.station).replace(/</g, '')}` : ''} - ${r.reportId || r._key}${r.verified ? ' - verified' : ''}</p>
-                            <div class="flex flex-wrap gap-3">
-                            ${status !== 'closed' ? `<button type="button" class="dr-close-btn text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Mark closed</button>` : '<span class="text-[10px] text-gray-400">Closed</span>'}
-                            ${!r.verified && r.uid ? `<button type="button" class="dr-verify-btn text-[10px] font-bold text-green-700 dark:text-green-400 underline" data-id="${r.reportId || r._key}" data-uid="${r.uid}">Mark verified (+trust)</button>` : (r.verified ? '<span class="text-[10px] text-green-600">Verified</span>' : '')}
-                            ${r.uid ? `<button type="button" class="dr-flag-user text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.uid}">Flag user</button>` : ''}
+                            <p class="admin-sheet-card-meta">${when ? `${when} · ` : ''}${who}${r.station ? ` · near ${String(r.station).replace(/</g, '')}` : ''}</p>
+                            <div class="admin-sheet-actions">
+                            ${status !== 'closed' ? `<button type="button" class="dr-close-btn" data-id="${r.reportId || r._key}">Mark closed</button>` : ''}
+                            ${!r.verified && r.uid ? `<button type="button" class="dr-verify-btn" data-id="${r.reportId || r._key}" data-uid="${r.uid}">Mark verified</button>` : ''}
+                            ${r.uid ? `<button type="button" class="dr-flag-user is-danger" data-uid="${r.uid}">Flag user</button>` : ''}
                             </div>
-                        </div>
+                        </article>
                     `;
                 }).join('');
 
@@ -11142,14 +11185,14 @@ const Admin = {
             </div>
             <div id="ls-body" class="hidden mt-4 flex flex-col">
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Live GPS shares and expandable sessions. Start and stop for the same rider sit in one entry.</p>
-                <div class="grid-hidden-actions flex space-x-1 mb-3 px-1" id="ls-region-tabs"></div>
+                <div class="grid-hidden-actions admin-sheet-tabs" id="ls-region-tabs"></div>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="ls-refresh-btn" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
-                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2 flex items-center gap-2">Live now <span id="ls-live-count" class="hidden text-[9px] font-black tracking-normal normal-case bg-blue-600 text-white px-1.5 py-0.5 rounded-full"></span></p>
-                <div id="ls-live-list" class="space-y-2 max-h-[28vh] overflow-y-auto pr-1 custom-scrollbar mb-4"></div>
-                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2">Share sessions</p>
-                <div id="ls-log-list" class="space-y-2 max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                <p class="admin-sheet-kicker">Live now <span id="ls-live-count" class="hidden"></span></p>
+                <div id="ls-live-list" class="admin-sheet-list"></div>
+                <p class="admin-sheet-kicker">Share sessions</p>
+                <div id="ls-log-list" class="admin-sheet-list"></div>
             </div>
         `;
 
@@ -11165,7 +11208,7 @@ const Admin = {
             tabsHost.innerHTML = regions.map((id) => {
                 const on = Admin._lsRegion === id;
                 const label = (typeof REGIONS !== 'undefined' && REGIONS[id]?.name) || id;
-                return `<button type="button" data-ls-region="${id}" class="flex-1 rounded-lg px-2 py-2 text-[10px] font-black ${on ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300'}">${label}</button>`;
+                return `<button type="button" data-ls-region="${id}" class="admin-sheet-tab${on ? ' is-on' : ''}">${label}</button>`;
             }).join('');
             tabsHost.querySelectorAll('[data-ls-region]').forEach((btn) => {
                 btn.onclick = () => {
@@ -11473,18 +11516,17 @@ const Admin = {
                         const speed = Number.isFinite(p.speedMps) ? (p.speedMps * 3.6).toFixed(0) + ' km/h' : '';
                         const bits = [p.source || '', p.station || '', acc, speed].filter(Boolean).join(' · ');
                         return `
-                        <div class="nt-ls-live-card border ${stale ? 'border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40' : 'border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/30'} rounded-xl p-3 text-left">
-                            <div class="flex justify-between gap-2 items-start">
-                                <p class="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
-                                    <span class="nt-ls-live-dot ${stale ? 'is-stale' : ''}"></span>
-                                    Train ${esc(p.trainId || '—')} · ${esc(routeName(p.routeId))}
-                                </p>
-                                <span class="text-[9px] font-mono ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-300'} shrink-0">${stale ? 'GPS stale · ' : 'LIVE · '}${esc(fmtAge(p.at, now))}</span>
+                        <article class="admin-sheet-card nt-ls-live-card${stale ? ' is-quiet' : ''}">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="admin-sheet-card-title"><span class="nt-ls-live-dot ${stale ? 'is-stale' : ''}"></span> Train ${esc(p.trainId || '—')}</p>
+                                <span class="admin-sheet-pill ${stale ? 'is-moderate' : 'is-ok'}">${stale ? 'GPS stale' : 'Live'} · ${esc(fmtAge(p.at, now))}</span>
                             </div>
-                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${Admin.commuterLabelHtml(p.deviceId)}</p>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">${esc(bits)}</p>
-                            <button type="button" class="ls-stop-share mt-2 text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(p.routeId)}" data-device="${esc(p.deviceId)}">Stop share</button>
-                        </div>`;
+                            <p class="admin-sheet-card-body">${Admin.formatRouteLabelHtml(routeName(p.routeId)) || esc(routeName(p.routeId))}</p>
+                            <p class="admin-sheet-card-meta">${esc(p.email || p.uid || 'Guest')} · ${esc(bits)}</p>
+                            <div class="admin-sheet-actions">
+                                <button type="button" class="ls-stop-share is-danger" data-route="${esc(p.routeId)}" data-device="${esc(p.deviceId)}">Stop share</button>
+                            </div>
+                        </article>`;
                     }).join('')
                     : '<p class="text-xs text-gray-400 text-center py-4">No live shares in this region.</p>';
                 liveEl.querySelectorAll('.ls-stop-share').forEach((btn) => {
@@ -11533,16 +11575,16 @@ const Admin = {
                             ? `since ${fmtWhen(s.startedAt)}`
                             : `${fmtWhen(s.startedAt)} → ${fmtWhen(s.stoppedAt)}`;
                         return `
-                        <details class="nt-ls-session ${live ? 'border-blue-200 dark:border-blue-800/70' : 'border-gray-200 dark:border-gray-700'} border rounded-xl text-left bg-white dark:bg-gray-800" data-ls-session="${esc(s.id)}">
-                            <summary class="cursor-pointer list-none p-3 flex justify-between gap-2 items-start">
-                                <span>
-                                    <span class="text-xs font-black text-gray-900 dark:text-white">${title}${dur ? ' · ' + esc(dur) : ''}</span>
-                                    <span class="block text-[11px] text-gray-600 dark:text-gray-300 mt-0.5">${esc(routeName(s.routeId))}</span>
-                                    <span class="block text-[9px] font-mono text-gray-400 mt-0.5">${esc(when)}</span>
+                        <details class="admin-sheet-card nt-ls-session${live ? ' is-live' : ''}" data-ls-session="${esc(s.id)}">
+                            <summary class="admin-sheet-summary">
+                                <span class="admin-sheet-card-main">
+                                    <span class="admin-sheet-card-title">${title}${dur ? ' · ' + esc(dur) : ''}</span>
+                                    <span class="admin-sheet-card-body">${Admin.formatRouteLabelHtml(routeName(s.routeId)) || esc(routeName(s.routeId))}</span>
+                                    <span class="admin-sheet-card-meta">${esc(when)}</span>
                                 </span>
-                                <svg class="nt-ls-session-chevron w-4 h-4 text-gray-400 shrink-0 mt-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                <svg class="nt-ls-session-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
                             </summary>
-                            <div class="px-3 pb-3 pt-0 text-[10px] font-mono text-gray-500 dark:text-gray-400 space-y-0.5" data-ls-session-body>
+                            <div class="admin-sheet-card-meta nt-ls-session-body" data-ls-session-body>
                                 <p>uid ${esc(s.uid || '')} · ${esc(s.email || '')}</p>
                                 <p>device ${Admin.commuterLabelHtml(s.deviceId)}</p>
                                 <p>start ${esc(s.startSource || '—')} · stop ${esc(s.stopSource || (live ? 'still live' : '—'))}</p>
@@ -11613,7 +11655,7 @@ const Admin = {
                     <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                         <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                     </div>
-                    <div id="mq-list" class="space-y-2 pr-1"></div>
+                    <div id="mq-list" class="admin-sheet-list"></div>
                     </div>
                     <div id="mq-thread" class="cm-thread" hidden>
                         <div class="cm-thread-bar">
@@ -11645,7 +11687,7 @@ const Admin = {
                         </select>
                         <button type="button" id="mq-reviews-refresh-btn" class="shrink-0 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                     </div>
-                    <div id="mq-reviews-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                    <div id="mq-reviews-list" class="admin-sheet-list"></div>
                 </div>
             </div>
         `;
@@ -12236,6 +12278,60 @@ const Admin = {
                 }
                 const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
                 const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
+                const quietRows = rows.filter((row) => !row.latestAt);
+                const activityBackfill = {};
+                await Admin._pool(quietRows, 4, async (row) => {
+                    try {
+                        const postsRes = await window.guardianFetch(
+                            Admin._badgeQueryUrl(
+                                `route_community/${encodeURIComponent(row.routeId)}/posts.json`,
+                                secret,
+                                { startAt: 0, limit: 1 },
+                            ),
+                            {},
+                            8000,
+                        );
+                        if (!postsRes || !postsRes.ok) return;
+                        const posts = await postsRes.json();
+                        if (!posts || typeof posts !== 'object') return;
+                        const entry = Object.entries(posts)[0];
+                        if (!entry || !entry[1] || typeof entry[1] !== 'object') return;
+                        const preview = ntAdminCommunityPostPreview(entry[1].postId || entry[0], entry[1]);
+                        if (!preview || (!preview.timestamp && !preview.body)) return;
+                        row.latestPostBody = preview.body;
+                        if (!preview.timestamp) return;
+                        row.latestAt = preview.timestamp;
+                        row.latestActivity = preview.activity;
+                        row.peekedFromPosts = true;
+                        const seenAt = Number(seenData?.[row.routeId] || 0);
+                        if (preview.timestamp > seenAt) row.unread += 1;
+                        const messageId = preview.activity.kind === 'reply'
+                            ? preview.activity.replyId
+                            : preview.activity.postId;
+                        if (messageId && preview.activity.uid && preview.activity.postId) {
+                            activityBackfill[`community_activity/${row.routeId}/${messageId}`] = {
+                                kind: preview.activity.kind,
+                                postId: preview.activity.postId,
+                                uid: preview.activity.uid,
+                                timestamp: preview.activity.timestamp,
+                                ...(preview.activity.replyId ? { replyId: preview.activity.replyId } : {}),
+                            };
+                        }
+                    } catch { /* the route stays listed */ }
+                });
+                rows.sort((a, b) => (b.latestAt - a.latestAt) || String(a.routeName).localeCompare(String(b.routeName)));
+                if (Object.keys(activityBackfill).length) {
+                    try {
+                        const fillRes = await fetch(`${dynamicEndpoint}.json${authQ}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(activityBackfill),
+                        });
+                        if (!fillRes.ok) throw new Error(`Activity backfill failed (${fillRes.status})`);
+                    } catch (e) {
+                        console.warn('Community activity backfill failed', e);
+                    }
+                }
                 Admin._communityMonitorRows = rows;
                 const totalUnread = rows.reduce((sum, row) => sum + row.unread, 0);
                 Admin._communityChatUnread = totalUnread;
@@ -12349,6 +12445,7 @@ const Admin = {
                 };
 
                 const fetchPreview = async (row) => {
+                    if (row.latestPostBody) return row.latestPostBody;
                     if (!row.latestActivity) return row.held[0]?.snippet || row.held[0]?.publish?.payload?.body || '';
                     const path = ntAdminCommunityActivityPath(row.routeId, row.latestActivity);
                     const encodedPath = path.split('/').map(encodeURIComponent).join('/');
@@ -12361,20 +12458,25 @@ const Admin = {
                         return '';
                     }
                 };
+                const routeTitleHtml = (name) => Admin.formatRouteLabelHtml(name) || esc(name);
                 const previews = await Promise.all(rows.map(fetchPreview));
-                list.innerHTML = rows.map((row, index) => `
-                    <button type="button" class="community-monitor-route w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden p-3 flex items-start justify-between gap-3" data-community-route="${esc(row.routeId)}" data-community-name="${esc(row.routeName)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
-                            <span class="min-w-0">
-                                <span class="block text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.routeName)}</span>
-                                <span class="block text-[11px] text-gray-600 dark:text-gray-300 truncate mt-0.5">${esc(previews[index] || (row.held.length ? 'Held item awaiting review' : 'No published messages'))}</span>
-                                <span class="block text-[9px] font-mono text-gray-400 mt-1">${esc(formatWhen(row.latestAt))}</span>
+                list.innerHTML = rows.map((row, index) => {
+                    const preview = previews[index] || (row.held.length ? 'Held item awaiting review' : 'No messages yet');
+                    const when = row.latestAt ? formatWhen(row.latestAt) : '';
+                    const quiet = !row.latestAt && !row.held.length;
+                    return `
+                    <button type="button" class="community-monitor-route admin-sheet-card${quiet ? ' is-quiet' : ''}" data-community-route="${esc(row.routeId)}" data-community-name="${esc(row.routeName)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${preview} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
+                            <span class="admin-sheet-card-main">
+                                <span class="admin-sheet-card-title">${routeTitleHtml(row.routeName)}</span>
+                                <span class="admin-sheet-card-body" data-cm-preview>${esc(preview)}</span>
+                                <span class="admin-sheet-card-meta${when ? '' : ' hidden'}" data-cm-when>${esc(when)}</span>
                             </span>
-                            <span class="flex items-center gap-2 shrink-0">
-                                ${row.held.length ? `<span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[9px] font-black">${row.held.length} held</span>` : ''}
-                                <span class="community-route-unread ${row.unread ? '' : 'hidden'} rounded-full bg-emerald-500 text-white min-w-5 h-5 px-1 inline-flex items-center justify-center text-[9px] font-black">${row.unread}</span>
+                            <span class="admin-sheet-card-side">
+                                ${row.held.length ? `<span class="admin-sheet-pill is-held">${row.held.length} held</span>` : ''}
+                                <span class="community-route-unread ${row.unread ? '' : 'hidden'}">${row.unread}</span>
                             </span>
-                    </button>
-                `).join('');
+                    </button>`;
+                }).join('');
 
                 const threadClock = (value) => {
                     const n = Number(value);
@@ -12561,6 +12663,23 @@ const Admin = {
                     }
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
+                    const storedPreview = posts.reduce((best, post) => {
+                        const preview = ntAdminCommunityPostPreview(post.postId, post);
+                        if (!preview) return best;
+                        if (!best || preview.timestamp >= best.timestamp) return preview;
+                        return best;
+                    }, null);
+                    const cardPreview = document.querySelector(`#mq-list [data-community-route="${CSS.escape ? CSS.escape(routeId) : routeId}"] [data-cm-preview]`);
+                    const cardWhen = document.querySelector(`#mq-list [data-community-route="${CSS.escape ? CSS.escape(routeId) : routeId}"] [data-cm-when]`);
+                    const card = cardPreview?.closest('.community-monitor-route');
+                    if (storedPreview && (storedPreview.body || storedPreview.timestamp)) {
+                        if (cardPreview) cardPreview.textContent = storedPreview.body || 'No messages yet';
+                        if (cardWhen && storedPreview.timestamp) {
+                            cardWhen.classList.remove('hidden');
+                            cardWhen.textContent = formatWhen(storedPreview.timestamp);
+                        }
+                        if (card) card.classList.remove('is-quiet');
+                    }
                 };
 
                 const setMonitorThread = (open, routeName) => {
@@ -13380,7 +13499,7 @@ const Admin = {
                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Active shadow bans</span>
                         <button type="button" id="ut-bans-refresh" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
-                    <div id="ut-bans-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
+                    <div id="ut-bans-list" class="admin-sheet-list">
                         <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans...</p>
                     </div>
                 </div>
@@ -13411,7 +13530,7 @@ const Admin = {
                         </select>
                     </div>
                     <p id="ut-accounts-count" class="text-[13px] font-semibold text-gray-800 dark:text-gray-100 px-1 mb-2"></p>
-                    <div id="ut-accounts-list" class="space-y-2 px-1">
+                    <div id="ut-accounts-list" class="admin-sheet-list">
                         <p class="text-xs text-gray-400 text-center py-3">Open this tab to load accounts.</p>
                     </div>
                 </div>
@@ -13427,7 +13546,7 @@ const Admin = {
                         <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Delete data removes the profile from the database.</p>
                         <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
-                    <div id="ad-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar"><p class="text-xs text-gray-400 text-center py-3">Open this tab to load requests.</p></div>
+                    <div id="ad-list" class="admin-sheet-list"><p class="text-xs text-gray-400 text-center py-3">Open this tab to load requests.</p></div>
                 </div>
             </div>
         `;
@@ -13716,11 +13835,12 @@ const Admin = {
             filtered.forEach((row) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'relative w-full text-left rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 pr-12 focus:outline-none';
+                btn.className = 'admin-sheet-card ut-account-card';
                 const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
-                const where = [regionLabel(row.region), row.lastRouteId ? routeName(row.lastRouteId) : ''].filter(Boolean).join(' · ');
-                const meta = [when ? `Joined ${when}` : '', where].filter(Boolean).join(' · ');
-                btn.innerHTML = `${providerMark(row.provider)}<span class="block text-[17px] font-semibold text-gray-900 dark:text-white break-words leading-tight">${esc(row.displayName || 'Passenger')}</span><span class="block text-[15px] text-gray-500 dark:text-gray-400 break-all mt-0.5">${esc(row.email || 'No email')}</span>${meta ? `<span class="block text-[13px] text-gray-400 mt-1">${esc(meta)}</span>` : ''}`;
+                const known = (typeof ROUTES !== 'undefined' && row.lastRouteId && ROUTES[row.lastRouteId]) ? ROUTES[row.lastRouteId] : null;
+                const routeHtml = known ? Admin.formatRouteLabelHtml(known.name) : (row.lastRouteId ? esc(routeName(row.lastRouteId)) : '');
+                const place = [regionLabel(row.region), routeHtml].filter(Boolean).join(' · ');
+                btn.innerHTML = `${providerMark(row.provider)}<span class="admin-sheet-card-title">${esc(row.displayName || 'Passenger')}</span><span class="admin-sheet-card-body">${esc(row.email || 'No email')}</span><span class="admin-sheet-card-meta">${when ? `Joined ${esc(when)}` : ''}${when && place ? ' · ' : ''}${place}</span>`;
                 btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
                 list.appendChild(btn);
             });
@@ -13804,20 +13924,20 @@ const Admin = {
                     const name = String(alias || b.displayName || '-').replace(/</g, '&lt;');
                     const email = b.email ? String(b.email).replace(/</g, '&lt;') : '';
                     const card = document.createElement('div');
-                    card.className = 'border border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-950/20 rounded-xl p-3 space-y-1';
+                    card.className = 'admin-sheet-card is-ban';
                     card.innerHTML = `
-                        <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
-                                <p class="text-xs font-black text-gray-900 dark:text-white break-words">${name}</p>
-                                <p class="font-mono text-[9px] text-gray-400 break-all">${b.id}</p>
-                                ${email ? `<p class="text-[10px] text-gray-500">${email}</p>` : ''}
+                                <p class="admin-sheet-card-title">${name}</p>
+                                ${email ? `<p class="admin-sheet-card-body">${email}</p>` : ''}
+                                <p class="admin-sheet-card-meta">${b.id}</p>
                             </div>
-                            <button type="button" class="ut-lift-from-list shrink-0 text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800">Lift</button>
+                            <button type="button" class="ut-lift-from-list admin-sheet-pill">Lift</button>
                         </div>
-                        <div class="flex flex-wrap gap-1.5 pt-0.5">
-                            <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">${modeStr}</span>
-                            <span class="text-[9px] font-bold text-gray-600 dark:text-gray-300">${untilStr}</span>
-                            <span class="text-[9px] text-gray-400">${remaining}</span>
+                        <div class="admin-sheet-pills">
+                            <span class="admin-sheet-pill is-severe">${modeStr}</span>
+                            <span class="admin-sheet-pill">${untilStr}</span>
+                            <span class="admin-sheet-card-meta">${remaining}</span>
                         </div>
                     `;
                     card.querySelector('.ut-lift-from-list').onclick = async () => {
@@ -13985,6 +14105,7 @@ const Admin = {
                     : name;
                 const providerName = String(authAccount?.providerName || user.providerName || '').trim();
                 const providerId = String(authAccount?.providerId || user.provider || '').trim().toLowerCase();
+                const accountEmailRaw = String(user.email || '').trim();
                 const emailLocal = accountEmailRaw.includes('@')
                     ? accountEmailRaw.split('@')[0].replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim()
                     : '';
@@ -13997,7 +14118,6 @@ const Admin = {
                 const knownBirthYear = Number(user.birthYear);
                 const chatDid = profile.chatDevice || deviceId || (/^usr_/i.test(uid) ? uid : '');
                 const defaultRouteLabel = Admin.inboxRouteLabel(profile.defaultRoute) || profile.defaultRoute;
-                const accountEmailRaw = String(user.email || '').trim();
                 const accountEmailHtml = accountEmailRaw.includes('@')
                     ? `<a href="mailto:${Admin.commuterEsc(accountEmailRaw)}" class="font-bold text-blue-600 dark:text-blue-400 underline break-all">${Admin.commuterEsc(accountEmailRaw)}</a>`
                     : `<b>${email}</b>`;
@@ -18592,7 +18712,7 @@ const Admin = {
                         <span class="text-[10px] font-bold text-gray-500 uppercase" id="alert-active-status">Idle</span>
                         <button type="button" id="alert-active-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-2 py-1 text-[10px] font-bold focus:outline-none">Refresh</button>
                     </div>
-                    <div id="alert-active-list" class="space-y-2 max-h-[420px] overflow-y-auto custom-scrollbar"></div>
+                    <div id="alert-active-list" class="admin-sheet-list"></div>
                 </div>
 
                 <div id="alert-schedule-pane" class="hidden space-y-3">
@@ -18605,7 +18725,7 @@ const Admin = {
                         <span class="text-[10px] font-bold text-gray-500 uppercase" id="alert-schedule-status">Idle</span>
                         <button type="button" id="alert-schedule-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-2 py-1 text-[10px] font-bold focus:outline-none">Refresh</button>
                     </div>
-                    <div id="alert-schedule-list" class="space-y-2 max-h-[420px] overflow-y-auto custom-scrollbar"></div>
+                    <div id="alert-schedule-list" class="admin-sheet-list"></div>
                 </div>
 
                 <div id="alert-archive-pane" class="hidden space-y-3">
@@ -18647,7 +18767,7 @@ const Admin = {
                             </div>
                         </div>
                     </div>
-                    <div id="alert-archive-list" class="space-y-3 max-h-[520px] overflow-y-auto pr-1 custom-scrollbar"></div>
+                    <div id="alert-archive-list" class="admin-sheet-list"></div>
                 </div>
             </div>
         `;
@@ -21192,7 +21312,7 @@ const Admin = {
                 </div>
                 <button id="grid-order-load" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Load order</button>
                 <div id="grid-order-meta" class="hidden rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-500 dark:text-gray-400" aria-live="polite"></div>
-                <ol id="grid-order-list" class="space-y-1 max-h-[52vh] overflow-y-auto custom-scrollbar" aria-label="Train column order"></ol>
+                <ol id="grid-order-list" class="admin-sheet-list" aria-label="Train column order"></ol>
                 <div id="grid-order-actions" class="hidden space-y-2">
                     <div class="grid grid-cols-2 gap-2">
                         <button id="grid-order-reset" type="button" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Reset to fallback</button>
@@ -21324,12 +21444,13 @@ const Admin = {
             listEl.innerHTML = currentOrder.map((id, index) => {
                 const via = currentVia[id] || '';
                 return `
-                <li draggable="true" data-grid-order-row="${index}" class="flex flex-col gap-2 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <li draggable="true" data-grid-order-row="${index}" class="admin-sheet-card">
                     <div class="flex items-center gap-2">
                         <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none h-11 w-11 shrink-0 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-500 focus:outline-none" aria-label="Drag train ${id}">
                             <svg class="w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="7" r="1.4"/><circle cx="15" cy="7" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="17" r="1.4"/><circle cx="15" cy="17" r="1.4"/></svg>
                         </button>
-                        <span class="font-mono font-semibold text-sm text-gray-900 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
+                        <span class="admin-sheet-index">${String(index + 1).padStart(2, '0')}</span>
+                        <span class="admin-sheet-card-title flex-1">${ntAdminSecureEscape(id)}</span>
                         <button type="button" data-grid-order-up="${index}" class="h-11 min-w-11 px-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-200 disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>Up</button>
                         <button type="button" data-grid-order-down="${index}" class="h-11 min-w-11 px-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-200 disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>Down</button>
                     </div>
@@ -25692,7 +25813,7 @@ const Admin = {
                     <button type="button" id="holiday-tab-approved" class="holiday-tab-btn flex-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider">Approved</button>
                     <button type="button" id="holiday-approvals-refresh" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 border border-blue-200 dark:border-blue-800 rounded px-2 py-1.5 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
-                <div id="holiday-approvals-list" class="space-y-3 max-h-[520px] overflow-y-auto custom-scrollbar"></div>
+                <div id="holiday-approvals-list" class="admin-sheet-list"></div>
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <button type="button" id="sched-override-header" class="w-full px-3 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white flex items-center justify-between focus:outline-none">
                         <span>Force schedule type</span>

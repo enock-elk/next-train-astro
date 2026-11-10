@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.9': [
+        'Community Monitor reads the newest stored post when a route has no activity index, so an older room such as Hercules to Koedoespoort still shows its message and time. That missing index row is written back. Route, delay, live share, account, ban, and train-order cards use the same sheet layout as Feedback. Live sharing and the other admin lists scroll with the page. The grey block under the session list is gone. Lookup no longer fails on accountEmailRaw before initialization. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.8': [
         'Community avatars use the first letter of the display name in that person\'s existing colour, taken from their account id. A name with no letter gets a small disc in that colour. The shared person emoji is gone. A profile photo still shows only when the rider has opted in. A display name change is written to public_profile on sign-in, on save, and when Community opens. Older messages use that current name, or the newest name already seen for that person when the profile has no name yet. No commuter What\'s New. forceShow stays false.',
     ],

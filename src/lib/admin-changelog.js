@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.13': [
+        'The first-visit map region grid uses the welcome sheet: white page, blue glow, app mark, and raised tiles. Back is the chevron. The choice itself is unchanged. GitHub Pages preview deploy for V10_11.10.12 timed out while GitHub was still syncing files. The Astro build succeeded and Cloudflare Pages deployed. That timeout is not a map code failure. forceShow stays false.',
+    ],
     'V10_11.10.12': [
         'A bare network map with no saved region, no ?region=, and no region already chosen this visit shows a 2 by 2 province grid and does not draw Gauteng. It does not write userRegion until a province is tapped. Back on that grid stays Back to Next Train, so a first visit opens the welcome screen. The general routes index is not the Back target: the control is already the app door, and a chosen region still returns to that region\'s timetable page. A saved region, ?region=, the in-app map tab, and a station preview are unchanged. The in-app tab and a station preview still fall back to GP in memory only, and that fallback is not saved. forceShow stays false.',
     ],

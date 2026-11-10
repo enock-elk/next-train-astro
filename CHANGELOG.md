@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_11.10.13
+
+- The map region choice uses the same look as the welcome screen.
+
 ## V10_11.10.12
 
 - The network map asks which region to open when this phone has not chosen one yet. Back from that choice opens Next Train.

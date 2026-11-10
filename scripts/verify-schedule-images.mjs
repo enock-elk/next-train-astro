@@ -7,6 +7,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sanitizeAlertImageUrl } from '../src/lib/alerts-feed.js';
+import { ROUTES } from '../src/lib/config.js';
+import { groupScheduleSheets, scheduleRouteTitle } from '../src/lib/schedule-sheet-list.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -51,6 +53,18 @@ assert(readme.includes('{region}-{corridor}-{day}-{direction}'), 'README documen
 assert(readme.includes('keep both') || readme.includes('Keep both'), 'README keeps multi-page / detail variants');
 assert(readme.includes('Grid vs departure') || readme.includes('grid vs departure'), 'README keeps grid and departures variants');
 assert(readme.includes('Do not copy schedule JPGs into `alerts/`'), 'README keeps schedules out of alerts copies');
+assert(readme.includes('Timetables'), 'README points admins at the Timetables tab');
+assert(scheduleRouteTitle('JHB <-> Naledi') === 'Johannesburg - Naledi', 'timetable routes use the full Johannesburg name');
+const board = Object.values(ROUTES).map((route) => ({ id: route.id, name: route.name, region: route.region }));
+const grouped = groupScheduleSheets(manifest.sheets, board);
+const flat = grouped.flatMap((group) => group.routes);
+const naledi = flat.find((route) => route.id === 'jhb-soweto');
+const pien = flat.find((route) => route.id === 'pta-pien');
+assert(naledi && naledi.name === 'Johannesburg - Naledi', 'Naledi sheets sit under Johannesburg - Naledi');
+assert(pien && flat.indexOf(pien) < flat.indexOf(naledi), 'routes follow the board order');
+assert(naledi.sheets.length >= 2, 'Naledi lists each filed sheet');
+assert(naledi.sheets.every((sheet) => sheet.path.startsWith('/images/schedules/')), 'a sheet click target is the catalogue file');
+assert(!flat.some((route) => route.id === 'ec-berlin'), 'a route with no printed sheet is left out');
 
 const agents = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8');
 const instructions = readFileSync(join(ROOT, 'instructions.md'), 'utf8');

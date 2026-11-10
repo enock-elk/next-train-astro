@@ -11,7 +11,9 @@ import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './u
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
-import { pictureWasShown, picturesWaitForTap, posterLoadPlan, rememberPicture } from './data-saver.js';
+import { pictureWasShown, picturesWaitForTap, posterLoadPlan, rememberPicture, heldPictureAskInnerHtml, settleHeldPicture, loadPicturePreview } from './data-saver.js';
+import { imageMetaForUrl, sanitizePicturePreview, tinyJpegFromBlob, imageMetaKey, imageMetaRow } from './picture-preview.js';
+import { groupScheduleSheets, scheduleRouteTitle, scheduleSheetRowLabel } from './schedule-sheet-list.js';
 import {
     ALERTS_PAGE_SIZE,
     ALERT_PIN_SVG,
@@ -254,6 +256,14 @@ function renderPosterHtml(urls, notice = null) {
     return renderLazyPosterHtml(urls, notice);
 }
 
+function previewDataAttrs(notice, path) {
+    const row = imageMetaForUrl(notice?.imageMeta, path);
+    let attrs = '';
+    if (row.preview) attrs += ` data-nt-preview="${escapeHTML(row.preview)}"`;
+    if (row.bytes > 0) attrs += ` data-nt-bytes="${row.bytes}"`;
+    return attrs;
+}
+
 export function renderLazyPosterHtml(urls, notice = null) {
     if (!urls.length) return '';
     const spinner = `<svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
@@ -263,7 +273,7 @@ export function renderLazyPosterHtml(urls, notice = null) {
         const href = resolveAlertImageSrc(path);
         if (!href) return '';
         const src = escapeHTML(href);
-        return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
+        return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}"${previewDataAttrs(notice, path)} class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
             <img alt="" referrerpolicy="no-referrer" draggable="false" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
@@ -352,10 +362,12 @@ function holdPosterForTap(host, startLoad) {
     if (!ask) {
         ask = document.createElement('span');
         ask.setAttribute('data-nt-poster-ask', '1');
-        ask.className = 'absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-300';
-        ask.innerHTML = '<span class="pointer-events-none absolute inset-3 rounded-md border border-dashed border-gray-400/80" aria-hidden="true"></span><span class="relative inline-flex items-center gap-1.5 text-[13px] font-semibold"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path></svg>Photo</span>';
+        ask.className = 'nt-picture-hold-ask absolute inset-0 overflow-hidden bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-300';
+        ask.innerHTML = heldPictureAskInnerHtml();
         host.appendChild(ask);
     }
+    const previewUrl = host.getAttribute('data-alert-lightbox') || '';
+    settleHeldPicture(host, previewUrl);
     const onTap = (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1573,6 +1585,14 @@ export function initAlertsChannel() {
     window.noticeForInstalledPhones = noticeForInstalledPhones;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
+    window.tinyJpegFromBlob = tinyJpegFromBlob;
+    window.imageMetaKey = imageMetaKey;
+    window.imageMetaRow = imageMetaRow;
+    window.sanitizePicturePreview = sanitizePicturePreview;
+    window.loadPicturePreview = loadPicturePreview;
+    window.groupScheduleSheets = groupScheduleSheets;
+    window.scheduleRouteTitle = scheduleRouteTitle;
+    window.scheduleSheetRowLabel = scheduleSheetRowLabel;
     window.parseNoticeBucket = parseNoticeBucket;
     window.buildNoticesMeta = buildNoticesMeta;
     window.listNoticesInTarget = listNoticesInTarget;
@@ -1598,6 +1618,14 @@ if (typeof window !== 'undefined') {
     window.withBase = window.withBase || withBase;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
+    window.tinyJpegFromBlob = tinyJpegFromBlob;
+    window.imageMetaKey = imageMetaKey;
+    window.imageMetaRow = imageMetaRow;
+    window.sanitizePicturePreview = sanitizePicturePreview;
+    window.loadPicturePreview = loadPicturePreview;
+    window.groupScheduleSheets = groupScheduleSheets;
+    window.scheduleRouteTitle = scheduleRouteTitle;
+    window.scheduleSheetRowLabel = scheduleSheetRowLabel;
     window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
     window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
     window.noticeForInstalledPhones = noticeForInstalledPhones;

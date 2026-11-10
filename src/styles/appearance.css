@@ -2977,3 +2977,16 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #nt-recovery-lifeline {
   display: none !important;
 }
+
+/* Data saving: a tiny stored preview, scaled and blurred, with the file size. */
+.nt-picture-preview {
+  filter: blur(10px);
+  transform: scale(1.12);
+}
+.nt-picture-preview-shade {
+  background: rgba(17, 24, 39, 0.28);
+}
+.nt-picture-download {
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+}

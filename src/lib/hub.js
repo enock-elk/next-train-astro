@@ -16,6 +16,7 @@ import {
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
 import { rememberPicture, shouldHoldPicture } from './data-saver.js';
+import { imageMetaForUrl } from './picture-preview.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
 import {
     validateFeedbackContact,
@@ -2136,7 +2137,10 @@ export function renderServiceAlertModal(notice, options = {}) {
             if (!href) return '';
             const src = escapeHTML(href);
             if (shouldHoldPicture(href)) {
-                return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${escapeHTML(String(notice.id || ''))}" data-alert-expires="${escapeHTML(String(notice.expiresAt || ''))}" class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true"><span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></span></span><img alt="" referrerpolicy="no-referrer" class="nt-alert-poster-img w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900 opacity-0"></button>`;
+                const row = imageMetaForUrl(notice?.imageMeta, path);
+                const previewAttr = row.preview ? ` data-nt-preview="${escapeHTML(row.preview)}"` : '';
+                const bytesAttr = row.bytes > 0 ? ` data-nt-bytes="${row.bytes}"` : '';
+                return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${escapeHTML(String(notice.id || ''))}" data-alert-expires="${escapeHTML(String(notice.expiresAt || ''))}"${previewAttr}${bytesAttr} class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true"><span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></span></span><img alt="" referrerpolicy="no-referrer" class="nt-alert-poster-img w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900 opacity-0"></button>`;
             }
             rememberPicture(href);
             const onclick = lightboxOnclickJs(href);

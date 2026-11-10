@@ -25,6 +25,7 @@ import {
     sanitizeCommunityAttachments,
     sanitizeCommunityLinkUrl,
 } from '../../src/lib/community-policy.js';
+import { jpegThumbnail } from './jpeg-thumb.js';
 
 const BODY_MAX = 280;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
@@ -1209,6 +1210,166 @@ async function handleAlertImageUpload(request, env) {
     return json(env, request, 200, { ok: true, url: `${origin}/alerts/${file}` });
 }
 
+const PREVIEW_SITE_HOSTS = new Set([
+    'nexttrain.co.za',
+    'www.nexttrain.co.za',
+    'lab.nexttrain.co.za',
+    'enock-elk.github.io',
+    'enockelk.github.io',
+]);
+const PREVIEW_IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
+const PREVIEW_SITE_PATH = /^\/images\/(?:alerts\/[A-Za-z0-9._-]+|schedules\/[a-z0-9]+\/[A-Za-z0-9._-]+\.jpe?g)$/i;
+
+function previewHostIsPrivate(host) {
+    const name = String(host || '').toLowerCase().replace(/\.$/, '');
+    if (!name || name === 'localhost' || name.endsWith('.local') || name.endsWith('.internal')) return true;
+    if (name === 'metadata.google.internal' || name === 'metadata.google.com') return true;
+    const ip = name.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!ip) return false;
+    const parts = ip.slice(1).map(Number);
+    if (parts.some((n) => n > 255)) return true;
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+}
+
+function previewHostKind(hostname) {
+    const host = String(hostname || '').toLowerCase();
+    if (PREVIEW_SITE_HOSTS.has(host) || host.endsWith('.next-train-lab.pages.dev')) return 'site';
+    if (host === 'nexttrain-community.enock.workers.dev' || /^nexttrain-community\.[a-z0-9-]+\.workers\.dev$/.test(host)) return 'r2';
+    return 'public';
+}
+
+function canonicalPreviewTarget(raw) {
+    let url;
+    try { url = new URL(String(raw || '')); } catch { return ''; }
+    if (url.protocol !== 'https:' || url.username || url.password) return '';
+    if (url.href.length > 2000) return '';
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (previewHostIsPrivate(host)) return '';
+    const path = url.pathname || '';
+    if (path.includes('..') || path.includes('//')) return '';
+    const kind = previewHostKind(host);
+    if (kind === 'site') {
+        if (!PREVIEW_SITE_PATH.test(path)) return '';
+        return `${url.origin}${path}`;
+    }
+    if (kind === 'r2') {
+        if (!/^\/alerts\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(path)) return '';
+        return `${url.origin}${path}`;
+    }
+    if (!PREVIEW_IMAGE_EXT.test(path)) return '';
+    return url.href.split('#')[0];
+}
+
+function previewResponseHeaders(env, request, bytes, contentType) {
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Access-Control-Expose-Headers', 'X-Nt-Bytes');
+    headers.set('Cache-Control', 'public, max-age=604800');
+    headers.set('X-Nt-Bytes', String(bytes > 0 ? Math.round(bytes) : 0));
+    if (contentType) headers.set('Content-Type', contentType);
+    return headers;
+}
+
+async function bytesForPreview(env, target) {
+    const url = new URL(target);
+    if (previewHostKind(url.hostname) === 'r2' && env.ALERT_IMAGES) {
+        const file = url.pathname.replace(/^\/alerts\//, '');
+        const obj = await env.ALERT_IMAGES.get(`alerts/${file}`);
+        if (!obj) return null;
+        const buf = new Uint8Array(await obj.arrayBuffer());
+        if (!buf.length || buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: obj.size || buf.length };
+        return { bytes: buf, size: obj.size || buf.length, type: obj.httpMetadata?.contentType || '' };
+    }
+    let fullSize = 0;
+    try {
+        const head = await fetch(target, { method: 'HEAD', redirect: 'follow' });
+        const declared = Number(head.headers.get('content-length') || 0);
+        if (head.ok && declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared };
+        if (head.ok) fullSize = declared;
+    } catch { /* the GET still has the picture */ }
+    let buf = null;
+    let type = '';
+    try {
+        const resized = await fetch(target, {
+            redirect: 'follow',
+            cf: { image: { width: 24, quality: 45, format: 'jpeg', fit: 'scale-down' } },
+        });
+        if (resized.ok) {
+            const declared = Number(resized.headers.get('content-length') || 0);
+            if (declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: fullSize || declared };
+            const got = new Uint8Array(await resized.arrayBuffer());
+            type = resized.headers.get('content-type') || '';
+            if (got.length && got.length <= 8000 && got[0] === 0xff && got[1] === 0xd8) {
+                return { thumb: got, size: fullSize };
+            }
+            if (got.length && got.length <= ALERT_IMAGE_MAX && sniffAlertImage(got)) {
+                buf = got;
+                if (!fullSize) fullSize = got.length;
+            }
+        }
+    } catch { /* image resizing is off; read the file itself */ }
+    if (!buf) {
+        const res = await fetch(target, { redirect: 'follow' });
+        if (!res.ok) return null;
+        const declared = Number(res.headers.get('content-length') || 0);
+        if (declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared };
+        buf = new Uint8Array(await res.arrayBuffer());
+        type = res.headers.get('content-type') || type;
+        if (!fullSize) fullSize = declared || buf.length;
+    }
+    if (!buf.length || buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: fullSize || buf.length };
+    return { bytes: buf, size: fullSize || buf.length, type };
+}
+
+async function rememberPreview(cacheKey, response) {
+    try { await caches.default.put(cacheKey, response.clone()); } catch { /* the phone still has this answer */ }
+    return response;
+}
+
+async function handleMediaPreview(request, env) {
+    const target = canonicalPreviewTarget(new URL(request.url).searchParams.get('u') || '');
+    if (!target) return json(env, request, 400, { ok: false, error: 'That picture cannot be previewed.' });
+    const cacheKey = new Request(`https://nexttrain-community.enock.workers.dev/media/preview?u=${encodeURIComponent(target)}`, { method: 'GET' });
+    try {
+        const hit = await caches.default.match(cacheKey);
+        if (hit) return hit;
+    } catch { /* a cache miss still builds the preview */ }
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`preview:${ip}`, 60_000, 80)) {
+        return json(env, request, 429, { ok: false, error: 'Slow down a moment.' });
+    }
+    let source;
+    try {
+        source = await bytesForPreview(env, target);
+    } catch {
+        return json(env, request, 502, { ok: false, error: 'Preview unavailable.' });
+    }
+    if (!source) return json(env, request, 404, { ok: false, error: 'Preview unavailable.' });
+    const size = Number(source.size) || 0;
+    if (source.error) {
+        return rememberPreview(cacheKey, new Response(JSON.stringify({ ok: false, bytes: size }), {
+            status: 200,
+            headers: previewResponseHeaders(env, request, size, 'application/json; charset=utf-8'),
+        }));
+    }
+    const thumb = source.thumb || jpegThumbnail(source.bytes);
+    if (!thumb) {
+        return rememberPreview(cacheKey, new Response(JSON.stringify({ ok: true, bytes: size }), {
+            status: 200,
+            headers: previewResponseHeaders(env, request, size, 'application/json; charset=utf-8'),
+        }));
+    }
+    return rememberPreview(cacheKey, new Response(thumb, {
+        status: 200,
+        headers: previewResponseHeaders(env, request, size, 'image/jpeg'),
+    }));
+}
+
 async function handleAlertImageGet(request, env, file) {
     if (!env.ALERT_IMAGES) {
         return json(env, request, 503, { ok: false, error: 'Alert image storage is not ready yet.' });
@@ -1662,6 +1823,9 @@ export default {
         }
         if (request.method === 'POST' && url.pathname === '/alerts/image') {
             return handleAlertImageUpload(request, env);
+        }
+        if (request.method === 'GET' && url.pathname === '/media/preview') {
+            return handleMediaPreview(request, env);
         }
         if (request.method === 'GET') {
             const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);

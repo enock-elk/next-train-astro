@@ -1,5 +1,11 @@
 # Changelog
 
+## V10_11.10.6
+
+- A picture that is waiting to download shows a blurred preview and the file size.
+- Tap that picture when you want the full photo.
+- Alert posters include the printed timetable sheets, listed by route. Retired fare, mass meeting, ballast, and health posters are removed.
+
 ## V10_11.10.5 — no release notes
 
 - Community unread badges stay for a session that has not opened that route. A signed-in account shares its seen cursor. A signed-out phone keeps its own.

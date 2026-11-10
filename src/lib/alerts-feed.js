@@ -7,7 +7,7 @@ export const ALERTS_PAGE_SIZE = 10;
 export const ALERT_POSTER_MAX = 10;
 export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
-/** Printed timetable sheets that back in-app schedules; also postable on alerts later. */
+/** Printed timetable sheets. Admins post these from the Timetables tab. */
 export const SCHEDULE_IMAGE_PREFIX = '/images/schedules/';
 export const ALERT_REACTION_KEYS = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
 export const ALERT_REACTION_EMOJI = {

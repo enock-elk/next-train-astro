@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.6': [
+        'A picture waiting for a tap shows a small blurred preview and the real file size. New posts store that preview with the notice. Older photos, including ImageBB and R2, use GET /media/preview on the community worker, which returns a tiny JPEG and the byte count. Deploy that worker so phones already showing a notice can blur it. The alert poster list has Posters and Timetables. Timetables follow the board route order, Johannesburg written in full, and a tap opens the sheet. Add to this alert posts the /images/schedules path. Fare adjustment, the commuter mass meeting, Germiston-Leralla ballast, and Phelophepa health are removed from the catalogue. forceShow stays false.',
+    ],
     'V10_11.10.5': [
         'A community unread badge stays until that session opens the route. A first visit no longer stamps every room as seen. A signed-in account stores users/{uid}/community_seen so another signed-in session on the same account starts clear. A signed-out phone uses only its own cursor. A newer post, or a reply on a post in the newest page, raises the badge again. The open room still clears immediately. No commuter What\'s New. forceShow stays false.',
     ],

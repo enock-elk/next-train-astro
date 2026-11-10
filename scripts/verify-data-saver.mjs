@@ -16,6 +16,9 @@ import {
     shouldHoldPicture,
     writeDataSaver,
 } from '../src/lib/data-saver.js';
+import { formatDownloadSize, imageMetaForUrl, imageMetaKey, imageMetaRow } from '../src/lib/picture-preview.js';
+import jpeg from 'jpeg-js';
+import { jpegThumbnail } from '../workers/nexttrain-community/jpeg-thumb.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -51,7 +54,26 @@ assert(posterLoadPlan(cached, { cached: true }) === 'show', 'a cached picture is
 const held = pictureMarkup(fresh);
 assert(held.includes('data-nt-defer-src'), 'tap markup does not download yet');
 assert(held.includes('nt-picture-hold-ask hidden'), 'the download chip stays hidden until the cache check misses');
-assert(!held.includes('<img'), 'tap markup has no image yet');
+assert(!held.includes(`<img src="${fresh}"`), 'tap markup does not point an image at the full photo');
+assert(held.includes(`data-nt-defer-src="${fresh}"`), 'the full address stays on the hold until a tap');
+assert(held.includes('data-nt-preview-img'), 'tap markup can show a blurred preview');
+assert(held.includes('data-nt-download-label'), 'tap markup has a place for the file size');
+assert(formatDownloadSize(474112) === '463 kB', 'a byte count becomes kB');
+assert(formatDownloadSize(2 * 1024 * 1024) === '2,0 MB', 'megabytes use a comma');
+assert(formatDownloadSize(0) === '', 'a missing size stays blank');
+const packed = imageMetaRow(fresh, { bytes: 474112, preview: 'data:image/jpeg;base64,aaaa' });
+assert(packed && packed.key === imageMetaKey(fresh) && !packed.key.includes('.'), 'preview keys are safe for Firebase');
+assert(imageMetaForUrl({ [packed.key]: packed.row }, fresh).bytes === 474112, 'a notice can look up its preview');
+const pixels = new Uint8Array(16 * 16 * 4);
+for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i] = 180;
+    pixels[i + 1] = 40;
+    pixels[i + 2] = 40;
+    pixels[i + 3] = 255;
+}
+const encoded = jpeg.encode({ data: pixels, width: 16, height: 16 }, 60);
+const thumb = jpegThumbnail(encoded.data, 8, 40);
+assert(thumb && thumb[0] === 0xff && thumb[1] === 0xd8 && thumb.length < encoded.data.length, 'a jpeg shrinks to a tiny preview');
 
 rememberPicture(seen);
 assert(pictureWasShown(seen) === true, 'a shown picture is remembered');
@@ -79,6 +101,17 @@ const hold = channel.indexOf('else holdPosterForTap(host, startLoad)');
 assert(cacheCheck > 0 && hold > cacheCheck, 'a poster checks the phone cache before the download chip');
 assert(channel.includes("posterLoadPlan(originalSrc, { cached: !!cached }) === 'show'"), 'a cache hit loads the poster');
 assert(channel.includes('ntPosterChecking'), 'a tap during the cache check does not open the full picture');
+assert(channel.includes('settleHeldPicture'), 'a held poster asks for the blurred preview');
+const worker = readFileSync(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
+assert(worker.includes("url.pathname === '/media/preview'"), 'the community worker serves a small preview');
+const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+assert(admin.includes("tabBtn('timetables', 'Timetables')"), 'alert posters include a Timetables tab');
+assert(admin.includes('openScheduleSheet'), 'a timetable row opens the image');
+assert(!admin.includes('phelophepa_health_train'), 'the health poster is gone from the picker');
+assert(!admin.includes('ger_leralla_ballast'), 'the ballast poster is gone from the picker');
+assert(!admin.includes('2025-fare-adjustment'), 'the fare poster is gone from the picker');
+const alertManifest = JSON.parse(readFileSync(new URL('../public/images/alerts/manifest.json', import.meta.url), 'utf8'));
+assert(!alertManifest.posters.some((p) => /fare-adjustment|mass-meeting|leralla-ballast|phelophepa/.test(p.id)), 'retired posters left the catalogue');
 
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hub.includes('shouldHoldPicture(href)'), 'the notice keeps its picture when data saving is off');

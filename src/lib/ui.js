@@ -837,6 +837,7 @@ const TOAST_MATCH_MS = 2500;
 const TOAST_LONG_MS = 4000;
 
 function toastHoldMs(message, duration, options = {}) {
+    if (options.untilDismiss) return 0;
     if (options.persist) return TOAST_LONG_MS;
     const text = String(message || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
     const extra = Math.max(0, text.length - 64) * 18;
@@ -881,8 +882,9 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     const center = options.center === true;
     const fitLine = options.fitLine === true;
     const persist = !!options.persist;
-    const dismissible = errorToast || !!options.dismissible;
-    const holdMs = toastHoldMs(message, duration, { persist });
+    const untilDismiss = !!options.untilDismiss;
+    const dismissible = errorToast || !!options.dismissible || untilDismiss;
+    const holdMs = toastHoldMs(message, duration, { persist, untilDismiss });
 
     // Debounce spamming. Ignore if the exact same message is already visible.
     if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {

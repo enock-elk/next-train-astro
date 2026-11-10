@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.15': [
+        'Live Telemetry revenue and the $4 CPM deal convert to rands from an open US dollar rate (Frankfurter, then open.er-api). Tap again to return to dollars. Ads on the user graph draws viewable impressions for the same days, weeks, or months. Stats opens the growth, the change, and the viewability rate for that view, and exports with the chart. The impressions graph opens full screen. A dismissible toast stays up while telemetry is loading and clears when the fetch succeeds. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.14': [
         'Live telemetry has an Ad revenue block. The Clever script id stays in the Worker secret CLEVER_SCRIPT_ID. A search can start at the first hit. Ranges longer than 3 months are stitched on the Worker and drawn with the existing telemetry graph. A pasted Next Train planner, timetable, or live-train link in Community, Feedback, and the admin inbox becomes a short chip. A live chip opens the Map tab only while that train is still being shared, including when Map is off for that person or route. A stopped train does not open Map. Admins can still post other https links. Account cards keep both ends of the route on one row. Trains near you opens from the bottom, at the same height. No commuter What\'s New. forceShow stays false.',
     ],

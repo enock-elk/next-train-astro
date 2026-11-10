@@ -12,6 +12,11 @@ import {
     fillYearMonthSeries,
     sliceChartWindow,
     enumerateYearMonths,
+    isoWeekKey,
+    adSpanForLabels,
+    alignAdSeries,
+    seriesTrend,
+    viewabilityTrend,
 } from '../workers/nexttrain-telemetry/chart-math.js';
 import {
     assignReportingDevice,
@@ -527,6 +532,27 @@ ok(mergedAds.series.length === 2 && mergedAds.geos[0].hits === 150, 'stitched ad
 ok(!workerJs.includes('ZmI0MWI3') && !workerJs.includes('cleverwebserver.com/dashboard'), 'the Clever dashboard token is not in the worker');
 ok(workerJs.includes("url.pathname === '/admin/ads'") && workerJs.includes('CLEVER_SCRIPT_ID'), 'ad stats are an admin route that reads the worker secret');
 ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('loadAdRevenue'), 'live telemetry draws its own ad revenue search');
+ok(adminJs.includes('$4 CPM') && adminJs.includes('api.frankfurter.dev') && adminJs.includes('open.er-api.com'), 'revenue and the $4 CPM deal convert with an open dollar rate');
+ok(adminJs.includes('trend-ads-btn') && adminJs.includes('alignAdSeries') && adminJs.includes('showAdOverlay'), 'the user graph can draw ad counts for the same buckets');
+ok(adminJs.includes('openGraphStats') && adminJs.includes('viewabilityTrend') && adminJs.includes('telemetry-stats-export'), 'graph statistics include viewability and export');
+ok(adminJs.includes("adChart.id = 'ad-impressions-panel'") && adminJs.includes('openAdImpressions'), 'the impressions graph opens full screen');
+ok(adminJs.includes("showToast(Admin._telemetryLoadToast") && adminJs.includes('untilDismiss: true') && adminJs.includes('hideToastIfMessage(Admin._telemetryLoadToast)'), 'telemetry load shows a dismissible toast and clears it on success');
+const bridgeJs = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
+const toastJs = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
+ok(bridgeJs.includes('window.ntAdChartAlign'), 'the chart align helpers are on the admin bridge');
+ok(toastJs.includes('options.untilDismiss') && toastJs.includes('untilDismiss'), 'a loading toast can stay until it is dismissed');
+ok(isoWeekKey('2026-01-01') === '202601', '1 Jan 2026 is ISO week 202601');
+const week = isoWeekKey('2026-11-10');
+const dailyAds = new Map([['2026-11-09', 10], ['2026-11-10', 5], ['2026-11-11', 7], ['2026-11-16', 100]]);
+ok(alignAdSeries([week], 'WAU', dailyAds)[0] === 22, 'a week of ad counts is the sum of those days');
+ok(alignAdSeries(['20261110', ''], 'DAU', dailyAds)[0] === 5 && alignAdSeries(['20261110', ''], 'DAU', dailyAds)[1] === null, 'a day uses that day and a pad stays empty');
+ok(alignAdSeries(['202611'], 'MAU', dailyAds)[0] === 122, 'a month sums every daily ad count in it');
+const dauSpan = adSpanForLabels(['20261104', '20261110'], 'DAU');
+ok(dauSpan.start === '2026-11-04' && dauSpan.end === '2026-11-10', 'the ad search covers the days on the DAU graph');
+const down = seriesTrend([100, 80]);
+ok(down.trend === 'Down' && down.pct === -20, 'the user trend is the change from the first point to the last');
+const rate = viewabilityTrend([100, 50], [10, 20]);
+ok(rate.avg === 0.25 && rate.trend === 'Growing', 'viewability is viewable impressions per active user');
 
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));

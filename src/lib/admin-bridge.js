@@ -30,6 +30,12 @@ import {
     whatsappReplyUrl,
 } from './reply-suggest.js';
 import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
+import {
+    adSpanForLabels,
+    alignAdSeries,
+    seriesTrend,
+    viewabilityTrend,
+} from '../../workers/nexttrain-telemetry/chart-math.js';
 import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
 import {
     alertDraftFromBriefCard,
@@ -147,6 +153,7 @@ export function exposeAdminGlobals() {
         noticeQuotePlain,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
+    window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, seriesTrend, viewabilityTrend };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
     window.ntOperatorBrief = {
         alertDraftFromBriefCard,

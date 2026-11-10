@@ -2288,6 +2288,11 @@ const Admin = {
     telemetryWeeksAgo: 0, 
     telemetryRange: 'DAU', // GROWTH SPRINT: Default to Daily Active Users Trend
     isComparing: false, // GROWTH SPRINT PHASE 9: Dual-Draw Overlay State
+    showAdOverlay: false,
+    _revenueInZar: false,
+    _dealInZar: false,
+    _adDealUsd: 4,
+    _telemetryLoadToast: 'Loading telemetry…',
     // [GUARDIAN] Phase 3 cleanup: removed dead `clockInterval` state. The admin live-clock DOM
     // injection was already purged; this vestigial property had no remaining references.
     
@@ -3721,6 +3726,269 @@ const Admin = {
     },
 
     // --- 0.2 TELEMETRY REFRESH ENGINE & EXPORT ---
+    _align: () => (typeof window !== 'undefined' && window.ntAdChartAlign) || null,
+
+    _usdZarRate: async () => {
+        const key = 'ntUsdZarV1';
+        try {
+            const cached = JSON.parse(sessionStorage.getItem(key) || 'null');
+            if (cached && Number(cached.rate) > 0 && Date.now() - Number(cached.at) < 12 * 60 * 60 * 1000) return cached;
+        } catch { /* fetch a fresh rate */ }
+        const sources = [
+            async () => {
+                const res = await fetch('https://api.frankfurter.dev/v1/latest?from=USD&to=ZAR');
+                const data = await res.json().catch(() => ({}));
+                const rate = Number(data?.rates?.ZAR);
+                if (!res.ok || !(rate > 0)) throw new Error('rate');
+                return { rate, date: String(data.date || ''), source: 'Frankfurter' };
+            },
+            async () => {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD');
+                const data = await res.json().catch(() => ({}));
+                const rate = Number(data?.rates?.ZAR);
+                if (!res.ok || !(rate > 0)) throw new Error('rate');
+                return { rate, date: String(data.time_last_update_utc || '').slice(0, 16), source: 'open.er-api' };
+            },
+        ];
+        let lastErr = null;
+        for (const load of sources) {
+            try {
+                const got = await load();
+                const row = { ...got, at: Date.now() };
+                try { sessionStorage.setItem(key, JSON.stringify(row)); } catch { /* private mode */ }
+                return row;
+            } catch (e) { lastErr = e; }
+        }
+        throw lastErr || new Error('rate');
+    },
+
+    _formatZar: (usd, rate) => {
+        const zar = (Number(usd) || 0) * (Number(rate) || 0);
+        return `R${zar.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    },
+
+    _paintAdMoney: () => {
+        const data = Admin._adRevenue || {};
+        const usd = Number(data.revenue);
+        const valueEl = document.getElementById('ad-revenue-value');
+        const dealEl = document.getElementById('ad-revenue-deal');
+        const fxEl = document.getElementById('ad-revenue-fx');
+        const rate = Number(Admin._fx?.rate);
+        const dealUsd = Number(Admin._adDealUsd) || 4;
+        if (valueEl) {
+            if (Number.isFinite(usd) && Admin._revenueInZar && rate > 0) valueEl.textContent = Admin._formatZar(usd, rate);
+            else if (Number.isFinite(usd)) valueEl.textContent = usd.toLocaleString('en-US', { style: 'currency', currency: data.coin || 'USD' });
+        }
+        if (dealEl) {
+            dealEl.textContent = (Admin._dealInZar && rate > 0)
+                ? `${Admin._formatZar(dealUsd, rate)} CPM`
+                : `$${dealUsd} CPM`;
+        }
+        if (fxEl) {
+            const showing = (Admin._revenueInZar || Admin._dealInZar) && rate > 0;
+            fxEl.textContent = showing
+                ? `R${rate.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per US dollar${Admin._fx.date ? ` · ${Admin._fx.date}` : ''}`
+                : '';
+        }
+    },
+
+    _toggleAdMoney: async (which) => {
+        if (which === 'revenue' && !Number.isFinite(Number(Admin._adRevenue?.revenue))) {
+            if (typeof showToast === 'function') showToast('Ad revenue is still loading.', 'info');
+            return;
+        }
+        try {
+            Admin._fx = await Admin._usdZarRate();
+            if (which === 'deal') Admin._dealInZar = !Admin._dealInZar;
+            else Admin._revenueInZar = !Admin._revenueInZar;
+            Admin._paintAdMoney();
+        } catch {
+            if (typeof showToast === 'function') showToast('Could not load the exchange rate.', 'error');
+        }
+    },
+
+    _loadAdDaily: async (start, end) => {
+        const key = `${start}|${end}`;
+        if (Admin._adDailyCache?.key === key) return Admin._adDailyCache;
+        const auth = await Admin.getAuthKey();
+        const res = await window.guardianFetch(`https://nexttrain-telemetry.enock.workers.dev/admin/ads?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
+            headers: { Authorization: `Bearer ${auth}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not load ad counts');
+        const map = new Map();
+        (Array.isArray(data.labels) ? data.labels : []).forEach((day, i) => {
+            map.set(String(day), Number(data.series?.[i]) || 0);
+        });
+        const row = {
+            key,
+            map,
+            revenue: Number(data.revenue) || 0,
+            hits: Number(data.hits) || 0,
+            coin: data.coin || 'USD',
+            start: data.start || start,
+            end: data.end || end,
+        };
+        Admin._adDailyCache = row;
+        return row;
+    },
+
+    _paintAdToggle: () => {
+        const on = !!Admin.showAdOverlay;
+        ['trend-ads-btn', 'analytics-trend-ads'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.setAttribute('aria-pressed', on ? 'true' : 'false');
+            el.classList.toggle('text-blue-600', on);
+            el.classList.toggle('bg-blue-50', on);
+            el.classList.toggle('dark:bg-gray-700', on);
+        });
+        const legend = document.getElementById('tel-trend-legend');
+        if (legend) {
+            const show = on && Admin.telemetryRange !== 'INTRADAY' && Array.isArray(Admin._lastChart?.overlay);
+            legend.textContent = show ? 'Green line: viewable impressions for the same days.' : '';
+            legend.classList.toggle('hidden', !show);
+        }
+    },
+
+    toggleAdOverlay: () => {
+        Admin.showAdOverlay = !Admin.showAdOverlay;
+        if (Admin.telemetryRange === 'INTRADAY' && Admin.showAdOverlay && !Admin._intradayAdNote) {
+            Admin._intradayAdNote = true;
+            if (typeof showToast === 'function') showToast('Ad counts are daily. Open DAU or WAU to line them up.', 'info');
+        }
+        Admin._paintAdToggle();
+        Admin.refreshTelemetry();
+    },
+
+    _paintAdChart: (series, labels, mini) => {
+        const short = (labels || []).map((day) => `${String(day).slice(8, 10)}/${String(day).slice(5, 7)}`);
+        const todayIdx = series.length ? series.length - 1 : -1;
+        return series.length
+            ? Admin._buildLineGraphSVG(series, short, 'Viewable impressions', todayIdx, mini, null, {
+                metricWord: 'Viewable impressions',
+                gradTag: mini ? 'adsMini' : 'adsFull',
+            })
+            : '<span class="text-xs text-gray-400">No impressions in this period.</span>';
+    },
+
+    openAdImpressions: () => {
+        const chart = Admin._adChart;
+        const slot = document.getElementById('ad-impressions-svg');
+        const title = document.getElementById('ad-impressions-title');
+        if (title) title.textContent = chart?.title || 'Viewable impressions';
+        if (slot) {
+            slot.innerHTML = chart?.series?.length
+                ? Admin._paintAdChart(chart.series, chart.labels, false)
+                : '<span class="text-sm text-gray-400">Search a period to see impressions.</span>';
+        }
+        Admin.deepLinkToPanel('ad-impressions-panel');
+    },
+
+    _trendLine: (label, stat) => {
+        if (!stat) return `<p class="text-[12px] text-gray-400">${label}: no points in this view.</p>`;
+        const sign = stat.pct > 0 ? '+' : '';
+        return `<div class="rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 p-3">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">${label}</p>
+            <p class="mt-1 text-lg font-black text-gray-900 dark:text-white">${stat.trend}</p>
+            <p class="text-[12px] text-gray-600 dark:text-gray-300">Average ${Admin.formatNumber(Math.round(stat.avg * 100) / 100)} · ${sign}${stat.pct.toFixed(1)}% from first to last</p>
+            <p class="text-[11px] text-gray-400">First ${Admin.formatNumber(Math.round(stat.first))} · Last ${Admin.formatNumber(Math.round(stat.last))}</p>
+        </div>`;
+    },
+
+    openGraphStats: async () => {
+        const modal = document.getElementById('telemetry-stats-modal');
+        const body = document.getElementById('telemetry-stats-body');
+        if (!modal || !body) return;
+        if (typeof openSmoothModal === 'function') openSmoothModal('telemetry-stats-modal');
+        else modal.classList.remove('hidden');
+        body.innerHTML = '<p class="text-sm text-gray-500">Loading statistics…</p>';
+        const view = Admin._lastChart || {};
+        const api = Admin._align();
+        let ads = Array.isArray(view.overlay) ? view.overlay : null;
+        let windowRow = Admin._lastAdWindow || null;
+        if (!ads && api && view.range && view.range !== 'INTRADAY') {
+            const span = api.adSpanForLabels(view.labels, view.range);
+            if (span) {
+                try {
+                    windowRow = await Admin._loadAdDaily(span.start, span.end);
+                    Admin._lastAdWindow = windowRow;
+                    ads = api.alignAdSeries(view.labels, view.range, windowRow.map);
+                } catch {
+                    windowRow = null;
+                }
+            }
+        }
+        const userStat = api ? api.seriesTrend(view.counts || []) : null;
+        const adStat = api && ads ? api.seriesTrend(ads) : null;
+        const rateStat = api && ads ? api.viewabilityTrend(view.counts || [], ads) : null;
+        const rateHtml = rateStat
+            ? `<div class="rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 p-3">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Viewability</p>
+                <p class="mt-1 text-lg font-black text-gray-900 dark:text-white">${rateStat.trend}</p>
+                <p class="text-[12px] text-gray-600 dark:text-gray-300">Average ${rateStat.avg.toFixed(2)} viewable impressions per active user</p>
+                <p class="text-[11px] text-gray-400">${rateStat.pct > 0 ? '+' : ''}${rateStat.pct.toFixed(1)}% change in that rate across this view</p>
+            </div>`
+            : `<p class="text-[12px] text-gray-400">${view.range === 'INTRADAY' ? 'Ad counts are kept by day. Switch to DAU or WAU to line them up with this graph.' : 'Ad counts for this view are not available yet.'}</p>`;
+        let money = '';
+        if (windowRow && Number.isFinite(windowRow.revenue)) {
+            const usd = windowRow.revenue.toLocaleString('en-US', { style: 'currency', currency: windowRow.coin || 'USD' });
+            let zar = '';
+            try {
+                const fx = Admin._fx || await Admin._usdZarRate();
+                Admin._fx = fx;
+                if (fx?.rate) zar = ` · ${Admin._formatZar(windowRow.revenue, fx.rate)}`;
+            } catch { /* dollars still show */ }
+            money = `<p class="text-[12px] text-gray-600 dark:text-gray-300">Revenue in this window: ${usd}${zar}</p>`;
+        }
+        body.innerHTML = `
+            <p class="text-[12px] font-semibold text-gray-500 mb-3">${view.title || 'This view'}</p>
+            <div class="space-y-2">
+                ${Admin._trendLine('Users', userStat)}
+                ${Admin._trendLine('Ad impressions', adStat)}
+                ${rateHtml}
+            </div>
+            ${money}`;
+    },
+
+    exportGraphStats: async () => {
+        const card = document.getElementById('telemetry-stats-card');
+        if (!card) return;
+        if (typeof showToast === 'function') showToast('Preparing the image...', 'info', 2000);
+        if (typeof html2canvas === 'undefined') {
+            try {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            } catch {
+                if (typeof showToast === 'function') showToast('Could not prepare the image.', 'error');
+                return;
+            }
+        }
+        try {
+            const canvas = await html2canvas(card, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                logging: false,
+            });
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const fileName = `NextTrain_GraphStats_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12)}.png`;
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                if (typeof showToast === 'function') showToast('Chart saved to device!', 'success', 4000);
+            });
+        } catch {
+            if (typeof showToast === 'function') showToast('Chart snapshot failed.', 'error');
+        }
+    },
+
     loadAdRevenue: async () => {
         const note = document.getElementById('ad-revenue-note');
         const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -3742,10 +4010,9 @@ const Admin = {
             if (data.start && document.getElementById('ad-revenue-start') && data.start !== start) {
                 document.getElementById('ad-revenue-start').value = data.start;
             }
-            const money = Number(data.revenue || 0).toLocaleString('en-US', { style: 'currency', currency: data.coin || 'USD' });
-            set('ad-revenue-value', money);
+            Admin._adRevenue = data;
             set('ad-revenue-hits', Admin.formatNumber(data.hits || 0));
-            set('ad-revenue-deal', data.dealType || '--');
+            Admin._paintAdMoney();
             const first = String(data.firstHit || '');
             set('ad-revenue-first', first ? `${first.slice(8, 10)}/${first.slice(5, 7)}/${first.slice(0, 4)}` : '--');
             const sync = document.getElementById('ad-revenue-sync');
@@ -3768,12 +4035,21 @@ const Admin = {
             }
             const labels = Array.isArray(data.labels) ? data.labels : [];
             const series = Array.isArray(data.series) ? data.series : [];
+            const startLabel = document.getElementById('ad-revenue-start')?.value || data.start || '';
+            const endLabel = document.getElementById('ad-revenue-end')?.value || data.end || '';
+            Admin._adChart = {
+                series,
+                labels,
+                title: startLabel && endLabel ? `Viewable impressions (${startLabel} - ${endLabel})` : 'Viewable impressions',
+            };
             const chart = document.getElementById('ad-revenue-chart');
-            if (chart) {
-                const short = labels.map((day) => `${String(day).slice(8, 10)}/${String(day).slice(5, 7)}`);
-                chart.innerHTML = series.length
-                    ? Admin._buildLineGraphSVG(series, short, 'Viewable impressions', -1, true)
-                    : '<span class="text-xs text-gray-400">No impressions in this period.</span>';
+            if (chart) chart.innerHTML = Admin._paintAdChart(series, labels, true);
+            const fullSlot = document.getElementById('ad-impressions-svg');
+            const fullOpen = document.getElementById('ad-impressions-panel')?.style.display !== 'none';
+            if (fullSlot && fullOpen && series.length) {
+                const titleEl = document.getElementById('ad-impressions-title');
+                if (titleEl) titleEl.textContent = Admin._adChart.title;
+                fullSlot.innerHTML = Admin._paintAdChart(series, labels, false);
             }
             const geos = document.getElementById('ad-revenue-geos');
             if (geos) {
@@ -3852,6 +4128,8 @@ const Admin = {
                         <span>${Admin.telemetryRange} Trend</span>
                     </button>
                     <div class="flex space-x-2">
+                        <button type="button" id="trend-ads-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Show ad counts on this graph" aria-pressed="false">Ads</button>
+                        <button type="button" id="trend-stats-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Statistics for this graph">Stats</button>
                         <button id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                         </button>
@@ -3863,6 +4141,7 @@ const Admin = {
                 <div id="tel-trend-container" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
                     <span class="text-xs text-gray-400 italic">Loading Graph...</span>
                 </div>
+                <p id="tel-trend-legend" class="hidden px-1 mt-1 text-[10px] font-semibold text-gray-400"></p>
             `;
             telBody.appendChild(trendWrapper);
 
@@ -3875,7 +4154,12 @@ const Admin = {
                 adPanel.innerHTML = `
                     <div class="flex items-center justify-between px-1 gap-2">
                         <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Ad revenue</span>
-                        <span id="ad-revenue-sync" class="text-[10px] font-semibold text-gray-400 truncate"></span>
+                        <span class="flex items-center gap-2 min-w-0">
+                            <span id="ad-revenue-sync" class="text-[10px] font-semibold text-gray-400 truncate"></span>
+                            <button type="button" id="ad-revenue-expand" class="text-sm text-gray-400 hover:text-blue-500 focus:outline-none px-1 shrink-0" title="Full Screen" aria-label="Open impressions full screen">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </button>
+                        </span>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <input id="ad-revenue-start" type="date" class="${field}" aria-label="From">
@@ -3888,7 +4172,7 @@ const Admin = {
                         <button type="button" id="ad-revenue-search" class="${pill} ml-auto bg-blue-600 text-white border-blue-600">Search</button>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                        <div id="ad-revenue-value-tile" role="button" tabindex="0" class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center cursor-pointer hover:border-blue-400" title="Tap to convert to rands">
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Revenue</span>
                             <span id="ad-revenue-value" class="text-2xl font-black text-gray-800 dark:text-gray-200">--</span>
                         </div>
@@ -3896,17 +4180,18 @@ const Admin = {
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Impressions</span>
                             <span id="ad-revenue-hits" class="text-2xl font-black text-gray-800 dark:text-gray-200">--</span>
                         </div>
-                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                        <div id="ad-revenue-deal-tile" role="button" tabindex="0" class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center cursor-pointer hover:border-blue-400" title="Tap to convert the CPM to rands">
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Deal</span>
-                            <span id="ad-revenue-deal" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
+                            <span id="ad-revenue-deal" class="text-lg font-black text-gray-800 dark:text-gray-200">$4 CPM</span>
                         </div>
                         <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">First hit</span>
                             <span id="ad-revenue-first" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
                         </div>
                     </div>
+                    <p id="ad-revenue-fx" class="text-[10px] font-semibold text-gray-400 px-1"></p>
                     <div id="ad-revenue-devices" class="text-[11px] font-semibold text-gray-500"></div>
-                    <div id="ad-revenue-chart" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center">
+                    <div id="ad-revenue-chart" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300">
                         <span class="text-xs text-gray-400">Loading graph...</span>
                     </div>
                     <div id="ad-revenue-geos" class="text-[12px] text-gray-600 dark:text-gray-300 space-y-1"></div>
@@ -3938,6 +4223,21 @@ const Admin = {
                     Admin.loadAdRevenue();
                 });
                 document.getElementById('ad-revenue-search')?.addEventListener('click', () => Admin.loadAdRevenue());
+                const bindMoney = (id, which) => {
+                    const tile = document.getElementById(id);
+                    if (!tile) return;
+                    tile.addEventListener('click', () => Admin._toggleAdMoney(which));
+                    tile.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            Admin._toggleAdMoney(which);
+                        }
+                    });
+                };
+                bindMoney('ad-revenue-value-tile', 'revenue');
+                bindMoney('ad-revenue-deal-tile', 'deal');
+                document.getElementById('ad-revenue-expand')?.addEventListener('click', () => Admin.openAdImpressions());
+                document.getElementById('ad-revenue-chart')?.addEventListener('click', () => Admin.openAdImpressions());
                 Admin.loadAdRevenue();
             }
             
@@ -3959,6 +4259,8 @@ const Admin = {
                                 <span>${Admin.telemetryRange}</span>
                             </button>
                             <div class="flex items-center space-x-2">
+                                <button type="button" id="analytics-trend-ads" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Show ad counts on this graph" aria-pressed="false">Ads</button>
+                                <button type="button" id="analytics-trend-stats" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Statistics for this graph">Stats</button>
                                 <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                                 </button>
@@ -3983,10 +4285,39 @@ const Admin = {
                 `;
                 adminContainer?.appendChild(chartPanel);
 
+                if (!document.getElementById('ad-impressions-panel')) {
+                    const adChart = document.createElement('div');
+                    adChart.id = 'ad-impressions-panel';
+                    adChart.dataset.adminSubview = 'true';
+                    adChart.style.display = 'none';
+                    adChart.className = 'bg-gray-50 dark:bg-gray-900 min-h-[calc(100dvh-5.5rem)] h-[calc(100dvh-5.5rem)]';
+                    adChart.innerHTML = `
+                        <button id="ad-impressions-header-btn" class="hidden" type="button"><span>Ad impressions</span></button>
+                        <div class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                            <div class="p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 flex justify-end bg-gray-50 dark:bg-gray-900 shrink-0">
+                                <button type="button" id="ad-impressions-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none" title="Export Chart" aria-label="Export impressions chart">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                </button>
+                            </div>
+                            <div class="flex-grow p-2 sm:p-4 flex flex-col min-h-0">
+                                <div id="ad-impressions-svg" class="w-full flex-1 min-h-0"></div>
+                                <h3 id="ad-impressions-title" class="text-base font-black text-gray-900 dark:text-white text-center shrink-0">Viewable impressions</h3>
+                            </div>
+                        </div>`;
+                    adminContainer?.appendChild(adChart);
+                    document.getElementById('ad-impressions-export').onclick = () => Admin.exportTrendGraph({
+                        svg: '#ad-impressions-svg svg',
+                        title: document.getElementById('ad-impressions-title')?.textContent || 'Viewable impressions',
+                        detail: 'Viewable impressions',
+                    });
+                }
+
                 document.getElementById('analytics-trend-prev').onclick = () => { Admin.telemetryWeeksAgo++; Admin.refreshTelemetry(); };
                 document.getElementById('analytics-trend-next').onclick = () => { if(Admin.telemetryWeeksAgo > 0) { Admin.telemetryWeeksAgo--; Admin.refreshTelemetry(); } };
                 document.getElementById('analytics-trend-export').onclick = () => Admin.exportTrendGraph();
                 document.getElementById('analytics-trend-cycle').onclick = Admin.cycleTelemetryRange;
+                document.getElementById('analytics-trend-ads').onclick = () => Admin.toggleAdOverlay();
+                document.getElementById('analytics-trend-stats').onclick = () => Admin.openGraphStats();
                 
                 // Compare Toggle Binding
                 const compareBtn = document.getElementById('analytics-trend-compare-btn');
@@ -4065,6 +4396,31 @@ const Admin = {
                     </div>
                 `;
                 document.body.appendChild(regionModal);
+
+                if (!document.getElementById('telemetry-stats-modal')) {
+                    const statsModal = document.createElement('div');
+                    statsModal.id = 'telemetry-stats-modal';
+                    statsModal.className = 'fixed inset-0 bg-black/90 z-[160] hidden flex items-center justify-center p-4 backdrop-blur-md';
+                    statsModal.innerHTML = `
+                        <div id="telemetry-stats-card" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700">
+                            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                <h3 class="text-lg font-black text-gray-900 dark:text-white">Graph statistics</h3>
+                                <button type="button" id="telemetry-stats-close" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                            <div id="telemetry-stats-body" class="p-4"></div>
+                            <div class="px-4 pb-4">
+                                <button type="button" id="telemetry-stats-export" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[10px] uppercase tracking-wider focus:outline-none">Export</button>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(statsModal);
+                    document.getElementById('telemetry-stats-close').onclick = () => {
+                        if (typeof closeSmoothModal === 'function') closeSmoothModal('telemetry-stats-modal');
+                        else statsModal.classList.add('hidden');
+                    };
+                    document.getElementById('telemetry-stats-export').onclick = () => Admin.exportGraphStats();
+                }
                 
                 // Bind the Pivot action
                 document.getElementById('region-view-graph-btn').onclick = () => {
@@ -4082,6 +4438,10 @@ const Admin = {
             if (cycleBtn) {
                 cycleBtn.onclick = Admin.cycleTelemetryRange;
             }
+            const adsBtn = document.getElementById('trend-ads-btn');
+            if (adsBtn) adsBtn.onclick = () => Admin.toggleAdOverlay();
+            const statsBtn = document.getElementById('trend-stats-btn');
+            if (statsBtn) statsBtn.onclick = () => Admin.openGraphStats();
 
             const expandBtn = document.getElementById('trend-expand-btn');
             const inlineExportBtn = document.getElementById('trend-inline-export-btn');
@@ -4179,7 +4539,7 @@ const Admin = {
     },
 
     // --- DYNAMIC SVG LINE GRAPH BUILDER (GROWTH PHASE 8: SCALE AWARE) ---
-    _buildLineGraphSVG: (dataArray, labelsArray, title, isTodayIdx, isMini = false, compareDataArray = null) => {
+    _buildLineGraphSVG: (dataArray, labelsArray, title, isTodayIdx, isMini = false, compareDataArray = null, extra = null) => {
         const numPoints = Math.max(1, dataArray.length);
         
         // SVG dimensions
@@ -4193,10 +4553,12 @@ const Admin = {
         const uh = h - pt - pb;
         
         // Exaggerated Y-Axis scale logic to defeat "Zero-Baseline Compression"
+        const overlaySeries = Array.isArray(extra?.overlay) ? extra.overlay : null;
         let allData = [...dataArray];
         if (Array.isArray(compareDataArray)) {
             allData = allData.concat(compareDataArray);
         }
+        if (overlaySeries) allData = allData.concat(overlaySeries);
         
         const validData = allData.filter(v => v !== null && v > 0);
         const maxVal = validData.length > 0 ? Math.max(...validData) : 10;
@@ -4243,10 +4605,11 @@ const Admin = {
         const gridColor = '#e5e5ea';
         const labelColor = '#8e8e93';
 
+        const gradId = `lineGrad_${extra?.gradTag || (isMini ? 'mini' : 'full')}`;
         let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; max-height:100%;">`;
         
         // Defs for gradient
-        svg += `<defs><linearGradient id="lineGrad_${isMini ? 'mini' : 'full'}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${lineColor}" stop-opacity="0.22"/><stop offset="100%" stop-color="${lineColor}" stop-opacity="0.0"/></linearGradient></defs>`;
+        svg += `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${lineColor}" stop-opacity="0.22"/><stop offset="100%" stop-color="${lineColor}" stop-opacity="0.0"/></linearGradient></defs>`;
         
         // Background Grid & Y-Axis (Only in full view)
         if (!isMini) {
@@ -4274,8 +4637,28 @@ const Admin = {
 
         // Fill Area & Stroke Line (Hide area if only 1 point exists)
         if (knownIdx.length > 1 && pathD) {
-            svg += `<path d="${areaD}" fill="url(#lineGrad_${isMini ? 'mini' : 'full'})" />`;
+            svg += `<path d="${areaD}" fill="url(#${gradId})" />`;
             svg += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="${isMini ? '3' : '3'}" stroke-linecap="round" stroke-linejoin="round" />`;
+        }
+
+        const adColor = '#059669';
+        if (overlaySeries && numPoints > 1) {
+            const oKnown = [];
+            for (let i = 0; i < numPoints; i++) {
+                if (overlaySeries[i] !== null && overlaySeries[i] !== undefined) oKnown.push(i);
+            }
+            if (oKnown.length > 1) {
+                const overlayPath = Admin._smoothSvgPathD(
+                    oKnown.map((i) => ({ x: getX(i), y: getY(overlaySeries[i]) }))
+                );
+                svg += `<path d="${overlayPath}" fill="none" stroke="${adColor}" stroke-width="${isMini ? '2' : '3'}" stroke-linecap="round" stroke-linejoin="round" />`;
+            }
+            if (!isMini) {
+                svg += `<line x1="${pl}" y1="12" x2="${pl + 16}" y2="12" stroke="${lineColor}" stroke-width="3" stroke-linecap="round" />`;
+                svg += `<text x="${pl + 20}" y="16" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" fill="${labelColor}">Users</text>`;
+                svg += `<line x1="${pl + 64}" y1="12" x2="${pl + 80}" y2="12" stroke="${adColor}" stroke-width="3" stroke-linecap="round" />`;
+                svg += `<text x="${pl + 84}" y="16" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" fill="${labelColor}">Ad impressions</text>`;
+            }
         }
         
         // Points and X-Axis
@@ -4302,10 +4685,13 @@ const Admin = {
             }
             
             // Worker metric is GA4 activeUsers. INTRADAY = actives in that half-hour bucket.
-            const metricWord = Admin.telemetryRange === 'INTRADAY' ? 'active / 30m' : 'Active users';
+            const metricWord = extra?.metricWord || (Admin.telemetryRange === 'INTRADAY' ? 'active / 30m' : 'Active users');
+            const adBit = overlaySeries && overlaySeries[i] !== null && overlaySeries[i] !== undefined
+                ? ` · ${overlaySeries[i]} viewable impressions`
+                : '';
             const tooltipText = compareVal !== null
-                ? `${val} ${metricWord} (Prev: ${compareVal}) [${hoverLabel}]`
-                : `${val} ${metricWord} (${hoverLabel})`;
+                ? `${val} ${metricWord} (Prev: ${compareVal}) [${hoverLabel}]${adBit}`
+                : `${val} ${metricWord} (${hoverLabel})${adBit}`;
             
             // GUARDIAN: Numbers hidden by default to declutter. Click dot to reveal exact stats!
             svg += `
@@ -4398,6 +4784,15 @@ const Admin = {
         });
 
         const CLOUDFLARE_WORKER_URL = 'https://nexttrain-telemetry.enock.workers.dev/';
+
+        const chartText = document.getElementById('tel-trend-container')?.textContent || '';
+        const headlinesWaiting = [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime].some((el) => {
+            const t = (el?.textContent || '').trim();
+            return t === '--' || t === '';
+        });
+        if ((headlinesWaiting || chartText.includes('Loading')) && typeof showToast === 'function') {
+            showToast(Admin._telemetryLoadToast, 'info', 0, '', { dismissible: true, untilDismiss: true, force: true });
+        }
         
         try {
             // GUARDIAN PHASE 4 & 8: Dynamic Range Payload for Edge Workers
@@ -4736,18 +5131,44 @@ const Admin = {
                 } else if (Admin.telemetryRange !== 'INTRADAY' && (Admin.telemetryWeeksAgo === 0 || Admin.telemetryRange === 'MAU' || Admin.telemetryRange === 'ALL')) {
                     isTodayIdx = activeCountsArray.length - 1;
                 }
+
+                let overlayCounts = null;
+                if (Admin.showAdOverlay && Admin.telemetryRange !== 'INTRADAY') {
+                    const api = Admin._align();
+                    const span = api?.adSpanForLabels(labelsArray, Admin.telemetryRange);
+                    if (api && span) {
+                        try {
+                            const daily = await Admin._loadAdDaily(span.start, span.end);
+                            if (telemetryGen !== Admin._telemetryGen) return;
+                            Admin._lastAdWindow = daily;
+                            overlayCounts = api.alignAdSeries(labelsArray, Admin.telemetryRange, daily.map);
+                        } catch {
+                            if (typeof showToast === 'function') showToast('Could not load ad counts for this graph.', 'error');
+                        }
+                    }
+                }
+                Admin._lastChart = {
+                    labels: labelsArray.slice(),
+                    counts: activeCountsArray.slice(),
+                    overlay: overlayCounts,
+                    range: Admin.telemetryRange,
+                    title: titleStr,
+                };
                 
                 // Render Inline Miniature SVG
+                const graphExtra = { overlay: overlayCounts, gradTag: 'usersMini' };
                 const inlineContainer = document.getElementById('tel-trend-container');
-                if (inlineContainer) inlineContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, true, compareCountsArray);
+                if (inlineContainer) inlineContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, true, compareCountsArray, graphExtra);
                 
                 // Render the full-height admin analytics drill.
                 const drillSvgContainer = document.getElementById('analytics-chart-svg-container');
-                if (drillSvgContainer) drillSvgContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, false, compareCountsArray);
+                if (drillSvgContainer) drillSvgContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, false, compareCountsArray, { overlay: overlayCounts, gradTag: 'usersFull' });
+                Admin._paintAdToggle();
 
                 [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
                     if (el) el.classList.remove('animate-pulse');
                 });
+                if (typeof hideToastIfMessage === 'function') hideToastIfMessage(Admin._telemetryLoadToast);
             } else {
                 if (res.status === 401 || res.status === 403) {
                     Admin.stopTelemetryPolling('Worker returned status: ' + res.status);
@@ -5073,7 +5494,8 @@ const Admin = {
     },
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
-    exportTrendGraph: async () => {
+    exportTrendGraph: async (opts) => {
+        const options = opts && opts.svg ? opts : {};
         if (typeof showToast === 'function') showToast('Preparing the chart image...', 'info', 2000);
         
         if (typeof html2canvas === 'undefined') {
@@ -5091,8 +5513,8 @@ const Admin = {
             }
         }
 
-        const titleText = document.getElementById('analytics-trend-title')?.textContent || '7-Day DAU Trend';
-        const rawSvgNode = document.querySelector('#analytics-chart-svg-container svg');
+        const titleText = options.title || document.getElementById('analytics-trend-title')?.textContent || '7-Day DAU Trend';
+        const rawSvgNode = document.querySelector(options.svg || '#analytics-chart-svg-container svg');
         if (!rawSvgNode) return;
 
         const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(700, {
@@ -5103,7 +5525,7 @@ const Admin = {
             <div id="export-svg-slot" style="height:268px;background:#F2F2F7;border-radius:16px;padding:10px 6px 4px;box-sizing:border-box;"></div>
             ${Admin._telemetryExportFooterHtml({
                 kicker: `Snapshot generated: ${Admin.formatDate(Date.now())}`,
-                detail: 'Daily activity from Google Analytics'
+                detail: options.detail || 'Daily activity from Google Analytics'
             })}
         `;
         

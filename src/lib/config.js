@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_11.10.3";
+export const APP_VERSION = "V10_11.10.4";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -1002,7 +1002,7 @@ export const CHANGELOG_DATA = [
         features: [
             "Data saving starts off. Pictures load on their own until you change that.",
             "You can make a picture wait until you tap it. A picture already saved on this phone still shows.",
-            "Link cards can stay off. The timetable still loads."
+            "Link previews can stay off. The timetable still loads."
         ]
     },
     {

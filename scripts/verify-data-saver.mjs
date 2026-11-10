@@ -60,7 +60,7 @@ assert(pictureMarkup(seen).includes('<img'), 'a remembered picture paints immedi
 
 writeDataSaver({ pictures: 'auto', linkCards: false, push: false });
 assert(picturesWaitForTap() === false, 'automatic pictures do not wait');
-assert(dataSaverSummary() === 'Link cards off', 'link cards can be the only change');
+assert(dataSaverSummary() === 'Link previews off', 'link previews can be the only change');
 assert(posterLoadPlan(fresh) === 'show', 'turning pictures back to automatic shows them');
 
 writeDataSaver({ linkCards: true, profilePhotos: false, push: false });

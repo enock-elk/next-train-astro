@@ -472,9 +472,22 @@ export async function publishPublicProfile(extra = {}) {
         const auth = await profileAuth();
         if (!auth) return;
         const state = extra.state || readMarks();
+        let points = Number(state.points) || 0;
+        try {
+            const current = await fetch(
+                `${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(auth.uid)}.json?auth=${encodeURIComponent(auth.token)}`
+            );
+            if (current.ok) {
+                const remote = await current.json();
+                const remotePoints = Number(remote?.points);
+                if (Number.isFinite(remotePoints)) points = Math.max(points, remotePoints);
+            }
+        } catch {
+            /* keep the local total */
+        }
         const body = {
-            points: Number(state.points) || 0,
-            tier: tierForPoints(state.points).id,
+            points,
+            tier: tierForPoints(points).id,
             showMarks: showMarksInCommunity(),
             showPhoto: showPhotoInAlerts(),
             updatedAt: Date.now(),

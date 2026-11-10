@@ -31,7 +31,7 @@ export function readDataSaver() {
 
 export function dataSaverSummary(prefs = readDataSaver()) {
     if (prefs.pictures === 'tap') return 'Pictures wait for a tap';
-    if (prefs.linkCards === false) return 'Link cards off';
+    if (prefs.linkCards === false) return 'Link previews off';
     if (prefs.profilePhotos === false) return 'Profile photos off';
     return 'Off';
 }

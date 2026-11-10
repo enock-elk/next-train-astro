@@ -914,6 +914,30 @@ async function ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId) 
     ));
 }
 
+function ntBindAdminTabSwipe(el, { getOrder, getActive, setActive, ignoreTarget } = {}) {
+    if (!el || el.dataset.ntTabSwipe === '1' || typeof getOrder !== 'function' || typeof setActive !== 'function') return;
+    el.dataset.ntTabSwipe = '1';
+    let startX = 0;
+    let startY = 0;
+    let blocked = false;
+    el.addEventListener('touchstart', (e) => {
+        blocked = typeof ignoreTarget === 'function' && ignoreTarget(e.target);
+        startX = e.changedTouches?.[0]?.screenX || 0;
+        startY = e.changedTouches?.[0]?.screenY || 0;
+    }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+        if (blocked) return;
+        const dx = (e.changedTouches?.[0]?.screenX || 0) - startX;
+        const dy = (e.changedTouches?.[0]?.screenY || 0) - startY;
+        if (!startX || Math.abs(dx) < 56 || Math.abs(dx) <= Math.abs(dy)) return;
+        const order = getOrder() || [];
+        const idx = order.indexOf(getActive());
+        if (idx < 0) return;
+        if (dx < 0 && idx < order.length - 1) setActive(order[idx + 1]);
+        else if (dx > 0 && idx > 0) setActive(order[idx - 1]);
+    }, { passive: true });
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -8180,19 +8204,24 @@ const Admin = {
             el.dataset.deSwipeBound = '1';
             const order = ['trips', 'fails', 'fares'];
             let touchStartX = 0;
+            let touchStartY = 0;
             el.addEventListener('touchstart', (e) => {
                 touchStartX = e.changedTouches?.[0]?.screenX || 0;
+                touchStartY = e.changedTouches?.[0]?.screenY || 0;
             }, { passive: true });
             el.addEventListener('touchend', (e) => {
                 const endX = e.changedTouches?.[0]?.screenX || 0;
+                const endY = e.changedTouches?.[0]?.screenY || 0;
                 const diffX = endX - touchStartX;
-                if (Math.abs(diffX) < 48) return;
+                const diffY = endY - touchStartY;
+                if (Math.abs(diffX) < 48 || Math.abs(diffX) <= Math.abs(diffY)) return;
                 const idx = order.indexOf(Admin._deActiveTab);
                 if (diffX < 0 && idx < order.length - 1) setDeTab(order[idx + 1]);
                 else if (diffX > 0 && idx > 0) setDeTab(order[idx - 1]);
             }, { passive: true });
         };
         bindDeSwipe(document.getElementById('de-tabs-swipe'));
+        bindDeSwipe(document.getElementById('de-list'));
 
         const bindTripFilter = (id, key) => {
             const el = document.getElementById(id);
@@ -11142,6 +11171,15 @@ const Admin = {
             });
         };
         paintTabs();
+        ntBindAdminTabSwipe(document.getElementById('ls-body'), {
+            getOrder: () => regions,
+            getActive: () => Admin._lsRegion,
+            setActive: (id) => {
+                Admin._lsRegion = id;
+                paintTabs();
+                Admin.fetchRideShareLog();
+            },
+        });
 
         if (!document.getElementById('nt-ls-style')) {
             const st = document.createElement('style');
@@ -11667,6 +11705,39 @@ const Admin = {
             event.stopPropagation();
             Admin._mqCloseThread?.();
         }, true);
+        ntBindAdminTabSwipe(body, {
+            getOrder: () => ['chats', 'reports', 'reviews'],
+            getActive: () => Admin.currentCommunityMonitorTab || 'chats',
+            setActive: (tab) => Admin.switchCommunityMonitorTab(tab),
+            ignoreTarget: (target) => {
+                if (document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) return true;
+                return !!target?.closest?.('#mq-reports-pane, input, textarea');
+            },
+        });
+        ntBindAdminTabSwipe(document.getElementById('mq-reports-pane'), {
+            getOrder: () => ['open', 'dismissed'],
+            getActive: () => (Admin._reportFilter === 'dismissed' ? 'dismissed' : 'open'),
+            setActive: (mode) => {
+                Admin._reportFilter = mode;
+                paintMqTab('reports');
+                Admin.paintCommunityReports?.();
+            },
+        });
+        const threadEl = document.getElementById('mq-thread');
+        if (threadEl && threadEl.dataset.ntThreadSwipe !== '1') {
+            threadEl.dataset.ntThreadSwipe = '1';
+            let threadX = 0;
+            let threadY = 0;
+            threadEl.addEventListener('touchstart', (e) => {
+                threadX = e.changedTouches?.[0]?.screenX || 0;
+                threadY = e.changedTouches?.[0]?.screenY || 0;
+            }, { passive: true });
+            threadEl.addEventListener('touchend', (e) => {
+                const dx = (e.changedTouches?.[0]?.screenX || 0) - threadX;
+                const dy = (e.changedTouches?.[0]?.screenY || 0) - threadY;
+                if (dx > 56 && Math.abs(dx) > Math.abs(dy)) Admin._mqCloseThread?.();
+            }, { passive: true });
+        }
         tabChats?.addEventListener('click', () => Admin.switchCommunityMonitorTab('chats'));
         tabReports?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reports'));
         tabReviews?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reviews'));
@@ -12350,11 +12421,14 @@ const Admin = {
                             </div>
                             <div class="cm-bubble-body">
                                 ${quote}<p class="cm-bubble-text${removed ? ' cm-msg-deleted' : ''}">${esc(shownBody)}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
-                                <div class="cm-bubble-actions">
-                                    <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
-                                    <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
-                                    ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
-                                    ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                                <div class="cm-options">
+                                    <button type="button" class="cm-options-toggle">Options</button>
+                                    <div class="cm-options-menu hidden">
+                                        <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
+                                        <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
+                                        ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
+                                        ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -12579,6 +12653,25 @@ const Admin = {
                         runMonitorLookup(lookupUidBtn.getAttribute('data-uid'));
                         return;
                     }
+                    const optionsToggle = event.target.closest?.('.cm-options-toggle');
+                    if (optionsToggle) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const menu = optionsToggle.parentElement?.querySelector('.cm-options-menu');
+                        const willOpen = !!menu?.classList.contains('hidden');
+                        document.querySelectorAll('.cm-options-menu').forEach((node) => node.classList.add('hidden'));
+                        if (willOpen && menu) {
+                            const rect = optionsToggle.getBoundingClientRect();
+                            const width = 196;
+                            menu.classList.remove('hidden');
+                            menu.style.position = 'fixed';
+                            menu.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
+                            menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 180))}px`;
+                            menu.style.zIndex = '80';
+                        }
+                        return;
+                    }
+                    document.querySelectorAll('.cm-options-menu').forEach((node) => node.classList.add('hidden'));
                     const hide = event.target.closest?.('.cm-hide-message');
                     if (hide) {
                         event.preventDefault();
@@ -13353,6 +13446,12 @@ const Admin = {
             if (active === 'deletions') Admin.fetchAccountDeletions();
         };
         utTabs.forEach((tab) => tab.btn?.addEventListener('click', () => setUtTab(tab.id)));
+        ntBindAdminTabSwipe(document.getElementById('ut-body'), {
+            getOrder: () => utTabs.map((tab) => tab.id),
+            getActive: () => utTabs.find((tab) => tab.pane && !tab.pane.classList.contains('hidden'))?.id || 'accounts',
+            setActive: (id) => setUtTab(id),
+            ignoreTarget: (target) => !!target?.closest?.('input, textarea, select'),
+        });
         Admin.setUtTab = setUtTab;
         Admin.openUserTrustLookup = ({ uid, email } = {}) => {
             const needle = String(uid || email || '').trim();
@@ -13843,9 +13942,6 @@ const Admin = {
                 const lastActivityHtml = lastActivity
                     ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="block text-[10px] text-gray-500 mt-0.5">${Admin.commuterEsc(lastActivity.label)}</span>`
                     : '<span class="text-gray-400">No activity on file</span>';
-                const devicesLabel = linkedIds.length
-                    ? linkedIds.map((id) => Admin.commuterLabelHtml(id)).join('<span class="text-gray-300">, </span>')
-                    : 'none';
                 const heading = profile.alias
                     ? Admin.commuterEsc(profile.alias)
                     : name;
@@ -13920,7 +14016,7 @@ const Admin = {
                             ${infoRow('Last activity', lastActivityHtml)}
                             ${infoRow('Found by', Admin.commuterEsc(viaLabel))}
                             ${deviceId && deviceId !== uid ? infoRow('Device', `<span class="break-all">${Admin.commuterEsc(deviceId)}</span>`) : ''}
-                            ${infoRow('Linked devices', `<span class="break-all">${devicesLabel}</span>`)}
+                            ${linkedIds.length ? `<details class="ut-devices"><summary class="ut-sheet-row"><span class="text-[15px] text-gray-500">Linked devices</span><span class="text-[15px] text-gray-400 shrink-0">${linkedIds.length}<span aria-hidden="true"> ›</span></span></summary><div class="ut-devices-list">${linkedIds.map((id) => `<p class="font-mono text-[12px] break-all text-gray-700 dark:text-gray-300">${Admin.commuterLabelHtml(id)}</p>`).join('')}</div></details>` : infoRow('Linked devices', 'none')}
                             ${contactHtml ? infoRow('Contacts', contactHtml) : ''}
                             ${infoRow('Role', `<b>${flags.role || 'user'}</b> · ${score}`)}
                             ${infoRow('Ban', `<b class="${banned && !expired ? 'text-[#ff3b30]' : ''}">${banDetail}</b>${banned ? ` · ${Admin.commuterEsc(modeStr)}` : ''}${bannedAtMs ? `<span class="block text-[12px] text-gray-400">since ${Admin.formatDate(bannedAtMs)}</span>` : ''}${bannedBy ? `<span class="block text-[12px] text-gray-400">${bannedBy}</span>` : ''}`)}
@@ -18602,20 +18698,14 @@ const Admin = {
         }
 
         const bindAlertTabSwipe = (el) => {
-            if (!el || el.dataset.alertSwipeBound === '1') return;
-            el.dataset.alertSwipeBound = '1';
-            let startX = 0;
-            const order = ['compose', 'active', 'schedule', 'archive'];
-            el.addEventListener('touchstart', (e) => { startX = e.changedTouches?.[0]?.screenX || 0; }, { passive: true });
-            el.addEventListener('touchend', (e) => {
-                const diffX = (e.changedTouches?.[0]?.screenX || 0) - startX;
-                if (Math.abs(diffX) < 48) return;
-                const idx = order.indexOf(Admin.currentAlertManagerTab || 'compose');
-                if (diffX < 0 && idx < order.length - 1) setAlertTab(order[idx + 1]);
-                else if (diffX > 0 && idx > 0) setAlertTab(order[idx - 1]);
-            }, { passive: true });
+            ntBindAdminTabSwipe(el, {
+                getOrder: () => ['compose', 'active', 'schedule', 'archive'],
+                getActive: () => Admin.currentAlertManagerTab || 'compose',
+                setActive: (tab) => setAlertTab(tab),
+                ignoreTarget: (target) => !!target?.closest?.('input, textarea, select, #alert-when-modes, .alert-wd-chip'),
+            });
         };
-        bindAlertTabSwipe(document.getElementById('alert-tabs-swipe'));
+        bindAlertTabSwipe(document.getElementById('alert-body'));
 
         document.getElementById('alert-schedule-refresh-btn')?.addEventListener('click', () => Admin.refreshScheduledAlerts());
 
@@ -18724,6 +18814,11 @@ const Admin = {
 
         document.querySelectorAll('.alert-when-mode').forEach((btn) => {
             btn.addEventListener('click', () => syncAlertWhenMode(btn.getAttribute('data-alert-when')));
+        });
+        ntBindAdminTabSwipe(document.getElementById('alert-when-modes'), {
+            getOrder: () => ['now', 'later', 'weekly', 'monthly'],
+            getActive: () => readAlertWhenMode(),
+            setActive: (mode) => syncAlertWhenMode(mode),
         });
         document.querySelectorAll('.alert-wd-chip').forEach((btn) => {
             styleWeekdayChip(btn);
@@ -22413,6 +22508,12 @@ const Admin = {
         Admin.setEventTab = paintEventTab;
         document.getElementById('event-tab-event')?.addEventListener('click', () => paintEventTab('event'));
         document.getElementById('event-tab-sheets')?.addEventListener('click', () => paintEventTab('sheets'));
+        ntBindAdminTabSwipe(document.getElementById('event-body'), {
+            getOrder: () => ['event', 'sheets'],
+            getActive: () => (document.getElementById('event-pane-sheets')?.classList.contains('hidden') ? 'event' : 'sheets'),
+            setActive: (which) => paintEventTab(which),
+            ignoreTarget: (target) => !!target?.closest?.('input, textarea, select'),
+        });
 
         if (typeof ROUTES !== 'undefined' && ROUTES['special_event']) {
             const ev = ROUTES['special_event'];
@@ -25690,6 +25791,11 @@ const Admin = {
         };
         tabPending?.addEventListener('click', () => setHolidayTab('pending'));
         tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
+        ntBindAdminTabSwipe(listDiv, {
+            getOrder: () => ['pending', 'approved'],
+            getActive: () => holidayTab,
+            setActive: (tab) => setHolidayTab(tab),
+        });
         setHolidayTab('pending');
     },
 

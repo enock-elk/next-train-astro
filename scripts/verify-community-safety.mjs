@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { checkContentSafety } from '../src/lib/content-safety.js';
-import { sanitizeBody, hasFirebaseAdminEnv } from '../workers/nexttrain-community/worker.js';
+import { sanitizeBody, hasFirebaseAdminEnv, communityPublicPointsNext } from '../workers/nexttrain-community/worker.js';
 
 const cases = [
     // English.
@@ -146,5 +146,28 @@ assert.match(community, /community-sheet-delete/, 'a message can be deleted from
 assert.match(community, /data-delete-as="author"/, 'the poster can delete their own message');
 assert.match(community, /Remove completely/, 'an operator can still remove a message with no bubble left');
 assert.match(admin, /ntAdminDeletePublishedCommunityMessage/, 'community tab delete uses the same RTDB delete as Community Monitor');
+assert.match(handlePostSrc, /applyCommunityPublicPoints/, 'an accepted post writes the public points total');
+assert.match(workerSource, /pathname === '\/community\/points'/, 'replies can ask for the same public points write');
+assert.match(community, /publishAcceptedCommunityPoints/, 'a direct write still asks the worker for the public total');
+assert.match(community, /authorColorKey\(replyTo\.uid/, 'a quote uses the same person colour as that person\'s bubble');
+assert.doesNotMatch(community.slice(community.indexOf('const payload = {'), community.indexOf('const banned = await isShadowBanned')), /marks:/, 'a new post does not freeze the pre-award total');
+
+const first = communityPublicPointsNext(null, { eventId: 'cp_1', snapshotPoints: 0, dayKey: '2026-11-10' });
+assert.equal(first.points, 7, 'the first accepted message is 5 plus the daily 2');
+assert.equal(first.tier, 'bronze');
+const retry = communityPublicPointsNext({ ...first, points: 7, lastCommunityPostId: 'cp_1' }, { eventId: 'cp_1', snapshotPoints: 0, dayKey: '2026-11-10' });
+assert.equal(retry.changed, false, 'the same accepted message does not add twice');
+const already = communityPublicPointsNext({ points: 9 }, { eventId: 'cp_2', snapshotPoints: 0, dayKey: '2026-11-10' });
+assert.equal(already.points, 9, 'a higher total already on the profile is kept');
+const later = communityPublicPointsNext(
+    { points: 7, communityFirst: true, communityDay: '2026-11-10', lastCommunityPostId: 'cp_1' },
+    { eventId: 'cp_3', snapshotPoints: 7, dayKey: '2026-11-10' }
+);
+assert.equal(later.points, 7, 'a second message on the same day adds nothing');
+const nextDay = communityPublicPointsNext(
+    { points: 7, communityFirst: true, communityDay: '2026-11-10', lastCommunityPostId: 'cp_1' },
+    { eventId: 'cp_4', snapshotPoints: 7, dayKey: '2026-11-11' }
+);
+assert.equal(nextDay.points, 9, 'the next day adds 2');
 
 console.log(`Community safety verified: ${cases.length} language cases, client/worker parity, held publishing paths.`);

@@ -1,5 +1,12 @@
 # Changelog
 
+## V10_11.10.4 — no release notes
+
+- Data saving calls the web-address card Link Previews.
+- Community Monitor fills the chat, keeps one route title, and puts message actions in Options.
+- Admin tab rows can be swiped. Linked device ids sit in a collapsed row.
+- An accepted community message writes one public points total.
+
 ## V10_11.10.3 — no release notes
 
 - Dev Hub badges wait for the in-flight schedule stamp check and download, then read community activity four routes at a time.
@@ -9,7 +16,7 @@
 
 - Data saving starts off. Pictures load on their own until you change that.
 - You can make a picture wait until you tap it. A picture already saved on this phone still shows.
-- Link cards can stay off. The timetable still loads.
+- Link previews can stay off. The timetable still loads.
 
 ## V10_11.01.4 — no release notes
 

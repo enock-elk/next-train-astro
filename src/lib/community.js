@@ -34,6 +34,7 @@ import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } 
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isFeatureGranted, isListedCommunityRoute } from './features.js';
 import {
     awardCommunityMarks,
+    contributionDayKey,
     marksPublicSnapshot,
     readMarks,
     renderBubbleMarksHtml,
@@ -196,6 +197,34 @@ async function ensureAuthToken() {
     return '';
 }
 
+function communityPointsSnapshot() {
+    return {
+        snapshotPoints: Number(readMarks()?.points) || 0,
+        dayKey: contributionDayKey(),
+    };
+}
+
+/** One small public total after an accepted message. Skipped when the post worker already wrote it. */
+async function publishAcceptedCommunityPoints(eventId) {
+    if (!COMMUNITY_WORKER_URL || !eventId) return null;
+    try {
+        const token = await ensureAuthToken();
+        if (!token) return null;
+        const res = await fetch(`${COMMUNITY_WORKER_URL}/community/points`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ eventId, ...communityPointsSnapshot() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        return res.ok && Number.isFinite(Number(data.points)) ? Number(data.points) : null;
+    } catch {
+        return null;
+    }
+}
+
 async function authQuery() {
     const token = await ensureAuthToken();
     return token ? `?auth=${encodeURIComponent(token)}` : '';
@@ -261,6 +290,24 @@ function nameColorFor(seed) {
     return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
 }
 
+/** One colour per person for this reading of the log, including quotes. */
+function authorColorKey(uid, displayName, postId) {
+    const direct = String(uid || '').trim();
+    if (direct) return direct;
+    const id = String(postId || '').trim();
+    if (id) {
+        const quoted = findCachedPost(id);
+        if (quoted?.uid) return String(quoted.uid);
+    }
+    const name = String(displayName || '').trim();
+    if (name) {
+        const match = (cachedFeedPosts || []).find((post) => post?.uid && String(post.displayName || '') === name);
+        if (match?.uid) return String(match.uid);
+        return name;
+    }
+    return id || 'x';
+}
+
 function communityNameFor(acct) {
     return acct?.displayName || formatAccountDisplayName(acct?.email ? String(acct.email).split('@')[0] : 'Passenger');
 }
@@ -314,6 +361,7 @@ function setReplyDraft(post, routeId) {
     replyDraft = {
         postId: post.postId,
         routeId: routeId || $currentRouteId.get(),
+        uid: post.uid || '',
         displayName: post.displayName || 'Passenger',
         body: String(post.body || (communityImageUrls(post).length ? 'Photo' : '')).slice(0, 120),
     };
@@ -691,6 +739,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     const replyToPayload = replyDraft?.postId && !isCommunityTombstone(findCachedPost(replyDraft.postId)) ? {
         replyTo: {
             postId: replyDraft.postId,
+            ...(replyDraft.uid ? { uid: replyDraft.uid } : {}),
             displayName: replyDraft.displayName,
             body: replyDraft.body,
         },
@@ -725,7 +774,6 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     hidden: false,
                     replyCount: 0,
                     appVersion: APP_VERSION,
-                    ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
                     ...replyToPayload,
                 },
             },
@@ -753,7 +801,6 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         hidden: false,
         replyCount: 0,
         appVersion: APP_VERSION,
-        ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
         ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
         ...(linkUrl ? { linkUrl } : {}),
         ...replyToPayload,
@@ -783,6 +830,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                 body: JSON.stringify({
                     ...payload,
                     region: $userRegion.get() || 'GP',
+                    ...communityPointsSnapshot(),
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -812,6 +860,9 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                 }
                 recordRateHit();
                 rememberBody(text);
+                if (!Number.isFinite(Number(data.publicPoints))) {
+                    await publishAcceptedCommunityPoints(postId);
+                }
                 return { ok: true, post: data.post || payload };
             }
             if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
@@ -853,6 +904,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         }
         recordRateHit();
         rememberBody(text);
+        await publishAcceptedCommunityPoints(postId);
         import('./account.js').then((m) => m.recordAccountActivity?.('community_post', { routeId })).catch(() => {});
         return { ok: true, post: payload };
     } catch (e) {
@@ -968,6 +1020,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         } catch { /* optional */ }
         recordRateHit();
         rememberBody(text);
+        await publishAcceptedCommunityPoints(replyId);
         import('./account.js').then((m) => m.recordAccountActivity?.('community_reply', { routeId, postId })).catch(() => {});
         return { ok: true, reply: payload };
     } catch (e) {
@@ -1262,6 +1315,16 @@ function latestAuthorMeta(posts) {
     return map;
 }
 
+function publicMarksFromPost(post, latest) {
+    const fromLatest = Number(latest?.points);
+    const fromPost = Number(post?.marks?.points);
+    const points = Number.isFinite(fromLatest) && fromLatest > 0
+        ? fromLatest
+        : (Number.isFinite(fromPost) && fromPost > 0 ? fromPost : null);
+    if (points == null) return null;
+    return { points, tier: latest?.tier || post?.marks?.tier || '' };
+}
+
 function authorPresentation(post, isOwn) {
     if (isOwn) {
         const acct = $account.get();
@@ -1289,9 +1352,7 @@ function authorPresentation(post, isOwn) {
     return {
         displayName: latest?.displayName || post.displayName || 'Passenger',
         photoURL: newestHidPhoto ? '' : (post.photoURL || ''),
-        marks: latest?.hasMarks
-            ? { points: latest.points, tier: latest.tier }
-            : (post.marks && Number.isFinite(Number(post.marks.points)) ? post.marks : null),
+        marks: publicMarksFromPost(post, latest),
     };
 }
 
@@ -1299,7 +1360,8 @@ async function loadPublicProfiles(uids) {
     const now = Date.now();
     const need = [...new Set((uids || []).filter(Boolean))].filter((uid) => {
         const hit = publicProfiles.get(uid);
-        return !hit || now - hit.fetchedAt > 10 * 60 * 1000;
+        const freshFor = Number(hit?.points) === 0 ? 60 * 1000 : 10 * 60 * 1000;
+        return !hit || now - hit.fetchedAt > freshFor;
     });
     if (!need.length) return false;
     let changed = false;
@@ -1369,11 +1431,14 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const isOwn = !!(myUid && post.uid && post.uid === myUid);
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
-    const nameColor = nameColorFor(post.uid || shown.displayName);
+    const nameColor = nameColorFor(authorColorKey(post.uid, shown.displayName));
     const replyTo = !tombstone && post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
+    const quoteColor = replyTo
+        ? nameColorFor(authorColorKey(replyTo.uid, replyTo.displayName, replyTo.postId))
+        : nameColor;
     const quoteHtml = replyTo
-        ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${nameColorFor(replyTo.displayName || replyTo.postId)}">
-             <p class="text-[11px] font-bold truncate" style="color:${nameColorFor(replyTo.displayName || replyTo.postId)}">${escapeHTML(replyTo.displayName || 'Passenger')}</p>
+        ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${quoteColor}">
+             <p class="text-[11px] font-bold truncate" style="color:${quoteColor}">${escapeHTML(replyTo.displayName || 'Passenger')}</p>
              <p class="text-[11px] opacity-80 truncate">${escapeHTML(String(replyTo.body || '').slice(0, 100))}</p>
            </div>`
         : '';

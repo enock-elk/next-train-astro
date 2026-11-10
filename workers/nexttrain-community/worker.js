@@ -1221,6 +1221,110 @@ async function handleAlertImageGet(request, env, file) {
     return new Response(obj.body, { status: 200, headers });
 }
 
+function saCommunityDayKey(now = Date.now()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Johannesburg',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(new Date(now));
+    const pick = (type) => parts.find((part) => part.type === type)?.value || '';
+    const key = `${pick('year')}-${pick('month')}-${pick('day')}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : '1970-01-01';
+}
+
+function tierForCommunityPoints(points) {
+    const n = Number(points) || 0;
+    if (n >= 600) return 'platinum';
+    if (n >= 250) return 'gold';
+    if (n >= 80) return 'silver';
+    return 'bronze';
+}
+
+/**
+ * One public total. First accepted message is 5 + 2. A later message on a new
+ * South African day is 2. The same event id does not add twice. A phone that
+ * already published a higher total is left alone.
+ */
+export function communityPublicPointsNext(profile, input = {}) {
+    const current = profile && typeof profile === 'object' ? profile : {};
+    const eventId = String(input.eventId || '').slice(0, 80);
+    const have = Number(current.points);
+    const base = Number.isFinite(have) ? have : 0;
+    if (eventId && current.lastCommunityPostId === eventId) {
+        return { points: base, changed: false, tier: current.tier || tierForCommunityPoints(base) };
+    }
+    const requested = String(input.dayKey || '');
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : saCommunityDayKey(input.now);
+    let delta = 0;
+    if (current.communityFirst !== true) delta += 5;
+    if (current.communityDay !== day) delta += 2;
+    const snap = Number(input.snapshotPoints);
+    const fromSnap = Number.isFinite(snap) ? snap + delta : base + delta;
+    const points = Math.max(0, Math.min(100000, Math.max(base, fromSnap)));
+    return {
+        points,
+        changed: true,
+        tier: tierForCommunityPoints(points),
+        communityFirst: true,
+        communityDay: day,
+        lastCommunityPostId: eventId,
+    };
+}
+
+async function applyCommunityPublicPoints(env, { uid, eventId, snapshotPoints, dayKey }) {
+    if (!uid || !isSafeRtdbKey(uid) || !hasFirebaseAdminEnv(env)) return null;
+    const profile = await rtdbGet(env, `public_profile/${uid}`);
+    const next = communityPublicPointsNext(profile, { eventId, snapshotPoints, dayKey });
+    if (!next.changed) return next.points;
+    const updates = {
+        [`public_profile/${uid}/points`]: next.points,
+        [`public_profile/${uid}/tier`]: next.tier,
+        [`public_profile/${uid}/updatedAt`]: Date.now(),
+        [`public_profile/${uid}/communityFirst`]: true,
+        [`public_profile/${uid}/communityDay`]: next.communityDay,
+    };
+    if (next.lastCommunityPostId) {
+        updates[`public_profile/${uid}/lastCommunityPostId`] = next.lastCommunityPostId;
+    }
+    await rtdbUpdate(env, updates);
+    return next.points;
+}
+
+async function handleCommunityPoints(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const eventId = String(body.eventId || '').slice(0, 80);
+    if (!isSafeRtdbKey(eventId)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid event' });
+    }
+    try {
+        const points = await applyCommunityPublicPoints(env, {
+            uid: user.uid,
+            eventId,
+            snapshotPoints: body.snapshotPoints,
+            dayKey: body.dayKey,
+        });
+        return json(env, request, 200, { ok: true, points });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Points update failed' });
+    }
+}
+
 async function handlePost(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -1337,11 +1441,13 @@ async function handlePost(request, env) {
     }
     if (linkUrl) payload.linkUrl = linkUrl;
     if (body.replyTo && typeof body.replyTo === 'object') {
+        const quoteUid = String(body.replyTo.uid || '').slice(0, 80);
         payload.replyTo = {
             postId: String(body.replyTo.postId || '').slice(0, 80),
             displayName: String(body.replyTo.displayName || '').slice(0, 80),
             body: quoteSnapshot(body.replyTo.body),
         };
+        if (quoteUid && isSafeRtdbKey(quoteUid)) payload.replyTo.uid = quoteUid;
     }
 
     try {
@@ -1390,7 +1496,18 @@ async function handlePost(request, env) {
                 await rtdbWriteWithUserToken(env, `community_activity/${routeId}/${postId}`, activity, idToken);
             } catch { /* index is optional when Admin is unset */ }
         }
-        return json(env, request, 200, { ok: true, post: payload });
+        let publicPoints = null;
+        try {
+            publicPoints = await applyCommunityPublicPoints(env, {
+                uid: user.uid,
+                eventId: postId,
+                snapshotPoints: body.snapshotPoints,
+                dayKey: body.dayKey,
+            });
+        } catch (pointsError) {
+            console.error('Community public points update failed', pointsError);
+        }
+        return json(env, request, 200, { ok: true, post: payload, publicPoints });
     } catch (e) {
         return json(env, request, 500, { ok: false, error: e.message || 'Write failed' });
     }
@@ -1552,6 +1669,9 @@ export default {
         }
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/points') {
+            return handleCommunityPoints(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/community/message') {
             return handleCommunityDelete(request, env);

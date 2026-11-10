@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const admin = await readFile(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+const css = await readFile(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
 const community = await readFile(new URL('../src/lib/community.js', import.meta.url), 'utf8');
 const worker = await readFile(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
 const rules = JSON.parse(await readFile(new URL('../firebase-database.rules.json', import.meta.url), 'utf8'));
@@ -62,6 +63,7 @@ assert.match(admin, /mq-approve-community/);
 assert.match(admin, /mq-reject-community/);
 assert.match(admin, /mq-hide-post/);
 assert.match(admin, /mq-shadow-ban/);
+assert.match(admin, /cm-options-toggle/, 'message actions sit behind Options');
 assert.match(admin, /cm-hide-message/);
 assert.match(admin, /cm-delete-message/);
 assert.match(admin, /deletePublishedCommunityMessage/);
@@ -83,6 +85,11 @@ assert.match(admin, /Object\.entries\(postsData\)/, 'monitor uses Firebase keys 
 assert.match(admin, /encodeURIComponent\(token\)/, 'monitor delete uses a fresh encoded ID token');
 assert.match(admin, /method: 'DELETE'/, 'published posts are deleted at their RTDB path, not via a root PATCH');
 assert.match(admin, /list\.onclick =/, 'monitor click handler is replaced on each refresh');
+assert.match(admin, /ntBindAdminTabSwipe\(body/, 'Community Monitor swipes between its tabs');
+assert.match(admin, /ntBindAdminTabSwipe\(document\.getElementById\('ut-body'\)/, 'User trust swipes between its tabs');
+assert.match(admin, /class="ut-devices"/, 'linked device ids sit in a collapsed row');
+assert.match(css, /#mq-body\.mq-showing-thread #mq-chats-pane/, 'an open monitor chat fills the panel');
+assert.match(css, /#mq-body\.mq-showing-thread \.cm-thread-bar/, 'the second route title is hidden');
 assert.doesNotMatch(
     admin.slice(admin.indexOf('Admin.deletePublishedCommunityMessage'), admin.indexOf('list.onclick')),
     /method: 'PATCH'/,

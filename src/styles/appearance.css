@@ -1929,23 +1929,45 @@ html.dark .cm-bubble-name { background: rgba(255, 255, 255, 0.07); }
   color: #6b7280;
   text-align: left;
 }
-.cm-bubble-actions {
+.cm-options {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
 }
-.cm-bubble-actions button {
+.cm-options-toggle {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #3b4a54;
   font-size: 0.68rem;
   font-weight: 700;
-  text-decoration: underline;
+  padding: 0.2rem 0.55rem;
+}
+html.dark .cm-options-toggle { background: rgba(255, 255, 255, 0.08); color: #e9edef; }
+.cm-options-menu {
+  min-width: 12.25rem;
+  padding: 0.25rem 0;
+  border-radius: 0.75rem;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+html.dark .cm-options-menu { background: #1f2c34; border-color: rgba(255, 255, 255, 0.08); }
+.cm-options-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: none;
   border: 0;
-  padding: 0;
-  color: #b45309;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #111827;
 }
-.cm-bubble-actions .cm-delete-message,
-.cm-bubble-actions .cm-shadow-ban { color: #dc2626; }
+html.dark .cm-options-menu button { color: #f9fafb; }
+.cm-options-menu .cm-hide-message { color: #b45309; }
+.cm-options-menu .cm-delete-message,
+.cm-options-menu .cm-shadow-ban { color: #dc2626; }
 .cm-msg-deleted { font-style: italic; opacity: 0.8; }
 .cm-empty { text-align: left; color: #9ca3af; padding: 0.5rem 0; }
 .mq-body-scroll {
@@ -1963,8 +1985,14 @@ html.dark .cm-bubble-name { background: rgba(255, 255, 255, 0.07); }
 #mq-body.mq-showing-thread #mq-tabbar,
 #mq-body.mq-showing-thread #mq-chats-home,
 #mq-body.mq-showing-thread #mq-reports-pane,
-#mq-body.mq-showing-thread #mq-reviews-pane {
+#mq-body.mq-showing-thread #mq-reviews-pane,
+#mq-body.mq-showing-thread .cm-thread-bar {
   display: none !important;
+}
+#mq-body.mq-showing-thread #mq-chats-pane {
+  display: flex !important;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .cm-earlier {
   align-self: center;
@@ -2048,6 +2076,17 @@ html.dark .ut-sheet-group { background: #111827; border-color: rgba(255, 255, 25
 }
 html.dark .ut-sheet-row { color: #f9fafb; border-bottom-color: rgba(255, 255, 255, 0.08); }
 .ut-sheet-group > :last-child { border-bottom: 0; }
+.ut-devices { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+html.dark .ut-devices { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.ut-devices > summary { list-style: none; cursor: pointer; }
+.ut-devices > summary::-webkit-details-marker { display: none; }
+.ut-devices-list {
+  padding: 0 1rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.ut-sheet-group > .ut-devices:last-child { border-bottom: 0; }
 #admin-commuter-peek .ut-peek-sheet {
   width: 100%;
   max-width: 28rem;

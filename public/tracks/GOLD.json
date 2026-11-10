@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "49280360daee9a37838113837f069bce009369f0",
+  "frozenAt": "d12ebe7a780d37a3859f7015bafbd841dc398e8b",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: a bare network map asks which region to view and does not seed Gauteng. Rail geometry, station pins, MapView, map-tab, and advert handling are unchanged. frozenAt is the region-choice commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: the first-visit region sheet uses the welcome look. The choice still does not seed Gauteng. Rail geometry, station pins, MapView, map-tab, map runtime, and advert handling are unchanged. frozenAt is the welcome-sheet commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -25,8 +25,8 @@
       "sha256": "cd55f437d6d52381876eca7cab5ab2470943b973059e8972a0bce0aee33a395a"
     },
     "src/pages/map.astro": {
-      "md5": "0c47a9de24f483e1521ca281ec4c660c",
-      "sha256": "bd18c076415880518cdc828291ec4098cdbbb44b931ab500d838f5c772c5f6fc"
+      "md5": "97fc25e4b1d8bf7aa32e8a2234113ce5",
+      "sha256": "9ce2f354e7fac025ce111898ef55e9a0af8b0e0ef8e3e7a927c11a345606e54e"
     },
     "src/components/MapView.astro": {
       "md5": "ceac5694b040c4c3107f6a27a8e96168",

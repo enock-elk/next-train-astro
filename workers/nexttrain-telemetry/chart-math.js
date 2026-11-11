@@ -241,6 +241,200 @@ export function seriesTrend(values) {
     return { first, last, sum, avg, delta, pct, trend, count: nums.length };
 }
 
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+
+/** Calendar parts in Africa/Johannesburg, without depending on the host timezone. */
+export function sastDateParts(now = new Date()) {
+    const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+    const year = sast.getUTCFullYear();
+    const month = sast.getUTCMonth() + 1;
+    const day = sast.getUTCDate();
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+        year,
+        month,
+        day,
+        dayKey: `${year}${pad(month)}${pad(day)}`,
+        monthKey: `${year}${pad(month)}`,
+        iso: `${year}-${pad(month)}-${pad(day)}`,
+    };
+}
+
+/** Bucket that is still open, so it must not be compared with a finished one. */
+export function inProgressKey(range, now = new Date()) {
+    const parts = sastDateParts(now);
+    if (range === 'DAU') return parts.dayKey;
+    if (range === 'WAU') return isoWeekKey(parts.iso);
+    if (range === 'MAU' || range === 'ALL') return parts.monthKey;
+    return '';
+}
+
+function formatBucketLabel(key, range) {
+    const raw = String(key || '');
+    if (range === 'DAU' && /^\d{8}$/.test(raw)) {
+        return `${Number(raw.slice(6, 8))} ${MONTH_LABELS[Number(raw.slice(4, 6)) - 1] || ''}`.trim();
+    }
+    if (range === 'WAU') {
+        const bounds = isoWeekBounds(raw);
+        if (!bounds) return raw;
+        const [, m, d] = bounds.start.split('-');
+        return `${Number(d)} ${MONTH_LABELS[Number(m) - 1] || ''}`.trim();
+    }
+    if ((range === 'MAU' || range === 'ALL') && /^\d{6}$/.test(raw)) {
+        return `${MONTH_LABELS[Number(raw.slice(4, 6)) - 1] || ''} ${raw.slice(0, 4)}`.trim();
+    }
+    return raw;
+}
+
+function bucketSpan(key, range) {
+    const raw = String(key || '');
+    if (range === 'DAU' && /^\d{8}$/.test(raw)) {
+        const iso = `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+        return { start: iso, end: iso };
+    }
+    if (range === 'WAU') return isoWeekBounds(raw);
+    if ((range === 'MAU' || range === 'ALL') && /^\d{6}$/.test(raw)) {
+        const y = Number(raw.slice(0, 4));
+        const m = Number(raw.slice(4, 6));
+        const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+        return { start: `${raw.slice(0, 4)}-${raw.slice(4, 6)}-01`, end };
+    }
+    return null;
+}
+
+function windowFromKeys(keys, valueMap) {
+    const nums = keys.map((key) => valueMap.get(key));
+    const sum = nums.reduce((total, n) => total + n, 0);
+    const spanStart = bucketSpan(keys[0], valueMap.range);
+    const spanEnd = bucketSpan(keys[keys.length - 1], valueMap.range);
+    const firstLabel = formatBucketLabel(keys[0], valueMap.range);
+    const lastLabel = formatBucketLabel(keys[keys.length - 1], valueMap.range);
+    return {
+        keys,
+        sum,
+        avg: nums.length ? sum / nums.length : 0,
+        count: nums.length,
+        start: spanStart?.start || '',
+        end: spanEnd?.end || '',
+        label: keys.length > 1 ? `${firstLabel} to ${lastLabel}` : firstLabel,
+    };
+}
+
+function trendFromSums(currentSum, previousSum) {
+    const delta = currentSum - previousSum;
+    const pct = previousSum !== 0 ? (delta / previousSum) * 100 : (currentSum !== 0 ? 100 : 0);
+    const trend = pct > 2 ? 'Growing' : (pct < -2 ? 'Down' : 'Flat');
+    return { delta, pct, trend };
+}
+
+/**
+ * Compare the latest complete period with the complete period of the same
+ * length immediately before it. The open day, week, or month is left out.
+ * DAU uses 7 days (or fewer when history is shorter). WAU and MAU use one
+ * finished week or month. ALL uses one finished month.
+ */
+export function equivalentPeriodTrend(labels, values, range, options = {}) {
+    const now = options.now instanceof Date ? options.now : new Date();
+    const preferred = range === 'DAU' ? 7 : 1;
+    if (range === 'INTRADAY') {
+        if (!options.liveEdge) return null;
+        const counts = Array.isArray(values) ? values : [];
+        if (counts.length <= 48) return null;
+        const yesterday = counts.slice(0, 48).map((n) => (n == null || n === '' ? 0 : Number(n) || 0));
+        const today = [];
+        counts.slice(48).forEach((n) => {
+            if (n === null || n === undefined || n === '') return;
+            today.push(Number(n) || 0);
+        });
+        const elapsed = today.slice(0, -1);
+        if (!elapsed.length) return null;
+        const prev = yesterday.slice(0, elapsed.length);
+        const currentSum = elapsed.reduce((total, n) => total + n, 0);
+        const previousSum = prev.reduce((total, n) => total + n, 0);
+        const change = trendFromSums(currentSum, previousSum);
+        return {
+            ...change,
+            width: elapsed.length,
+            unit: 'same hours',
+            versus: 'versus the same hours yesterday',
+            current: { sum: currentSum, avg: currentSum / elapsed.length, count: elapsed.length, label: 'Today so far', start: '', end: '', keys: [] },
+            previous: { sum: previousSum, avg: prev.length ? previousSum / prev.length : 0, count: prev.length, label: 'Yesterday, same hours', start: '', end: '', keys: [] },
+        };
+    }
+    const valueMap = new Map();
+    const labs = Array.isArray(labels) ? labels : [];
+    const vals = Array.isArray(values) ? values : [];
+    for (let i = 0; i < labs.length; i++) {
+        const key = String(labs[i] || '');
+        if (!key) continue;
+        const raw = vals[i];
+        if (raw === null || raw === undefined || raw === '') continue;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) continue;
+        valueMap.set(key, n);
+    }
+    valueMap.range = range;
+    const keys = [...valueMap.keys()].sort();
+    if (!keys.length) return null;
+    let endIdx = keys.length - 1;
+    if (options.endLabel && keys.includes(String(options.endLabel))) {
+        endIdx = keys.indexOf(String(options.endLabel));
+    }
+    const openKey = options.openKey || inProgressKey(range, now);
+    if (openKey && keys[endIdx] === openKey) endIdx -= 1;
+    let chosen = null;
+    for (let width = Math.min(preferred, endIdx + 1); width >= 1; width -= 1) {
+        const curStart = endIdx - width + 1;
+        const prevStart = curStart - width;
+        if (curStart < 0 || prevStart < 0) continue;
+        const currentKeys = keys.slice(curStart, endIdx + 1);
+        const prevKeys = keys.slice(prevStart, curStart);
+        if (currentKeys.length === width && prevKeys.length === width) {
+            chosen = { width, currentKeys, prevKeys };
+            break;
+        }
+    }
+    if (!chosen) return null;
+    const current = windowFromKeys(chosen.currentKeys, valueMap);
+    const previous = windowFromKeys(chosen.prevKeys, valueMap);
+    const change = trendFromSums(current.sum, previous.sum);
+    const noun = range === 'DAU'
+        ? (chosen.width === 1 ? 'day' : 'days')
+        : (range === 'WAU' ? 'full week' : 'full month');
+    const versus = range === 'DAU'
+        ? `versus the previous ${chosen.width} ${noun}`
+        : `versus the previous ${noun}`;
+    return {
+        ...change,
+        width: chosen.width,
+        unit: noun,
+        versus,
+        current,
+        previous,
+    };
+}
+
+/** Viewable impressions per active user across two equal complete periods. */
+export function equivalentViewability(userTrend, adTrend) {
+    if (!userTrend?.current || !adTrend?.current || !userTrend.previous || !adTrend.previous) return null;
+    const curUsers = Number(userTrend.current.sum);
+    const prevUsers = Number(userTrend.previous.sum);
+    if (!Number.isFinite(curUsers) || !Number.isFinite(prevUsers) || curUsers <= 0 || prevUsers <= 0) return null;
+    const current = (Number(adTrend.current.sum) || 0) / curUsers;
+    const previous = (Number(adTrend.previous.sum) || 0) / prevUsers;
+    const change = trendFromSums(current, previous);
+    return {
+        ...change,
+        current,
+        previous,
+        avg: current,
+        versus: userTrend.versus,
+        width: userTrend.width,
+        currentLabel: userTrend.current.label,
+        previousLabel: userTrend.previous.label,
+    };
+}
+
 /** Viewable impressions per active user, one rate per bucket that has users. */
 export function viewabilityTrend(users, ads) {
     const rates = [];

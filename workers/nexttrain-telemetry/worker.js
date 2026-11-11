@@ -428,7 +428,9 @@ export default {
                     const range = url.searchParams.get('range') || 'DAU';
                     let trendDimensions = [{ name: "date" }];
                     let trendOrderBys = [{ dimension: { dimensionName: "date" } }];
-                    let trendStartDate = "13daysAgo";
+                    // 14daysAgo through today is 15 points: 14 finished days plus today.
+                    // Stats compare the last 7 finished days with the 7 before them.
+                    let trendStartDate = "14daysAgo";
                     let trendEndDate = "today";
 
                     if (range === 'INTRADAY') {

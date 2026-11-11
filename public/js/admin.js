@@ -3886,13 +3886,18 @@ const Admin = {
     },
 
     _trendLine: (label, stat) => {
-        if (!stat) return `<p class="text-[12px] text-gray-400">${label}: no points in this view.</p>`;
+        if (!stat) return `<p class="text-[12px] text-gray-400">${label}: no finished period to compare yet.</p>`;
         const sign = stat.pct > 0 ? '+' : '';
+        const currentSum = Number(stat.current?.sum);
+        const previousSum = Number(stat.previous?.sum);
+        const sums = Number.isFinite(currentSum) && Number.isFinite(previousSum)
+            ? `<p class="text-[11px] text-gray-400">${stat.current.label}: ${Admin.formatNumber(Math.round(currentSum))} · ${stat.previous.label}: ${Admin.formatNumber(Math.round(previousSum))}</p>`
+            : '';
         return `<div class="rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 p-3">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">${label}</p>
             <p class="mt-1 text-lg font-black text-gray-900 dark:text-white">${stat.trend}</p>
-            <p class="text-[12px] text-gray-600 dark:text-gray-300">Average ${Admin.formatNumber(Math.round(stat.avg * 100) / 100)} · ${sign}${stat.pct.toFixed(1)}% from first to last</p>
-            <p class="text-[11px] text-gray-400">First ${Admin.formatNumber(Math.round(stat.first))} · Last ${Admin.formatNumber(Math.round(stat.last))}</p>
+            <p class="text-[12px] text-gray-600 dark:text-gray-300">${sign}${stat.pct.toFixed(1)}% ${stat.versus || ''}</p>
+            ${sums}
         </div>`;
     },
 
@@ -3905,41 +3910,44 @@ const Admin = {
         body.innerHTML = '<p class="text-sm text-gray-500">Loading statistics…</p>';
         const view = Admin._lastChart || {};
         const api = Admin._align();
-        let ads = Array.isArray(view.overlay) ? view.overlay : null;
-        let windowRow = Admin._lastAdWindow || null;
-        if (!ads && api && view.range && view.range !== 'INTRADAY') {
-            const span = api.adSpanForLabels(view.labels, view.range);
-            if (span) {
-                try {
-                    windowRow = await Admin._loadAdDaily(span.start, span.end);
-                    Admin._lastAdWindow = windowRow;
-                    ads = api.alignAdSeries(view.labels, view.range, windowRow.map);
-                } catch {
-                    windowRow = null;
-                }
+        const masterLabels = Array.isArray(view.masterLabels) && view.masterLabels.length ? view.masterLabels : (view.labels || []);
+        const masterCounts = Array.isArray(view.masterCounts) && view.masterCounts.length ? view.masterCounts : (view.counts || []);
+        const endLabel = [...(view.labels || [])].reverse().find((label) => String(label || '').trim()) || '';
+        const userStat = api ? api.equivalentPeriodTrend(masterLabels, masterCounts, view.range, { endLabel, liveEdge: !!view.liveEdge }) : null;
+        let windowRow = null;
+        let adStat = null;
+        if (api && userStat && view.range !== 'INTRADAY' && userStat.previous?.start && userStat.current?.end) {
+            try {
+                windowRow = await Admin._loadAdDaily(userStat.previous.start, userStat.current.end);
+                Admin._lastAdWindow = windowRow;
+                const aligned = api.alignAdSeries(masterLabels, view.range, windowRow.map);
+                adStat = api.equivalentPeriodTrend(masterLabels, aligned, view.range, { endLabel });
+            } catch {
+                windowRow = null;
             }
         }
-        const userStat = api ? api.seriesTrend(view.counts || []) : null;
-        const adStat = api && ads ? api.seriesTrend(ads) : null;
-        const rateStat = api && ads ? api.viewabilityTrend(view.counts || [], ads) : null;
+        const rateStat = api && userStat && adStat ? api.equivalentViewability(userStat, adStat) : null;
         const rateHtml = rateStat
             ? `<div class="rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 p-3">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Viewability</p>
                 <p class="mt-1 text-lg font-black text-gray-900 dark:text-white">${rateStat.trend}</p>
-                <p class="text-[12px] text-gray-600 dark:text-gray-300">Average ${rateStat.avg.toFixed(2)} viewable impressions per active user</p>
-                <p class="text-[11px] text-gray-400">${rateStat.pct > 0 ? '+' : ''}${rateStat.pct.toFixed(1)}% change in that rate across this view</p>
+                <p class="text-[12px] text-gray-600 dark:text-gray-300">${rateStat.current.toFixed(2)} viewable impressions per active user, ${rateStat.pct > 0 ? '+' : ''}${rateStat.pct.toFixed(1)}% ${rateStat.versus || ''}</p>
+                <p class="text-[11px] text-gray-400">${rateStat.currentLabel}: ${rateStat.current.toFixed(2)} · ${rateStat.previousLabel}: ${rateStat.previous.toFixed(2)}</p>
             </div>`
-            : `<p class="text-[12px] text-gray-400">${view.range === 'INTRADAY' ? 'Ad counts are kept by day. Switch to DAU or WAU to line them up with this graph.' : 'Ad counts for this view are not available yet.'}</p>`;
+            : `<p class="text-[12px] text-gray-400">${view.range === 'INTRADAY' ? 'Ad counts are kept by day. Switch to DAU or WAU to line them up with this graph.' : (userStat ? 'Ad counts for this period are not available yet.' : 'No finished period to compare yet.')}</p>`;
         let money = '';
-        if (windowRow && Number.isFinite(windowRow.revenue)) {
-            const usd = windowRow.revenue.toLocaleString('en-US', { style: 'currency', currency: windowRow.coin || 'USD' });
+        const hitTotal = (Number(adStat?.current?.sum) || 0) + (Number(adStat?.previous?.sum) || 0);
+        if (windowRow && adStat && hitTotal > 0 && Number.isFinite(windowRow.revenue)) {
+            const share = (Number(adStat.current.sum) || 0) / hitTotal;
+            const amount = windowRow.revenue * share;
+            const usd = amount.toLocaleString('en-US', { style: 'currency', currency: windowRow.coin || 'USD' });
             let zar = '';
             try {
                 const fx = Admin._fx || await Admin._usdZarRate();
                 Admin._fx = fx;
-                if (fx?.rate) zar = ` · ${Admin._formatZar(windowRow.revenue, fx.rate)}`;
+                if (fx?.rate) zar = ` · ${Admin._formatZar(amount, fx.rate)}`;
             } catch { /* dollars still show */ }
-            money = `<p class="text-[12px] text-gray-600 dark:text-gray-300">Revenue in this window: ${usd}${zar}</p>`;
+            money = `<p class="text-[12px] text-gray-600 dark:text-gray-300">Estimated revenue in ${adStat.current.label}: ${usd}${zar}</p>`;
         }
         body.innerHTML = `
             <p class="text-[12px] font-semibold text-gray-500 mb-3">${view.title || 'This view'}</p>
@@ -5150,9 +5158,12 @@ const Admin = {
                 Admin._lastChart = {
                     labels: labelsArray.slice(),
                     counts: activeCountsArray.slice(),
+                    masterLabels: rawLabelsArray.slice(),
+                    masterCounts: rawCountsArray.slice(),
                     overlay: overlayCounts,
                     range: Admin.telemetryRange,
                     title: titleStr,
+                    liveEdge: Admin.telemetryWeeksAgo === 0,
                 };
                 
                 // Render Inline Miniature SVG

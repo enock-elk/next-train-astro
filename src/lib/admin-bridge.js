@@ -33,6 +33,8 @@ import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './te
 import {
     adSpanForLabels,
     alignAdSeries,
+    equivalentPeriodTrend,
+    equivalentViewability,
     seriesTrend,
     viewabilityTrend,
 } from '../../workers/nexttrain-telemetry/chart-math.js';
@@ -153,7 +155,7 @@ export function exposeAdminGlobals() {
         noticeQuotePlain,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
-    window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, seriesTrend, viewabilityTrend };
+    window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, equivalentPeriodTrend, equivalentViewability, seriesTrend, viewabilityTrend };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
     window.ntOperatorBrief = {
         alertDraftFromBriefCard,

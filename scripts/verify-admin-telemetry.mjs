@@ -15,6 +15,8 @@ import {
     isoWeekKey,
     adSpanForLabels,
     alignAdSeries,
+    equivalentPeriodTrend,
+    equivalentViewability,
     seriesTrend,
     viewabilityTrend,
 } from '../workers/nexttrain-telemetry/chart-math.js';
@@ -534,7 +536,7 @@ ok(workerJs.includes("url.pathname === '/admin/ads'") && workerJs.includes('CLEV
 ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('loadAdRevenue'), 'live telemetry draws its own ad revenue search');
 ok(adminJs.includes('$4 CPM') && adminJs.includes('api.frankfurter.dev') && adminJs.includes('open.er-api.com'), 'revenue and the $4 CPM deal convert with an open dollar rate');
 ok(adminJs.includes('trend-ads-btn') && adminJs.includes('alignAdSeries') && adminJs.includes('showAdOverlay'), 'the user graph can draw ad counts for the same buckets');
-ok(adminJs.includes('openGraphStats') && adminJs.includes('viewabilityTrend') && adminJs.includes('telemetry-stats-export'), 'graph statistics include viewability and export');
+ok(adminJs.includes('openGraphStats') && adminJs.includes('equivalentViewability') && adminJs.includes('telemetry-stats-export'), 'graph statistics compare equal finished periods and can export');
 ok(adminJs.includes("adChart.id = 'ad-impressions-panel'") && adminJs.includes('openAdImpressions'), 'the impressions graph opens full screen');
 ok(adminJs.includes("showToast(Admin._telemetryLoadToast") && adminJs.includes('untilDismiss: true') && adminJs.includes('hideToastIfMessage(Admin._telemetryLoadToast)'), 'telemetry load shows a dismissible toast and clears it on success');
 const bridgeJs = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
@@ -553,6 +555,26 @@ const down = seriesTrend([100, 80]);
 ok(down.trend === 'Down' && down.pct === -20, 'the user trend is the change from the first point to the last');
 const rate = viewabilityTrend([100, 50], [10, 20]);
 ok(rate.avg === 0.25 && rate.trend === 'Growing', 'viewability is viewable impressions per active user');
+const dauLabels = [];
+const dauValues = [];
+for (let day = 28; day <= 31; day += 1) dauLabels.push(`202610${String(day).padStart(2, '0')}`);
+for (let day = 1; day <= 11; day += 1) dauLabels.push(`202611${String(day).padStart(2, '0')}`);
+dauLabels.forEach(() => dauValues.push(10));
+dauValues[dauValues.length - 1] = 1;
+const fair = equivalentPeriodTrend(dauLabels, dauValues, 'DAU', { openKey: '20261111', endLabel: '20261111' });
+ok(fair && fair.trend === 'Flat' && fair.width === 7 && fair.current.label.includes('4 Nov') && fair.previous.label.includes('28 Oct'), 'DAU stats compare the last 7 finished days with the 7 before them');
+ok(fair.current.sum === 70 && fair.previous.sum === 70, 'today is left out of both DAU periods');
+const growingDays = dauValues.slice();
+for (let i = growingDays.length - 8; i < growingDays.length - 1; i += 1) growingDays[i] = 20;
+const grew = equivalentPeriodTrend(dauLabels, growingDays, 'DAU', { openKey: '20261111', endLabel: '20261111' });
+ok(grew && grew.trend === 'Growing' && grew.current.sum === 140 && grew.previous.sum === 70, 'a stronger finished week is Growing even when today is small');
+const weeks = equivalentPeriodTrend(['202642', '202643', '202644'], [80, 120, 5], 'WAU', { openKey: '202644', endLabel: '202644' });
+ok(weeks && weeks.trend === 'Growing' && weeks.current.sum === 120 && weeks.previous.sum === 80, 'WAU compares the last full week with the full week before it');
+const seen = equivalentViewability(
+    { current: { sum: 100 }, previous: { sum: 50 }, versus: 'versus the previous 7 days' },
+    { current: { sum: 50 }, previous: { sum: 50 } },
+);
+ok(seen && seen.current === 0.5 && seen.previous === 1 && seen.trend === 'Down', 'viewability compares the two finished periods');
 
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));

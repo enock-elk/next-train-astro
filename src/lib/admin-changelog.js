@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.1': [
+        'The Community badge waits until a signed-in account\'s seen cursors have loaded, so a restoring session does not show a count for messages already read. Opening Community clears only the room on screen, after that room has painted. Other rooms keep their counts. A sent message leaves the composer immediately, shows in the room with a clock, and the clock becomes a tick when the send is accepted. Live Telemetry stats compare the last 7 finished days with the 7 days before them, and a finished week or month with the one before it. Today, this week, and this month are left out of that comparison. Deploy the telemetry worker so the daily series includes the 14th finished day. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.10.15': [
         'Live Telemetry revenue and the $4 CPM deal convert to rands from an open US dollar rate (Frankfurter, then open.er-api). Tap again to return to dollars. Ads on the user graph draws viewable impressions for the same days, weeks, or months. Stats opens the growth, the change, and the viewability rate for that view, and exports with the chart. The impressions graph opens full screen. A dismissible toast stays up while telemetry is loading and clears when the fetch succeeds. No commuter What\'s New. forceShow stays false.',
     ],

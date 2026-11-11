@@ -100,7 +100,9 @@ import {
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
 import {
+    inboxMessageMatchesAdmin,
     inboxReactionActorId,
+    inboxReactionNeedsAdminAttention,
     renderInboxReactionChips,
     renderInboxReactionPickerHtml,
     submitInboxReaction,
@@ -227,6 +229,8 @@ export function exposeAdminGlobals() {
     window.buildGridOrderWriteRecord = buildGridOrderWriteRecord;
     window.viaCodesFromGridOrderRecord = viaCodesFromGridOrderRecord;
     window.inboxReactionActorId = inboxReactionActorId;
+    window.inboxMessageMatchesAdmin = inboxMessageMatchesAdmin;
+    window.inboxReactionNeedsAdminAttention = inboxReactionNeedsAdminAttention;
     window.renderInboxReactionChips = renderInboxReactionChips;
     window.renderInboxReactionPickerHtml = renderInboxReactionPickerHtml;
     window.submitInboxReaction = submitInboxReaction;

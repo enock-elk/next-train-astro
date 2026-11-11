@@ -787,10 +787,25 @@ import { withBase } from '../lib/config.js';
 <div id="messages-thread-modal" class="fixed inset-0 bg-white dark:bg-gray-900 z-[135] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-none w-full max-w-md h-full flex flex-col overflow-hidden border-0">
         <div id="messages-thread-header" class="flex items-center gap-1 px-1 h-12 shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" style="margin-top: env(safe-area-inset-top, 0px);">
-            <button type="button" id="messages-thread-close" class="w-10 h-10 inline-flex items-center justify-center rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-            </button>
-            <h3 class="min-w-0 truncate text-[17px] font-semibold text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
+            <div id="messages-thread-home" class="flex items-center gap-1 w-full min-w-0">
+                <button type="button" id="messages-thread-close" class="w-10 h-10 inline-flex items-center justify-center rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h3 class="min-w-0 truncate text-[17px] font-semibold text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
+            </div>
+            <div id="messages-select-bar" class="hidden items-center gap-1 w-full px-1">
+                <button type="button" id="messages-select-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Clear selection">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <span id="messages-select-count" class="text-lg font-black text-gray-900 dark:text-white tabular-nums">1</span>
+                <span class="flex-1"></span>
+                <button type="button" id="messages-select-copy" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Copy">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" stroke-width="2"></rect><path stroke-width="2" d="M4 16V6a2 2 0 012-2h10"></path></svg>
+                </button>
+                <button type="button" id="messages-select-share" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Share">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+                </button>
+            </div>
         </div>
         <div class="relative flex flex-col flex-1 min-h-0">
             <div class="nt-pack-wallpaper" aria-hidden="true"></div>

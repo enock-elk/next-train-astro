@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.9': [
+        'The Community composer sits on the same wallpaper as Feedback Hub, so the area around the message field is not a white bar. Feedback Hub uses the Community bubble, name, and avatar. A run of your own messages shows You once. An admin reply uses that admin\'s account name and Community photo, so Enock LK stays Enock LK. One person has one reaction. A commuter reaction on an admin message badges that message and leaves the thread in Archives. Opening the thread clears the badge. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.8': [
         'Reset this App still clears this phone, and it keeps which admin replies in Feedback Hub were already opened. A reply that was viewed does not come back as new. No commuter What\'s New. forceShow stays false.',
     ],

@@ -1413,6 +1413,104 @@ const Admin = {
         return n;
     },
 
+    /** Account display name and opted-in photo, not the email's first name. */
+    inboxSenderIdentity: async () => {
+        const user = Admin.currentUser;
+        if (!user?.uid) return null;
+        const email = String(user.email || '').toLowerCase();
+        const short = email.includes('enock') ? 'Enock' : (email.includes('thandeka') ? 'Thandeka' : 'Admin');
+        let displayName = String(user.displayName || '').trim();
+        let photoURL = String(user.photoURL || '').trim();
+        let showPhoto = false;
+        try {
+            const secret = await Admin.getAuthKey();
+            const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            if (secret) {
+                const [userRes, pubRes] = await Promise.all([
+                    fetch(`${base}users/${encodeURIComponent(user.uid)}.json?auth=${encodeURIComponent(secret)}`),
+                    fetch(`${base}public_profile/${encodeURIComponent(user.uid)}.json?auth=${encodeURIComponent(secret)}`),
+                ]);
+                const userNode = userRes.ok ? await userRes.json() : null;
+                const pub = pubRes.ok ? await pubRes.json() : null;
+                if (userNode?.displayName) displayName = String(userNode.displayName).trim();
+                else if (pub?.displayName) displayName = String(pub.displayName).trim();
+                if (userNode?.photoURL) photoURL = String(userNode.photoURL).trim();
+                showPhoto = pub?.showPhoto === true;
+            }
+        } catch { /* keep the auth profile */ }
+        const name = (displayName || short).slice(0, 80);
+        const photo = showPhoto && /^https:\/\//i.test(photoURL) ? photoURL.slice(0, 500) : '';
+        return { uid: user.uid, name, photo, short };
+    },
+
+    stampAdminIdentity: (rows, ident) => {
+        if (!ident?.uid || !Array.isArray(rows)) return;
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        rows.forEach((item) => {
+            if (!item?.isFromAdmin) return;
+            const probe = {
+                id: item.inboxMsgId || item.id,
+                from: 'admin',
+                message: item.message || item.text || 'reply',
+                fromUid: item.fromUid,
+                fromName: item.fromName,
+            };
+            const matches = typeof window.inboxMessageMatchesAdmin === 'function'
+                ? window.inboxMessageMatchesAdmin(probe, ident)
+                : (item.fromUid ? item.fromUid === ident.uid : String(item.fromName || '').trim() === ident.short);
+            if (!matches) return;
+            const patch = {};
+            if ((item.fromName || '') !== ident.name) patch.fromName = ident.name;
+            if ((item.fromUid || '') !== ident.uid) patch.fromUid = ident.uid;
+            if (ident.photo && (item.fromPhoto || '') !== ident.photo) patch.fromPhoto = ident.photo;
+            if (!Object.keys(patch).length) return;
+            item.fromName = ident.name;
+            item.fromUid = ident.uid;
+            if (patch.fromPhoto) item.fromPhoto = ident.photo;
+            const msgId = item.inboxMsgId || item.id;
+            const did = item.device_id || item.deviceId;
+            if (!msgId || !did) return;
+            Admin.getAuthKey().then((secret) => {
+                if (!secret) return;
+                fetch(`${base}inbox/${encodeURIComponent(did)}/${encodeURIComponent(msgId)}.json?auth=${encodeURIComponent(secret)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(patch),
+                }).catch(() => {});
+            }).catch(() => {});
+        });
+    },
+
+    clearFeedbackReactionNotices: async (body) => {
+        if (!body) return;
+        const rows = [...body.querySelectorAll('[data-fb-react-unread]')];
+        const secret = rows.length ? await Admin.getAuthKey() : '';
+        const now = Date.now();
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        if (secret) {
+            await Promise.all(rows.map(async (el) => {
+                const id = el.getAttribute('data-inbox-msg-id');
+                const did = el.getAttribute('data-inbox-device-id');
+                if (!id || !did) return;
+                await fetch(`${base}inbox/${encodeURIComponent(did)}/${encodeURIComponent(id)}.json?auth=${encodeURIComponent(secret)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reactionNotifyAt: null, reactionSeenAt: now }),
+                }).catch(() => {});
+                (Admin.cachedFeedbackData || []).forEach((item) => {
+                    const inboxId = item.inboxMsgId || (item.isFromAdmin ? String(item.id || '') : '');
+                    if (String(inboxId) === String(id) && String(item.device_id || item.deviceId || '') === String(did)) {
+                        item.reactionSeenAt = now;
+                        item.reactionNotifyAt = null;
+                    }
+                });
+                el.removeAttribute('data-fb-react-unread');
+                el.querySelectorAll('.fb-react-unread').forEach((badge) => badge.remove());
+            }));
+        }
+        body.parentElement?.querySelectorAll('.fb-react-unread').forEach((el) => el.remove());
+    },
+
     // --- 0.1 GLOBAL AUTH KEY HELPER (GUARDIAN PHASE 9) ---
     isAllowlistedAdmin: (user) => {
         const email = String(user?.email || '').trim().toLowerCase();
@@ -2567,7 +2665,7 @@ const Admin = {
         const chips = wrap?.querySelector('[data-inbox-react-chips]');
         const actor = typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(deviceId) : '';
         if (chips && typeof window.renderInboxReactionChips === 'function') {
-            chips.outerHTML = window.renderInboxReactionChips(entry, actor);
+            chips.outerHTML = window.renderInboxReactionChips(entry, actor, row.classList.contains('justify-end'));
         }
     },
 
@@ -11197,11 +11295,15 @@ const Admin = {
                     isInbox,
                 };
 
+                const reactUnreadCount = groupItems.filter((item) => item.isFromAdmin && typeof window.inboxReactionNeedsAdminAttention === 'function' && window.inboxReactionNeedsAdminAttention(item)).length;
+                const reactUnreadBadge = reactUnreadCount
+                    ? `<span class="fb-react-unread" title="New reactions" style="display:inline-flex;align-items:center;justify-content:center;min-width:1.05rem;height:1.05rem;padding:0 0.28rem;margin-left:0.35rem;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;line-height:1;">${reactUnreadCount}</span>`
+                    : '';
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-white dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
                             <div class="text-xs font-bold text-gray-900 dark:text-white w-full min-w-0">${commuterTitle}</div>
-                            <span class="text-[9px] text-gray-500 font-mono mt-1 inline-flex items-center flex-wrap gap-y-0.5">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''}${contactScanBlock} <span class="opacity-40 mx-0.5">|</span> Last: ${latestDate}</span>
+                            <span class="text-[9px] text-gray-500 font-mono mt-1 inline-flex items-center flex-wrap gap-y-0.5">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''}${reactUnreadBadge}${contactScanBlock} <span class="opacity-40 mx-0.5">|</span> Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center justify-end shrink-0 self-center">
                             <button class="pointer-events-none focus:outline-none p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-transparent">
@@ -11331,6 +11433,7 @@ const Admin = {
                     header.classList.remove('border-transparent');
                     const chevron = header.querySelector('.chevron-icon');
                     if (chevron) chevron.classList.add('rotate-180');
+                    Admin.clearFeedbackReactionNotices(body);
                 } else {
                     body.classList.add('hidden');
                     header.parentElement?.classList.remove('fb-thread-open');
@@ -11522,9 +11625,13 @@ const Admin = {
                                 attachmentUrl: msg.attachmentUrl,
                                 attachmentUrls: msg.attachmentUrls,
                                 fromName: msg.fromName,
+                                fromUid: msg.fromUid,
+                                fromPhoto: msg.fromPhoto,
                                 editedAt: msg.editedAt,
                                 reactions: msg.reactions,
                                 reactedBy: msg.reactedBy,
+                                reactionNotifyAt: msg.reactionNotifyAt,
+                                reactionSeenAt: msg.reactionSeenAt,
                                 chatScope: msg.chatScope,
                                 accountUid: msg.accountUid,
                                 sentSignedOut: msg.sentSignedOut,
@@ -11535,6 +11642,10 @@ const Admin = {
                     });
                 }
 
+                try {
+                    const ident = await Admin.inboxSenderIdentity();
+                    if (ident) Admin.stampAdminIdentity(mergedData, ident);
+                } catch { /* the short name still paints until the next open */ }
                 Admin.cachedFeedbackData = mergedData;
                 Admin.cachedFeedbackData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
@@ -16695,9 +16806,11 @@ const Admin = {
             const replyFeedbackId = modal.dataset.replyFeedbackId || feedbackId;
 
             const adminEmail = Admin.currentUser?.email || '';
-            const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
+            const ident = await Admin.inboxSenderIdentity();
+            const adminName = ident?.name || (adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin'));
+            const safeSign = String(adminName).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
             if (!editingKey) {
-                text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
+                text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${safeSign}</span>`;
             }
             
             const btn = document.getElementById('reply-send');
@@ -16737,6 +16850,8 @@ const Admin = {
                     feedbackId: replyFeedbackId,
                     read: false,
                     fromName: adminName,
+                    fromUid: ident?.uid || Admin.currentUser?.uid || '',
+                    fromPhoto: ident?.photo || '',
                     appVersion: (typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '')
                 };
 
@@ -24088,15 +24203,21 @@ const Admin = {
                             : `<span class="font-mono font-medium opacity-60 shrink-0">${adminVer}</span>`;
                         const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
                         const inboxReactId = item.inboxMsgId || String(item.id || '');
-                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
-                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
+                        const reactUnread = typeof window.inboxReactionNeedsAdminAttention === 'function' && window.inboxReactionNeedsAdminAttention(item);
+                        const reactBadge = reactUnread
+                            ? `<span class="fb-react-unread" title="New reaction" style="display:inline-flex;align-items:center;justify-content:center;min-width:0.95rem;height:0.95rem;padding:0 0.25rem;margin-left:0.35rem;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;line-height:1;">1</span>`
                             : '';
+                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
+                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '', true)
+                            : '';
+                        const unreadAttr = reactUnread ? ' data-fb-react-unread="1"' : '';
                         groupHTML += `
-                            <div class="inbox-row justify-end mb-1.5" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
+                            <div class="inbox-row justify-end mb-1.5"${unreadAttr} id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
                                 <div class="inbox-bubble-wrap">
                                     <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
                                         <div class="inbox-bubble-name-row">
                                             <span>${secureEscape(adminName)}</span>
+                                            ${reactBadge}
                                             ${adminMeta}
                                         </div>
                                         ${userRouteHtml}

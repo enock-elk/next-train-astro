@@ -16,6 +16,13 @@ import {
     isAdminInboxMessage,
 } from '../src/lib/inbox-receipts.js';
 import { isProtectedVolatileKey } from '../src/lib/utils.js';
+import {
+    collapseViewerGuestReaction,
+    inboxMessageMatchesAdmin,
+    inboxReactionCounts,
+    inboxReactionNeedsAdminAttention,
+    nextInboxReaction,
+} from '../src/lib/inbox-reactions.js';
 
 const failures = [];
 function assert(condition, message) {
@@ -105,6 +112,43 @@ assert(!receiptBlock.includes('>R</span>'), 'admin receipts do not append an R c
 assert(!admin.includes('Acknowledged by Commuter'), 'admin receipts no longer label R');
 assert(admin.includes("receiptTicks('single'"), 'admin still has a single grey tick');
 assert(admin.includes("receiptTicks('double'"), 'admin still has double ticks');
+
+const drifted = {
+    reactions: { like: 1, love: 1, haha: 1 },
+    reactedBy: { uid_enock: 'like' },
+};
+const oneFace = inboxReactionCounts(drifted);
+assert(oneFace.like === 1 && !oneFace.love && !oneFace.haha, 'one person is one reaction even if the count map drifted');
+const replaced = nextInboxReaction(drifted, 'love', 'uid_enock');
+assert(replaced.reactedBy.uid_enock === 'love' && replaced.reactions.love === 1 && !replaced.reactions.like, 'a new emoji replaces the previous one');
+const stacked = collapseViewerGuestReaction(
+    { reactedBy: { uid_enock: 'like', dev_phone: 'love', uid_other: 'laugh' } },
+    'uid_enock',
+    'phone',
+);
+assert(stacked.reactedBy.uid_enock === 'like' && !stacked.reactedBy.dev_phone && stacked.reactedBy.uid_other === 'laugh', 'this phone keeps one reaction and leaves other people');
+const moved = collapseViewerGuestReaction({ reactedBy: { dev_phone: 'love' } }, 'uid_enock', 'phone');
+assert(moved.reactedBy.uid_enock === 'love' && !moved.reactedBy.dev_phone, 'a guest reaction moves onto the signed-in account');
+const removed = nextInboxReaction(replaced, 'love', 'uid_enock');
+assert(!removed.reactedBy.uid_enock && !removed.reactions.love, 'the same emoji removes that person');
+assert(inboxReactionNeedsAdminAttention({ reactionNotifyAt: 20, reactionSeenAt: 10 }), 'a newer commuter reaction is unread');
+assert(!inboxReactionNeedsAdminAttention({ reactionNotifyAt: 10, reactionSeenAt: 20 }), 'an opened reaction is not unread');
+assert(!inboxReactionNeedsAdminAttention({ reactions: { like: 1 } }), 'a reaction without a notify time is not a badge');
+assert(
+    inboxMessageMatchesAdmin({ from: 'admin', message: 'Hi', fromName: 'Enock' }, { uid: 'abc', name: 'Enock LK', short: 'Enock' }),
+    'the short email label still belongs to that admin'
+);
+assert(
+    !inboxMessageMatchesAdmin({ from: 'admin', message: 'Hi', fromName: 'Thandeka' }, { uid: 'abc', name: 'Enock LK', short: 'Enock' }),
+    'another admin name is left alone'
+);
+assert(admin.includes('reactionNotifyAt'), 'admin archive keeps a reaction badge on the message');
+assert(admin.includes('clearFeedbackReactionNotices'), 'opening the thread clears the reaction badge');
+assert(admin.includes('fromUid: ident?.uid'), 'a new admin reply stores the account id');
+const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
+assert(communityView.includes('id="community-composer-dock"') && communityView.includes('bg-transparent') && !communityView.includes('community-composer-dock" class="relative z-[1] shrink-0 border-t'), 'community composer uses the wallpaper, not a white bar');
+assert(hub.includes('is-grouped') && hub.includes('inboxAvatarHtml'), 'feedback hub groups a run and uses a community avatar');
+assert(!hub.includes('icons/icon-192.png'), 'feedback hub does not use the train logo as the admin avatar');
 
 if (failures.length) {
     console.error('verify-inbox-banner-once failed:');

@@ -15,7 +15,7 @@ import {
     safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
-import { rememberPicture, shouldHoldPicture } from './data-saver.js';
+import { rememberPicture, profilePhotosOn, shouldHoldPicture } from './data-saver.js';
 import { imageMetaForUrl } from './picture-preview.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
 import { renderTextWithShareChips } from './share-chips.js';
@@ -34,17 +34,21 @@ import {
 } from './inbox-replies.js';
 import {
     inboxEntriesFromMap,
+    isAdminInboxMessage,
     markInboxDelivered,
     markInboxRead,
     patchInboxMessageFields,
 } from './inbox-receipts.js';
 import {
+    collapseViewerGuestReaction,
+    inboxMessageMatchesAdmin,
     inboxReactionActorId,
     renderInboxReactionChips,
     renderInboxReactionPickerHtml,
     submitInboxReaction,
 } from './inbox-reactions.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { showPhotoInAlerts } from './rider-marks.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref, linkedPlainHtml } from './rich-text.js';
@@ -1794,6 +1798,124 @@ function inboxClock(ts) {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function inboxDayLabel(ts) {
+    const date = new Date(ts || 0);
+    if (Number.isNaN(date.getTime())) return '';
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+const INBOX_NAME_COLORS = ['#02a698', '#53bdeb', '#06cf9c', '#e742a4', '#a281f7', '#ff7b72', '#25d366', '#d97706'];
+
+function inboxNameColor(seed) {
+    const s = String(seed || 'x');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+    return INBOX_NAME_COLORS[Math.abs(h) % INBOX_NAME_COLORS.length];
+}
+
+function viewerInboxIdentity() {
+    if (!isAdminAuthed()) return null;
+    const acct = $account.get();
+    if (!acct || acct.status !== 'signed-in' || !acct.uid) return null;
+    const email = String(acct.email || '').toLowerCase();
+    const short = email.includes('enock') ? 'Enock' : (email.includes('thandeka') ? 'Thandeka' : '');
+    const name = String(acct.displayName || '').trim() || short || 'Admin';
+    let photo = '';
+    if (showPhotoInAlerts()) {
+        const url = String(acct.photoURL || '').trim();
+        if (/^https:\/\//i.test(url)) photo = url.slice(0, 500);
+    }
+    return { uid: acct.uid, name: name.slice(0, 80), photo, short };
+}
+
+function rememberAdminIdentity(list, ident) {
+    if (!ident) return;
+    const deviceId = getThreadDeviceId();
+    (list || []).forEach((m) => {
+        if (!m?.id || !deviceId || !inboxMessageMatchesAdmin(m, ident)) return;
+        const patch = {};
+        if ((m.fromName || '') !== ident.name) patch.fromName = ident.name;
+        if ((m.fromUid || '') !== ident.uid) patch.fromUid = ident.uid;
+        if (ident.photo && (m.fromPhoto || '') !== ident.photo) patch.fromPhoto = ident.photo;
+        if (!Object.keys(patch).length) return;
+        m.fromName = ident.name;
+        m.fromUid = ident.uid;
+        if (patch.fromPhoto) m.fromPhoto = ident.photo;
+        patchInboxMessageFields(deviceId, m.id, patch).catch(() => {});
+    });
+}
+
+function inboxAvatarHtml(name, seed, photoUrl) {
+    const ink = inboxNameColor(seed || name);
+    const ch = Array.from(String(name || '').trim())[0] || '';
+    const letter = /^[\p{L}\p{N}]$/u.test(ch) ? ch.toLocaleUpperCase() : '';
+    const mark = letter
+        ? `<span class="community-avatar-letter" style="color:${ink}">${escapeHTML(letter)}</span>`
+        : `<span class="community-avatar-mark" style="background:${ink}" aria-hidden="true"></span>`;
+    const disc = `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0">${mark}</span>`;
+    const photo = profilePhotosOn() && /^https:\/\//i.test(String(photoUrl || '')) ? String(photoUrl) : '';
+    if (!photo) return disc;
+    return `<span class="relative inline-flex w-8 h-8 shrink-0"><img src="${escapeHTML(photo)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');var f=this.parentElement&amp;&amp;this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/><span class="avatar-fallback hidden absolute inset-0">${disc}</span></span>`;
+}
+
+function inboxPlainText(entry) {
+    return String(entry?.message || entry?.text || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 4000);
+}
+
+let inboxSelectedId = '';
+let inboxReactionGuardUntil = 0;
+
+function clearInboxSelection() {
+    inboxSelectedId = '';
+    document.querySelectorAll('#messages-thread-list .community-post-row.is-selected, #messages-thread-list .community-post-row.is-pressing')
+        .forEach((el) => el.classList.remove('is-selected', 'is-pressing'));
+    document.getElementById('messages-thread-home')?.classList.remove('hidden');
+    const bar = document.getElementById('messages-select-bar');
+    bar?.classList.add('hidden');
+    bar?.classList.remove('flex');
+    document.getElementById('inbox-reaction-tray')?.classList.add('hidden');
+}
+
+function selectedInboxEntry(host) {
+    const list = host?._ntInboxList || [];
+    return list.find((m) => String(m.id) === String(inboxSelectedId)) || null;
+}
+
+async function copyInboxSelection(host) {
+    const text = inboxPlainText(selectedInboxEntry(host));
+    if (!text) return;
+    try {
+        await navigator.clipboard.writeText(text);
+        if (typeof showToast === 'function') showToast('Copied', 'success', 1600);
+    } catch {
+        if (typeof showToast === 'function') showToast('Could not copy.', 'error');
+    }
+}
+
+async function shareInboxSelection(host) {
+    const text = inboxPlainText(selectedInboxEntry(host));
+    if (!text) return;
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ title: 'Next Train', text });
+            return;
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+        }
+    }
+    await copyInboxSelection(host);
+}
+
 async function fetchRemoteInbox() {
     const deviceId = getThreadDeviceId();
     if (!deviceId) return [];
@@ -1855,12 +1977,40 @@ async function fetchInboxThread() {
 function renderMessagesThread(list) {
     const host = document.getElementById('messages-thread-list');
     if (!host) return;
+    clearInboxSelection();
+    const ident = viewerInboxIdentity();
+    rememberAdminIdentity(list, ident);
+    const actorForRepair = inboxReactionActorId(getThreadDeviceId());
+    const deviceForRepair = getThreadDeviceId();
+    (list || []).forEach((m) => {
+        const collapsed = collapseViewerGuestReaction(m, actorForRepair, deviceForRepair);
+        if (!collapsed || !m?.id || !deviceForRepair) return;
+        m.reactions = collapsed.reactions;
+        m.reactedBy = collapsed.reactedBy;
+        patchInboxMessageFields(deviceForRepair, m.id, collapsed).catch(() => {});
+    });
     if (!list.length) {
         host.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-400 text-center py-8 px-4">No messages yet. Send one below - you and the team will see the full chat here.</p>';
+        host._ntInboxList = list;
         return;
     }
-    host.innerHTML = list.map((m) => {
+    const actor = inboxReactionActorId(getThreadDeviceId());
+    let html = '';
+    let lastDay = '';
+    let prevKey = '';
+    list.forEach((m) => {
         const mine = isCommuterInboxMsg(m);
+        const dayKey = new Date(m.timestamp || 0).toDateString();
+        if (dayKey && dayKey !== lastDay) {
+            html += `<div class="flex justify-center w-full my-3"><span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/70 dark:bg-gray-800/70 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">${escapeHTML(inboxDayLabel(m.timestamp))}</span></div>`;
+            lastDay = dayKey;
+            prevKey = '';
+        }
+        const matched = !mine && ident && inboxMessageMatchesAdmin(m, ident);
+        const name = mine ? 'You' : (matched ? ident.name : adminBubbleName(m, m.message || m.text || ''));
+        const senderKey = mine ? 'me' : (matched ? ident.uid : (m.fromUid || name));
+        const grouped = !!(senderKey && prevKey && senderKey === prevKey);
+        prevKey = senderKey;
         const raw = m.message || m.text || '';
         const extraUrls = [];
         if (m.attachmentUrl) extraUrls.push(m.attachmentUrl);
@@ -1873,80 +2023,145 @@ function renderMessagesThread(list) {
             : (laid.body || '');
         const media = laid.media || '';
         const clock = inboxClock(m.timestamp);
-        const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
+        const photo = matched ? (ident.photo || '') : (m.fromPhoto || '');
+        const seed = matched ? ident.uid : (m.fromUid || name);
         const avatar = mine
             ? ''
-            : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;
-        const actor = inboxReactionActorId(getThreadDeviceId());
-        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
+            : grouped
+                ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
+                : `<div class="community-avatar">${inboxAvatarHtml(name, seed, photo)}</div>`;
+        const nameHtml = grouped
+            ? ''
+            : `<div class="community-bubble-name-row" style="color:${mine ? 'inherit' : inboxNameColor(seed)}"><span class="community-bubble-name truncate">${escapeHTML(name)}</span></div>`;
+        const bubbleCls = mine ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
+        html += `<div class="community-post-row inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
       ${avatar}
-      <div class="inbox-bubble-wrap">
-        <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}" data-inbox-react-host="1">
-          <div class="inbox-bubble-name-row">${who}</div>
-          <div class="inbox-bubble-body">
-            <div class="inbox-msg-text">${media}${body}<span class="inbox-msg-time">${clock}</span></div>
+      <div class="community-bubble-wrap">
+        <div class="${bubbleCls} shadow-sm" data-inbox-react-host="1">
+          ${nameHtml}
+          <div class="community-bubble-body">
+            <div class="community-msg-text inbox-msg-text">${media}${body}<span class="community-msg-time inbox-msg-time">${clock}</span></div>
           </div>
         </div>
-        ${renderInboxReactionChips(m, actor)}
+        ${renderInboxReactionChips(m, actor, mine)}
       </div>
     </div>`;
-    }).join('');
+    });
+    host.innerHTML = html;
     host._ntInboxList = list;
     bindInboxThreadReactions(host);
     hydrateAlertPosterImages(host);
     host.scrollTop = host.scrollHeight;
 }
 
-function hideInboxReactionPicker() {
-    document.getElementById('inbox-reaction-picker')?.classList.add('hidden');
+function ensureInboxReactionTray() {
+    let tray = document.getElementById('inbox-reaction-tray');
+    if (tray) return tray;
+    tray = document.createElement('div');
+    tray.id = 'inbox-reaction-tray';
+    tray.className = 'fixed z-[160] hidden w-max max-w-[min(92vw,20rem)]';
+    tray.innerHTML = `<div class="flex items-center gap-0.5 rounded-full border border-white/10 bg-gray-950/95 px-1.5 py-1 text-white shadow-2xl">${renderInboxReactionPickerHtml().replaceAll('hover:bg-gray-100 dark:hover:bg-gray-700', 'hover:bg-white/10')}</div>`;
+    tray.style.userSelect = 'none';
+    tray.style.webkitUserSelect = 'none';
+    document.body.appendChild(tray);
+    tray.addEventListener('contextmenu', (e) => e.preventDefault());
+    return tray;
 }
 
-function showInboxReactionPicker(anchor, onPick) {
-    let picker = document.getElementById('inbox-reaction-picker');
-    if (!picker) {
-        picker = document.createElement('div');
-        picker.id = 'inbox-reaction-picker';
-        picker.className = 'hidden fixed z-[160] px-2 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl flex items-center gap-0.5';
-        picker.innerHTML = renderInboxReactionPickerHtml();
-        document.body.appendChild(picker);
-    }
-    picker.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
-        btn.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            hideInboxReactionPicker();
-            onPick(btn.getAttribute('data-inbox-react-pick'));
-        };
+function placeInboxReactionTray(point) {
+    const tray = ensureInboxReactionTray();
+    if (tray.parentElement !== document.body) document.body.appendChild(tray);
+    tray.classList.remove('hidden');
+    if (!point && tray.style.left) return;
+    const width = tray.offsetWidth || 280;
+    const height = tray.offsetHeight || 48;
+    const at = point || { x: window.innerWidth / 2, y: 180 };
+    let left = at.x - (width / 2);
+    left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
+    const gap = 10;
+    const chrome = document.getElementById('messages-thread-header');
+    const floor = (chrome?.getBoundingClientRect().bottom || 56) + 4;
+    let top = at.y - height - gap;
+    if (top < floor) top = at.y + gap;
+    const bottomLimit = window.innerHeight - height - 64;
+    if (top > bottomLimit) top = Math.max(floor, Math.min(bottomLimit, at.y - height - gap));
+    tray.style.left = `${left}px`;
+    tray.style.top = `${top}px`;
+}
+
+function selectInboxMessage(row, point) {
+    const host = document.getElementById('messages-thread-list');
+    const id = row?.getAttribute('data-inbox-msg-id') || '';
+    if (!id) return;
+    inboxSelectedId = id;
+    inboxReactionGuardUntil = Date.now() + 700;
+    try { window.getSelection()?.removeAllRanges(); } catch { /* the tray must not sit inside a text selection */ }
+    host?.querySelectorAll('.community-post-row').forEach((el) => {
+        el.classList.toggle('is-selected', el === row);
+        el.classList.remove('is-pressing');
     });
-    const rect = anchor.getBoundingClientRect();
-    picker.classList.remove('hidden');
-    const top = Math.max(12, rect.top - 52);
-    const left = Math.max(12, Math.min(window.innerWidth - picker.offsetWidth - 12, rect.left));
-    picker.style.top = `${top}px`;
-    picker.style.left = `${left}px`;
+    document.getElementById('messages-thread-home')?.classList.add('hidden');
+    const bar = document.getElementById('messages-select-bar');
+    bar?.classList.remove('hidden');
+    bar?.classList.add('flex');
+    const entry = selectedInboxEntry(host);
+    const mine = inboxReactionActorId(row.getAttribute('data-inbox-device-id') || '');
+    const mineKey = entry ? (entry.reactedBy && entry.reactedBy[mine]) : '';
+    const tray = ensureInboxReactionTray();
+    tray.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
+        const key = btn.getAttribute('data-inbox-react-pick');
+        btn.classList.toggle('bg-white/15', key && key === mineKey);
+        btn.classList.toggle('ring-1', key && key === mineKey);
+        btn.classList.toggle('ring-white/40', key && key === mineKey);
+    });
+    placeInboxReactionTray(point);
+    triggerHaptic();
 }
 
 function bindInboxThreadReactions(host) {
     if (!host || host.dataset.inboxReactBound === '1') return;
     host.dataset.inboxReactBound = '1';
     let longTimer = null;
+    let pressPoint = null;
+    let pressRow = null;
+    let holdFired = false;
     const clearLong = () => {
         if (longTimer) clearTimeout(longTimer);
         longTimer = null;
+        pressRow?.classList.remove('is-pressing');
     };
     const listOf = () => host._ntInboxList || [];
     host.addEventListener('pointerdown', (e) => {
+        if (e.button) return;
         const bubble = e.target.closest?.('[data-inbox-react-host]');
         if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
         const row = bubble.closest('[data-inbox-msg-id]');
         if (!row) return;
+        holdFired = false;
+        pressRow = row;
+        pressPoint = { x: e.clientX, y: e.clientY };
+        row.classList.add('is-pressing');
         longTimer = setTimeout(() => {
-            showInboxReactionPicker(bubble, (emoji) => applyThreadInboxReaction(row, listOf(), emoji));
+            holdFired = true;
+            selectInboxMessage(row, pressPoint);
         }, 420);
     });
     host.addEventListener('pointerup', clearLong);
     host.addEventListener('pointercancel', clearLong);
+    host.addEventListener('pointermove', (e) => {
+        if (!longTimer || !pressPoint) return;
+        if (Math.abs(e.clientX - pressPoint.x) + Math.abs(e.clientY - pressPoint.y) > 12) clearLong();
+    });
+    host.addEventListener('contextmenu', (e) => {
+        if (e.target.closest?.('[data-inbox-react-host]')) e.preventDefault();
+    });
     host.addEventListener('click', (e) => {
+        if (holdFired) {
+            holdFired = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         const poster = e.target.closest?.('[data-alert-lightbox]');
         if (poster && host.contains(poster)) {
             e.preventDefault();
@@ -1956,29 +2171,48 @@ function bindInboxThreadReactions(host) {
         }
         const chip = e.target.closest?.('[data-inbox-react]');
         if (!chip) return;
+        e.preventDefault();
         const row = chip.closest('[data-inbox-msg-id]');
         if (!row) return;
         applyThreadInboxReaction(row, listOf(), chip.getAttribute('data-inbox-react'));
     });
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest?.('#inbox-reaction-picker')) hideInboxReactionPicker();
+    const tray = ensureInboxReactionTray();
+    tray.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-inbox-react-pick]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const row = host.querySelector(`[data-inbox-msg-id="${CSS.escape(inboxSelectedId)}"]`);
+        if (!row) return;
+        applyThreadInboxReaction(row, listOf(), btn.getAttribute('data-inbox-react-pick'));
     });
+    if (!document.documentElement.dataset.inboxSelectAway) {
+        document.documentElement.dataset.inboxSelectAway = '1';
+        document.addEventListener('pointerdown', (e) => {
+            if (!inboxSelectedId) return;
+            if (Date.now() < inboxReactionGuardUntil) return;
+            if (e.target.closest?.('#messages-thread-list .is-selected, #inbox-reaction-tray, #messages-select-bar')) return;
+            clearInboxSelection();
+        });
+    }
 }
 
 async function applyThreadInboxReaction(row, list, emoji) {
     const messageId = row.getAttribute('data-inbox-msg-id');
     const deviceId = row.getAttribute('data-inbox-device-id') || getThreadDeviceId();
     const entry = (list || []).find((m) => String(m.id) === String(messageId));
-    if (!messageId || !deviceId || !entry) return;
-    const next = await submitInboxReaction({ deviceId, messageId, entry, emoji });
+    if (!messageId || !deviceId || !entry || !emoji) return;
+    const notifyAdmin = isAdminInboxMessage(entry, messageId) && !isAdminAuthed();
+    const next = await submitInboxReaction({ deviceId, messageId, entry, emoji, notifyAdmin });
     if (!next) {
         if (typeof showToast === 'function') showToast('Could not save reaction.', 'error');
         return;
-    };
+    }
     Object.assign(entry, next);
-    const wrap = row.querySelector('.inbox-bubble-wrap');
-    const chips = wrap?.querySelector('[data-inbox-react-chips]');
-    if (chips) chips.outerHTML = renderInboxReactionChips(entry, inboxReactionActorId(deviceId));
+    const chips = row.querySelector('[data-inbox-react-chips]');
+    const actor = inboxReactionActorId(deviceId);
+    if (chips) chips.outerHTML = renderInboxReactionChips(entry, actor, row.classList.contains('justify-end'));
+    if (inboxSelectedId === String(messageId)) selectInboxMessage(row, null);
 }
 
 async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmentUrl, attachmentUrls }) {
@@ -3160,7 +3394,22 @@ export function initHub() {
         trackAnalyticsEvent('open_feedback_modal', { location: 'settings' });
         openMessagesThread();
     });
-    document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    document.getElementById('messages-thread-close')?.addEventListener('click', () => {
+        clearInboxSelection();
+        closeSmoothModal('messages-thread-modal');
+    });
+    document.getElementById('messages-select-back')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        clearInboxSelection();
+    });
+    document.getElementById('messages-select-copy')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        copyInboxSelection(document.getElementById('messages-thread-list'));
+    });
+    document.getElementById('messages-select-share')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        shareInboxSelection(document.getElementById('messages-thread-list'));
+    });
     const contactToggle = document.getElementById('messages-thread-contact-toggle');
     const toggleThreadContact = () => {
         setThreadContactOpen(contactToggle?.getAttribute('aria-expanded') !== 'true');

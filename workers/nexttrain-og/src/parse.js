@@ -103,13 +103,19 @@ function shareToken(raw) {
   return SHARE_TOKEN.test(value) ? value : '';
 }
 
+export function alertPhotoIndex(raw) {
+  const n = Number(String(raw || '').trim());
+  if (!Number.isInteger(n) || n < 1 || n > 10) return 0;
+  return n;
+}
+
 export function parseAlertSharePath(pathname) {
-  const m = String(pathname || '').match(/\/og\/a\/([^/]+)\/([^/]+)\/?$/i);
+  const m = String(pathname || '').match(/\/og\/a\/([^/]+)\/([^/]+)(?:\/([1-9]|10))?\/?$/i);
   if (!m) return null;
   const source = shareToken(m[1]);
   const id = shareToken(m[2]);
   if (!source || !id) return null;
-  return { kind: 'alert', id, source };
+  return { kind: 'alert', id, source, photo: alertPhotoIndex(m[3]) };
 }
 
 export function parseCommunitySharePath(pathname) {
@@ -131,7 +137,14 @@ export function parseShareIntent(url) {
   const communityPath = parseCommunitySharePath(url.pathname);
   if (communityPath) return communityPath;
   const alertId = shareToken(params.get('alert') || '');
-  if (alertId) return { kind: 'alert', id: alertId, source: shareToken(params.get('src') || '') };
+  if (alertId) {
+    return {
+      kind: 'alert',
+      id: alertId,
+      source: shareToken(params.get('src') || ''),
+      photo: alertPhotoIndex(params.get('photo')),
+    };
+  }
   const roomId = shareToken(params.get('room') || '');
   const postId = shareToken(params.get('post') || '');
   if (roomId && postId) return { kind: 'community', routeId: roomId, postId };

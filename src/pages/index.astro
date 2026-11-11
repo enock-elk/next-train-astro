@@ -473,13 +473,15 @@ const faqLd = {
             }).catch(() => switchTab('community'));
         } else switchTab('next-train');
     } else if (hash === '#alerts' || hash.startsWith('#alerts/')) {
-        const noticeId = hash.startsWith('#alerts/')
-            ? (() => { try { return decodeURIComponent(hash.slice('#alerts/'.length)); } catch { return hash.slice('#alerts/'.length); } })()
-            : '';
+        const rawAlert = hash.startsWith('#alerts/') ? hash.slice('#alerts/'.length) : '';
+        const alertBits = rawAlert.split('/').filter(Boolean);
+        let noticeId = alertBits[0] || '';
+        try { noticeId = decodeURIComponent(noticeId); } catch { /* keep raw */ }
+        const photo = /^([1-9]|10)$/.test(alertBits[1] || '') ? Number(alertBits[1]) : 0;
         switchTab('next-train');
         if (noticeId) {
             import('../lib/alerts-channel.js').then(async (m) => {
-                const state = await m.focusSharedAlert?.(noticeId, '');
+                const state = await m.focusSharedAlert?.(noticeId, '', photo);
                 window.showToast?.(
                     state === 'opened' ? 'Opened service update' : 'This update is no longer available',
                     state === 'opened' ? 'success' : 'info',

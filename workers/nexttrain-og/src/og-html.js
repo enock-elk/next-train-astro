@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa11';
+const OG_IMAGE_CACHE_BUST = 'wa12';
 
 function esc(s) {
   return String(s ?? '')
@@ -32,6 +32,8 @@ export function buildAppDeepLink(intent, site) {
   if (intent.kind === 'alert') {
     app.searchParams.set('alert', intent.id);
     if (intent.source) app.searchParams.set('src', intent.source);
+    const photo = Number(intent.photo) || 0;
+    if (photo >= 1 && photo <= 10) app.searchParams.set('photo', String(photo));
     return app.toString();
   }
   if (intent.kind === 'community') {
@@ -65,7 +67,9 @@ export function buildOgShareLink(intent, site) {
   if (intent.kind === 'alert') {
     const source = encodeURIComponent(String(intent.source || 'all'));
     const id = encodeURIComponent(String(intent.id || ''));
-    return `${site.replace(/\/$/, '')}/og/a/${source}/${id}`;
+    const photo = Number(intent.photo) || 0;
+    const suffix = photo >= 1 && photo <= 10 ? `/${photo}` : '';
+    return `${site.replace(/\/$/, '')}/og/a/${source}/${id}${suffix}`;
   }
   if (intent.kind === 'community') {
     const routeId = encodeURIComponent(String(intent.routeId || ''));

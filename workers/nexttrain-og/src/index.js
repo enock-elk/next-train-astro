@@ -75,19 +75,33 @@ function safePreviewImage(raw, site) {
   }
 }
 
-function firstImage(node, site) {
+function previewImages(node, site) {
   const list = Array.isArray(node?.imageUrls) ? node.imageUrls : [];
-  const candidates = [...list, node?.imageUrl];
+  const candidates = list.slice();
+  if (node?.imageUrl) candidates.push(node.imageUrl);
   const attachments = Array.isArray(node?.attachments) ? node.attachments : [];
   attachments.forEach((item) => candidates.push(item?.url || item));
   const html = String(node?.message || node?.text || node?.body || '');
-  const img = html.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
-  if (img) candidates.push(img[1]);
+  const re = /<img\b[^>]*\bsrc=["']([^"']+)["']/gi;
+  let match;
+  while ((match = re.exec(html))) candidates.push(match[1]);
+  const out = [];
+  const seen = new Set();
   for (const raw of candidates) {
     const image = safePreviewImage(raw, site);
-    if (image) return image;
+    if (!image || seen.has(image.href)) continue;
+    seen.add(image.href);
+    out.push(image);
+    if (out.length >= 10) break;
   }
-  return null;
+  return out;
+}
+
+function pickedImage(node, site, photo) {
+  const images = previewImages(node, site);
+  const index = Number(photo) || 0;
+  if (index >= 1 && images[index - 1]) return images[index - 1];
+  return images[0] || null;
 }
 
 async function readRtdb(env, path) {
@@ -111,17 +125,26 @@ async function loadContentPreview(env, intent) {
     }
     const title = plainBits(node.title, 80) || 'Service update';
     const description = plainBits(node.message || node.text, 180) || 'Open this update in Next Train.';
-    const image = firstImage(node, site);
-    return { title, description, image: image?.href || '', imageType: image?.imageType || 'image/png' };
+    const image = pickedImage(node, site, intent.photo);
+    const photo = Number(intent.photo) || 0;
+    const photoNote = photo >= 1 ? `Photo ${photo}` : '';
+    return {
+      title,
+      description: photoNote && description ? `${photoNote}. ${description}` : (photoNote || description),
+      image: image?.href || '',
+      imageType: image?.imageType || 'image/png',
+    };
   }
   const node = await readRtdb(env, `route_community/${encodeURIComponent(intent.routeId)}/posts/${encodeURIComponent(intent.postId)}`);
   if (!node || typeof node !== 'object' || node.deleted || node.hidden || node.removed) {
     return { title: 'Community message', description: 'This message is no longer available.' };
   }
   const description = plainBits(node.body, 180) || 'Open this message in Next Train.';
-  const image = firstImage(node, site);
+  const image = pickedImage(node, site, 0);
+  const rawName = plainBits(node.displayName || node.fromName || '', 60);
+  const name = rawName && !/^(you|passenger)$/i.test(rawName) ? rawName : '';
   return {
-    title: 'Community message',
+    title: name || 'Community message',
     description,
     image: image?.href || '',
     imageType: image?.imageType || 'image/png',

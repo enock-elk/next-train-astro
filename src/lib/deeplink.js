@@ -633,7 +633,7 @@ export async function applyAlertDeepLink() {
     let state = 'gone';
     try {
         const alerts = await import('./alerts-channel.js');
-        state = await alerts.focusSharedAlert?.(link.id, link.source || '');
+        state = await alerts.focusSharedAlert?.(link.id, link.source || '', link.photo || 0);
     } catch { /* gone */ }
     slowToast.cancel();
     if (state !== 'opened') noteDeeplinkSurface('home', { loadDefaults: false });
@@ -829,12 +829,14 @@ export function bindPwaSameOriginLinks() {
                 return;
             }
             if (hash === '#alerts' || hash.startsWith('#alerts/')) {
-                const noticeId = hash.startsWith('#alerts/')
-                    ? (() => { try { return decodeURIComponent(hash.slice('#alerts/'.length)); } catch { return hash.slice('#alerts/'.length); } })()
-                    : '';
+                const rawAlert = hash.startsWith('#alerts/') ? hash.slice('#alerts/'.length) : '';
+                const alertBits = rawAlert.split('/').filter(Boolean);
+                let noticeId = alertBits[0] || '';
+                try { noticeId = decodeURIComponent(noticeId); } catch { /* keep raw */ }
+                const photo = /^([1-9]|10)$/.test(alertBits[1] || '') ? Number(alertBits[1]) : 0;
                 if (noticeId) {
                     import('./alerts-channel.js').then(async (m) => {
-                        const state = await m.focusSharedAlert?.(noticeId, '');
+                        const state = await m.focusSharedAlert?.(noticeId, '', photo);
                         if (typeof window.showToast === 'function') {
                             window.showToast(
                                 state === 'opened' ? 'Opened service update' : 'This update is no longer available',

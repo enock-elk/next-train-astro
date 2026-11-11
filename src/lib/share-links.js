@@ -374,14 +374,30 @@ function shareToken(raw) {
     return SHARE_TOKEN.test(value) ? value : '';
 }
 
-/** `/og/a/{source}/{id}` so a crawler can read the notice without the hash. */
+/** 1-based photo inside one notice. 0 means the notice itself. */
+export function alertPhotoIndex(raw) {
+    const n = Number(String(raw || '').trim());
+    if (!Number.isInteger(n) || n < 1 || n > 10) return 0;
+    return n;
+}
+
+/** `/og/a/{source}/{id}` and `/og/a/{source}/{id}/{photo}` so a crawler can read the notice without the hash. */
 export function parseAlertSharePath(pathname) {
-    const m = String(pathname || '').match(/\/og\/a\/([^/]+)\/([^/]+)\/?$/i);
+    const m = String(pathname || '').match(/\/og\/a\/([^/]+)\/([^/]+)(?:\/([1-9]|10))?\/?$/i);
     if (!m) return null;
     const source = shareToken(m[1]);
     const id = shareToken(m[2]);
     if (!source || !id) return null;
-    return { kind: 'alert', id, source };
+    return { kind: 'alert', id, source, photo: alertPhotoIndex(m[3]) };
+}
+
+/** Share path for one notice, or one photo in that notice (`/1`, `/2`, …). */
+export function alertSharePath(source, id, photo = 0) {
+    const src = encodeURIComponent(String(source || 'all'));
+    const noticeId = encodeURIComponent(String(id || ''));
+    const index = alertPhotoIndex(photo);
+    const base = `/og/a/${src}/${noticeId}`;
+    return index ? `${base}/${index}` : base;
 }
 
 /** `/og/c/{route}/{post}` */
@@ -399,7 +415,14 @@ export function parseContentQuery(search) {
         ? search
         : new URLSearchParams(typeof search === 'string' ? search : '');
     const alert = shareToken(params.get('alert') || '');
-    if (alert) return { kind: 'alert', id: alert, source: shareToken(params.get('src') || '') };
+    if (alert) {
+        return {
+            kind: 'alert',
+            id: alert,
+            source: shareToken(params.get('src') || ''),
+            photo: alertPhotoIndex(params.get('photo')),
+        };
+    }
     const routeId = shareToken(params.get('room') || '');
     const postId = shareToken(params.get('post') || '');
     if (routeId && postId) return { kind: 'community', routeId, postId };
@@ -411,10 +434,10 @@ export function parseContentDeepLink({ search = '', hash = '', pathname = '' } =
     const fromPath = parseAlertSharePath(pathname) || parseCommunitySharePath(pathname);
     if (fromPath) return fromPath;
     const hashText = String(hash || '');
-    const alertHash = hashText.match(/^#alerts\/([^/?#]+)/i);
+    const alertHash = hashText.match(/^#alerts\/([^/?#]+)(?:\/([1-9]|10))?(?:[/?#]|$)/i);
     if (alertHash) {
         const id = shareToken(alertHash[1]);
-        if (id) return { kind: 'alert', id, source: '' };
+        if (id) return { kind: 'alert', id, source: '', photo: alertPhotoIndex(alertHash[2]) };
     }
     const roomHash = hashText.match(/^#community\/([^/]+)\/([^/?#]+)/i);
     if (roomHash) {
@@ -431,6 +454,7 @@ export function contentDeepLinkSearch(content) {
     if (content.kind === 'alert') {
         params.set('alert', content.id);
         if (content.source) params.set('src', content.source);
+        if (alertPhotoIndex(content.photo)) params.set('photo', String(alertPhotoIndex(content.photo)));
     } else if (content.kind === 'community') {
         params.set('room', content.routeId);
         params.set('post', content.postId);
@@ -449,7 +473,7 @@ export function stripShareParamsFromUrl() {
             'plan', 'rt', 'v', 't', 'd', 'r',
             'live', 'onboard',
             'src', 'source',
-            'alert', 'room', 'post',
+            'alert', 'room', 'post', 'photo',
             // Web Share Target GET params
             'title', 'text', 'url',
         ].forEach((k) => urlObj.searchParams.delete(k));

@@ -105,6 +105,16 @@ const alertApp = buildAppDeepLink(alertIntent, 'https://nexttrain.co.za');
 ok(alertApp.includes('alert=1794297920885') && alertApp.includes('src=all_GP'), 'alert human target is /?alert=');
 const alertOg = buildOgShareLink(alertIntent, 'https://nexttrain.co.za');
 ok(alertOg.includes('/og/a/all_GP/1794297920885'), 'alert OG URL stays on /og/a/');
+const photoIntent = parseShareIntent(new URL('https://nexttrain.co.za/og/a/all_GP/1794297920885/2'));
+ok(photoIntent && photoIntent.kind === 'alert' && photoIntent.photo === 2 && photoIntent.id === '1794297920885', 'worker reads /og/a/{source}/{id}/{photo}');
+const photoApp = buildAppDeepLink(photoIntent, 'https://nexttrain.co.za');
+ok(photoApp.includes('photo=2') && photoApp.includes('alert=1794297920885'), 'photo link lands on /?alert=&photo=');
+const photoOg = buildOgShareLink(photoIntent, 'https://nexttrain.co.za');
+ok(photoOg.endsWith('/og/a/all_GP/1794297920885/2'), 'photo OG URL keeps the image index');
+consumeShareDeeplinkSnapshot();
+const photoLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/og/a/all/1794297920885/2');
+ok(photoLaunch && photoLaunch.photo === 2 && photoLaunch.id === '1794297920885', 'launch /og/a/.../2 snapshots that photo');
+ok(String(globalThis.location.search).includes('photo=2'), 'photo launch rewrites to /?photo=');
 
 consumeShareDeeplinkSnapshot();
 const roomLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/#community/pta-mabopane/cp123');
@@ -134,6 +144,8 @@ ok(ogIndex.includes('parseLiveTrainImagePath'), 'worker serves /og/train/*.png')
 ok(ogIndex.includes('buildLiveTrainOgMeta'), 'worker emits live OG HTML');
 ok(ogIndex.includes('isOgSharePath') && ogIndex.includes('parseLiveSharePath'), 'worker treats /og/l/ as a share path');
 ok(ogIndex.includes('private, no-store'), 'OG HTML is not CDN-cached (live vs timetable UA mix)');
+ok(ogIndex.includes('node.displayName'), 'community OG title uses who posted');
+ok(ogIndex.includes('pickedImage'), 'alert OG can pick one attached photo');
 
 const ghosts = readFileSync(join(ROOT, 'src/lib/train-ghosts.js'), 'utf8');
 const termFn = ghosts.slice(ghosts.indexOf('export function trainTerminusName'), ghosts.indexOf('export function trainGoingLabel'));

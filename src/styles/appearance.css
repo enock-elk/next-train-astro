@@ -3201,6 +3201,12 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #nt-nearby-trains-modal {
   padding-bottom: 0;
 }
+/* Community reactions and attach sit on the bottom bar. This clearance was
+   the empty band that showed the composer between the card and the bar. */
+#community-reactions-modal,
+#community-attach-modal {
+  padding-bottom: 0;
+}
 /* Centered info cards (What's New, Today's schedule, and the same type) sit
    in the middle of the scrim. The bottom-nav clearance left a blank slab
    under the card. Bottom sheets and tall lists keep the clearance below. */
@@ -3229,12 +3235,12 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #profile-modal > div {
   max-height: min(85dvh, calc(var(--nt-app-h, 100dvh) - 1.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))) !important;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal):not(#nt-nearby-trains-modal),
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal):not(#nt-nearby-trains-modal):not(#community-reactions-modal):not(#community-attach-modal),
 #nt-on-train-sheet {
   padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal) > div,
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal):not(#community-reactions-modal):not(#community-attach-modal) > div,
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }

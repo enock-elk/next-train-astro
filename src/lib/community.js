@@ -1363,7 +1363,12 @@ function syncCommunitySelectActions(post) {
     paintCommunityAdminMenu(post);
 }
 
-/** Emoji pill by the message. No scrim, so the header stays usable. */
+/**
+ * Sit the sheet on the bottom bar. The nav's rect is visual-viewport relative.
+ * innerHeight can be taller than that visible hole (browser chrome on github.io),
+ * and reserving innerHeight minus the visual top lifts the sheet so the composer
+ * shows between the card and the bar.
+ */
 function placeSheetAboveNav(sheet) {
     if (!sheet || sheet.classList.contains('hidden')) return;
     const root = document.documentElement;
@@ -1379,8 +1384,9 @@ function placeSheetAboveNav(sheet) {
         sheet.style.bottom = '0px';
         return;
     }
-    const top = nav.getBoundingClientRect().top;
-    sheet.style.bottom = `${Math.max(0, Math.round(window.innerHeight - top))}px`;
+    const rect = nav.getBoundingClientRect();
+    const viewH = window.visualViewport?.height || window.innerHeight;
+    sheet.style.bottom = `${Math.max(0, Math.round(viewH - rect.top))}px`;
 }
 
 function openReactionChooser(postId, anchorEl) {
@@ -1447,7 +1453,7 @@ function ensureCommunityReactionsModal() {
     if (sheet) return sheet;
     sheet = document.createElement('div');
     sheet.id = 'community-reactions-modal';
-    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[140] hidden flex items-end justify-center bg-black/50';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[140] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
         <div class="flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
@@ -3297,9 +3303,11 @@ export function bindCommunityUi() {
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
+        const who = String(post.displayName || '').trim();
+        const shareTitle = who && !/^(you|passenger)$/i.test(who) ? who : 'Community message';
         if (typeof navigator.share === 'function') {
             try {
-                await navigator.share({ title: 'Next Train', text: text || 'Community message', url });
+                await navigator.share({ title: shareTitle, text: text || shareTitle, url });
                 return;
             } catch (err) {
                 if (err?.name === 'AbortError') return;
@@ -3430,10 +3438,12 @@ export function bindCommunityUi() {
     });
     restoreComposerDraft(composerEl);
     bindKeyboardThread();
-    window.visualViewport?.addEventListener('resize', () => {
+    const placeOpenSheets = () => {
         placeSheetAboveNav(document.getElementById('community-reactions-modal'));
         placeSheetAboveNav(document.getElementById('community-attach-modal'));
-    }, { passive: true });
+    };
+    window.visualViewport?.addEventListener('resize', placeOpenSheets, { passive: true });
+    window.visualViewport?.addEventListener('scroll', placeOpenSheets, { passive: true });
     composerEl?.addEventListener('input', () => {
         rememberComposerDraft(composerEl.value);
         // Auto-grow with new lines (WhatsApp-style), capped

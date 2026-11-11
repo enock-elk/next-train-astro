@@ -8,6 +8,7 @@ import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDat
 import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
 import { isPublicPreviewUrl } from './link-preview.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { alertSharePath } from './share-links.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $account } from './account.js';
 import { $currentRouteId, $userRegion } from '../store.js';
@@ -274,11 +275,13 @@ export function renderLazyPosterHtml(urls, notice = null) {
     const spinner = `<svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
     const noticeId = escapeHTML(String(notice?.id || ''));
     const expiresAt = escapeHTML(String(notice?.expiresAt || ''));
+    let photo = 0;
     const cells = urls.map((path) => {
         const href = resolveAlertImageSrc(path);
         if (!href) return '';
+        photo += 1;
         const src = escapeHTML(href);
-        return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}"${previewDataAttrs(notice, path)} class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
+        return `<button type="button" data-alert-lightbox="${src}" data-alert-photo="${photo}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}"${previewDataAttrs(notice, path)} class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
             <img alt="" referrerpolicy="no-referrer" draggable="false" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
@@ -1481,10 +1484,18 @@ function shareOrigin() {
     return 'https://nexttrain.co.za';
 }
 
-function alertShareUrl(notice) {
-    const id = encodeURIComponent(String(notice?.id || ''));
-    const src = encodeURIComponent(String(notice?._sourceKey || 'all'));
-    return `${shareOrigin()}/og/a/${src}/${id}`;
+function alertShareUrl(notice, photo = 0) {
+    return `${shareOrigin()}${alertSharePath(notice?._sourceKey || 'all', notice?.id || '', photo)}`;
+}
+
+function syncAlertCopyButton() {
+    const btn = document.getElementById('alerts-select-copy');
+    if (!btn) return;
+    const hasText = alertPlainText(selectedAlert).length > 0;
+    btn.disabled = !hasText;
+    btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+    btn.classList.toggle('opacity-40', !hasText);
+    btn.classList.toggle('pointer-events-none', !hasText);
 }
 
 function alertPlainText(notice) {
@@ -1502,6 +1513,7 @@ function clearAlertSelection() {
     bar?.classList.add('hidden');
     bar?.classList.remove('flex');
     document.getElementById('alerts-select-menu')?.classList.add('hidden');
+    syncAlertCopyButton();
 }
 
 function selectAlertNotice(notice) {
@@ -1515,6 +1527,7 @@ function selectAlertNotice(notice) {
     bar?.classList.add('flex');
     document.getElementById('alerts-select-menu')?.classList.add('hidden');
     syncAlertMenuButton();
+    syncAlertCopyButton();
 }
 
 async function copyText(text) {
@@ -1700,8 +1713,25 @@ async function fetchNoticeRecord(source, id) {
     }
 }
 
+function openSharedAlertPhoto(id, photo) {
+    const index = Number(photo);
+    if (!Number.isInteger(index) || index < 1) return;
+    const tryOpen = (left) => {
+        const card = document.getElementById(`alert-post-${id}`);
+        const btn = card?.querySelector(`[data-alert-photo="${index}"]`);
+        const src = btn?.getAttribute('data-alert-lightbox') || '';
+        if (btn && src && typeof window.openLightbox === 'function') {
+            btn.setAttribute('data-alert-ready', '1');
+            window.openLightbox(src, btn);
+            return;
+        }
+        if (left > 0) requestAnimationFrame(() => tryOpen(left - 1));
+    };
+    requestAnimationFrame(() => tryOpen(8));
+}
+
 /** Open one shared notice. Returns opened or gone. Does not prefetch a PDF. */
-export async function focusSharedAlert(id, source = '') {
+export async function focusSharedAlert(id, source = '', photo = 0) {
     const cleanId = String(id || '').trim();
     const cleanSource = String(source || '').trim();
     if (!ALERT_SHARE_TOKEN.test(cleanId)) return 'gone';
@@ -1723,6 +1753,7 @@ export async function focusSharedAlert(id, source = '') {
         focusTop: true,
         skipReload: true,
     });
+    openSharedAlertPhoto(cleanId, photo);
     return 'opened';
 }
 
@@ -1752,9 +1783,9 @@ function bindAlertsChannelOnce() {
     document.getElementById('alerts-select-copy')?.addEventListener('click', (e) => {
         e.preventDefault();
         if (!selectedAlert) return;
-        const link = alertShareUrl(selectedAlert);
         let text = alertPlainText(selectedAlert);
-        if (text.length < 12) text = text ? `${text}\n${link}` : link;
+        if (!text || document.getElementById('alerts-select-copy')?.disabled) return;
+        if (text.length < 12) text = `${text}\n${alertShareUrl(selectedAlert)}`;
         copyText(text);
     });
     document.getElementById('alerts-select-share')?.addEventListener('click', (e) => {

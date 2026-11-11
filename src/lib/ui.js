@@ -21,6 +21,7 @@ import {
     SUPPORT_EMAIL,
 } from './recovery.js';
 import { sanitizeAttachmentDisplayUrl } from './attachments.js';
+import { alertSharePath } from './share-links.js';
 import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
 import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
 
@@ -1614,6 +1615,11 @@ function bindAlertImageLightbox() {
         e.stopPropagation();
         downloadLightboxImage();
     });
+    document.getElementById('alert-image-lightbox-share')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        shareLightboxPhoto();
+    });
     const blockPageZoom = (e) => {
         if (e.touches && e.touches.length > 1) e.preventDefault();
     };
@@ -1869,6 +1875,9 @@ function lightboxNoticeMeta(host) {
 function announceLightboxNotice(host) {
     const meta = lightboxNoticeMeta(host);
     const { overlay } = lightboxEls();
+    const node = host?.nodeType === 1 ? host : null;
+    const photo = node?.getAttribute?.('data-alert-photo') || '';
+    const share = document.getElementById('alert-image-lightbox-share');
     if (overlay) {
         if (meta) {
             overlay.dataset.ntNoticeId = meta.id;
@@ -1877,10 +1886,44 @@ function announceLightboxNotice(host) {
             delete overlay.dataset.ntNoticeId;
             delete overlay.dataset.ntNoticeSrc;
         }
+        const linked = !!(meta && photo && !overlay.dataset.ntFeedbackGallery);
+        if (linked) overlay.dataset.ntPhoto = photo;
+        else delete overlay.dataset.ntPhoto;
+        share?.classList.toggle('hidden', !linked);
     }
     try {
         window.dispatchEvent(new CustomEvent('nt-alert-lightbox', { detail: meta }));
     } catch { /* ignore */ }
+}
+
+function lightboxPhotoShareUrl() {
+    const { overlay } = lightboxEls();
+    const id = overlay?.dataset.ntNoticeId || '';
+    const photo = overlay?.dataset.ntPhoto || '';
+    if (!id || !photo) return '';
+    const origin = (typeof location !== 'undefined' && /^https?:$/.test(location.protocol))
+        ? location.origin
+        : 'https://nexttrain.co.za';
+    return `${origin}${alertSharePath(overlay.dataset.ntNoticeSrc || 'all', id, photo)}`;
+}
+
+async function shareLightboxPhoto() {
+    const url = lightboxPhotoShareUrl();
+    if (!url) return;
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ title: 'Service update', url });
+            return;
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+        }
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copied', 'success');
+    } catch {
+        showToast('Could not share this photo', 'error');
+    }
 }
 
 function lightboxCandidateSrc(url, host) {

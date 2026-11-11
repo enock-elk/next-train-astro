@@ -34,6 +34,20 @@ export function inboxReplyAckToken(deviceId, entry, firebaseKey = '') {
     return replyId ? `${String(deviceId || 'installation')}:${replyId}` : '';
 }
 
+/** A viewed reply stays viewed after Reset this App, even if the token was stored under another device id. */
+export function inboxReplyIsAcknowledged(acknowledgements, deviceId, entry, firebaseKey = '') {
+    const acks = acknowledgements instanceof Set ? acknowledgements : parseInboxReplyAcks(acknowledgements);
+    const token = inboxReplyAckToken(deviceId, entry, firebaseKey);
+    if (token && acks.has(token)) return true;
+    const replyId = inboxReplyIdentity(entry, firebaseKey);
+    if (!replyId) return false;
+    const suffix = `:${replyId}`;
+    for (const stored of acks) {
+        if (stored === replyId || stored.endsWith(suffix)) return true;
+    }
+    return false;
+}
+
 export function parseInboxReplyAcks(raw) {
     try {
         const values = JSON.parse(raw || '[]');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.8': [
+        'Reset this App still clears this phone, and it keeps which admin replies in Feedback Hub were already opened. A reply that was viewed does not come back as new. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.7': [
         'A community long-press highlights that message with the same shape as the bubble, and puts the reaction tray just above the finger. A selected alert uses that same wash on the card. The tray cannot be selected as text. Tapping away clears the message, the tray, and the header together. A guest opens the same Account page, with a sign-in note where the name would be and Sign in where Edit profile is. Signing out stays on that page and keeps this phone\'s settings. A shared alert, community message, live train, timetable, or trip opens that item first. A saved region and route stay as they were. A new visitor sees Welcome only after leaving that screen. Alerts still show reaction totals to everyone. When a signed-in rider reacts, an admin also sees that rider. Deploy Firebase rules so those names can be saved. No commuter What\'s New. forceShow stays false.',
     ],

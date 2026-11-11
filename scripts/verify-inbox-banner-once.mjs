@@ -7,6 +7,7 @@ import {
     addInboxReplyAcks,
     inboxReplyAckToken,
     inboxReplyIdentity,
+    inboxReplyIsAcknowledged,
     inboxReplyStillVisible,
     parseInboxReplyAcks,
 } from '../src/lib/inbox-replies.js';
@@ -52,6 +53,14 @@ const repacked = addInboxReplyAcks(packed, [secondToken, firstToken]);
 assert(parseInboxReplyAcks(repacked).size === 2, 'acknowledgements are deduplicated without dropping earlier replies');
 assert(parseInboxReplyAcks('{bad json').size === 0, 'corrupt acknowledgement storage fails safely');
 assert(isProtectedVolatileKey('ntInboxAcknowledgedV1'), 'app reset preserves per-reply acknowledgements');
+assert(
+    inboxReplyIsAcknowledged(acknowledgements, 'other-device', first, 'reply-a'),
+    'a viewed reply stays viewed when Reset this App keeps the token under another device id'
+);
+assert(
+    !inboxReplyIsAcknowledged(acknowledgements, deviceId, second, 'reply-b'),
+    'a reply that was never viewed stays unread'
+);
 
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 const receipts = readFileSync(new URL('../src/lib/inbox-receipts.js', import.meta.url), 'utf8');
@@ -64,7 +73,11 @@ assert(immediateAck >= 0 && immediateAck < threadFetch, 'banner reply is acknowl
 assert(threadFetch >= 0 && threadFetch < markRead, 'fetched unread replies are marked read after the thread fetch');
 assert(hub.includes('openMessagesThread(adminReply)'), 'banner passes the exact reply identity into the thread');
 assert(hub.includes('openMessagesThread(replyToAcknowledge = latestPendingAdminReply)'), 'Messages acknowledges the latest known reply immediately');
-assert(hub.includes('localAcknowledgements.has(inboxReplyAckToken'), 'banner filtering consults per-reply local acknowledgements');
+assert(hub.includes('inboxReplyIsAcknowledged(localAcknowledgements'), 'banner filtering consults per-reply local acknowledgements');
+{
+    const resetFn = hub.slice(hub.indexOf('export async function resetPhoneKeepDeviceId'), hub.indexOf('function syncProfileDisplay'));
+    assert(resetFn.includes('INBOX_REPLY_ACKS_KEY') && resetFn.includes('keptInboxViewed'), 'Reset this App keeps viewed admin replies');
+}
 assert(hub.includes('markInboxDelivered'), 'hub marks delivered when the inbox is fetched');
 assert(hub.includes("from './inbox-receipts.js'"), 'hub uses the auth-backed receipt helper');
 assert(!hub.includes("updates[`${m.id}/acknowledged`]"), 'opening Messages does not write acknowledged');

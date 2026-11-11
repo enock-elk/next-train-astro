@@ -28,6 +28,7 @@ import {
     INBOX_REPLY_ACKS_KEY,
     addInboxReplyAcks,
     inboxReplyAckToken,
+    inboxReplyIsAcknowledged,
     inboxReplyStillVisible,
     parseInboxReplyAcks,
 } from './inbox-replies.js';
@@ -900,11 +901,23 @@ function deleteIndexedDatabase(name) {
     });
 }
 
-/** Wipe this phone back to welcome. Keeps next_train_device_id. Does not delete the account. */
+/** Wipe this phone back to welcome. Keeps next_train_device_id and which admin replies were already viewed. Does not delete the account. */
 export async function resetPhoneKeepDeviceId() {
     const keep = safeStorage.getItem('next_train_device_id')
         || (typeof window !== 'undefined' ? window.NEXT_TRAIN_DEVICE_ID : '')
         || '';
+    const keptInboxViewed = {};
+    try {
+        const rememberViewed = (key) => {
+            if (!key || key !== INBOX_REPLY_ACKS_KEY) return;
+            const value = safeStorage.getItem(key);
+            if (value) keptInboxViewed[key] = value;
+        };
+        rememberViewed(INBOX_REPLY_ACKS_KEY);
+        if (typeof localStorage !== 'undefined') {
+            for (let i = 0; i < localStorage.length; i++) rememberViewed(localStorage.key(i));
+        }
+    } catch { /* the viewed set stays empty and the wipe still runs */ }
     try { await signOutAccount(); } catch { /* the account stays on the server */ }
     try { sessionStorage.clear(); } catch { /* ignore */ }
     try { localStorage.clear(); } catch { /* ignore */ }
@@ -923,6 +936,10 @@ export async function resetPhoneKeepDeviceId() {
     await deleteIndexedDatabase('GuardianIdentityDB');
     if (keep) {
         try { await safeStorage.setResilientItem('next_train_device_id', keep); } catch { /* local copy remains */ }
+    }
+    for (const [key, value] of Object.entries(keptInboxViewed)) {
+        try { localStorage.setItem(key, value); } catch { /* ignore */ }
+        try { await safeStorage.setResilientItem(key, value); } catch { /* local copy remains */ }
     }
     try {
         if (typeof caches !== 'undefined') {
@@ -2426,7 +2443,7 @@ export async function checkServiceAlerts(opts = {}) {
                         const unreadKeys = Object.keys(inboxData).filter((k) => {
                             const entry = inboxData[k];
                             if (!inboxMessageInScope({ ...entry, id: k })) return false;
-                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, entry, k));
+                            const locallyAcknowledged = inboxReplyIsAcknowledged(localAcknowledgements, deviceId, entry, k);
                             return inboxReplyStillVisible(entry, Date.now(), locallyAcknowledged);
                         });
                         syncInboxBadges(unreadKeys.length);

@@ -1402,6 +1402,7 @@ export function restoreDeviceIdentity() {
             : (ls || idb || cookie || '');
         if (stable) applyCanonicalDeviceId(stable);
         try { await withTimeout(safeStorage.getResilientItem('ntInboxLocalV1'), 1500, null); } catch { /* optional */ }
+        try { await withTimeout(safeStorage.getResilientItem('ntInboxAcknowledgedV1'), 1500, null); } catch { /* optional */ }
         return stable;
     })();
     return restoreDevicePromise;

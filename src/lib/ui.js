@@ -2156,9 +2156,11 @@ export function initGlobalErrorHandler() {
         document.getElementById('safe-mode-clear-btn')?.addEventListener('click', async () => {
             try {
                 const keep = localStorage.getItem('next_train_device_id');
+                const viewedReplies = localStorage.getItem('ntInboxAcknowledgedV1');
                 localStorage.clear();
                 sessionStorage.clear();
                 if (keep) localStorage.setItem('next_train_device_id', keep);
+                if (viewedReplies) localStorage.setItem('ntInboxAcknowledgedV1', viewedReplies);
             } catch (ex) {}
             try {
                 if (window.indexedDB) indexedDB.deleteDatabase('NextTrainDB');

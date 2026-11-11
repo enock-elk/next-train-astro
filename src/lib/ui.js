@@ -147,6 +147,7 @@ const MODAL_HASH = {
     'disruption-modal': '#disruption',
     'planner-train-sheet-modal': '#train-sheet',
     'planner-fare-breakdown-sheet': '#trip-fare',
+    'community-reactions-modal': '#community-reactions',
     'cache-clear-modal': '#cacheclear',
     'phone-reset-modal': '#phone-reset',
     'phone-reset-network-modal': '#phone-reset-network',
@@ -2468,7 +2469,7 @@ export function setupSwipeNavigation() {
     };
 
     const swipeIgnoreFrom = (target) => !!target?.closest?.(
-        'input, textarea, select, [contenteditable="true"], #account-modal, .community-post-row, #community-reaction-sheet, #community-route-list, #community-reply-bar, #map-tab-frame, .map-tab-pane, iframe'
+        'input, textarea, select, [contenteditable="true"], #account-modal, .community-post-row, #community-reaction-sheet, #community-reactions-modal, #community-route-list, #community-reply-bar, #map-tab-frame, .map-tab-pane, iframe'
     );
 
     const clearSwipe = () => {
@@ -3572,6 +3573,7 @@ function bindBlurBackdropDismiss() {
 /** Bottom sheets that rise from the bottom. Pull down on the card to close. */
 const BOTTOM_SHEET_CLOSE = {
     'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
+    'community-reactions-modal': () => closeSmoothModal('community-reactions-modal'),
     'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),
     'nt-nearby-trains-modal': () => document.getElementById('nt-nearby-close')?.click(),
     'nt-live-tracker-modal': () => document.getElementById('nt-live-tracker-close')?.click(),

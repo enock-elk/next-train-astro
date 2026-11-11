@@ -20,7 +20,7 @@ import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
-import { showToast, triggerHaptic } from './ui.js';
+import { closeSmoothModal, openSmoothModal, showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
     isShadowBanned,
@@ -1287,7 +1287,6 @@ function ensureReactionTray() {
     sheet.className = 'fixed z-[12] hidden w-max max-w-[min(92vw,20rem)]';
     sheet.innerHTML = `
         <div id="community-reaction-tray" class="flex flex-col items-stretch gap-1">
-            <div id="community-reaction-who-list" class="hidden max-h-36 overflow-y-auto rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"></div>
             <div id="community-reaction-sheet-emojis" class="flex items-center gap-0.5 rounded-full border border-white/10 bg-gray-950/95 px-1.5 py-1 text-white shadow-2xl"></div>
         </div>`;
     const host = document.querySelector('#view-community .community-pane') || document.body;
@@ -1352,7 +1351,7 @@ function syncCommunitySelectActions(post) {
 }
 
 /** Emoji pill by the message. No scrim, so the header stays usable. */
-function openReactionSheet(postId, routeId, anchorEl, opts = {}) {
+function openReactionSheet(postId, routeId, anchorEl) {
     const post = findCachedPost(postId);
     const tombstone = isCommunityTombstone(post);
     if (tombstone) {
@@ -1367,7 +1366,6 @@ function openReactionSheet(postId, routeId, anchorEl, opts = {}) {
     sheet.dataset.replyId = '';
     sheet.dataset.uid = post?.uid || '';
     sheet.dataset.email = post?.email || '';
-    sheet.dataset.who = opts.who ? '1' : '0';
     const { myEmoji } = summarizeReactions(postId);
     const row = sheet.querySelector('#community-reaction-sheet-emojis');
     if (row) {
@@ -1375,14 +1373,60 @@ function openReactionSheet(postId, routeId, anchorEl, opts = {}) {
             <button type="button" class="community-react-btn h-10 w-10 text-xl rounded-full ${myEmoji === r.id ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
     }
-    const who = sheet.querySelector('#community-reaction-who-list');
-    if (who) {
-        who.innerHTML = '';
-        who.classList.add('hidden');
-    }
-    if (opts.who) void paintWhoReacted(postId);
     sheet.classList.remove('hidden');
     placeReactionTray(anchorEl);
+    triggerHaptic();
+}
+
+const COMMUNITY_REACT_ALL = `<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14.2c1.1 1.3 2.4 2 4 2s2.9-.7 4-2"/><circle cx="9" cy="10" r="0.8" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="0.8" fill="currentColor" stroke="none"/></svg>`;
+
+let communityReactFilter = 'all';
+
+function reactorPhoto(uid) {
+    const rows = cachedFeedPosts || [];
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+        if (rows[i]?.uid === uid && rows[i].photoURL) return rows[i].photoURL;
+    }
+    return '';
+}
+
+function ensureCommunityReactionsModal() {
+    let sheet = document.getElementById('community-reactions-modal');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'community-reactions-modal';
+    sheet.className = 'fixed inset-0 z-[140] hidden flex items-end justify-center bg-black/50';
+    sheet.innerHTML = `
+        <div class="flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
+            <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-community-react-title>Reactions</p>
+            <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-community-react-chips></div>
+            <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-[max(1rem,env(safe-area-inset-bottom))]" data-community-react-list></div>
+        </div>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', (e) => {
+        if (e.target === sheet) {
+            closeSmoothModal('community-reactions-modal');
+            return;
+        }
+        const chip = e.target.closest?.('[data-community-react-filter]');
+        if (!chip || !sheet.contains(chip)) return;
+        e.preventDefault();
+        communityReactFilter = chip.getAttribute('data-community-react-filter') || 'all';
+        void paintCommunityReactionsModal(sheet.dataset.postId || '');
+    });
+    return sheet;
+}
+
+function openCommunityReactionsModal(postId) {
+    if (!postId) return;
+    closeReactionSheet();
+    communityReactFilter = 'all';
+    const sheet = ensureCommunityReactionsModal();
+    sheet.dataset.postId = String(postId);
+    const wasHidden = sheet.classList.contains('hidden');
+    void paintCommunityReactionsModal(postId);
+    if (wasHidden) openSmoothModal('community-reactions-modal');
     triggerHaptic();
 }
 
@@ -1397,25 +1441,64 @@ function reactorName(uid) {
     return String(post?.displayName || '').trim() || 'Passenger';
 }
 
-async function paintWhoReacted(postId) {
-    const box = document.getElementById('community-reaction-who-list');
-    if (!box) return;
-    const byUid = cachedReactionsByPost[postId] || {};
-    const uids = Object.keys(byUid);
-    if (!uids.length) {
-        box.innerHTML = '';
-        box.classList.add('hidden');
-        placeReactionTray(reactionAnchor);
-        return;
+function drawCommunityReactionsModal(sheet, people) {
+    const counts = {};
+    people.forEach((row) => { counts[row.emojiId] = (counts[row.emojiId] || 0) + 1; });
+    const total = people.length;
+    const title = sheet.querySelector('[data-community-react-title]');
+    if (title) title.textContent = total === 1 ? '1 reaction' : `${total} reactions`;
+    const chips = sheet.querySelector('[data-community-react-chips]');
+    const chipClass = (on) => `inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${
+        on
+            ? 'border-gray-300 bg-gray-200 text-gray-900 dark:border-gray-500 dark:bg-gray-600 dark:text-white'
+            : 'border-gray-200 bg-gray-100 text-gray-900 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white'
+    }`;
+    if (chips) {
+        const faces = WA_REACTIONS
+            .filter((r) => counts[r.id])
+            .sort((a, b) => counts[b.id] - counts[a.id] || WA_REACTIONS.indexOf(a) - WA_REACTIONS.indexOf(b));
+        const allOn = communityReactFilter === 'all';
+        chips.innerHTML = [
+            `<button type="button" data-community-react-filter="all" class="${chipClass(allOn)}" aria-pressed="${allOn ? 'true' : 'false'}" aria-label="All reactions">${COMMUNITY_REACT_ALL}</button>`,
+            ...faces.map((r) => {
+                const on = communityReactFilter === r.id;
+                return `<button type="button" data-community-react-filter="${r.id}" class="${chipClass(on)}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${escapeHTML(r.emoji)} ${counts[r.id]}"><span aria-hidden="true">${r.emoji}</span><span class="tabular-nums">${counts[r.id]}</span></button>`;
+            }),
+        ].join('');
     }
-    box.classList.remove('hidden');
-    try { await loadPublicProfiles(uids); } catch { /* a name already on a message still shows */ }
-    if (document.getElementById('community-reaction-sheet')?.dataset.postId !== String(postId)) return;
-    box.innerHTML = uids.map((uid) => {
-        const emoji = WA_REACTIONS.find((r) => r.id === byUid[uid]?.emoji)?.emoji || '';
-        return `<div class="flex items-center justify-between gap-2 px-1 py-1 text-sm text-gray-800 dark:text-gray-100"><span class="truncate">${escapeHTML(reactorName(uid))}</span><span aria-hidden="true">${emoji}</span></div>`;
+    const shown = communityReactFilter === 'all'
+        ? people
+        : people.filter((row) => row.emojiId === communityReactFilter);
+    const list = sheet.querySelector('[data-community-react-list]');
+    if (!list) return;
+    list.innerHTML = shown.map((row) => {
+        const name = reactorName(row.uid);
+        const emoji = WA_REACTIONS.find((r) => r.id === row.emojiId)?.emoji || '';
+        const color = nameColorFor(authorColorKey(row.uid, name));
+        return `<div class="flex items-center gap-3 px-2 py-2" data-community-react-person="${escapeHTML(row.uid)}">
+            ${renderAvatarHtml(reactorPhoto(row.uid), name, color)}
+            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${escapeHTML(name)}</span>
+            <span class="text-xl leading-none" aria-hidden="true">${emoji}</span>
+        </div>`;
     }).join('');
-    placeReactionTray(reactionAnchor);
+}
+
+async function paintCommunityReactionsModal(postId) {
+    const sheet = document.getElementById('community-reactions-modal');
+    if (!sheet || sheet.dataset.postId !== String(postId)) return;
+    const byUid = cachedReactionsByPost[postId] || {};
+    const people = Object.entries(byUid)
+        .map(([uid, entry]) => ({
+            uid,
+            emojiId: entry?.emoji || '',
+            at: Number(entry?.at) || 0,
+        }))
+        .filter((row) => WA_REACTIONS.some((r) => r.id === row.emojiId))
+        .sort((a, b) => b.at - a.at);
+    drawCommunityReactionsModal(sheet, people);
+    try { await loadPublicProfiles(people.map((row) => row.uid)); } catch { /* a name on a message still shows */ }
+    if (sheet.dataset.postId !== String(postId)) return;
+    drawCommunityReactionsModal(sheet, people);
 }
 
 let selectedCommunity = null;
@@ -3258,11 +3341,10 @@ export function bindCommunityUi() {
         const trayOpen = !!(sheet && !sheet.classList.contains('hidden'));
         const menuOpen = !!(menu && !menu.classList.contains('hidden'));
         if (!trayOpen && !menuOpen) return;
-        if (e.target.closest?.('#community-reaction-sheet, #community-select-bar, #community-select-menu')) return;
-        const whoOnly = sheet?.dataset.who === '1';
+        if (e.target.closest?.('#community-reaction-sheet, #community-reactions-modal, #community-select-bar, #community-select-menu')) return;
         closeReactionSheet();
         menu?.classList.add('hidden');
-        if (trayOpen && !whoOnly) clearCommunitySelection();
+        if (trayOpen) clearCommunitySelection();
     }, true);
 
     document.addEventListener('click', async (e) => {
@@ -3271,7 +3353,7 @@ export function bindCommunityUi() {
         const whoPill = t.closest?.('.community-reaction-who');
         if (whoPill) {
             e.preventDefault();
-            openReactionSheet(whoPill.getAttribute('data-post-id'), whoPill.getAttribute('data-route'), whoPill, { who: true });
+            openCommunityReactionsModal(whoPill.getAttribute('data-post-id'));
             return;
         }
 

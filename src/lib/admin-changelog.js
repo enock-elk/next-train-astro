@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.6': [
+        'Community reactions open the bottom sheet. It lists each person with their avatar, name, and reaction, plus the reaction totals. Swipe down or Back closes it. The Alerts reactions sheet is unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.5': [
         'Community reactions are a small tray beside the message, so the header stays usable. Closing that tray, or reacting, clears the selection. Report and Delete sit on the header. A rider cannot report their own message, and can delete only their own. The three-dot menu is admin only. Alerts and Community share use the Share App icon. No commuter What\'s New. forceShow stays false.',
     ],

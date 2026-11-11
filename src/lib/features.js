@@ -7,20 +7,21 @@
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"], regionIds: ["KZN"] },
- *   communityTab:      { enabled: true, routeIds: ["pta-kempton"], regionIds: [] },
+ *   communityTab:      { killed: true } hides the tab. Anything else leaves it on.
  *   accounts:          { enabled: true, routeIds: ["pta-kempton"], regionIds: [] }
  * }
  *
  * A region, route, or device grant stays on until an admin turns that
  * switch off. Empty routeIds with a region still enables the feature.
- * Community rooms are stricter: a listed route is the only room, and a
- * region checkbox does not open the other communities in that region.
- * Empty routeIds with a region still opens every community there.
- * Accounts use that same route rule. The switch starts off.
+ * Accounts use the route rule: a listed route is the only account sheet, and a
+ * region checkbox does not open the other routes in that region.
+ * Empty routeIds with a region still opens every account sheet there.
+ * The accounts switch starts off. Community ignores route lists and the old
+ * enabled:false. It stays on until communityTab.killed is true.
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
- * Map and Community tabs stay off until config/features lists pinned routes.
+ * Map stays off until config/features lists pinned routes. Community stays on.
  * The green live-share chip uses `isRideCheckInPinned` (RTDB pins only, no
  * lab `*` default). Production: missing config → other flags off. Planner
  * trip fare is always on and is not a config/features flag.
@@ -43,7 +44,6 @@ export { PILOT_ROUTE_IDS };
 
 export const GRANTABLE_FEATURES = [
     { key: FEATURE_KEYS.MAP_TAB, label: 'Map' },
-    { key: FEATURE_KEYS.COMMUNITY_TAB, label: 'Community' },
     { key: FEATURE_KEYS.RIDE_CHECKIN, label: "I'm on it / live share" },
     { key: FEATURE_KEYS.DELAY_REPORTS_UI, label: 'Delay reports' },
     { key: FEATURE_KEYS.COMMUNITY_REALTIME, label: 'Community realtime' },
@@ -316,13 +316,21 @@ export function isListedAccountsRoute(routeId) {
     return communityRouteOnEntry(entry, routeId);
 }
 
-/** Community room from the loaded config. A device grant opens every room. */
+/**
+ * Community is on for every commuter until System Controls sets killed.
+ * The old enabled:false and route lists do not hide the tab.
+ */
+export function isCommunityTabKilled() {
+    const entry = cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB];
+    return !!(entry && entry.killed === true);
+}
+
+/** Any active room, unless an admin has switched Community off. */
 export function isListedCommunityRoute(routeId) {
-    if (isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
-    const bag = cachedFeatures || defaultsForEnv();
-    const entry = normalizeEntry(FEATURE_KEYS.COMMUNITY_TAB, bag?.[FEATURE_KEYS.COMMUNITY_TAB]);
-    if (entry.signedInOnly && !viewerMayUseSignedInFeature()) return false;
-    return communityRouteOnEntry(entry, routeId);
+    if (isCommunityTabKilled()) return false;
+    const id = String(routeId || '').trim();
+    const route = id && ROUTES?.[id];
+    return !!(route && route.isActive && route.id !== 'special_event');
 }
 
 /**
@@ -356,6 +364,7 @@ if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
     window.isListedCommunityRoute = isListedCommunityRoute;
+    window.isCommunityTabKilled = isCommunityTabKilled;
     window.isListedAccountsRoute = isListedAccountsRoute;
     window.isFeatureGranted = isFeatureGranted;
     window.getGrantedFeatures = getGrantedFeatures;

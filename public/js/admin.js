@@ -4141,6 +4141,9 @@ const Admin = {
                         <button id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                         </button>
+                        <button type="button" id="trend-inline-landscape-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Landscape" aria-label="Open landscape view">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
+                        </button>
                         <button id="trend-inline-export-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Export">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         </button>
@@ -4164,6 +4167,12 @@ const Admin = {
                         <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Ad revenue</span>
                         <span class="flex items-center gap-2 min-w-0">
                             <span id="ad-revenue-sync" class="text-[10px] font-semibold text-gray-400 truncate"></span>
+                            <button type="button" id="ad-revenue-landscape" class="text-sm text-gray-400 hover:text-blue-500 focus:outline-none px-1 shrink-0" title="Landscape" aria-label="Open impressions landscape">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
+                            </button>
+                            <button type="button" id="ad-revenue-export" class="text-sm text-gray-400 hover:text-blue-500 focus:outline-none px-1 shrink-0" title="Export" aria-label="Export ad revenue">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            </button>
                             <button type="button" id="ad-revenue-expand" class="text-sm text-gray-400 hover:text-blue-500 focus:outline-none px-1 shrink-0" title="Full Screen" aria-label="Open impressions full screen">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                             </button>
@@ -4245,6 +4254,8 @@ const Admin = {
                 bindMoney('ad-revenue-value-tile', 'revenue');
                 bindMoney('ad-revenue-deal-tile', 'deal');
                 document.getElementById('ad-revenue-expand')?.addEventListener('click', () => Admin.openAdImpressions());
+                document.getElementById('ad-revenue-landscape')?.addEventListener('click', () => Admin.openGraphLandscape('ads'));
+                document.getElementById('ad-revenue-export')?.addEventListener('click', () => Admin.offerChartExport('ads'));
                 document.getElementById('ad-revenue-chart')?.addEventListener('click', () => Admin.openAdImpressions());
                 Admin.loadAdRevenue();
             }
@@ -4271,6 +4282,9 @@ const Admin = {
                                 <button type="button" id="analytics-trend-stats" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Statistics for this graph">Stats</button>
                                 <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                                </button>
+                                <button type="button" id="analytics-trend-landscape" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Landscape" aria-label="Open landscape view">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
                                 </button>
                                 <button id="analytics-trend-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -4303,6 +4317,9 @@ const Admin = {
                         <button id="ad-impressions-header-btn" class="hidden" type="button"><span>Ad impressions</span></button>
                         <div class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
                             <div class="p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 flex justify-end bg-gray-50 dark:bg-gray-900 shrink-0">
+                                <button type="button" id="ad-impressions-landscape" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none" title="Landscape" aria-label="Open impressions landscape">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
+                                </button>
                                 <button type="button" id="ad-impressions-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none" title="Export Chart" aria-label="Export impressions chart">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
@@ -4313,16 +4330,14 @@ const Admin = {
                             </div>
                         </div>`;
                     adminContainer?.appendChild(adChart);
-                    document.getElementById('ad-impressions-export').onclick = () => Admin.exportTrendGraph({
-                        svg: '#ad-impressions-svg svg',
-                        title: document.getElementById('ad-impressions-title')?.textContent || 'Viewable impressions',
-                        detail: 'Viewable impressions',
-                    });
+                    document.getElementById('ad-impressions-landscape').onclick = () => Admin.openGraphLandscape('ads');
+                    document.getElementById('ad-impressions-export').onclick = () => Admin.offerChartExport('ads');
                 }
 
                 document.getElementById('analytics-trend-prev').onclick = () => { Admin.telemetryWeeksAgo++; Admin.refreshTelemetry(); };
                 document.getElementById('analytics-trend-next').onclick = () => { if(Admin.telemetryWeeksAgo > 0) { Admin.telemetryWeeksAgo--; Admin.refreshTelemetry(); } };
-                document.getElementById('analytics-trend-export').onclick = () => Admin.exportTrendGraph();
+                document.getElementById('analytics-trend-landscape').onclick = () => Admin.openGraphLandscape('users');
+                document.getElementById('analytics-trend-export').onclick = () => Admin.offerChartExport('users');
                 document.getElementById('analytics-trend-cycle').onclick = Admin.cycleTelemetryRange;
                 document.getElementById('analytics-trend-ads').onclick = () => Admin.toggleAdOverlay();
                 document.getElementById('analytics-trend-stats').onclick = () => Admin.openGraphStats();
@@ -4457,7 +4472,9 @@ const Admin = {
 
             if (expandBtn) expandBtn.onclick = () => Admin.deepLinkToPanel('telemetry-chart-panel');
             if (inlineContainer) inlineContainer.onclick = () => Admin.deepLinkToPanel('telemetry-chart-panel');
-            if (inlineExportBtn) inlineExportBtn.onclick = () => Admin.exportTrendGraph();
+            if (inlineExportBtn) inlineExportBtn.onclick = () => Admin.offerChartExport('users');
+            const inlineLandscapeBtn = document.getElementById('trend-inline-landscape-btn');
+            if (inlineLandscapeBtn) inlineLandscapeBtn.onclick = () => Admin.openGraphLandscape('users');
 
             // Main Global Export Button (Raw Data Snapshot)
             const exportBtn = document.createElement('button');
@@ -4550,9 +4567,10 @@ const Admin = {
     _buildLineGraphSVG: (dataArray, labelsArray, title, isTodayIdx, isMini = false, compareDataArray = null, extra = null) => {
         const numPoints = Math.max(1, dataArray.length);
         
-        // SVG dimensions
-        const w = 600; 
-        const h = isMini ? 150 : 300;
+        // SVG dimensions. Wide is the landscape stage and the exported frame.
+        const wide = extra?.wide === true;
+        const w = wide ? 1100 : 600;
+        const h = wide ? 420 : (isMini ? 150 : 300);
         const pl = isMini ? 15 : 50; 
         const pr = isMini ? 15 : 30; 
         const pt = isMini ? 25 : 30; 
@@ -5157,7 +5175,10 @@ const Admin = {
                 }
                 Admin._lastChart = {
                     labels: labelsArray.slice(),
+                    displayLabels: displayLabels.slice(),
                     counts: activeCountsArray.slice(),
+                    compare: compareCountsArray ? compareCountsArray.slice() : null,
+                    todayIdx: isTodayIdx,
                     masterLabels: rawLabelsArray.slice(),
                     masterCounts: rawCountsArray.slice(),
                     overlay: overlayCounts,
@@ -5504,9 +5525,182 @@ const Admin = {
         hideRegionNote();
     },
 
+    _csvCell: (value) => {
+        const s = String(value ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    },
+
+    _wideChartSvg: (which) => {
+        if (which === 'ads') {
+            const chart = Admin._adChart;
+            if (!chart?.series?.length) return '';
+            const short = (chart.labels || []).map((day) => `${String(day).slice(8, 10)}/${String(day).slice(5, 7)}`);
+            return Admin._buildLineGraphSVG(chart.series, short, 'Viewable impressions', chart.series.length - 1, false, null, {
+                metricWord: 'Viewable impressions',
+                gradTag: 'adsWide',
+                wide: true,
+            });
+        }
+        const view = Admin._lastChart;
+        if (!view?.counts?.length) return '';
+        return Admin._buildLineGraphSVG(
+            view.counts,
+            view.displayLabels || view.labels,
+            view.title,
+            Number.isFinite(view.todayIdx) ? view.todayIdx : view.counts.length - 1,
+            false,
+            view.compare || null,
+            {
+                overlay: view.overlay,
+                gradTag: 'usersWide',
+                wide: true,
+                metricWord: view.range === 'INTRADAY' ? 'active / 30m' : 'Active users',
+            }
+        );
+    },
+
+    exportAdRevenueSheet: () => {
+        const data = Admin._adRevenue || {};
+        const labels = Array.isArray(data.labels) ? data.labels : [];
+        const series = Array.isArray(data.series) ? data.series : [];
+        if (!labels.length) {
+            if (typeof showToast === 'function') showToast('Search a period before exporting.', 'info');
+            return;
+        }
+        const hits = series.reduce((sum, n) => sum + (Number(n) || 0), 0);
+        const revenue = Number(data.revenue) || 0;
+        const coin = data.coin || 'USD';
+        const rate = Number(Admin._fx?.rate);
+        const headers = ['Date', 'Viewable impressions', `Amount (${coin})`];
+        if (rate > 0) headers.push('Amount (ZAR)');
+        const lines = [headers.join(',')];
+        labels.forEach((day, i) => {
+            const dayHits = Number(series[i]) || 0;
+            const amount = hits > 0 ? (revenue * dayHits) / hits : 0;
+            const cells = [day, dayHits, amount.toFixed(2)];
+            if (rate > 0) cells.push((amount * rate).toFixed(2));
+            lines.push(cells.map((cell) => Admin._csvCell(cell)).join(','));
+        });
+        const start = document.getElementById('ad-revenue-start')?.value || data.start || 'start';
+        const end = document.getElementById('ad-revenue-end')?.value || data.end || 'end';
+        Admin.downloadFile(`ad_revenue_${start}_${end}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
+        if (typeof showToast === 'function') showToast('Spreadsheet saved to device!', 'success');
+    },
+
+    exportUserChartSheet: () => {
+        const view = Admin._lastChart;
+        if (!view?.labels?.length) {
+            if (typeof showToast === 'function') showToast('The graph is still loading.', 'info');
+            return;
+        }
+        const hasAds = Array.isArray(view.overlay);
+        const headers = ['Bucket', 'Active users'];
+        if (hasAds) headers.push('Viewable impressions');
+        const lines = [headers.join(',')];
+        view.labels.forEach((label, i) => {
+            if (view.counts[i] === null || view.counts[i] === undefined) return;
+            const bucket = String(label || view.displayLabels?.[i] || '').trim();
+            if (!bucket) return;
+            const cells = [bucket, view.counts[i]];
+            if (hasAds) cells.push(view.overlay[i] ?? '');
+            lines.push(cells.map((cell) => Admin._csvCell(cell)).join(','));
+        });
+        if (lines.length < 2) {
+            if (typeof showToast === 'function') showToast('No rows in this period.', 'info');
+            return;
+        }
+        const day = new Date().toISOString().slice(0, 10);
+        Admin.downloadFile(`telemetry_${view.range || 'graph'}_${day}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
+        if (typeof showToast === 'function') showToast('Spreadsheet saved to device!', 'success');
+    },
+
+    offerChartExport: async (which) => {
+        const ads = which === 'ads';
+        const format = await Admin.secureChoice(
+            'Download export',
+            ads ? 'Export the ad period on screen.' : 'Export the graph on screen.',
+            [
+                { id: 'graph', label: 'Graph (.png)', primary: true },
+                { id: 'csv', label: 'Excel (.csv)' },
+            ]
+        );
+        if (!format) return;
+        if (format === 'csv') {
+            if (ads) Admin.exportAdRevenueSheet();
+            else Admin.exportUserChartSheet();
+            return;
+        }
+        const chart = ads ? Admin._adChart : Admin._lastChart;
+        Admin.exportTrendGraph({
+            wideSource: ads ? 'ads' : 'users',
+            title: chart?.title || (ads ? 'Viewable impressions' : 'Telemetry'),
+            detail: ads ? 'Viewable impressions' : 'Activity on this graph',
+        });
+    },
+
+    openGraphLandscape: async (which) => {
+        const svg = Admin._wideChartSvg(which);
+        if (!svg) {
+            if (typeof showToast === 'function') {
+                showToast(which === 'ads' ? 'Search a period to see impressions.' : 'The graph is still loading.', 'info');
+            }
+            return;
+        }
+        let stage = document.getElementById('telemetry-landscape-stage');
+        if (!stage) {
+            stage = document.createElement('div');
+            stage.id = 'telemetry-landscape-stage';
+            stage.className = 'fixed inset-0 z-[220] hidden bg-white dark:bg-gray-900';
+            stage.innerHTML = `
+                <div class="h-full min-h-0 flex">
+                    <div class="w-14 shrink-0 flex flex-col items-center justify-between py-3 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                        <button type="button" id="telemetry-landscape-close" class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Close landscape">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                        <p id="telemetry-landscape-title" class="text-[10px] font-bold text-gray-500 dark:text-gray-300 text-center leading-tight max-h-[40vh] overflow-hidden" style="writing-mode:vertical-rl;transform:rotate(180deg);"></p>
+                        <button type="button" id="telemetry-landscape-export" class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Export chart" title="Export">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </button>
+                    </div>
+                    <div id="telemetry-landscape-svg" class="flex-1 min-w-0 min-h-0 p-2"></div>
+                </div>`;
+            document.body.appendChild(stage);
+            document.getElementById('telemetry-landscape-close').onclick = () => Admin.closeGraphLandscape();
+            document.getElementById('telemetry-landscape-export').onclick = () => Admin.offerChartExport(stage.dataset.which || 'users');
+        }
+        stage.dataset.which = which === 'ads' ? 'ads' : 'users';
+        const title = which === 'ads'
+            ? (Admin._adChart?.title || 'Viewable impressions')
+            : (Admin._lastChart?.title || 'Telemetry');
+        const titleEl = document.getElementById('telemetry-landscape-title');
+        if (titleEl) titleEl.textContent = title;
+        const slot = document.getElementById('telemetry-landscape-svg');
+        if (slot) slot.innerHTML = svg;
+        stage.classList.remove('hidden');
+        try {
+            const root = document.documentElement;
+            if (root.requestFullscreen && !document.fullscreenElement) await root.requestFullscreen();
+            if (screen.orientation && typeof screen.orientation.lock === 'function') {
+                await screen.orientation.lock('landscape');
+            }
+        } catch {
+            /* the wide stage still shows when the phone will not rotate */
+        }
+    },
+
+    closeGraphLandscape: async () => {
+        document.getElementById('telemetry-landscape-stage')?.classList.add('hidden');
+        try {
+            if (screen.orientation && typeof screen.orientation.unlock === 'function') screen.orientation.unlock();
+        } catch { /* ignore */ }
+        try {
+            if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        } catch { /* ignore */ }
+    },
+
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
     exportTrendGraph: async (opts) => {
-        const options = opts && opts.svg ? opts : {};
+        const options = opts && typeof opts === 'object' ? opts : {};
         if (typeof showToast === 'function') showToast('Preparing the chart image...', 'info', 2000);
         
         if (typeof html2canvas === 'undefined') {
@@ -5524,28 +5718,33 @@ const Admin = {
             }
         }
 
+        const which = options.wideSource || (String(options.svg || '').includes('ad-') ? 'ads' : 'users');
         const titleText = options.title || document.getElementById('analytics-trend-title')?.textContent || '7-Day DAU Trend';
-        const rawSvgNode = document.querySelector(options.svg || '#analytics-chart-svg-container svg');
-        if (!rawSvgNode) return;
+        const wideSvg = Admin._wideChartSvg(which);
+        const rawSvgNode = wideSvg ? null : document.querySelector(options.svg || '#analytics-chart-svg-container svg');
+        if (!wideSvg && !rawSvgNode) return;
 
-        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(700, {
+        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(1100, {
             title: titleText,
             subtitle: 'Next Train',
         });
         exportCard.innerHTML = `
-            <div id="export-svg-slot" style="height:268px;background:#F2F2F7;border-radius:16px;padding:10px 6px 4px;box-sizing:border-box;"></div>
+            <div id="export-svg-slot" style="height:420px;background:#F2F2F7;border-radius:16px;padding:10px 6px 4px;box-sizing:border-box;"></div>
             ${Admin._telemetryExportFooterHtml({
                 kicker: `Snapshot generated: ${Admin.formatDate(Date.now())}`,
                 detail: options.detail || 'Daily activity from Google Analytics'
             })}
         `;
-        
-        // Deep clone the SVG into the export container to preserve all exact vector points
-        const svgClone = rawSvgNode.cloneNode(true);
-        svgClone.style.width = '100%';
-        svgClone.style.height = '100%';
-        svgClone.style.maxHeight = 'none';
-        exportCard.querySelector('#export-svg-slot').appendChild(svgClone);
+        const slot = exportCard.querySelector('#export-svg-slot');
+        if (wideSvg) {
+            slot.innerHTML = wideSvg;
+        } else {
+            const svgClone = rawSvgNode.cloneNode(true);
+            svgClone.style.width = '100%';
+            svgClone.style.height = '100%';
+            svgClone.style.maxHeight = 'none';
+            slot.appendChild(svgClone);
+        }
         document.body.appendChild(exportContainer);
 
         try {
@@ -24265,7 +24464,6 @@ const Admin = {
         }
         return [
             { key: 'mapTab', label: 'Map' },
-            { key: 'communityTab', label: 'Community' },
             { key: 'rideCheckIn', label: "I'm on it / live share" },
             { key: 'delayReportsUi', label: 'Delay reports' },
             { key: 'communityRealtime', label: 'Community realtime' },
@@ -24286,19 +24484,6 @@ const Admin = {
                 body: 'exp-feat-mapTab-body',
                 chevron: 'exp-feat-mapTab-chevron',
                 count: 'exp-feat-mapTab-count',
-            };
-        }
-        if (key === 'communityTab') {
-            return {
-                enabled: 'exp-community-enabled',
-                signedIn: 'exp-community-signed-in',
-                routes: 'exp-community-routes',
-                regions: 'exp-community-regions',
-                all: 'exp-community-all',
-                header: 'exp-feat-communityTab-header',
-                body: 'exp-feat-communityTab-body',
-                chevron: 'exp-feat-communityTab-chevron',
-                count: 'exp-feat-communityTab-count',
             };
         }
         return {
@@ -26980,7 +27165,21 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Experimental features (pin-gated Map / Community) -->
+                <!-- Community tab. On for every commuter until this switch is off. -->
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm">
+                    <div class="px-3 py-3 space-y-3">
+                        <label class="flex items-center justify-between gap-3">
+                            <span>
+                                <span class="block text-sm font-bold text-emerald-950 dark:text-emerald-100">Community</span>
+                                <span class="block text-[10px] text-emerald-800/90 dark:text-emerald-300/90 leading-snug">On for every commuter, like Trip Planner. Off hides the tab. An admin session can still open it.</span>
+                            </span>
+                            <input type="checkbox" id="community-tab-switch" class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500" checked>
+                        </label>
+                        <button type="button" id="community-tab-save" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save community</button>
+                    </div>
+                </div>
+
+                <!-- Experimental features (pin-gated Map) -->
                 <div class="bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-200 dark:border-teal-800 overflow-hidden shadow-sm transition-all">
                     <button type="button" id="exp-features-header" class="w-full px-3 py-3 bg-teal-100/50 dark:bg-teal-900/40 text-left text-[10px] font-black text-teal-800 dark:text-teal-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-teal-200/50 dark:hover:bg-teal-900/60">
                         <span class="flex items-center gap-2">
@@ -26989,7 +27188,7 @@ const Admin = {
                         <svg id="exp-features-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="exp-features-body" class="hidden p-4 space-y-3">
-                        <p class="text-[10px] text-teal-700 dark:text-teal-300 leading-snug">Each feature type is an accordion. Open one to allow it on selected routes. Map and Community still need a matching pin. Other features follow the corridor the commuter is on. Per-device Feedback Options grants still unlock a feature without a route.</p>
+                        <p class="text-[10px] text-teal-700 dark:text-teal-300 leading-snug">Each feature type is an accordion. Open one to allow it on selected routes. Map still needs a matching pin. Other features follow the corridor the commuter is on. Per-device Feedback Options grants still unlock a feature without a route.</p>
                         <div id="exp-features-accordions" class="space-y-2">
                             ${Admin.renderExpFeatureAccordions()}
                         </div>
@@ -27852,7 +28051,10 @@ const Admin = {
                     const resFeat = await fetch(`${dynamicEndpoint}config/features.json`);
                     if (resFeat.ok) {
                         const featCfg = await resFeat.json();
-                        applyExpFeaturesToForm(featCfg && typeof featCfg === 'object' && !featCfg.error ? featCfg : {});
+                        const bag = featCfg && typeof featCfg === 'object' && !featCfg.error ? featCfg : {};
+                        applyExpFeaturesToForm(bag);
+                        const communitySwitch = document.getElementById('community-tab-switch');
+                        if (communitySwitch) communitySwitch.checked = bag.communityTab?.killed !== true;
                     }
                 } catch (fe) { /* leave unhydrated so save cannot wipe live flags */ }
 
@@ -27927,6 +28129,49 @@ const Admin = {
                     if (typeof showToast === 'function') showToast(`Shadow-ban default: ${mode}`, 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to save ban mode.', 'error');
+                }
+            };
+        }
+
+        const communityTabSave = document.getElementById('community-tab-save');
+        if (communityTabSave) {
+            communityTabSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    let existing = {};
+                    try {
+                        const cur = await fetch(`${dynamicEndpoint}config/features.json`);
+                        if (cur.ok) {
+                            const data = await cur.json();
+                            if (data && typeof data === 'object' && !data.error) existing = data;
+                        }
+                    } catch { /* start from empty */ }
+                    const killed = document.getElementById('community-tab-switch')?.checked === false;
+                    const payload = {
+                        ...existing,
+                        communityTab: {
+                            ...(existing.communityTab && typeof existing.communityTab === 'object' ? existing.communityTab : {}),
+                            killed,
+                        },
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'Admin',
+                    };
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/features.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    if (typeof showToast === 'function') showToast(killed ? 'Community is off for commuters.' : 'Community is on.', 'success');
+                    if (typeof window.fetchFeatures === 'function') {
+                        try { await window.fetchFeatures(true); } catch { /* ignore */ }
+                    }
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save Community.', 'error');
                 }
             };
         }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { checkContentSafety } from '../src/lib/content-safety.js';
 import { sanitizeBody, hasFirebaseAdminEnv, communityPublicPointsNext } from '../workers/nexttrain-community/worker.js';
@@ -98,7 +99,7 @@ assert.match(admin, /Admin\.approveHeldFeedback\s*=\s*async/, 'feedback approval
 
 const heldPostBranch = community.slice(
     community.indexOf("safety.verdict === 'review'", community.indexOf('export async function submitCommunityPost')),
-    community.indexOf('const postId = newId', community.indexOf('export async function submitCommunityPost'))
+    community.indexOf('const postId = options.postId || newId', community.indexOf('export async function submitCommunityPost'))
 );
 const heldReplyBranch = community.slice(
     community.indexOf("safety.verdict === 'review'", community.indexOf('export async function submitCommunityReply')),
@@ -169,5 +170,13 @@ const nextDay = communityPublicPointsNext(
     { eventId: 'cp_4', snapshotPoints: 7, dayKey: '2026-11-11' }
 );
 assert.equal(nextDay.points, 9, 'the next day adds 2');
+
+const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
+assert.match(communityJs, /community-reaction-who/, 'a reaction pill opens who reacted');
+assert.match(communityJs, /community-select-share/, 'a selected message can be shared from the header');
+assert.match(communityJs, /queueCommunityFocus/, 'a community link can open that post');
+assert.match(communityView, /id="community-select-menu"/, 'report sits in the community header menu');
+assert.match(readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8'), /isCommunityTabKilled/, 'Community is on unless the killed flag is set');
 
 console.log(`Community safety verified: ${cases.length} language cases, client/worker parity, held publishing paths.`);

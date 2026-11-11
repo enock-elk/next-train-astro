@@ -893,7 +893,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var pilot = null;
           try { pilot = JSON.parse(localStorage.getItem('ntPilotChrome') || 'null'); } catch (e2) { pilot = null; }
           if (pilot && pilot.map === '1') document.documentElement.setAttribute('data-pilot-map', '1');
-          if (pilot && pilot.community === '1') document.documentElement.setAttribute('data-pilot-community', '1');
+          if (!pilot || pilot.communityKilled !== '1') document.documentElement.setAttribute('data-pilot-community', '1');
         }
       } catch (e) {}
     </script>

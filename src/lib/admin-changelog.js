@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.2': [
+        'Ad revenue and the telemetry graphs export the period on screen as a wide graph or as a spreadsheet of the date and the amount. Each graph has a landscape button, and the saved image uses that wide frame. Holding an alert or a community message puts Copy, Share, and a menu on the header. Report is in that menu. A shared link opens that notice or that message. Tapping a community reaction lists who reacted and keeps the reaction buttons. Community is a normal tab. System Controls can switch it off for commuters. An admin session can still open it. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.1': [
         'The Community badge waits until a signed-in account\'s seen cursors have loaded, so a restoring session does not show a count for messages already read. Opening Community clears only the room on screen, after that room has painted. Other rooms keep their counts. A sent message leaves the composer immediately, shows in the room with a clock, and the clock becomes a tick when the send is accepted. Live Telemetry stats compare the last 7 finished days with the 7 days before them, and a finished week or month with the one before it. Today, this week, and this month are left out of that comparison. Deploy the telemetry worker so the daily series includes the 14th finished day. No commuter What\'s New. forceShow stays false.',
     ],

@@ -2285,7 +2285,7 @@ export function switchTab(tab, opts = null) {
             history.pushState({ tab: 'map' }, '', '#map');
         }
     } else if (tab === 'community') {
-        if (location.hash !== '#community') {
+        if (location.hash !== '#community' && !location.hash.startsWith('#community/')) {
             history.pushState({ tab: 'community' }, '', '#community');
         }
     } else if (location.hash !== '#home' && location.hash !== '') {
@@ -2296,6 +2296,8 @@ export function switchTab(tab, opts = null) {
             || location.hash === '#legal'
             || location.hash === '#fare'
             || location.hash === '#account'
+            || location.hash === '#alerts'
+            || location.hash.startsWith('#alerts/')
             || isAccountSheetHash(location.hash);
         if (!keepHash) {
             history.replaceState({ tab: 'next-train' }, '', '#home');
@@ -2387,7 +2389,9 @@ function swipeTabOrder() {
     const mapBtn = document.getElementById('bottom-nav-map');
     const communityBtn = document.getElementById('bottom-nav-community');
     if (mapBtn && !mapBtn.classList.contains('hidden')) order.push('map');
-    if (communityBtn && !communityBtn.classList.contains('hidden')) order.push('community');
+    const communityShown = document.documentElement.getAttribute('data-pilot-community') === '1'
+        || (isAdminAuthed() && !communityBtn?.classList.contains('hidden'));
+    if (communityBtn && communityShown) order.push('community');
     return order;
 }
 

@@ -4,6 +4,9 @@
  * Behaviour: src/lib/community.js
  */
 ---
+<style>
+    .community-post-row.is-selected { outline: 2px solid #3b82f6; border-radius: 1rem; }
+</style>
 
 <div id="view-community" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
     <div class="community-pane relative flex flex-col flex-1 min-h-0 h-full">
@@ -15,7 +18,8 @@
           paint on top. Taps then hit the feed, the list looks see-through, and
           the room never changes. Do not drop this chrome below the feed again.
         -->
-        <div class="community-chrome relative z-20 shrink-0 pt-2.5 pb-2 space-y-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div class="community-chrome relative z-20 shrink-0 pt-2.5 pb-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div id="community-chrome-home" class="space-y-1.5">
             <div class="flex items-center justify-between gap-3 px-4">
                 <div class="flex items-center gap-2 min-w-0">
                     <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
@@ -49,6 +53,24 @@
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
+            </div>
+            <div id="community-select-bar" class="hidden items-center gap-1 px-2">
+                <button type="button" id="community-select-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Clear selection">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <span id="community-select-count" class="text-lg font-black text-gray-900 dark:text-white tabular-nums">1</span>
+                <span class="flex-1"></span>
+                <button type="button" id="community-select-copy" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Copy">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" stroke-width="2"></rect><path stroke-width="2" d="M4 16V6a2 2 0 012-2h10"></path></svg>
+                </button>
+                <button type="button" id="community-select-share" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Share">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 6l-4-4-4 4M12 2v13"></path></svg>
+                </button>
+                <button type="button" id="community-select-menu-btn" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="More" aria-haspopup="menu">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+                </button>
+            </div>
+            <div id="community-select-menu" class="hidden absolute right-3 top-full z-30 mt-1 min-w-[12rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl py-1" role="menu"></div>
         </div>
 
         <!-- Wallpaper lives on the pane so IME / composer resize does not retile it -->

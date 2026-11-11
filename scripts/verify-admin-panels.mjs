@@ -184,7 +184,7 @@ assert(admin.includes('Add a message, a poster, or a poll.'), 'compose allows a 
 assert(!admin.includes('Add a message or a poster.'), 'old body-or-poster-only toast is gone');
 assert(admin.includes('writePollVoteMeta'), 'publish writes poll close meta for rules');
 assert(admin.includes('closesInMs'), 'scheduled polls store a dedicated run length');
-assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
+assert(admin.includes("'exp-map-enabled'") && admin.includes('id="community-tab-switch"'), 'Map stays experimental and Community has its own switch');
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
 assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications'), 'System Controls lists remaining experimental feature types');

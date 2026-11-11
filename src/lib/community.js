@@ -33,7 +33,7 @@ import {
     startRateLimitCountdown,
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
-import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isFeatureGranted, isListedCommunityRoute } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isCommunityTabKilled, isListedCommunityRoute } from './features.js';
 import {
     awardCommunityMarks,
     contributionDayKey,
@@ -582,7 +582,8 @@ async function startRealtimeReactions(routeId) {
  */
 function communityRoomAllowed(routeId) {
     if (!routeId || !ROUTES[routeId]) return false;
-    if (isAdminAuthed() || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
+    if (isAdminAuthed()) return true;
+    if (isCommunityTabKilled()) return false;
     return isListedCommunityRoute(routeId);
 }
 
@@ -1271,10 +1272,7 @@ function renderReactionSummary(postId, isOwn = false, routeId = '') {
         .filter((r) => (counts[r.id] || 0) > 0)
         .map((r) => {
             const label = `${r.emoji}${counts[r.id] > 1 ? ` ${counts[r.id]}` : ''}`;
-            if (myEmoji === r.id) {
-                return `<button type="button" class="community-reaction-pill community-react-btn" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="Remove reaction">${label}</button>`;
-            }
-            return `<span class="community-reaction-pill">${label}</span>`;
+            return `<button type="button" class="community-reaction-pill community-reaction-who" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="Who reacted">${label}</button>`;
         })
         .join('');
     if (!pills) return '';
@@ -1291,10 +1289,10 @@ function openReactionSheet(postId, routeId) {
             <div class="absolute inset-0 bg-black/50" data-reaction-scrim></div>
             <div class="absolute left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 w-[min(92vw,22rem)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 px-3 py-3">
                 <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center mb-2">React</p>
+                <div id="community-reaction-who-list" class="max-h-40 overflow-y-auto space-y-1 mb-2"></div>
                 <div class="flex items-center justify-between gap-1" id="community-reaction-sheet-emojis"></div>
                 <div class="mt-3 grid grid-cols-2 gap-2" id="community-reaction-sheet-actions">
-                    <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
-                    <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
+                    <button type="button" class="community-sheet-reply col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
                 </div>
             </div>`;
         document.body.appendChild(sheet);
@@ -1316,29 +1314,32 @@ function openReactionSheet(postId, routeId) {
         const ownDelete = mine && !tombstone
             ? `<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="tombstone" data-delete-as="author">Delete</button>`
             : '';
-        const suggestBtn = isAdminAuthed() && !tombstone
-            ? `<button type="button" class="community-sheet-suggest col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white">Suggest reply</button>`
-            : '';
-        const adminActions = isAdminAuthed()
-            ? `${suggestBtn}
-                    <button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
-                    <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="purge" data-delete-as="admin">Remove completely</button>
-                    ${tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN) ? '' : '<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300" data-delete-mode="tombstone" data-delete-as="admin">Deleted by an Admin</button>'}`
-            : '';
+        const suggestBtn = isAdminAuthed() && !tombstone;
         const { myEmoji: mineNow } = summarizeReactions(postId);
         const removeMine = !tombstone && mineNow
             ? `<button type="button" class="community-react-btn col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${escapeHTML(mineNow)}" aria-label="Remove reaction">Remove reaction</button>`
             : '';
         const talk = tombstone
             ? ''
-            : `<button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
-                    <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>`;
+            : `<button type="button" class="community-sheet-reply col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>`;
         actions.innerHTML = `
                     ${talk}
                     ${removeMine}
-                    ${ownDelete}
-                    ${adminActions}
         `;
+        const menu = document.getElementById('community-select-menu');
+        if (menu) {
+            const item = (cls, label, extra = '') => `<button type="button" class="${cls} w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none" ${extra} role="menuitem">${label}</button>`;
+            menu.innerHTML = [
+                tombstone ? '' : item('community-sheet-report', 'Report'),
+                ownDelete ? item('community-sheet-delete', 'Delete', 'data-delete-mode="tombstone" data-delete-as="author"') : '',
+                suggestBtn ? item('community-sheet-suggest', 'Suggest reply') : '',
+                isAdminAuthed() ? item('community-sheet-lookup', 'Look up rider') : '',
+                isAdminAuthed() ? item('community-sheet-delete', 'Remove completely', 'data-delete-mode="purge" data-delete-as="admin"') : '',
+                isAdminAuthed() && !(tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN))
+                    ? item('community-sheet-delete', 'Deleted by an Admin', 'data-delete-mode="tombstone" data-delete-as="admin"')
+                    : '',
+            ].filter(Boolean).join('');
+        }
     }
     const { myEmoji } = summarizeReactions(postId);
     const row = sheet.querySelector('#community-reaction-sheet-emojis');
@@ -1347,8 +1348,113 @@ function openReactionSheet(postId, routeId) {
             <button type="button" class="community-react-btn flex-1 h-11 text-xl rounded-xl ${myEmoji === r.id ? 'bg-blue-50 dark:bg-blue-900/40 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
     }
+    void paintWhoReacted(postId);
     sheet.classList.remove('hidden');
     triggerHaptic();
+}
+
+function reactorName(uid) {
+    loadBestPublicNames();
+    const profile = publicProfiles.get(uid);
+    const fromProfile = String(profile?.displayName || '').trim();
+    if (fromProfile) return fromProfile;
+    const remembered = bestPublicNames.get(uid)?.name;
+    if (remembered) return remembered;
+    const post = (cachedFeedPosts || []).find((row) => row?.uid === uid && String(row.displayName || '').trim());
+    return String(post?.displayName || '').trim() || 'Passenger';
+}
+
+async function paintWhoReacted(postId) {
+    const box = document.getElementById('community-reaction-who-list');
+    if (!box) return;
+    const byUid = cachedReactionsByPost[postId] || {};
+    const uids = Object.keys(byUid);
+    if (!uids.length) {
+        box.innerHTML = '';
+        return;
+    }
+    try { await loadPublicProfiles(uids); } catch { /* a name already on a message still shows */ }
+    if (document.getElementById('community-reaction-sheet')?.dataset.postId !== String(postId)) return;
+    box.innerHTML = uids.map((uid) => {
+        const emoji = WA_REACTIONS.find((r) => r.id === byUid[uid]?.emoji)?.emoji || '';
+        return `<div class="flex items-center justify-between gap-2 px-1 py-1 text-sm text-gray-800 dark:text-gray-100"><span class="truncate">${escapeHTML(reactorName(uid))}</span><span aria-hidden="true">${emoji}</span></div>`;
+    }).join('');
+}
+
+let selectedCommunity = null;
+let pendingCommunityFocus = null;
+
+export function queueCommunityFocus(routeId, postId = '') {
+    pendingCommunityFocus = {
+        routeId: String(routeId || ''),
+        postId: String(postId || ''),
+        fetched: false,
+    };
+}
+
+async function fetchOneCommunityPost(routeId, postId) {
+    try {
+        const q = await authQuery();
+        const res = await fetch(`${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}.json${q}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || typeof data !== 'object') return null;
+        return { ...data, postId: data.postId || postId };
+    } catch {
+        return null;
+    }
+}
+
+async function revealCommunityFocus(routeId) {
+    const focus = pendingCommunityFocus;
+    if (!focus || focus.routeId !== routeId || !focus.postId) return;
+    if (!findCachedPost(focus.postId) && !focus.fetched) {
+        focus.fetched = true;
+        const one = await fetchOneCommunityPost(routeId, focus.postId);
+        if (one && pendingCommunityFocus === focus) {
+            cachedFeedPosts = [...cachedFeedPosts.filter((row) => row.postId !== one.postId), one]
+                .sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+            applyFeedFilter(routeId);
+            return;
+        }
+    }
+    pendingCommunityFocus = null;
+    const row = [...document.querySelectorAll('.community-post-row')].find((el) => el.getAttribute('data-post-id') === focus.postId);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center' });
+}
+
+function shareOrigin() {
+    if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) return location.origin;
+    return 'https://nexttrain.co.za';
+}
+
+function communityShareUrl(routeId, postId) {
+    return `${shareOrigin()}/#community/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`;
+}
+
+function clearCommunitySelection() {
+    selectedCommunity = null;
+    document.querySelectorAll('.community-post-row.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    document.getElementById('community-chrome-home')?.classList.remove('hidden');
+    const bar = document.getElementById('community-select-bar');
+    bar?.classList.add('hidden');
+    bar?.classList.remove('flex');
+    document.getElementById('community-select-menu')?.classList.add('hidden');
+}
+
+function selectCommunityPost(postId, routeId) {
+    const post = findCachedPost(postId);
+    if (!post) return;
+    selectedCommunity = { post, routeId };
+    document.querySelectorAll('.community-post-row').forEach((el) => {
+        el.classList.toggle('is-selected', el.getAttribute('data-post-id') === String(postId));
+    });
+    document.getElementById('community-chrome-home')?.classList.add('hidden');
+    const bar = document.getElementById('community-select-bar');
+    bar?.classList.remove('hidden');
+    bar?.classList.add('flex');
+    document.getElementById('community-select-menu')?.classList.add('hidden');
 }
 
 function closeReactionSheet() {
@@ -1714,6 +1820,8 @@ function applyFeedFilter(routeId) {
             emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
                    <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up, or ask a question.</p>`;
         }
+        const focusingEmpty = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
+        if (focusingEmpty) void revealCommunityFocus(routeId);
         rememberPaintedCommunityRoute(routeId);
         return;
     }
@@ -1740,7 +1848,9 @@ function applyFeedFilter(routeId) {
     settleDeferredPictures(listEl);
     armGifPlayers(listEl);
     wireCommunityChatGestures(listEl);
-    pinCommunityFeedToLatest();
+    const focusing = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
+    if (focusing) void revealCommunityFocus(routeId);
+    else pinCommunityFeedToLatest();
     rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
     const uids = posts.map((p) => p.uid);
@@ -1786,7 +1896,10 @@ function wireCommunityChatGestures(listEl) {
             longFired = true;
             const postId = row.getAttribute('data-post-id');
             const routeId = row.getAttribute('data-route');
-            if (postId && routeId) openReactionSheet(postId, routeId);
+            if (postId && routeId) {
+                openReactionSheet(postId, routeId);
+                selectCommunityPost(postId, routeId);
+            }
         }, 480);
     }, { passive: true });
 
@@ -1847,7 +1960,10 @@ function wireCommunityChatGestures(listEl) {
         if (!row) return;
         e.preventDefault();
         row.classList.add('is-pressing');
-        openReactionSheet(row.getAttribute('data-post-id'), row.getAttribute('data-route'));
+        const postId = row.getAttribute('data-post-id');
+        const routeId = row.getAttribute('data-route');
+        openReactionSheet(postId, routeId);
+        selectCommunityPost(postId, routeId);
         setTimeout(() => row.classList.remove('is-pressing'), 400);
     });
 }
@@ -2522,7 +2638,7 @@ function publishOwnCommunityName() {
 
 async function openRouteCommunityNow(opts = {}) {
     try { await fetchFeatures(); } catch { /* defaults */ }
-    const requested = opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
+    const requested = pendingCommunityFocus?.routeId || opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
     const routeId = resolveCommunityRoute(requested);
     const routeSel = document.getElementById('community-route-select');
     const guestHint = document.getElementById('community-guest-hint');
@@ -2819,6 +2935,51 @@ export function bindCommunityUi() {
         }, 50);
     });
 
+    document.getElementById('community-select-back')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        clearCommunitySelection();
+    });
+    document.getElementById('community-select-copy')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const post = selectedCommunity?.post;
+        if (!post) return;
+        const link = communityShareUrl(selectedCommunity.routeId, post.postId);
+        let text = String(post.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (text.length < 12) text = text ? `${text}\n${link}` : link;
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast('Copied', 'success');
+        } catch {
+            showToast('Could not copy.', 'error');
+        }
+    });
+    document.getElementById('community-select-share')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const post = selectedCommunity?.post;
+        if (!post) return;
+        const url = communityShareUrl(selectedCommunity.routeId, post.postId);
+        const text = String(post.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || 'Next Train';
+        if (typeof navigator.share === 'function') {
+            try {
+                await navigator.share({ title: 'Next Train', text, url });
+                return;
+            } catch (err) {
+                if (err?.name === 'AbortError') return;
+            }
+        }
+        try {
+            await navigator.clipboard.writeText(url);
+            showToast('Link copied', 'success');
+        } catch {
+            showToast('Could not share.', 'error');
+        }
+    });
+    document.getElementById('community-select-menu-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('community-select-menu')?.classList.toggle('hidden');
+    });
+
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
     document.getElementById('community-suggest-btn')?.addEventListener('click', () => { suggestCommunityReply(); });
     document.getElementById('community-attach-btn')?.addEventListener('click', () => {
@@ -2947,6 +3108,19 @@ export function bindCommunityUi() {
 
     document.addEventListener('click', async (e) => {
         const t = e.target;
+
+        const whoPill = t.closest?.('.community-reaction-who');
+        if (whoPill) {
+            e.preventDefault();
+            openReactionSheet(whoPill.getAttribute('data-post-id'), whoPill.getAttribute('data-route'));
+            return;
+        }
+
+        const selectedRow = t.closest?.('.community-post-row.is-selected');
+        if (selectedRow && !t.closest('button, a')) {
+            clearCommunitySelection();
+            return;
+        }
 
         const sheetReply = t.closest?.('.community-sheet-reply');
         if (sheetReply) {
@@ -3115,6 +3289,7 @@ if (typeof window !== 'undefined') {
         if (routeId) applyFeedFilter(routeId);
     });
     window.openRouteCommunity = openRouteCommunity;
+    window.queueCommunityFocus = queueCommunityFocus;
     window.renderCommunityFeed = renderCommunityFeed;
     window.leaveCommunityRoom = leaveCommunityRoom;
 }

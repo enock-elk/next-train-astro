@@ -601,7 +601,9 @@ export function bindPwaSameOriginLinks() {
         const sameDoc = norm(url.pathname) === norm(location.pathname) && url.search === location.search;
         const hash = url.hash || '';
 
-        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || hash === '#community' || hash === '#map' || hash === '#prasa-map' || hash === '#alerts')) {
+        const communityHash = hash === '#community' || hash.startsWith('#community/');
+        const alertsHash = hash === '#alerts' || hash.startsWith('#alerts/');
+        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || communityHash || hash === '#map' || hash === '#prasa-map' || alertsHash)) {
             if (isLegalHash(hash) || hash === '#fare') {
                 if (location.hash !== hash) {
                     history.pushState({ deeplink: hash }, '', hash);
@@ -614,8 +616,16 @@ export function bindPwaSameOriginLinks() {
                 if (location.hash !== hash) history.pushState({ tab: 'planner' }, '', hash);
                 return;
             }
-            if (hash === '#community') {
-                if (typeof window.switchTab === 'function') window.switchTab('community');
+            if (hash === '#community' || hash.startsWith('#community/')) {
+                const parts = hash.slice('#community'.length).split('/').filter(Boolean).map((part) => {
+                    try { return decodeURIComponent(part); } catch { return part; }
+                });
+                import('./community.js').then((m) => {
+                    if (parts[0]) m.queueCommunityFocus?.(parts[0], parts[1] || '');
+                    if (typeof window.switchTab === 'function') window.switchTab('community');
+                }).catch(() => {
+                    if (typeof window.switchTab === 'function') window.switchTab('community');
+                });
                 if (location.hash !== hash) history.pushState({ tab: 'community' }, '', hash);
                 return;
             }
@@ -628,9 +638,17 @@ export function bindPwaSameOriginLinks() {
                 if (typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal');
                 return;
             }
-            if (hash === '#alerts') {
+            if (hash === '#alerts' || hash.startsWith('#alerts/')) {
+                const noticeId = hash.startsWith('#alerts/')
+                    ? (() => { try { return decodeURIComponent(hash.slice('#alerts/'.length)); } catch { return hash.slice('#alerts/'.length); } })()
+                    : '';
                 whenSettledForAutoNotices(() => {
-                    if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
+                    if (typeof window.openAlertsChannel === 'function') {
+                        window.openAlertsChannel({
+                            highlightId: noticeId || null,
+                            focusTop: !!noticeId,
+                        });
+                    }
                 });
                 return;
             }

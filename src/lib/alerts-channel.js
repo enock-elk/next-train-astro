@@ -1054,6 +1054,7 @@ export function closeAlertsChannel() {
     if (typeof window !== 'undefined') window.__ntAlertsParkHome = true;
     closeSmoothModal('alerts-channel');
     if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
+    clearAlertSelection();
 }
 
 export function openAlertsChannel(opts = {}) {
@@ -1390,6 +1391,84 @@ function bindLightboxReactionClicks() {
     });
 }
 
+let selectedAlert = null;
+
+function shareOrigin() {
+    if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) return location.origin;
+    return 'https://nexttrain.co.za';
+}
+
+function alertShareUrl(notice) {
+    return `${shareOrigin()}/#alerts/${encodeURIComponent(String(notice?.id || ''))}`;
+}
+
+function alertPlainText(notice) {
+    const title = String(notice?.title || layoutAlertPost(notice)?.title || '').trim();
+    const body = htmlToPlainSnippet(notice?.message || notice?.text || '', 80);
+    return [title, body].filter(Boolean).join('\n').trim();
+}
+
+function clearAlertSelection() {
+    selectedAlert = null;
+    document.querySelectorAll('.nt-alert-card.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    document.getElementById('alerts-channel-home')?.classList.remove('hidden');
+    const bar = document.getElementById('alerts-select-bar');
+    bar?.classList.add('hidden');
+    bar?.classList.remove('flex');
+    document.getElementById('alerts-select-menu')?.classList.add('hidden');
+}
+
+function selectAlertNotice(notice) {
+    if (!notice?.id) return;
+    selectedAlert = notice;
+    document.querySelectorAll('.nt-alert-card.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    document.getElementById(`alert-post-${notice.id}`)?.classList.add('is-selected');
+    document.getElementById('alerts-channel-home')?.classList.add('hidden');
+    const bar = document.getElementById('alerts-select-bar');
+    bar?.classList.remove('hidden');
+    bar?.classList.add('flex');
+    document.getElementById('alerts-select-menu')?.classList.add('hidden');
+}
+
+async function copyText(text) {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    try {
+        await navigator.clipboard.writeText(value);
+        showToast('Copied', 'success');
+        return true;
+    } catch {
+        showToast('Could not copy.', 'error');
+        return false;
+    }
+}
+
+async function shareLink(url, text) {
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ title: 'Next Train', text: text || 'Next Train', url });
+            return;
+        } catch (e) {
+            if (e?.name === 'AbortError') return;
+        }
+    }
+    await copyText(url);
+}
+
+function paintAlertSelectMenu() {
+    const menu = document.getElementById('alerts-select-menu');
+    const notice = selectedAlert;
+    if (!menu || !notice) return;
+    const row = (action, label) => `<button type="button" class="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none" data-alert-menu="${action}" role="menuitem">${label}</button>`;
+    let html = row('report', 'Report');
+    if (isAdminAuthed()) {
+        html += row('pin', isNoticePinned(notice) ? 'Unpin' : 'Pin');
+        html += row('delete', 'Delete');
+    }
+    menu.innerHTML = html;
+    menu.classList.remove('hidden');
+}
+
 function bindAlertsChannelOnce() {
     if (channelBound) return;
     const root = document.getElementById('alerts-channel');
@@ -1402,6 +1481,60 @@ function bindAlertsChannelOnce() {
     };
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
+    document.getElementById('alerts-select-back')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        clearAlertSelection();
+    });
+    document.getElementById('alerts-select-copy')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!selectedAlert) return;
+        const link = alertShareUrl(selectedAlert);
+        let text = alertPlainText(selectedAlert);
+        if (text.length < 12) text = text ? `${text}\n${link}` : link;
+        copyText(text);
+    });
+    document.getElementById('alerts-select-share')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!selectedAlert) return;
+        shareLink(alertShareUrl(selectedAlert), alertPlainText(selectedAlert) || 'Service update');
+    });
+    document.getElementById('alerts-select-menu-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const menu = document.getElementById('alerts-select-menu');
+        if (menu && !menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+            return;
+        }
+        paintAlertSelectMenu();
+    });
+    document.getElementById('alerts-select-menu')?.addEventListener('click', async (e) => {
+        const btn = e.target.closest?.('[data-alert-menu]');
+        if (!btn || !selectedAlert) return;
+        e.preventDefault();
+        const action = btn.getAttribute('data-alert-menu');
+        const notice = selectedAlert;
+        document.getElementById('alerts-select-menu')?.classList.add('hidden');
+        if (action === 'report') {
+            const { submitModerationReport } = await import('./community.js');
+            const result = await submitModerationReport({
+                type: 'alert',
+                targetPostId: notice.id,
+                snippet: alertPlainText(notice).slice(0, 80),
+            });
+            showToast(result.ok ? 'Thanks. Report sent.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
+            clearAlertSelection();
+            return;
+        }
+        if (action === 'pin') {
+            await toggleAlertPinned(notice);
+            clearAlertSelection();
+            return;
+        }
+        if (action === 'delete') {
+            await deleteAlertForEveryone(notice);
+            clearAlertSelection();
+        }
+    });
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {
         triggerHaptic();
@@ -1434,7 +1567,10 @@ function bindAlertsChannelOnce() {
             const src = card.getAttribute('data-alert-src');
             const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
             clearAlertTextSelection();
-            if (notice) openAlertReactionPicker(notice, card);
+            if (notice) {
+                openAlertReactionPicker(notice, card);
+                selectAlertNotice(notice);
+            }
             card.classList.remove('is-pressing');
             [40, 120, 280, 500].forEach((ms) => setTimeout(clearAlertTextSelection, ms));
         }, 400);
@@ -1473,7 +1609,10 @@ function bindAlertsChannelOnce() {
         const id = card.getAttribute('data-alert-id');
         const src = card.getAttribute('data-alert-src');
         const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
-        if (notice) openAlertReactionPicker(notice, card);
+        if (notice) {
+            openAlertReactionPicker(notice, card);
+            selectAlertNotice(notice);
+        }
     });
     document.getElementById('alerts-channel-scroll')?.addEventListener('scroll', hideAlertReactionPicker, { passive: true });
     document.addEventListener('pointerdown', (e) => {
@@ -1492,6 +1631,12 @@ function bindAlertsChannelOnce() {
     }, true);
 
     root.addEventListener('click', (e) => {
+        const selectedCard = e.target.closest?.('.nt-alert-card.is-selected');
+        if (selectedCard && !e.target.closest('button, a, [data-alert-lightbox]')) {
+            e.preventDefault();
+            clearAlertSelection();
+            return;
+        }
         const seeMore = e.target.closest?.('[data-alert-see-more]');
         if (seeMore) {
             e.preventDefault();

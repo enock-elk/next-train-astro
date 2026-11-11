@@ -537,6 +537,8 @@ ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('load
 ok(adminJs.includes('$4 CPM') && adminJs.includes('api.frankfurter.dev') && adminJs.includes('open.er-api.com'), 'revenue and the $4 CPM deal convert with an open dollar rate');
 ok(adminJs.includes('trend-ads-btn') && adminJs.includes('alignAdSeries') && adminJs.includes('showAdOverlay'), 'the user graph can draw ad counts for the same buckets');
 ok(adminJs.includes('openGraphStats') && adminJs.includes('equivalentViewability') && adminJs.includes('telemetry-stats-export'), 'graph statistics compare equal finished periods and can export');
+ok(adminJs.includes('offerChartExport') && adminJs.includes("label: 'Excel (.csv)'") && adminJs.includes('exportAdRevenueSheet'), 'ad revenue and telemetry graphs export a graph or a spreadsheet');
+ok(adminJs.includes('openGraphLandscape') && adminJs.includes('_telemetryExportFrame(1100') && adminJs.includes('wide: true'), 'telemetry graphs open landscape and export that wide frame');
 ok(adminJs.includes("adChart.id = 'ad-impressions-panel'") && adminJs.includes('openAdImpressions'), 'the impressions graph opens full screen');
 ok(adminJs.includes("showToast(Admin._telemetryLoadToast") && adminJs.includes('untilDismiss: true') && adminJs.includes('hideToastIfMessage(Admin._telemetryLoadToast)'), 'telemetry load shows a dismissible toast and clears it on success');
 const bridgeJs = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');

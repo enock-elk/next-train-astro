@@ -145,7 +145,8 @@ assert.match(workerSource, /sanitizeCommunityPhotoUrl/, 'worker allowlists commu
 assert.match(workerSource, /next-train-lab\.pages\.dev/, 'worker CORS is limited to Next Train lab previews');
 assert.doesNotMatch(workerSource, /host\.endsWith\('\.pages\.dev'\)/, 'worker CORS does not allow every pages.dev host');
 assert.match(community, /community-sheet-delete/, 'a message can be deleted from the community tab');
-assert.match(community, /data-delete-as="author"/, 'the poster can delete their own message');
+assert.match(readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8'), /data-delete-as="author"/, 'the poster can delete their own message');
+assert.match(community, /as === 'author'[\s\S]{0,280}if \(!ownMessage\) return/, 'a rider can delete only their own message');
 assert.match(community, /Remove completely/, 'an operator can still remove a message with no bubble left');
 assert.match(admin, /ntAdminDeletePublishedCommunityMessage/, 'community tab delete uses the same RTDB delete as Community Monitor');
 assert.match(handlePostSrc, /applyCommunityPublicPoints/, 'an accepted post writes the public points total');
@@ -177,7 +178,14 @@ const communityView = readFileSync(new URL('../src/components/CommunityView.astr
 assert.match(communityJs, /community-reaction-who/, 'a reaction pill opens who reacted');
 assert.match(communityJs, /community-select-share/, 'a selected message can be shared from the header');
 assert.match(communityJs, /queueCommunityFocus/, 'a community link can open that post');
-assert.match(communityView, /id="community-select-menu"/, 'report sits in the community header menu');
+assert.match(communityView, /id="community-select-report"/, 'report sits on the community header');
+assert.match(communityView, /id="community-select-delete"/, 'delete sits on the community header');
+assert.match(communityView, /id="community-select-menu-btn"[^>]*\bhidden\b/, 'the community menu starts hidden');
+assert.match(communityJs, /ownMessage/, 'a rider cannot report their own message');
+assert.doesNotMatch(communityJs, /item\('community-sheet-report'/, 'report is not a menu row');
+assert.doesNotMatch(communityJs, /data-reaction-scrim/, 'the reaction tray does not dim the screen');
+assert.match(communityView, /M8\.59 13\.51l6\.83 3\.98/, 'community share uses the Share App icon');
+assert.match(readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8'), /M8\.59 13\.51l6\.83 3\.98/, 'alerts share uses the Share App icon');
 assert.match(readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8'), /blockedRegionIds/, 'Community can be blocked for one region');
 const gp = { id: 'pta-kempton', region: 'GP' };
 const kzn = { id: 'kzn-catoridge', region: 'KZN' };

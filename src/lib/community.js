@@ -1279,77 +1279,110 @@ function renderReactionSummary(postId, isOwn = false, routeId = '') {
     return `<div class="community-reaction-pills ${isOwn ? 'ml-auto mr-1' : ''}" data-reactions-for="${escapeHTML(postId)}">${pills}</div>`;
 }
 
-function openReactionSheet(postId, routeId) {
+function ensureReactionTray() {
     let sheet = document.getElementById('community-reaction-sheet');
-    if (!sheet) {
-        sheet = document.createElement('div');
-        sheet.id = 'community-reaction-sheet';
-        sheet.className = 'fixed inset-0 z-[145] hidden';
-        sheet.innerHTML = `
-            <div class="absolute inset-0 bg-black/50" data-reaction-scrim></div>
-            <div class="absolute left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 w-[min(92vw,22rem)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 px-3 py-3">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center mb-2">React</p>
-                <div id="community-reaction-who-list" class="max-h-40 overflow-y-auto space-y-1 mb-2"></div>
-                <div class="flex items-center justify-between gap-1" id="community-reaction-sheet-emojis"></div>
-                <div class="mt-3 grid grid-cols-2 gap-2" id="community-reaction-sheet-actions">
-                    <button type="button" class="community-sheet-reply col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
-                </div>
-            </div>`;
-        document.body.appendChild(sheet);
-        sheet.querySelector('[data-reaction-scrim]')?.addEventListener('click', () => sheet.classList.add('hidden'));
-    }
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'community-reaction-sheet';
+    sheet.className = 'fixed z-[12] hidden w-max max-w-[min(92vw,20rem)]';
+    sheet.innerHTML = `
+        <div id="community-reaction-tray" class="flex flex-col items-stretch gap-1">
+            <div id="community-reaction-who-list" class="hidden max-h-36 overflow-y-auto rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"></div>
+            <div id="community-reaction-sheet-emojis" class="flex items-center gap-0.5 rounded-full border border-white/10 bg-gray-950/95 px-1.5 py-1 text-white shadow-2xl"></div>
+        </div>`;
+    const host = document.querySelector('#view-community .community-pane') || document.body;
+    host.appendChild(sheet);
+    return sheet;
+}
 
+function placeReactionTray(anchorEl) {
+    const sheet = document.getElementById('community-reaction-sheet');
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    const chrome = document.querySelector('#view-community .community-chrome');
+    const minTop = (chrome?.getBoundingClientRect().bottom || 72) + 6;
+    const rect = anchorEl?.getBoundingClientRect?.() || { left: 24, width: 180, top: minTop + 48, bottom: minTop + 96 };
+    sheet.classList.remove('hidden');
+    const width = sheet.offsetWidth || 280;
+    const height = sheet.offsetHeight || 48;
+    let left = rect.left + (rect.width / 2) - (width / 2);
+    left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
+    const bottomLimit = window.innerHeight - height - 72;
+    let top = rect.top - height - 8;
+    if (top < minTop) top = Math.min(bottomLimit, rect.bottom + 8);
+    if (top < minTop) top = minTop;
+    if (top > bottomLimit) top = Math.max(minTop, bottomLimit);
+    sheet.style.left = `${left}px`;
+    sheet.style.top = `${top}px`;
+}
+
+function communityMenuIcon(path) {
+    return `<svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">${path}</svg>`;
+}
+
+function paintCommunityAdminMenu(post) {
+    const menu = document.getElementById('community-select-menu');
+    const btn = document.getElementById('community-select-menu-btn');
+    if (!menu || !btn) return;
+    if (!isAdminAuthed() || !post) {
+        btn.classList.add('hidden');
+        menu.classList.add('hidden');
+        menu.innerHTML = '';
+        return;
+    }
+    const tombstone = isCommunityTombstone(post);
+    const item = (cls, label, icon, extra = '') => `<button type="button" class="${cls} flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none dark:text-gray-100 dark:hover:bg-gray-700" ${extra} role="menuitem">${icon}<span>${label}</span></button>`;
+    menu.innerHTML = [
+        tombstone ? '' : item('community-sheet-suggest', 'Suggest reply', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')),
+        item('community-sheet-lookup', 'Look up rider', communityMenuIcon('<circle cx="11" cy="8" r="3"/><path d="M5 19a6 6 0 0112 0"/><circle cx="18" cy="18" r="3"/><path d="M20.2 20.2L22 22"/>')),
+        item('community-sheet-delete', 'Remove completely', communityMenuIcon('<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/>'), 'data-delete-mode="purge" data-delete-as="admin"'),
+        !(tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN))
+            ? item('community-sheet-delete', 'Deleted by an Admin', communityMenuIcon('<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/>'), 'data-delete-mode="tombstone" data-delete-as="admin"')
+            : '',
+    ].filter(Boolean).join('');
+    btn.classList.remove('hidden');
+}
+
+function syncCommunitySelectActions(post) {
+    const acct = $account.get();
+    const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
+    const tombstone = isCommunityTombstone(post);
+    document.getElementById('community-select-report')?.classList.toggle('hidden', !post || mine || tombstone);
+    document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone);
+    paintCommunityAdminMenu(post);
+}
+
+/** Emoji pill by the message. No scrim, so the header stays usable. */
+function openReactionSheet(postId, routeId, anchorEl, opts = {}) {
+    const post = findCachedPost(postId);
+    const tombstone = isCommunityTombstone(post);
+    if (tombstone) {
+        closeReactionSheet();
+        return;
+    }
+    reactionAnchor = anchorEl || null;
+    reactionGuardUntil = Date.now() + 700;
+    const sheet = ensureReactionTray();
     sheet.dataset.postId = postId;
     sheet.dataset.routeId = routeId;
     sheet.dataset.replyId = '';
-    const post = findCachedPost(postId);
-    const tombstone = isCommunityTombstone(post);
-    const acctNow = $account.get();
-    const mine = !!(acctNow?.status === 'signed-in' && post?.uid && post.uid === acctNow.uid);
-    if (tombstone && !isAdminAuthed()) return;
     sheet.dataset.uid = post?.uid || '';
     sheet.dataset.email = post?.email || '';
-    const actions = sheet.querySelector('#community-reaction-sheet-actions');
-    if (actions) {
-        const ownDelete = mine && !tombstone
-            ? `<button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white" data-delete-mode="tombstone" data-delete-as="author">Delete</button>`
-            : '';
-        const suggestBtn = isAdminAuthed() && !tombstone;
-        const { myEmoji: mineNow } = summarizeReactions(postId);
-        const removeMine = !tombstone && mineNow
-            ? `<button type="button" class="community-react-btn col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${escapeHTML(mineNow)}" aria-label="Remove reaction">Remove reaction</button>`
-            : '';
-        const talk = tombstone
-            ? ''
-            : `<button type="button" class="community-sheet-reply col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>`;
-        actions.innerHTML = `
-                    ${talk}
-                    ${removeMine}
-        `;
-        const menu = document.getElementById('community-select-menu');
-        if (menu) {
-            const item = (cls, label, extra = '') => `<button type="button" class="${cls} w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none" ${extra} role="menuitem">${label}</button>`;
-            menu.innerHTML = [
-                tombstone ? '' : item('community-sheet-report', 'Report'),
-                ownDelete ? item('community-sheet-delete', 'Delete', 'data-delete-mode="tombstone" data-delete-as="author"') : '',
-                suggestBtn ? item('community-sheet-suggest', 'Suggest reply') : '',
-                isAdminAuthed() ? item('community-sheet-lookup', 'Look up rider') : '',
-                isAdminAuthed() ? item('community-sheet-delete', 'Remove completely', 'data-delete-mode="purge" data-delete-as="admin"') : '',
-                isAdminAuthed() && !(tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN))
-                    ? item('community-sheet-delete', 'Deleted by an Admin', 'data-delete-mode="tombstone" data-delete-as="admin"')
-                    : '',
-            ].filter(Boolean).join('');
-        }
-    }
+    sheet.dataset.who = opts.who ? '1' : '0';
     const { myEmoji } = summarizeReactions(postId);
     const row = sheet.querySelector('#community-reaction-sheet-emojis');
     if (row) {
-        row.innerHTML = tombstone ? '' : WA_REACTIONS.map((r) => `
-            <button type="button" class="community-react-btn flex-1 h-11 text-xl rounded-xl ${myEmoji === r.id ? 'bg-blue-50 dark:bg-blue-900/40 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
+        row.innerHTML = WA_REACTIONS.map((r) => `
+            <button type="button" class="community-react-btn h-10 w-10 text-xl rounded-full ${myEmoji === r.id ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
     }
-    void paintWhoReacted(postId);
+    const who = sheet.querySelector('#community-reaction-who-list');
+    if (who) {
+        who.innerHTML = '';
+        who.classList.add('hidden');
+    }
+    if (opts.who) void paintWhoReacted(postId);
     sheet.classList.remove('hidden');
+    placeReactionTray(anchorEl);
     triggerHaptic();
 }
 
@@ -1371,17 +1404,23 @@ async function paintWhoReacted(postId) {
     const uids = Object.keys(byUid);
     if (!uids.length) {
         box.innerHTML = '';
+        box.classList.add('hidden');
+        placeReactionTray(reactionAnchor);
         return;
     }
+    box.classList.remove('hidden');
     try { await loadPublicProfiles(uids); } catch { /* a name already on a message still shows */ }
     if (document.getElementById('community-reaction-sheet')?.dataset.postId !== String(postId)) return;
     box.innerHTML = uids.map((uid) => {
         const emoji = WA_REACTIONS.find((r) => r.id === byUid[uid]?.emoji)?.emoji || '';
         return `<div class="flex items-center justify-between gap-2 px-1 py-1 text-sm text-gray-800 dark:text-gray-100"><span class="truncate">${escapeHTML(reactorName(uid))}</span><span aria-hidden="true">${emoji}</span></div>`;
     }).join('');
+    placeReactionTray(reactionAnchor);
 }
 
 let selectedCommunity = null;
+let reactionAnchor = null;
+let reactionGuardUntil = 0;
 let pendingCommunityFocus = null;
 
 export function queueCommunityFocus(routeId, postId = '', opts = {}) {
@@ -1504,6 +1543,10 @@ function clearCommunitySelection() {
     bar?.classList.add('hidden');
     bar?.classList.remove('flex');
     document.getElementById('community-select-menu')?.classList.add('hidden');
+    document.getElementById('community-select-report')?.classList.add('hidden');
+    document.getElementById('community-select-delete')?.classList.add('hidden');
+    document.getElementById('community-select-menu-btn')?.classList.add('hidden');
+    closeReactionSheet();
 }
 
 function selectCommunityPost(postId, routeId) {
@@ -1518,10 +1561,34 @@ function selectCommunityPost(postId, routeId) {
     bar?.classList.remove('hidden');
     bar?.classList.add('flex');
     document.getElementById('community-select-menu')?.classList.add('hidden');
+    syncCommunitySelectActions(post);
 }
 
 function closeReactionSheet() {
     document.getElementById('community-reaction-sheet')?.classList.add('hidden');
+}
+
+function communityActionTarget() {
+    const selected = selectedCommunity?.post?.postId ? selectedCommunity : null;
+    if (selected) {
+        return {
+            postId: selected.post.postId,
+            routeId: selected.routeId || '',
+            post: selected.post,
+            uid: selected.post.uid || '',
+            email: selected.post.email || '',
+        };
+    }
+    const sheet = document.getElementById('community-reaction-sheet');
+    const postId = sheet?.dataset.postId || '';
+    const post = findCachedPost(postId);
+    return {
+        postId,
+        routeId: sheet?.dataset.routeId || '',
+        post,
+        uid: post?.uid || sheet?.dataset.uid || '',
+        email: post?.email || sheet?.dataset.email || '',
+    };
 }
 
 const publicProfiles = new Map();
@@ -1911,6 +1978,16 @@ function applyFeedFilter(routeId) {
     settleDeferredPictures(listEl);
     armGifPlayers(listEl);
     wireCommunityChatGestures(listEl);
+    if (selectedCommunity && selectedCommunity.routeId === routeId) {
+        const id = String(selectedCommunity.post?.postId || '').replace(/"/g, '');
+        const still = id ? listEl.querySelector(`[data-post-id="${id}"]`) : null;
+        if (still) {
+            still.classList.add('is-selected');
+            const fresh = findCachedPost(id) || selectedCommunity.post;
+            selectedCommunity.post = fresh;
+            syncCommunitySelectActions(fresh);
+        } else clearCommunitySelection();
+    }
     const focusing = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
     if (focusing) void revealCommunityFocus(routeId);
     else pinCommunityFeedToLatest();
@@ -1960,7 +2037,7 @@ function wireCommunityChatGestures(listEl) {
             const postId = row.getAttribute('data-post-id');
             const routeId = row.getAttribute('data-route');
             if (postId && routeId) {
-                openReactionSheet(postId, routeId);
+                openReactionSheet(postId, routeId, row);
                 selectCommunityPost(postId, routeId);
             }
         }, 480);
@@ -2025,7 +2102,7 @@ function wireCommunityChatGestures(listEl) {
         row.classList.add('is-pressing');
         const postId = row.getAttribute('data-post-id');
         const routeId = row.getAttribute('data-route');
-        openReactionSheet(postId, routeId);
+        openReactionSheet(postId, routeId, row);
         selectCommunityPost(postId, routeId);
         setTimeout(() => row.classList.remove('is-pressing'), 400);
     });
@@ -3174,18 +3251,32 @@ export function bindCommunityUi() {
         openRouteCommunity({ routeId: document.getElementById('community-route-select')?.value || $currentRouteId.get() });
     });
 
+    document.addEventListener('pointerdown', (e) => {
+        if (Date.now() < reactionGuardUntil) return;
+        const sheet = document.getElementById('community-reaction-sheet');
+        const menu = document.getElementById('community-select-menu');
+        const trayOpen = !!(sheet && !sheet.classList.contains('hidden'));
+        const menuOpen = !!(menu && !menu.classList.contains('hidden'));
+        if (!trayOpen && !menuOpen) return;
+        if (e.target.closest?.('#community-reaction-sheet, #community-select-bar, #community-select-menu')) return;
+        const whoOnly = sheet?.dataset.who === '1';
+        closeReactionSheet();
+        menu?.classList.add('hidden');
+        if (trayOpen && !whoOnly) clearCommunitySelection();
+    }, true);
+
     document.addEventListener('click', async (e) => {
         const t = e.target;
 
         const whoPill = t.closest?.('.community-reaction-who');
         if (whoPill) {
             e.preventDefault();
-            openReactionSheet(whoPill.getAttribute('data-post-id'), whoPill.getAttribute('data-route'));
+            openReactionSheet(whoPill.getAttribute('data-post-id'), whoPill.getAttribute('data-route'), whoPill, { who: true });
             return;
         }
 
         const selectedRow = t.closest?.('.community-post-row.is-selected');
-        if (selectedRow && !t.closest('button, a')) {
+        if (selectedRow && !t.closest('button, a') && Date.now() >= reactionGuardUntil) {
             clearCommunitySelection();
             return;
         }
@@ -3193,45 +3284,50 @@ export function bindCommunityUi() {
         const sheetReply = t.closest?.('.community-sheet-reply');
         if (sheetReply) {
             e.preventDefault();
-            const sheet = document.getElementById('community-reaction-sheet');
-            const postId = sheet?.dataset.postId;
-            const routeId = sheet?.dataset.routeId;
+            const target = communityActionTarget();
             closeReactionSheet();
-            const post = findCachedPost(postId);
-            if (post) setReplyDraft(post, routeId);
+            if (target.post) setReplyDraft(target.post, target.routeId);
             return;
         }
 
         const sheetReport = t.closest?.('.community-sheet-report');
         if (sheetReport) {
             e.preventDefault();
-            const sheet = document.getElementById('community-reaction-sheet');
-            const postId = sheet?.dataset.postId;
-            const routeId = sheet?.dataset.routeId || document.getElementById('community-route-select')?.value || $currentRouteId.get();
+            const target = communityActionTarget();
+            const acct = $account.get();
+            const ownMessage = !!(acct?.status === 'signed-in' && target.post?.uid && target.post.uid === acct.uid);
             closeReactionSheet();
-            const post = findCachedPost(postId);
+            document.getElementById('community-select-menu')?.classList.add('hidden');
+            if (!target.postId || ownMessage) return;
             const result = await submitModerationReport({
                 type: 'message',
-                routeId,
-                targetPostId: postId,
-                targetUid: post?.uid,
-                snippet: String(post?.body || '').slice(0, 80),
+                routeId: target.routeId || document.getElementById('community-route-select')?.value || $currentRouteId.get(),
+                targetPostId: target.postId,
+                targetUid: target.uid,
+                snippet: String(target.post?.body || '').slice(0, 80),
             });
             showToast(result.ok ? 'Thanks - report sent to moderation.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
+            if (result.ok) clearCommunitySelection();
             return;
         }
 
         const sheetDelete = t.closest?.('.community-sheet-delete');
         if (sheetDelete) {
             e.preventDefault();
-            const sheet = document.getElementById('community-reaction-sheet');
-            const postId = sheet?.dataset.postId || '';
-            const routeId = sheet?.dataset.routeId || '';
-            const replyId = sheet?.dataset.replyId || '';
+            const target = communityActionTarget();
+            const postId = target.postId || '';
+            const routeId = target.routeId || '';
+            const replyId = document.getElementById('community-reaction-sheet')?.dataset.replyId || '';
             const mode = sheetDelete.getAttribute('data-delete-mode') === 'purge' ? 'purge' : 'tombstone';
             const as = sheetDelete.getAttribute('data-delete-as') === 'author' ? 'author' : 'admin';
             if (as === 'admin' && !isAdminAuthed()) return;
+            if (as === 'author') {
+                const acct = $account.get();
+                const ownMessage = !!(acct?.status === 'signed-in' && target.post?.uid && target.post.uid === acct.uid);
+                if (!ownMessage) return;
+            }
             closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
             if (!routeId || !postId) return;
             const prompt = mode === 'purge'
                 ? 'Remove this message completely? Quotes people already made keep their text.'
@@ -3240,6 +3336,7 @@ export function bindCommunityUi() {
                     : 'Delete this message? It will say Deleted message. Quotes people already made keep their text.');
             const ok = typeof window.confirm === 'function' ? window.confirm(prompt) : true;
             if (!ok) return;
+            clearCommunitySelection();
             try {
                 await deleteCommunityMessage({ routeId, postId, replyId, mode, as });
                 showToast(mode === 'purge' ? 'Message removed.' : 'Message deleted.', 'success');
@@ -3254,9 +3351,9 @@ export function bindCommunityUi() {
         if (sheetSuggest) {
             e.preventDefault();
             if (!isAdminAuthed()) return;
-            const sheet = document.getElementById('community-reaction-sheet');
-            const focusId = sheet?.dataset.postId || '';
+            const focusId = communityActionTarget().postId || '';
             closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
             suggestCommunityReply(focusId);
             return;
         }
@@ -3265,10 +3362,11 @@ export function bindCommunityUi() {
         if (sheetLookup) {
             e.preventDefault();
             if (!isAdminAuthed()) return;
-            const sheet = document.getElementById('community-reaction-sheet');
-            const uid = sheet?.dataset.uid || '';
-            const email = sheet?.dataset.email || '';
+            const target = communityActionTarget();
+            const uid = target.uid || '';
+            const email = target.email || '';
             closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
             const { ensureAdminLoaded, openDevHubUi } = await import('./admin-bridge.js');
             const Admin = await ensureAdminLoaded();
             if (!Admin) {
@@ -3299,7 +3397,7 @@ export function bindCommunityUi() {
                 if (!result.needsAuth) showToast(result.message || 'Could not react', 'error');
                 return;
             }
-            closeReactionSheet();
+            clearCommunitySelection();
             const rid = document.getElementById('community-route-select')?.value || routeId;
             applyFeedFilter(rid);
             return;

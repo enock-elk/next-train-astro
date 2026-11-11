@@ -218,8 +218,8 @@ ok(rules.includes('"station_reviews_public"'), 'RTDB rules expose station_review
 ok(rules.includes("!data.exists() && newData.child('status').val() === 'pending'"), 'anonymous creates stay pending');
 
 const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
-ok(gridHandoff.includes('SEO cold launch seeds a pin only when none exists'), 'SEO handoff soft-pins defaults');
-ok(gridHandoff.includes('if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId)'), 'SEO handoff keeps existing route pins');
+ok(gridHandoff.includes('A saved region and route stay in storage'), 'a timetable link does not overwrite a saved route');
+ok(gridHandoff.includes('persistRegion: false'), 'a timetable link does not write userRegion');
 
 const routePage = readFileSync(new URL('../src/pages/routes/[slug].astro', import.meta.url), 'utf8');
 ok(routePage.includes('stationHasPublicPage'), 'route SEO pages link to station landings');

@@ -4,8 +4,23 @@
  * Behaviour: src/lib/community.js
  */
 ---
-<style>
-    .community-post-row.is-selected { outline: 2px solid #3b82f6; border-radius: 1rem; }
+<style is:global>
+    .community-post-row,
+    .community-post-row .community-msg-text,
+    #community-reaction-sheet,
+    #community-reaction-sheet button {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+    .community-post-row.is-selected .community-bubble::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: rgba(11, 20, 26, 0.22);
+        pointer-events: none;
+    }
 </style>
 
 <div id="view-community" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
@@ -230,6 +245,18 @@
     background: #1f2937;
     color: #f3f4f6;
     border-color: #374151;
+  }
+  .community-post-row.is-selected .community-bubble-other {
+    background: #d3e4f7;
+  }
+  .dark .community-post-row.is-selected .community-bubble-other {
+    background: #243b53;
+  }
+  .community-post-row.is-selected .community-bubble-own {
+    background: #b6ecc4;
+  }
+  .dark .community-post-row.is-selected .community-bubble-own {
+    background: #08745c;
   }
   .community-bubble-name-row {
     display: flex;

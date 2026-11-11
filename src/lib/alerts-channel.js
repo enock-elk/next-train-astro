@@ -9,6 +9,7 @@ import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-t
 import { isPublicPreviewUrl } from './link-preview.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { $account } from './account.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
 import { pictureWasShown, picturesWaitForTap, posterLoadPlan, rememberPicture, heldPictureAskInnerHtml, settleHeldPicture, loadPicturePreview } from './data-saver.js';
@@ -802,6 +803,7 @@ function openAlertReactionBreakdown(notice) {
                 <div class="flex justify-center mb-3"><span class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></span></div>
                 <p class="text-base font-black text-gray-900 dark:text-white mb-3" data-breakdown-title>Reactions</p>
                 <div class="flex flex-wrap gap-2" data-breakdown-chips></div>
+                <div class="mt-1 hidden max-h-64 overflow-y-auto" data-alert-react-people></div>
             </div>`;
         document.body.appendChild(sheet);
         sheet.querySelector('[data-breakdown-scrim]')?.addEventListener('click', hideAlertReactionBreakdown);
@@ -828,6 +830,12 @@ function openAlertReactionBreakdown(notice) {
                 ? `<button type="button" data-alert-react="${escapeHTML(row.key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ring-1 ring-blue-400" aria-label="Remove reaction">${row.emoji} <span class="tabular-nums">${row.count}</span></button>`
                 : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
         )).join('');
+    }
+    const people = sheet.querySelector('[data-alert-react-people]');
+    if (people) {
+        people.classList.add('hidden');
+        people.innerHTML = '';
+        if (isAdminAuthed()) void paintAlertReactionPeople(people, notice);
     }
     sheet.classList.remove('hidden');
     if (!reactionBreakdownPushed) {
@@ -1065,6 +1073,11 @@ export function closeAlertsChannel() {
     closeSmoothModal('alerts-channel');
     if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
     clearAlertSelection();
+    let linkSurface = '';
+    try { linkSurface = sessionStorage.getItem('nt_deeplink_surface') || ''; } catch { /* ignore */ }
+    if (linkSurface === 'alerts') {
+        import('./deeplink.js').then((m) => m.finishDeeplinkVisit?.()).catch(() => {});
+    }
 }
 
 export function openAlertsChannel(opts = {}) {
@@ -1177,6 +1190,61 @@ async function ensureReactAuthToken() {
     return '';
 }
 
+function alertPeopleKey(path) {
+    return String(path || '').replace(/[.#$/[\]]/g, '_').slice(0, 180);
+}
+
+async function writeAlertReactionPerson(path, emoji, token, removing) {
+    const user = window.firebaseAuth?.currentUser;
+    const acct = $account.get();
+    if (!user || user.isAnonymous || acct?.status !== 'signed-in' || !user.uid || !token) return;
+    const url = `${DYNAMIC_BASE_URL}alert_reaction_people/${encodeURIComponent(alertPeopleKey(path))}/${encodeURIComponent(user.uid)}.json?auth=${encodeURIComponent(token)}`;
+    try {
+        if (removing) {
+            await fetch(url, { method: 'DELETE' });
+            return;
+        }
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emoji,
+                name: String(acct.displayName || 'Passenger').slice(0, 80),
+                at: Date.now(),
+            }),
+        });
+    } catch { /* the count is already saved; names appear after the rules deploy */ }
+}
+
+async function paintAlertReactionPeople(host, notice) {
+    if (!host || !isAdminAuthed()) return;
+    const token = await ensureReactAuthToken();
+    if (!token) return;
+    const path = notice._reactPath || `${notice._sourceKey}/${notice.id}`;
+    let data = null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}alert_reaction_people/${encodeURIComponent(alertPeopleKey(path))}.json?auth=${encodeURIComponent(token)}`);
+        if (!res.ok) return;
+        data = await res.json();
+    } catch {
+        return;
+    }
+    if (!data || typeof data !== 'object') return;
+    const rows = Object.values(data).filter((row) => row && ALERT_REACTION_EMOJI[row.emoji]);
+    if (!rows.length) return;
+    host.innerHTML = rows.map((row) => {
+        const name = escapeHTML(String(row.name || 'Passenger').slice(0, 80));
+        const letter = escapeHTML((String(row.name || 'P').trim().charAt(0) || 'P').toUpperCase());
+        const emoji = ALERT_REACTION_EMOJI[row.emoji] || '';
+        return `<div class="flex items-center gap-3 px-1 py-2">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">${letter}</span>
+            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${name}</span>
+            <span class="text-lg leading-none" aria-hidden="true">${emoji}</span>
+        </div>`;
+    }).join('');
+    host.classList.remove('hidden');
+}
+
 async function writeAlertReactionCount(path, emoji, token, delta) {
     const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
     const curRes = await fetch(url);
@@ -1224,6 +1292,7 @@ export async function submitAlertReaction(notice, emoji) {
             if (wrap) wrap.outerHTML = renderReactionsHtml(notice);
         }
         paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
+        await writeAlertReactionPerson(path, emoji, token, removing);
         triggerHaptic();
         return true;
     } catch (e) {

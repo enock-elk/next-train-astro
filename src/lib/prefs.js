@@ -498,7 +498,9 @@ export function applyNavChrome(style = getNavStyle()) {
 
     const welcome = document.getElementById('welcome-modal');
     const welcomeOpen = !!(welcome && !welcome.classList.contains('hidden'));
-    const inApp = safeStorage.getItem('welcomeSeen') === 'true' && !welcomeOpen;
+    let deeplinkOpen = false;
+    try { deeplinkOpen = !!sessionStorage.getItem('nt_deeplink_surface'); } catch { /* ignore */ }
+    const inApp = (safeStorage.getItem('welcomeSeen') === 'true' || deeplinkOpen) && !welcomeOpen;
     document.documentElement.classList.toggle('nt-onboarding', !inApp);
     document.documentElement.classList.toggle('nt-in-app', inApp);
 

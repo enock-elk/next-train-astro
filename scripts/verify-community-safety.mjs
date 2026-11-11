@@ -179,7 +179,9 @@ assert.match(communityJs, /community-reaction-who/, 'a reaction pill opens who r
 assert.match(communityJs, /data-community-react-list/, 'community reactions list the people');
 assert.match(communityJs, /renderAvatarHtml\(reactorPhoto/, 'each reaction row shows an avatar');
 assert.match(readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8'), /community-reactions-modal/, 'the community reactions sheet closes like the fare sheet');
-assert.doesNotMatch(readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8'), /data-community-react-list/, 'the alerts reactions sheet is unchanged');
+assert.doesNotMatch(readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8'), /data-community-react-list/, 'alert reactions do not reuse the community people list');
+assert.match(readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8'), /data-alert-react-people/, 'admins can see who reacted on an alert');
+assert.match(readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8'), /if \(isAdminAuthed\(\)\) void paintAlertReactionPeople/, 'only an admin session loads alert reactors');
 assert.match(communityJs, /community-select-share/, 'a selected message can be shared from the header');
 assert.match(communityJs, /queueCommunityFocus/, 'a community link can open that post');
 assert.match(communityView, /id="community-select-report"/, 'report sits on the community header');

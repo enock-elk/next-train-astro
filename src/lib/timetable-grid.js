@@ -14,7 +14,7 @@ import {
     stripShareParamsFromUrl,
     isSeoAppHandoff,
 } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot, noteDeeplinkSurface } from './deeplink.js';
 
 function centerInScroller(scroller, el, axis) {
     if (!scroller || !el) return;
@@ -439,43 +439,15 @@ export async function applyRouteDeepLink() {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast(seoHandoff ? 'Opening Next Train' : 'Still opening this link');
 
-    const returning = safeStorage.getItem('welcomeSeen') === 'true';
-    const defaultKey = 'defaultRoute_' + route.region;
-    const existingDefault = safeStorage.getItem(defaultKey);
-    const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
-    let savedRegionBefore = null;
-    try { savedRegionBefore = safeStorage.getItem('userRegion'); } catch { /* ignore */ }
-
-    if (!returning) {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // Layout may have stamped nt-onboarding before welcomeSeen / pin restore.
-    // SEO Open and shared route links skip Welcome, so re-show the bottom bar here.
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
-    // SEO cold launch seeds a pin only when none exists. Returning commuters keep their default.
-    // Shared links pin only when none exists.
-    if (seoHandoff) {
-        try {
-            if (!savedRegionBefore) safeStorage.setItem('userRegion', route.region);
-            if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId);
-        } catch { /* ignore */ }
-    } else if (!hasUsableDefault) {
-        safeStorage.setItem(defaultKey, link.routeId);
-    }
-
-    // Set the linked corridor first so a same-region pin cannot restore Pretoria
-    // (or any other default) before schedules load.
+    // A saved region and route stay in storage. The linked timetable still paints.
+    // A new visitor is not pinned by the link. Welcome waits until they leave.
     const region = ['GP', 'WC', 'KZN', 'EC'].includes(link.region) ? link.region : route.region;
     $currentRouteId.set(link.routeId);
-    // A returning commuter opening an SEO page must not overwrite their saved
-    // region. The linked route still paints; their home timetable cache stays.
-    ensureRoutePinnedForRegion(region, { persistRegion: !(seoHandoff && savedRegionBefore) });
+    ensureRoutePinnedForRegion(region, { persistRegion: false });
     $currentRouteId.set(link.routeId);
-    // Cross-region SEO open may rewrite userRegion in storage; restore a returning pin.
-    if (seoHandoff && savedRegionBefore) {
-        try { safeStorage.setItem('userRegion', savedRegionBefore); } catch { /* ignore */ }
-    }
+    noteDeeplinkSurface('home', { loadDefaults: false });
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();

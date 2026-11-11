@@ -125,6 +125,15 @@
       }
     },
 
+    "alert_reaction_people": {
+      "$noticeKey": {
+        ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.hasChild('emoji') && (newData.child('emoji').val() === 'like' || newData.child('emoji').val() === 'love' || newData.child('emoji').val() === 'laugh' || newData.child('emoji').val() === 'wow' || newData.child('emoji').val() === 'sad' || newData.child('emoji').val() === 'pray') && (!newData.hasChild('name') || (newData.child('name').isString() && newData.child('name').val().length <= 80)) && (!newData.hasChild('at') || newData.child('at').isNumber())))"
+        }
+      }
+    },
+
     "notices_meta": {
       ".read": true,
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"

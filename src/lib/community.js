@@ -1289,27 +1289,39 @@ function ensureReactionTray() {
         <div id="community-reaction-tray" class="flex flex-col items-stretch gap-1">
             <div id="community-reaction-sheet-emojis" class="flex items-center gap-0.5 rounded-full border border-white/10 bg-gray-950/95 px-1.5 py-1 text-white shadow-2xl"></div>
         </div>`;
-    const host = document.querySelector('#view-community .community-pane') || document.body;
-    host.appendChild(sheet);
+    document.body.appendChild(sheet);
+    sheet.style.userSelect = 'none';
+    sheet.style.webkitUserSelect = 'none';
+    sheet.style.webkitTouchCallout = 'none';
+    sheet.addEventListener('contextmenu', (e) => e.preventDefault());
     return sheet;
 }
 
-function placeReactionTray(anchorEl) {
+function liveCommunityRow(postId, fallback) {
+    const live = [...document.querySelectorAll('.community-post-row')].find((el) => (
+        el.isConnected && el.getAttribute('data-post-id') === String(postId)
+    ));
+    if (live) return live;
+    return fallback?.isConnected ? fallback : null;
+}
+
+function placeReactionTray() {
     const sheet = document.getElementById('community-reaction-sheet');
-    if (!sheet || sheet.classList.contains('hidden')) return;
-    const chrome = document.querySelector('#view-community .community-chrome');
-    const minTop = (chrome?.getBoundingClientRect().bottom || 72) + 6;
-    const rect = anchorEl?.getBoundingClientRect?.() || { left: 24, width: 180, top: minTop + 48, bottom: minTop + 96 };
+    if (!sheet) return;
+    if (sheet.parentElement !== document.body) document.body.appendChild(sheet);
     sheet.classList.remove('hidden');
     const width = sheet.offsetWidth || 280;
     const height = sheet.offsetHeight || 48;
-    let left = rect.left + (rect.width / 2) - (width / 2);
+    const point = reactionPress || { x: window.innerWidth / 2, y: 180 };
+    let left = point.x - (width / 2);
     left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
-    const bottomLimit = window.innerHeight - height - 72;
-    let top = rect.top - height - 8;
-    if (top < minTop) top = Math.min(bottomLimit, rect.bottom + 8);
-    if (top < minTop) top = minTop;
-    if (top > bottomLimit) top = Math.max(minTop, bottomLimit);
+    const gap = 10;
+    const chrome = document.querySelector('#view-community .community-chrome');
+    const floor = (chrome?.getBoundingClientRect().bottom || 56) + 4;
+    let top = point.y - height - gap;
+    if (top < floor) top = point.y + gap;
+    const bottomLimit = window.innerHeight - height - 64;
+    if (top > bottomLimit) top = Math.max(floor, Math.min(bottomLimit, point.y - height - gap));
     sheet.style.left = `${left}px`;
     sheet.style.top = `${top}px`;
 }
@@ -1358,8 +1370,14 @@ function openReactionSheet(postId, routeId, anchorEl) {
         closeReactionSheet();
         return;
     }
-    reactionAnchor = anchorEl || null;
+    const liveRow = liveCommunityRow(postId, anchorEl);
+    reactionAnchor = liveRow || anchorEl || null;
+    if (!reactionPress && reactionAnchor?.getBoundingClientRect) {
+        const rect = reactionAnchor.getBoundingClientRect();
+        if (rect.width || rect.height) reactionPress = { x: rect.left + rect.width / 2, y: rect.top + 8 };
+    }
     reactionGuardUntil = Date.now() + 700;
+    try { window.getSelection()?.removeAllRanges(); } catch { /* the tray must not sit inside a text selection */ }
     const sheet = ensureReactionTray();
     sheet.dataset.postId = postId;
     sheet.dataset.routeId = routeId;
@@ -1374,7 +1392,7 @@ function openReactionSheet(postId, routeId, anchorEl) {
         `).join('');
     }
     sheet.classList.remove('hidden');
-    placeReactionTray(anchorEl);
+    placeReactionTray();
     triggerHaptic();
 }
 
@@ -1504,6 +1522,7 @@ async function paintCommunityReactionsModal(postId) {
 let selectedCommunity = null;
 let reactionAnchor = null;
 let reactionGuardUntil = 0;
+let reactionPress = null;
 let pendingCommunityFocus = null;
 
 export function queueCommunityFocus(routeId, postId = '', opts = {}) {
@@ -2092,6 +2111,7 @@ function wireCommunityChatGestures(listEl) {
     }
     if (listEl.dataset.gesturesBound === '1') return;
     listEl.dataset.gesturesBound = '1';
+    listEl.addEventListener('selectstart', (e) => e.preventDefault());
 
     let startX = 0;
     let startY = 0;
@@ -2120,7 +2140,10 @@ function wireCommunityChatGestures(listEl) {
             const postId = row.getAttribute('data-post-id');
             const routeId = row.getAttribute('data-route');
             if (postId && routeId) {
-                openReactionSheet(postId, routeId, row);
+                reactionPress = { x: startX, y: startY };
+                try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+                const live = liveCommunityRow(postId, row);
+                openReactionSheet(postId, routeId, live);
                 selectCommunityPost(postId, routeId);
             }
         }, 480);
@@ -2185,7 +2208,10 @@ function wireCommunityChatGestures(listEl) {
         row.classList.add('is-pressing');
         const postId = row.getAttribute('data-post-id');
         const routeId = row.getAttribute('data-route');
-        openReactionSheet(postId, routeId, row);
+        reactionPress = { x: e.clientX, y: e.clientY };
+        try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+        const live = liveCommunityRow(postId, row);
+        openReactionSheet(postId, routeId, live);
         selectCommunityPost(postId, routeId);
         setTimeout(() => row.classList.remove('is-pressing'), 400);
     });
@@ -3338,13 +3364,15 @@ export function bindCommunityUi() {
         if (Date.now() < reactionGuardUntil) return;
         const sheet = document.getElementById('community-reaction-sheet');
         const menu = document.getElementById('community-select-menu');
+        const bar = document.getElementById('community-select-bar');
         const trayOpen = !!(sheet && !sheet.classList.contains('hidden'));
         const menuOpen = !!(menu && !menu.classList.contains('hidden'));
-        if (!trayOpen && !menuOpen) return;
+        const selecting = !!(bar && !bar.classList.contains('hidden'));
+        if (!trayOpen && !menuOpen && !selecting) return;
         if (e.target.closest?.('#community-reaction-sheet, #community-reactions-modal, #community-select-bar, #community-select-menu')) return;
         closeReactionSheet();
         menu?.classList.add('hidden');
-        if (trayOpen) clearCommunitySelection();
+        clearCommunitySelection();
     }, true);
 
     document.addEventListener('click', async (e) => {

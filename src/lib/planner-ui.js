@@ -4784,11 +4784,7 @@ export async function applyPlannerDeepLink() {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast('Still opening this link');
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // SEO / share planner handoffs skip Welcome — clear nt-onboarding so the bottom bar shows.
     import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
@@ -4796,7 +4792,7 @@ export async function applyPlannerDeepLink() {
     const targetRegion = (link.region && ['GP', 'WC', 'KZN', 'EC'].includes(link.region))
         ? link.region
         : ($userRegion.get() || 'GP');
-    const pinned = ensureRoutePinnedForRegion(targetRegion);
+    const pinned = ensureRoutePinnedForRegion(targetRegion, { persistRegion: false });
     if (!pinned) {
         slowToast.cancel();
         showToast('Could not load trip data for this region.', 'error');
@@ -4810,6 +4806,7 @@ export async function applyPlannerDeepLink() {
 
     if (typeof switchTab === 'function') switchTab('trip-planner');
     else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    import('./deeplink.js').then((m) => m.noteDeeplinkSurface?.('planner', { loadDefaults: false })).catch(() => {});
 
     stripShareParamsFromUrl();
 

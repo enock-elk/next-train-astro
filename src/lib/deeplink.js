@@ -99,6 +99,89 @@ function clearIntent() {
     } catch { /* ignore */ }
 }
 
+const DEEPLINK_SURFACE_KEY = 'nt_deeplink_surface';
+const DEEPLINK_WELCOME_KEY = 'nt_deeplink_welcome';
+
+/** A saved region and route. A link must not replace these. */
+export function readSavedDefaults() {
+    const region = safeStorage.getItem('userRegion') || '';
+    if (!['GP', 'WC', 'KZN', 'EC'].includes(region)) return null;
+    const routeId = safeStorage.getItem('defaultRoute_' + region) || '';
+    if (!routeId) return null;
+    return { region, routeId };
+}
+
+async function applySavedDefaultsToStore(saved = readSavedDefaults()) {
+    if (!saved?.routeId) return false;
+    const { ROUTES } = await import('./config.js');
+    const route = ROUTES[saved.routeId];
+    if (!route?.isActive || route.region !== saved.region) return false;
+    const { $userRegion, $currentRouteId } = await import('../store.js');
+    if ($userRegion.get() !== saved.region) $userRegion.set(saved.region);
+    if ($currentRouteId.get() !== saved.routeId) $currentRouteId.set(saved.routeId);
+    return true;
+}
+
+/**
+ * Remember which surface the link opened.
+ * A visitor with a saved route keeps that route.
+ * A new visitor sees the link first. Welcome waits until they leave.
+ */
+export function noteDeeplinkSurface(surface, { loadDefaults = true } = {}) {
+    if (typeof window === 'undefined' || !surface) return;
+    try { sessionStorage.setItem(DEEPLINK_SURFACE_KEY, surface); } catch { /* ignore */ }
+    const saved = readSavedDefaults();
+    if (saved) {
+        try { sessionStorage.removeItem(DEEPLINK_WELCOME_KEY); } catch { /* ignore */ }
+        if (loadDefaults) {
+            applySavedDefaultsToStore(saved).then((ok) => {
+                if (!ok) return;
+                import('./logic.js').then((m) => m.loadAllSchedules?.(false)).catch(() => {});
+            }).catch(() => {});
+        }
+    } else if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        try { sessionStorage.setItem(DEEPLINK_WELCOME_KEY, '1'); } catch { /* ignore */ }
+        try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    }
+    import('./prefs.js').then((m) => m.syncInAppChrome?.()).catch(() => {});
+}
+
+/** Leave the linked surface. Restore a saved route, or open Welcome for a new visitor. */
+export function finishDeeplinkVisit() {
+    if (typeof window === 'undefined') return;
+    let surface = '';
+    let needsWelcome = false;
+    try {
+        surface = sessionStorage.getItem(DEEPLINK_SURFACE_KEY) || '';
+        needsWelcome = sessionStorage.getItem(DEEPLINK_WELCOME_KEY) === '1';
+        sessionStorage.removeItem(DEEPLINK_SURFACE_KEY);
+        sessionStorage.removeItem(DEEPLINK_WELCOME_KEY);
+    } catch { /* ignore */ }
+    if (!surface) return;
+    const saved = readSavedDefaults();
+    if (saved) {
+        applySavedDefaultsToStore(saved).then((ok) => {
+            if (!ok) return;
+            import('./logic.js').then((m) => m.loadAllSchedules?.(false)).catch(() => {});
+        }).catch(() => {});
+        import('./prefs.js').then((m) => m.syncInAppChrome?.()).catch(() => {});
+        return;
+    }
+    const storedRegion = safeStorage.getItem('userRegion') || '';
+    const showWelcome = () => {
+        if (needsWelcome && safeStorage.getItem('welcomeSeen') !== 'true') {
+            try { window.dispatchEvent(new CustomEvent('nt-show-welcome')); } catch { /* ignore */ }
+        }
+    };
+    if (!['GP', 'WC', 'KZN', 'EC'].includes(storedRegion)) {
+        showWelcome();
+        return;
+    }
+    import('../store.js').then(({ $userRegion }) => {
+        if ($userRegion.get() !== storedRegion) $userRegion.set(storedRegion);
+    }).catch(() => {}).finally(showWelcome);
+}
+
 function stripHashKeepQuery() {
     try {
         history.replaceState(history.state || {}, '', location.pathname + location.search);
@@ -388,12 +471,9 @@ export async function applyPlannerShortcutDeepLink() {
     if (!link || link.kind !== 'planner-shortcut') return false;
     if (snap && snap.kind === 'planner-shortcut') consumeShareDeeplinkSnapshot();
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    noteDeeplinkSurface('planner');
     return true;
 }
 
@@ -413,13 +493,9 @@ export async function applyShareTargetDeepLink() {
     if (!link || link.kind !== 'share-target') return false;
     if (snap && snap.kind === 'share-target') consumeShareDeeplinkSnapshot();
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
-
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    noteDeeplinkSurface('planner');
 
     const hint = [link.text, link.title, link.url].filter(Boolean).join(' — ').slice(0, 120);
     if (hint && typeof window.showToast === 'function') {
@@ -442,20 +518,23 @@ export async function applyLiveTrainDeepLink() {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast('Still opening this link');
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
-
     const { ROUTES } = await import('./config.js');
     const { $currentRouteId, $userRegion } = await import('../store.js');
     const route = link.routeId ? ROUTES[link.routeId] : null;
-    if (route?.isActive) {
-        const region = route.region || $userRegion.get() || 'GP';
-        $userRegion.set(region);
-        const defaultKey = 'defaultRoute_' + region;
-        if (!safeStorage.getItem(defaultKey)) safeStorage.setItem(defaultKey, route.id);
+    const saved = readSavedDefaults();
+    if (saved) {
+        await applySavedDefaultsToStore(saved);
+    } else if (route?.isActive) {
+        const nextRegion = route.region || $userRegion.get() || 'GP';
+        if ($userRegion.get() !== nextRegion) {
+            let previousRegion = '';
+            try { previousRegion = safeStorage.getItem('userRegion') || ''; } catch { /* ignore */ }
+            $userRegion.set(nextRegion);
+            try {
+                if (previousRegion) safeStorage.setItem('userRegion', previousRegion);
+                else safeStorage.removeItem('userRegion');
+            } catch { /* ignore */ }
+        }
         $currentRouteId.set(route.id);
     }
 
@@ -488,6 +567,7 @@ export async function applyLiveTrainDeepLink() {
                 region_id: route?.region || '',
             });
         }
+        noteDeeplinkSurface('home', { loadDefaults: false });
         return true;
     }
 
@@ -499,6 +579,7 @@ export async function applyLiveTrainDeepLink() {
     if (typeof window.switchTab === 'function') {
         window.switchTab('map');
     }
+    noteDeeplinkSurface('map', { loadDefaults: false });
     try {
         const map = await import('./map-tab.js');
         await map.focusTrainOnMap?.(link.trainId, {
@@ -532,15 +613,11 @@ function contentLinkFromPage() {
     return parseContentDeepLink({ search: location.search, hash: location.hash, pathname: location.pathname });
 }
 
-function armContentEntry() {
+function armContentEntry(surface) {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast('Still opening this link');
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     stripShareParamsFromUrl();
+    noteDeeplinkSurface(surface);
     return slowToast;
 }
 
@@ -551,14 +628,15 @@ export async function applyAlertDeepLink() {
     if (!link || link.kind !== 'alert') return false;
     const snap = peekShareDeeplinkSnapshot();
     if (snap && snap.kind === 'alert') consumeShareDeeplinkSnapshot();
-    const slowToast = armContentEntry();
     if (typeof window.switchTab === 'function') window.switchTab('next-train');
+    const slowToast = armContentEntry('alerts');
     let state = 'gone';
     try {
         const alerts = await import('./alerts-channel.js');
         state = await alerts.focusSharedAlert?.(link.id, link.source || '');
     } catch { /* gone */ }
     slowToast.cancel();
+    if (state !== 'opened') noteDeeplinkSurface('home', { loadDefaults: false });
     if (typeof window.showToast === 'function') {
         window.showToast(
             state === 'opened' ? 'Opened service update' : 'This update is no longer available',
@@ -576,7 +654,7 @@ export async function applyCommunityDeepLink() {
     if (!link || link.kind !== 'community') return false;
     const snap = peekShareDeeplinkSnapshot();
     if (snap && snap.kind === 'community') consumeShareDeeplinkSnapshot();
-    const slowToast = armContentEntry();
+    const slowToast = armContentEntry('community');
     let allowed = false;
     try {
         const chrome = await import('./admin-chrome.js');
@@ -584,6 +662,7 @@ export async function applyCommunityDeepLink() {
     } catch { allowed = true; }
     if (!allowed) {
         slowToast.cancel();
+        noteDeeplinkSurface('home', { loadDefaults: false });
         if (typeof window.switchTab === 'function') window.switchTab('next-train');
         if (typeof window.showToast === 'function') {
             window.showToast('Community is not available', 'info', 4000);
@@ -617,11 +696,6 @@ export async function applyMapDeepLink() {
     if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
 
     const slowToast = armSlowDeeplinkToast('Still opening this link');
-
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
 
@@ -662,17 +736,14 @@ export async function applyMapDeepLink() {
         return true;
     };
 
-    if (openTab()) {
-        slowToast.cancel();
-        return true;
-    }
-    // Modal markup may still be mounting on cold start
-    if (openModal()) {
+    if (openTab() || openModal()) {
+        noteDeeplinkSurface('map', { loadDefaults: false });
         slowToast.cancel();
         return true;
     }
     await new Promise((r) => setTimeout(r, 120));
     const opened = openTab() || openModal();
+    if (opened) noteDeeplinkSurface('map', { loadDefaults: false });
     slowToast.cancel();
     return opened;
 }

@@ -53,6 +53,7 @@ import { withBase } from '../lib/config.js';
     import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession, lineSwatchClass } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
+    import { parseContentDeepLink } from '../lib/share-links.js';
     import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
 
     prepareDeeplinkIntents();
@@ -207,12 +208,17 @@ import { withBase } from '../lib/config.js';
         const hasPlannerShortcut = params.get('action') === 'planner' && !params.get('from') && !params.get('to') && !params.get('plan');
         const hasMapDeepLink = String(params.get('action') || '').toLowerCase() === 'map';
         const hasShareTarget = !!(params.get('title') || params.get('text') || params.get('url'));
+        const hasContentLink = !!parseContentDeepLink({
+            search: window.location.search,
+            hash: window.location.hash,
+            pathname: window.location.pathname,
+        });
         // Search plus launchQueue/session snapshot — a late Facebook hop can
         // already have frozen plan= before this script reads location.search.
-        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget || hasInboundShareIntent();
+        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget || hasContentLink || hasInboundShareIntent();
         // Soft SEO hint for first-time only — never override a returning user's region
         const seoRegion = (params.get('region') || params.get('r') || '').toUpperCase();
-        if (!welcomeSeen && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {
+        if (!welcomeSeen && !hasInboundShare && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {
             activeRegion = seoRegion;
             $userRegion.set(seoRegion);
             try { safeStorage.setItem('userRegion', seoRegion); } catch (e) {}
@@ -229,31 +235,24 @@ import { withBase } from '../lib/config.js';
             } catch (e) {}
         }
 
-        // Brand-new users + legacy map onboarding deep-links
-        // Shared route/planner links skip Welcome so the destination opens immediately
-        if ((!welcomeSeen || isOnboardMap) && !hasInboundShare) {
+        let welcomeChromeBound = false;
+        const presentWelcome = (region) => {
+            try {
+                if (sessionStorage.getItem('nt_deeplink_surface')) return;
+            } catch { /* ignore */ }
             markWelcomeShownThisVisit();
-            if (isOnboardMap) {
-                try {
-                    const urlObj = new URL(window.location.href);
-                    urlObj.searchParams.delete('onboard');
-                    window.history.replaceState({}, '', urlObj.toString());
-                } catch (e) {}
-            }
-
             modal.classList.remove('hidden');
             import('../lib/prefs.js').then(({ applyNavChrome }) => applyNavChrome()).catch(() => {});
-
-            updateRegionButtons(activeRegion);
-            renderWelcomeRoutes(activeRegion);
-
+            const active = region || $userRegion.get() || 'GP';
+            updateRegionButtons(active);
+            renderWelcomeRoutes(active);
+            if (welcomeChromeBound) return;
+            welcomeChromeBound = true;
             $userRegion.subscribe(newRegion => {
                 updateRegionButtons(newRegion);
                 renderWelcomeRoutes(newRegion);
             });
-
-            const regionButtons = document.querySelectorAll('#welcome-region-selector button');
-            regionButtons.forEach(btn => {
+            document.querySelectorAll('#welcome-region-selector button').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     triggerHapticFeedback();
                     const target = e.currentTarget || e.target;
@@ -264,6 +263,23 @@ import { withBase } from '../lib/config.js';
                     }
                 });
             });
+        };
+        window.addEventListener('nt-show-welcome', () => {
+            if (safeStorage.getItem('welcomeSeen') === 'true') return;
+            presentWelcome($userRegion.get() || safeStorage.getItem('userRegion') || 'GP');
+        });
+
+        // Brand-new users + legacy map onboarding deep-links.
+        // A shared link stays hidden until they leave that alert, room, map, or planner.
+        if ((!welcomeSeen || isOnboardMap) && !hasInboundShare) {
+            if (isOnboardMap) {
+                try {
+                    const urlObj = new URL(window.location.href);
+                    urlObj.searchParams.delete('onboard');
+                    window.history.replaceState({}, '', urlObj.toString());
+                } catch (e) {}
+            }
+            presentWelcome(activeRegion);
         } else {
             // Pin restore / SEO Open may mint welcomeSeen after Layout stamped
             // nt-onboarding. Re-apply chrome so the bottom bar is not stuck hidden.

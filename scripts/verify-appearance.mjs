@@ -211,7 +211,7 @@ assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar
 
 const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
 assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after Welcome');
-assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
+assert(prefs.includes("(safeStorage.getItem('welcomeSeen') === 'true' || deeplinkOpen) && !welcomeOpen"), 'bottom bar waits until Welcome is done');
 assert(prefs.includes('ntProdClassicPackV1'), 'production pack FLAG still exists');
 assert(!prefs.includes('if (pack && pack !== COLOUR_PACKS.CLASSIC)'), 'missing FLAG does not remap Earthy to Classic');
 assert(prefs.includes('syncPrefsAccordionSummary'), 'theme accordion subtitle follows the live pack');

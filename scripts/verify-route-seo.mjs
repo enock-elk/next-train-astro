@@ -497,10 +497,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   }
   const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
   if (!gridHandoff.includes("seoHandoff ? 'Opening Next Train'")
-    || !gridHandoff.includes("if (!savedRegionBefore) safeStorage.setItem('userRegion', route.region)")
-    || !gridHandoff.includes('if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId)')
-    || !gridHandoff.includes('SEO cold launch seeds a pin only when none exists')) {
-    fail('SEO grid handoff must soft-pin only on cold launch and toast Opening Next Train');
+    || !gridHandoff.includes('persistRegion: false')
+    || !gridHandoff.includes('A new visitor is not pinned by the link')) {
+    fail('SEO grid handoff must not pin a route and must toast Opening Next Train');
   }
   if (!gridHandoff.includes('if (!seoHandoff) showToast(`Opened shared route:')) {
     fail('shared route toast must stay off the SEO handoff');

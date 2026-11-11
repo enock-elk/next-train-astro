@@ -214,9 +214,11 @@ function finishHeldBoot() {
         else document.getElementById('loading-overlay')?.classList.add('hidden');
     } catch { /* ignore */ }
     const welcome = document.getElementById('welcome-modal');
+    let holdingLink = false;
+    try { holdingLink = !!sessionStorage.getItem('nt_deeplink_surface'); } catch { /* ignore */ }
     if (pinnedRouteId()) {
         welcome?.classList.add('hidden');
-    } else if (safeStorage.getItem('welcomeSeen') !== 'true' && welcome?.classList.contains('hidden')) {
+    } else if (!holdingLink && safeStorage.getItem('welcomeSeen') !== 'true' && welcome?.classList.contains('hidden')) {
         if (typeof window.openSmoothModal === 'function') window.openSmoothModal('welcome-modal');
         else welcome?.classList.remove('hidden');
     }

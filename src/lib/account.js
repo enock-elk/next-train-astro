@@ -884,14 +884,45 @@ export async function signOutAccount() {
     import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
 }
 
+let accountAuthFlow = false;
+let accountAuthFromHub = false;
+let accountWasSigned = false;
+
+function paintAccountHubChrome(state = $account.get()) {
+    const signed = state?.status === 'signed-in';
+    document.getElementById('account-edit-profile-pill')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-signin-pill')?.classList.toggle('hidden', signed);
+    document.getElementById('account-guest-note')?.classList.toggle('hidden', signed);
+    document.getElementById('account-signout-btn')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-modal-email')?.classList.toggle('hidden', !signed);
+    const profileBtn = document.getElementById('account-profile-toggle');
+    if (profileBtn) profileBtn.setAttribute('aria-label', signed ? 'Edit profile' : 'Sign in');
+}
+
+/** Settings hub for a guest or a signed-in rider. Local settings stay on this phone. */
+export function showAccountHub() {
+    if (typeof document === 'undefined') return;
+    accountAuthFlow = false;
+    accountAuthFromHub = false;
+    document.getElementById('account-signed-in')?.classList.remove('hidden');
+    document.getElementById('account-guest')?.classList.add('hidden');
+    document.getElementById('account-settings-host')?.classList.remove('hidden');
+    document.getElementById('account-legal-footer')?.classList.add('hidden');
+    paintAccountPane('hub');
+    paintAccountHubChrome();
+}
+
 export function showAccountGuestScreen(screen) {
     if (typeof document === 'undefined') return;
     const guest = document.getElementById('account-guest');
     if (!guest) return;
+    accountAuthFlow = true;
     const name = screen === 'signin' || screen === 'reset' || screen === 'invalid'
         ? screen
         : 'create';
     guest.setAttribute('data-account-screen', name);
+    guest.classList.remove('hidden');
+    document.getElementById('account-signed-in')?.classList.add('hidden');
     guest.querySelectorAll('[data-account-only]').forEach((el) => {
         const list = (el.getAttribute('data-account-only') || '').split(/\s+/).filter(Boolean);
         el.classList.toggle('hidden', !list.includes(name));
@@ -1007,8 +1038,7 @@ export function openAccountModal() {
         modal.style.removeProperty('--nt-feedback-vv-top');
         modal.style.removeProperty('--nt-feedback-vv-height');
     }
-    const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
-    if (!signedOpen) showAccountGuestScreen('create');
+    if (!accountAuthFlow) showAccountHub();
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
     }
@@ -1314,6 +1344,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     const modalEmail = document.getElementById('account-modal-email');
 
     const signed = state.status === 'signed-in';
+    const showHub = signed || !accountAuthFlow;
     if (nameEl) nameEl.textContent = signed ? (state.displayName || 'Passenger') : 'Account';
     if (subEl) {
         subEl.textContent = state.status === 'loading'
@@ -1339,15 +1370,16 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }
     }
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
-    if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
-    if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
+    if (signedBlock) signedBlock.classList.toggle('hidden', !showHub);
+    if (guestBlock) guestBlock.classList.toggle('hidden', showHub || state.status === 'loading');
     const screenTitle = document.getElementById('account-screen-title');
     // Guest heroes already show Welcome / Welcome back / Reset; do not repeat in the top bar.
     if (screenTitle) screenTitle.textContent = signed ? (ACCOUNT_PANE_TITLE[getAccountPane()] || '') : '';
     document.getElementById('account-prefs-label')?.classList.add('hidden');
-    document.getElementById('account-settings-host')?.classList.toggle('hidden', !signed);
-    document.getElementById('account-legal-footer')?.classList.toggle('hidden', signed);
-    if (!signed) paintAccountPane('hub');
+    document.getElementById('account-settings-host')?.classList.toggle('hidden', !showHub);
+    document.getElementById('account-legal-footer')?.classList.toggle('hidden', showHub);
+    if (!signed && showHub && accountWasSigned) paintAccountPane('hub');
+    accountWasSigned = signed;
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -1368,7 +1400,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (photoBox) delete photoBox.dataset.dirty;
         const marksBox = document.getElementById('account-marks-community');
         if (marksBox) delete marksBox.dataset.dirty;
-        if (modalName) modalName.textContent = 'Passenger';
+        if (modalName) modalName.textContent = showHub ? 'Guest' : 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
@@ -1436,6 +1468,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     const cluster = document.getElementById('settings-profile-cluster');
     const hosted = !!cluster?.closest('#account-settings-host');
     if (cluster) cluster.classList.toggle('hidden', signed && hosted);
+    if (showHub) paintAccountHubChrome(state);
 }
 
 export function syncAuthProviderUi(providers = getAuthProviders(), busy = _accountUiBusy) {
@@ -1792,6 +1825,10 @@ export function bindAccountUi() {
         const guest = document.getElementById('account-guest');
         const screen = guest?.getAttribute('data-account-screen') || 'create';
         const guestOpen = guest && !guest.classList.contains('hidden');
+        if (guestOpen && accountAuthFromHub) {
+            showAccountHub();
+            return;
+        }
         if (guestOpen && screen !== 'create') {
             showAccountGuestScreen('create');
             return;
@@ -2103,6 +2140,11 @@ export function bindAccountUi() {
     document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
     document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
+        if ($account.get()?.status !== 'signed-in') {
+            accountAuthFromHub = true;
+            showAccountGuestScreen('signin');
+            return;
+        }
         setAccountPane('profile');
     });
     document.getElementById('account-open-notifications')?.addEventListener('click', () => {

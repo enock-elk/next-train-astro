@@ -2398,6 +2398,16 @@ export function switchTab(tab, opts = null) {
     try {
         window.dispatchEvent(new CustomEvent('nt-tab-changed', { detail: { tab } }));
     } catch { /* ignore */ }
+
+    let linkSurface = '';
+    try { linkSurface = sessionStorage.getItem('nt_deeplink_surface') || ''; } catch { /* ignore */ }
+    const leftLink = (linkSurface === 'community' && prev === 'community' && tab !== 'community')
+        || (linkSurface === 'map' && prev === 'map' && tab !== 'map')
+        || (linkSurface === 'planner' && prev === 'trip-planner' && tab !== 'trip-planner')
+        || (linkSurface === 'home' && prev === 'next-train' && tab !== 'next-train');
+    if (leftLink) {
+        import('./deeplink.js').then((m) => m.finishDeeplinkVisit?.()).catch(() => {});
+    }
 }
 
 export function initTabIndicator() {

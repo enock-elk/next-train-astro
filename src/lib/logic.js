@@ -2210,11 +2210,20 @@ export function ensureRoutePinnedForRegion(region, options = {}) {
     if (current !== target) {
         console.log(`🛡️ Guardian: Deeplink soft region pin ${current} → ${target}`);
         regionSwapGeneration++;
+        let previousRegion = '';
+        if (!persistRegion) {
+            try { previousRegion = safeStorage.getItem('userRegion') || ''; } catch { /* ignore */ }
+        }
         $userRegion.set(target);
         syncRegionDisplayDom(target);
         if (persistRegion) {
             try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
         } else {
+            // The region atom writes storage. Put the saved choice back so a link cannot replace it.
+            try {
+                if (previousRegion) safeStorage.setItem('userRegion', previousRegion);
+                else safeStorage.removeItem('userRegion');
+            } catch { /* ignore */ }
             waterfallLog(`seo handoff browses ${target} and keeps saved userRegion`);
         }
         try { window.syncCrmRegionAnalytics?.(target); } catch { /* ignore */ }

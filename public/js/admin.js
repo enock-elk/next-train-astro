@@ -27165,16 +27165,21 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Community tab. On for every commuter until this switch is off. -->
+                <!-- Community tab. On everywhere until this switch, a region, or a route is blocked. -->
                 <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm">
                     <div class="px-3 py-3 space-y-3">
                         <label class="flex items-center justify-between gap-3">
                             <span>
                                 <span class="block text-sm font-bold text-emerald-950 dark:text-emerald-100">Community</span>
-                                <span class="block text-[10px] text-emerald-800/90 dark:text-emerald-300/90 leading-snug">On for every commuter, like Trip Planner. Off hides the tab. An admin session can still open it.</span>
+                                <span class="block text-[10px] text-emerald-800/90 dark:text-emerald-300/90 leading-snug">On for commuters. Off hides the tab everywhere. Leave it on to block one region or one route. An admin session can still open it.</span>
                             </span>
                             <input type="checkbox" id="community-tab-switch" class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500" checked>
                         </label>
+                        <p id="community-block-summary" class="text-[10px] font-bold text-emerald-800 dark:text-emerald-200">Nothing blocked</p>
+                        <p class="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Blocked regions</p>
+                        <div id="community-block-regions" class="flex flex-wrap gap-x-3 gap-y-1"></div>
+                        <p class="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Blocked routes</p>
+                        <div id="community-block-routes" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
                         <button type="button" id="community-tab-save" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save community</button>
                     </div>
                 </div>
@@ -28055,6 +28060,9 @@ const Admin = {
                         applyExpFeaturesToForm(bag);
                         const communitySwitch = document.getElementById('community-tab-switch');
                         if (communitySwitch) communitySwitch.checked = bag.communityTab?.killed !== true;
+                        if (typeof paintCommunityBlocks === 'function') {
+                            paintCommunityBlocks(bag.communityTab || {});
+                        }
                     }
                 } catch (fe) { /* leave unhydrated so save cannot wipe live flags */ }
 
@@ -28133,6 +28141,88 @@ const Admin = {
             };
         }
 
+        const communityBlockState = { regions: new Set(), routes: new Set() };
+        const COMMUNITY_REGION_LABELS = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+
+        const paintCommunityBlockSummary = () => {
+            const el = document.getElementById('community-block-summary');
+            if (!el) return;
+            const off = document.getElementById('community-tab-switch')?.checked === false;
+            if (off) {
+                el.textContent = 'Off for every commuter';
+                return;
+            }
+            const regions = communityBlockState.regions.size;
+            const routes = communityBlockState.routes.size;
+            if (!regions && !routes) {
+                el.textContent = 'Nothing blocked';
+                return;
+            }
+            const parts = [];
+            if (regions) parts.push(`${regions} region${regions === 1 ? '' : 's'}`);
+            if (routes) parts.push(`${routes} route${routes === 1 ? '' : 's'}`);
+            el.textContent = `Blocking ${parts.join(' and ')}`;
+        };
+
+        const paintCommunityBlocks = (raw = null) => {
+            if (raw && typeof raw === 'object') {
+                communityBlockState.regions = new Set(
+                    (Array.isArray(raw.blockedRegionIds) ? raw.blockedRegionIds : [])
+                        .map((id) => String(id || '').toUpperCase())
+                        .filter((id) => COMMUNITY_REGION_LABELS[id])
+                );
+                communityBlockState.routes = new Set(
+                    (Array.isArray(raw.blockedRouteIds) ? raw.blockedRouteIds : [])
+                        .map((id) => String(id || '').trim())
+                        .filter(Boolean)
+                );
+            }
+            const regionBox = document.getElementById('community-block-regions');
+            const routeBox = document.getElementById('community-block-routes');
+            if (regionBox) {
+                regionBox.innerHTML = ['GP', 'WC', 'KZN', 'EC'].map((code) => {
+                    const checked = communityBlockState.regions.has(code) ? 'checked' : '';
+                    return `<label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-950 dark:text-emerald-100 cursor-pointer">
+                        <input type="checkbox" class="community-block-region rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500" value="${code}" ${checked}>
+                        ${COMMUNITY_REGION_LABELS[code]}
+                    </label>`;
+                }).join('');
+                regionBox.querySelectorAll('.community-block-region').forEach((cb) => {
+                    cb.onchange = () => {
+                        if (cb.checked) communityBlockState.regions.add(cb.value);
+                        else communityBlockState.regions.delete(cb.value);
+                        paintCommunityBlockSummary();
+                    };
+                });
+            }
+            if (routeBox) {
+                const esc = (typeof escapeHTML === 'function')
+                    ? escapeHTML
+                    : (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                const routes = listExpRoutes().filter((r) => r.isActive !== false);
+                routeBox.innerHTML = routes.map((r) => {
+                    const label = Admin.formatRouteLabelPlain
+                        ? Admin.formatRouteLabelPlain(r.name || r.id)
+                        : (r.name || r.id);
+                    const checked = communityBlockState.routes.has(r.id) ? 'checked' : '';
+                    return `<label class="flex items-start gap-2 text-[10px] text-emerald-950 dark:text-emerald-100 cursor-pointer py-0.5">
+                        <input type="checkbox" class="community-block-route mt-0.5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" value="${esc(r.id)}" ${checked}>
+                        <span><span class="font-black text-emerald-700 dark:text-emerald-300">${esc(r.region || '')}</span> · ${esc(label)}</span>
+                    </label>`;
+                }).join('') || '<p class="text-[10px] text-emerald-600 italic">No routes loaded.</p>';
+                routeBox.querySelectorAll('.community-block-route').forEach((cb) => {
+                    cb.onchange = () => {
+                        if (cb.checked) communityBlockState.routes.add(cb.value);
+                        else communityBlockState.routes.delete(cb.value);
+                        paintCommunityBlockSummary();
+                    };
+                });
+            }
+            paintCommunityBlockSummary();
+        };
+        paintCommunityBlocks();
+        document.getElementById('community-tab-switch')?.addEventListener('change', paintCommunityBlockSummary);
+
         const communityTabSave = document.getElementById('community-tab-save');
         if (communityTabSave) {
             communityTabSave.onclick = async () => {
@@ -28157,6 +28247,8 @@ const Admin = {
                         communityTab: {
                             ...(existing.communityTab && typeof existing.communityTab === 'object' ? existing.communityTab : {}),
                             killed,
+                            blockedRegionIds: [...communityBlockState.regions],
+                            blockedRouteIds: [...communityBlockState.routes],
                         },
                         updatedAt: Date.now(),
                         updatedBy: Admin.currentUser?.email || 'Admin',
@@ -28166,7 +28258,11 @@ const Admin = {
                         body: JSON.stringify(payload),
                     }, 10000);
                     if (!res.ok) throw new Error('Auth failed');
-                    if (typeof showToast === 'function') showToast(killed ? 'Community is off for commuters.' : 'Community is on.', 'success');
+                    const blocked = communityBlockState.regions.size + communityBlockState.routes.size;
+                    const note = killed
+                        ? 'Community is off for commuters.'
+                        : (blocked ? 'Community blocks saved.' : 'Community is on.');
+                    if (typeof showToast === 'function') showToast(note, 'success');
                     if (typeof window.fetchFeatures === 'function') {
                         try { await window.fetchFeatures(true); } catch { /* ignore */ }
                     }

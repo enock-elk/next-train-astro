@@ -33,7 +33,7 @@ import {
     startRateLimitCountdown,
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
-import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isCommunityTabKilled, isListedCommunityRoute } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isCommunityOpenInRegion, isCommunityTabKilled, isListedCommunityRoute } from './features.js';
 import {
     awardCommunityMarks,
     contributionDayKey,
@@ -3282,6 +3282,13 @@ export function bindCommunityUi() {
 }
 
 if (typeof window !== 'undefined') {
+    window.addEventListener('nt-features-updated', () => {
+        if (safeStorage.getItem('activeTab') !== 'community') return;
+        const routeId = document.getElementById('community-route-select')?.value || '';
+        if (!routeId || isListedCommunityRoute(routeId)) return;
+        if (!isCommunityOpenInRegion($userRegion.get())) return;
+        openRouteCommunity();
+    });
     window.addEventListener('ntdatasaver', () => {
         const view = document.getElementById('view-community');
         if (!view || view.classList.contains('hidden')) return;

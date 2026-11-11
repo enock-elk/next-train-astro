@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.3': [
+        'Alerts do not have Report. The header menu on an alert is Pin and Delete, and only for an admin session. Community can be switched off for every commuter, or left on and blocked for one region or one route. An admin session can still open it. The old enabled:false pilot config still does not hide the tab. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.2': [
         'Ad revenue and the telemetry graphs export the period on screen as a wide graph or as a spreadsheet of the date and the amount. Each graph has a landscape button, and the saved image uses that wide frame. Holding an alert or a community message puts Copy, Share, and a menu on the header. Report is in that menu. A shared link opens that notice or that message. Tapping a community reaction lists who reacted and keeps the reaction buttons. Community is a normal tab. System Controls can switch it off for commuters. An admin session can still open it. No commuter What\'s New. forceShow stays false.',
     ],

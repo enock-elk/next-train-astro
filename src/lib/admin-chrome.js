@@ -7,7 +7,7 @@
 import { safeStorage } from './utils.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { $account } from './account.js';
-import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isCommunityTabKilled, isListedAccountsRoute, isRideCheckInPinned } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isCommunityOpenInRegion, isListedAccountsRoute, isRideCheckInPinned } from './features.js';
 import { isLiveTrainFollowActive } from './live-train-follow.js';
 
 function isSignedInAccount() {
@@ -55,7 +55,7 @@ function setReveal(el, on) {
 export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
-    if (surface === 'community') return !isCommunityTabKilled();
+    if (surface === 'community') return isCommunityOpenInRegion($userRegion.get());
     // Someone who already signed in can still open Account to sign out.
     if (surface === 'account' && isSignedInAccount()) return true;
     if (surface === 'account' && isFeatureGranted(FEATURE_KEYS.ACCOUNTS)) return true;
@@ -353,6 +353,11 @@ function bindPilotChromeListeners() {
     });
     if (typeof $currentRouteId?.subscribe === 'function') {
         $currentRouteId.subscribe(() => {
+            try { applyPilotChrome(); } catch { /* ignore */ }
+        });
+    }
+    if (typeof $userRegion?.subscribe === 'function') {
+        $userRegion.subscribe(() => {
             try { applyPilotChrome(); } catch { /* ignore */ }
         });
     }

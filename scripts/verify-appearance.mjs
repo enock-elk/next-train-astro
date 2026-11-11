@@ -682,7 +682,7 @@ const adminChrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.me
 assert(adminChrome.includes('getPinnedRouteIds'), 'pilot chrome reads pinned routes');
 assert(adminChrome.includes("safeStorage.getItem('defaultRoute_' + region)"), 'pilot access uses pin keys, not the viewed corridor');
 assert(adminChrome.includes('FEATURE_KEYS.MAP_TAB'), 'Map tab is a pin-gated feature');
-assert(adminChrome.includes('isCommunityTabKilled'), 'Community stays on unless System Controls sets the killed flag');
+assert(adminChrome.includes('isCommunityOpenInRegion'), 'Community stays on unless this region is blocked or the tab is killed');
 assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
 assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
 assert(adminChrome.includes('placeAccountSettings'), 'Passenger Type and Theme move into Account when that row is visible');
@@ -693,7 +693,7 @@ assert(liveBoard.includes("timeEl.classList.add('hidden')"), 'commuters do not s
 
 const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 assert(adminJs.includes('id="exp-features-header"'), 'System Controls has Experimental features');
-assert(adminJs.includes("'exp-map-enabled'") && adminJs.includes('id="community-tab-switch"') && adminJs.includes('killed'), 'Map stays experimental and Community has one off switch');
+assert(adminJs.includes("'exp-map-enabled'") && adminJs.includes('id="community-tab-switch"') && adminJs.includes('blockedRegionIds') && adminJs.includes('blockedRouteIds'), 'Map stays experimental and Community can be blocked by region or route');
 assert(adminJs.includes("I'm on it / live share") && adminJs.includes('Delay reports') && adminJs.includes('Community realtime') && adminJs.includes('Push notifications'), 'experimental accordion lists remaining grantable features');
 assert(!adminJs.includes("{ key: 'tripPrice', label: 'Trip price' }"), 'Trip price is not a grantable experimental feature');
 assert(adminJs.includes('exp-feat-header') && adminJs.includes('exp-feat-body'), 'feature types are nested accordions');

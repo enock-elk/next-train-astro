@@ -7,7 +7,9 @@
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"], regionIds: ["KZN"] },
- *   communityTab:      { killed: true } hides the tab. Anything else leaves it on.
+ *   communityTab:      { killed: true } hides the tab everywhere.
+ *                      blockedRegionIds / blockedRouteIds hide one region or route.
+ *                      The old enabled flag and routeIds list do not hide it.
  *   accounts:          { enabled: true, routeIds: ["pta-kempton"], regionIds: [] }
  * }
  *
@@ -17,7 +19,7 @@
  * region checkbox does not open the other routes in that region.
  * Empty routeIds with a region still opens every account sheet there.
  * The accounts switch starts off. Community ignores route lists and the old
- * enabled:false. It stays on until communityTab.killed is true.
+ * enabled:false. It stays on until killed, or until that region or route is blocked.
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
@@ -316,21 +318,56 @@ export function isListedAccountsRoute(routeId) {
     return communityRouteOnEntry(entry, routeId);
 }
 
+function communityIdList(raw) {
+    return Array.isArray(raw) ? raw.map((id) => String(id || '').trim()).filter(Boolean) : [];
+}
+
+/**
+ * Community blocks from System Controls.
+ * `killed` hides the tab everywhere. `blockedRegionIds` and `blockedRouteIds`
+ * hide one region or one route. The old enabled flag and routeIds allow-list
+ * are ignored, so a pilot-off config does not hide the tab.
+ * @param {{ killed?: boolean, blockedRegionIds?: string[], blockedRouteIds?: string[] } | null | undefined} entry
+ * @param {{ id?: string, region?: string } | null | undefined} route
+ */
+export function routeBlockedByCommunity(entry, route) {
+    if (!entry) return false;
+    if (entry.killed === true) return true;
+    const id = String(route?.id || '').trim();
+    if (id && communityIdList(entry.blockedRouteIds).includes(id)) return true;
+    const region = String(route?.region || regionForRouteId(id) || '').toUpperCase();
+    const blockedRegions = communityIdList(entry.blockedRegionIds).map((code) => code.toUpperCase());
+    return !!(region && blockedRegions.includes(region));
+}
+
 /**
  * Community is on for every commuter until System Controls sets killed.
- * The old enabled:false and route lists do not hide the tab.
+ * A blocked region or route is handled by routeBlockedByCommunity.
  */
 export function isCommunityTabKilled() {
     const entry = cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB];
     return !!(entry && entry.killed === true);
 }
 
-/** Any active room, unless an admin has switched Community off. */
-export function isListedCommunityRoute(routeId) {
+/** True when this region still has a community room a commuter can open. */
+export function isCommunityOpenInRegion(region) {
     if (isCommunityTabKilled()) return false;
+    const code = String(region || '').toUpperCase();
+    const entry = cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB];
+    if (code && communityIdList(entry?.blockedRegionIds).map((id) => id.toUpperCase()).includes(code)) return false;
+    const routes = Object.values(ROUTES || {}).filter((r) => (
+        r && r.isActive && r.id !== 'special_event' && String(r.region || '').toUpperCase() === code
+    ));
+    if (!routes.length) return true;
+    return routes.some((route) => !routeBlockedByCommunity(entry, route));
+}
+
+/** Any active room that System Controls has not blocked. */
+export function isListedCommunityRoute(routeId) {
     const id = String(routeId || '').trim();
     const route = id && ROUTES?.[id];
-    return !!(route && route.isActive && route.id !== 'special_event');
+    if (!(route && route.isActive && route.id !== 'special_event')) return false;
+    return !routeBlockedByCommunity(cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB], route);
 }
 
 /**
@@ -365,6 +402,8 @@ if (typeof window !== 'undefined') {
     window.isFeatureEnabled = isFeatureEnabled;
     window.isListedCommunityRoute = isListedCommunityRoute;
     window.isCommunityTabKilled = isCommunityTabKilled;
+    window.isCommunityOpenInRegion = isCommunityOpenInRegion;
+    window.routeBlockedByCommunity = routeBlockedByCommunity;
     window.isListedAccountsRoute = isListedAccountsRoute;
     window.isFeatureGranted = isFeatureGranted;
     window.getGrantedFeatures = getGrantedFeatures;

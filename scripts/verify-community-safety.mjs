@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { checkContentSafety } from '../src/lib/content-safety.js';
+import { routeBlockedByCommunity } from '../src/lib/features.js';
 import { sanitizeBody, hasFirebaseAdminEnv, communityPublicPointsNext } from '../workers/nexttrain-community/worker.js';
 
 const cases = [
@@ -177,6 +178,15 @@ assert.match(communityJs, /community-reaction-who/, 'a reaction pill opens who r
 assert.match(communityJs, /community-select-share/, 'a selected message can be shared from the header');
 assert.match(communityJs, /queueCommunityFocus/, 'a community link can open that post');
 assert.match(communityView, /id="community-select-menu"/, 'report sits in the community header menu');
-assert.match(readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8'), /isCommunityTabKilled/, 'Community is on unless the killed flag is set');
+assert.match(readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8'), /blockedRegionIds/, 'Community can be blocked for one region');
+const gp = { id: 'pta-kempton', region: 'GP' };
+const kzn = { id: 'kzn-catoridge', region: 'KZN' };
+assert.equal(routeBlockedByCommunity(null, gp), false, 'a missing Community config leaves the room open');
+assert.equal(routeBlockedByCommunity({ enabled: false, routeIds: ['pta-kempton'] }, gp), false, 'the old pilot-off config does not block a room');
+assert.equal(routeBlockedByCommunity({ killed: true }, gp), true, 'the global switch blocks every room');
+assert.equal(routeBlockedByCommunity({ blockedRegionIds: ['KZN'] }, kzn), true, 'a blocked region closes its rooms');
+assert.equal(routeBlockedByCommunity({ blockedRegionIds: ['KZN'] }, gp), false, 'a blocked region leaves the other regions open');
+assert.equal(routeBlockedByCommunity({ blockedRouteIds: ['pta-kempton'] }, gp), true, 'a blocked route closes that room');
+assert.equal(routeBlockedByCommunity({ blockedRouteIds: ['pta-kempton'] }, { id: 'pta-pien', region: 'GP' }), false, 'a blocked route leaves the rest of the region open');
 
 console.log(`Community safety verified: ${cases.length} language cases, client/worker parity, held publishing paths.`);

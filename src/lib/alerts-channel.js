@@ -1428,6 +1428,7 @@ function selectAlertNotice(notice) {
     bar?.classList.remove('hidden');
     bar?.classList.add('flex');
     document.getElementById('alerts-select-menu')?.classList.add('hidden');
+    syncAlertMenuButton();
 }
 
 async function copyText(text) {
@@ -1455,17 +1456,35 @@ async function shareLink(url, text) {
     await copyText(url);
 }
 
+function alertMenuActions(notice) {
+    if (!isAdminAuthed() || !notice) return [];
+    return [
+        { action: 'pin', label: isNoticePinned(notice) ? 'Unpin' : 'Pin' },
+        { action: 'delete', label: 'Delete' },
+    ];
+}
+
+function syncAlertMenuButton() {
+    const btn = document.getElementById('alerts-select-menu-btn');
+    const menu = document.getElementById('alerts-select-menu');
+    const actions = alertMenuActions(selectedAlert);
+    if (!actions.length) {
+        btn?.classList.add('hidden');
+        menu?.classList.add('hidden');
+        if (menu) menu.innerHTML = '';
+        return;
+    }
+    btn?.classList.remove('hidden');
+}
+
 function paintAlertSelectMenu() {
     const menu = document.getElementById('alerts-select-menu');
     const notice = selectedAlert;
-    if (!menu || !notice) return;
+    const actions = alertMenuActions(notice);
+    syncAlertMenuButton();
+    if (!menu || !notice || !actions.length) return;
     const row = (action, label) => `<button type="button" class="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none" data-alert-menu="${action}" role="menuitem">${label}</button>`;
-    let html = row('report', 'Report');
-    if (isAdminAuthed()) {
-        html += row('pin', isNoticePinned(notice) ? 'Unpin' : 'Pin');
-        html += row('delete', 'Delete');
-    }
-    menu.innerHTML = html;
+    menu.innerHTML = actions.map((item) => row(item.action, item.label)).join('');
     menu.classList.remove('hidden');
 }
 
@@ -1514,17 +1533,6 @@ function bindAlertsChannelOnce() {
         const action = btn.getAttribute('data-alert-menu');
         const notice = selectedAlert;
         document.getElementById('alerts-select-menu')?.classList.add('hidden');
-        if (action === 'report') {
-            const { submitModerationReport } = await import('./community.js');
-            const result = await submitModerationReport({
-                type: 'alert',
-                targetPostId: notice.id,
-                snippet: alertPlainText(notice).slice(0, 80),
-            });
-            showToast(result.ok ? 'Thanks. Report sent.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
-            clearAlertSelection();
-            return;
-        }
         if (action === 'pin') {
             await toggleAlertPinned(notice);
             clearAlertSelection();

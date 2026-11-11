@@ -21,6 +21,7 @@ import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { closeSmoothModal, openSmoothModal, showToast, triggerHaptic } from './ui.js';
+import { bindKeyboardThread } from './keyboard-thread.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
     isShadowBanned,
@@ -1449,6 +1450,11 @@ function openCommunityReactionsModal(postId) {
 }
 
 function reactorName(uid) {
+    const acct = $account.get();
+    const own = acct?.status === 'signed-in' && acct.uid && acct.uid === uid
+        ? String(acct.displayName || '').trim()
+        : '';
+    if (own) return own;
     loadBestPublicNames();
     const profile = publicProfiles.get(uid);
     const fromProfile = String(profile?.displayName || '').trim();
@@ -1524,6 +1530,8 @@ let reactionAnchor = null;
 let reactionGuardUntil = 0;
 let reactionPress = null;
 let pendingCommunityFocus = null;
+let communityFlashPostId = '';
+let communityFocusHold = 0;
 
 export function queueCommunityFocus(routeId, postId = '', opts = {}) {
     pendingCommunityFocus = {
@@ -1592,8 +1600,35 @@ async function revealCommunityFocus(routeId) {
         announceCommunityFocus(focus, false);
         return;
     }
-    row.scrollIntoView({ block: 'center' });
+    revealCommunityRow(row);
     announceCommunityFocus(focus, true);
+}
+
+/** Scroll the room only. scrollIntoView also moves #app-scroll and leaves a blank under the tab. */
+function revealCommunityRow(row, opts = {}) {
+    const scroller = row.closest('.community-feed-scroll');
+    if (scroller) {
+        const box = scroller.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const below = rowRect.bottom - (box.bottom - 16);
+        const above = (box.top + 16) - rowRect.top;
+        if (below > 0) scroller.scrollTop += below;
+        else if (above > 0) scroller.scrollTop -= above;
+    }
+    const root = document.scrollingElement || document.documentElement;
+    if (root) root.scrollTop = 0;
+    const app = document.getElementById('app-scroll');
+    if (app) app.scrollTop = 0;
+    try { window.scrollTo(0, 0); } catch { /* ignore */ }
+    const bubble = row.querySelector('.community-bubble');
+    if (!opts.keepHold) {
+        communityFlashPostId = row.getAttribute('data-post-id') || '';
+        communityFocusHold = Date.now() + 2500;
+    }
+    bubble?.classList.remove('nt-community-force-flash');
+    // Restart the ring if the same link is opened twice.
+    if (bubble) void bubble.offsetWidth;
+    bubble?.classList.add('nt-community-force-flash');
 }
 
 function shareOrigin() {
@@ -2091,7 +2126,10 @@ function applyFeedFilter(routeId) {
         } else clearCommunitySelection();
     }
     const focusing = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
+    const heldId = communityFlashPostId;
+    const heldRow = heldId ? listEl.querySelector(`[data-post-id="${String(heldId).replace(/"/g, '')}"]`) : null;
     if (focusing) void revealCommunityFocus(routeId);
+    else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
     else pinCommunityFeedToLatest();
     rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
@@ -2677,7 +2715,7 @@ function restoreComposerDraft(composer) {
     if (!saved) return;
     el.value = saved;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), 160)}px`;
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 60), 160)}px`;
 }
 
 function keepComposerText(composer) {
@@ -2857,7 +2895,7 @@ async function suggestCommunityReply(focusPostId = '') {
         if (composer) {
             composer.value = draft.slice(0, COMMUNITY_ADMIN_BODY_MAX);
             composer.style.height = 'auto';
-            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 44), 160)}px`;
+            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 60), 160)}px`;
             rememberComposerDraft(composer.value);
             composer.focus();
         }
@@ -3083,7 +3121,7 @@ async function handlePostSubmit() {
         if (composer && draft && !composer.value) {
             composer.value = draft;
             composer.style.height = 'auto';
-            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 44), 160)}px`;
+            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 60), 160)}px`;
             rememberComposerDraft(draft);
         }
         if (errEl) errEl.textContent = result.needsAuth ? '' : (result.message || '');
@@ -3339,11 +3377,12 @@ export function bindCommunityUi() {
         syncComposerChrome($account.get().status === 'signed-in');
     });
     restoreComposerDraft(composerEl);
+    bindKeyboardThread();
     composerEl?.addEventListener('input', () => {
         rememberComposerDraft(composerEl.value);
         // Auto-grow with new lines (WhatsApp-style), capped
         composerEl.style.height = 'auto';
-        const next = Math.min(Math.max(composerEl.scrollHeight, 44), 160);
+        const next = Math.min(Math.max(composerEl.scrollHeight, 60), 160);
         composerEl.style.height = `${next}px`;
         liveModerateComposer();
         paintCommunityQuotaHint();

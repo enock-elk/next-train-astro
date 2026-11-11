@@ -447,7 +447,7 @@ assert(communityView.includes('community-bubble-marks'), 'Community name row can
 assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
 assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
-assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
+assert(communityView.includes('rows="2"') && communityView.includes('min-h-[3.75rem]') && communityView.includes('rounded-[1.35rem]'), 'community composer matches the Feedback Hub field');
 const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
 assert(communityJs.includes('community-bubble-name'), 'name stays on the far left of the bubble row');
 assert(communityJs.includes('grouped'), 'consecutive same-author posts still omit the name row');
@@ -458,6 +458,9 @@ assert(communityJs.includes('offerNextTrainAccount') && communityJs.includes('nt
 assert(!communityJs.includes('requestAccountSignIn'), 'community post does not jump straight to Welcome back');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
+assert(communityJs.includes('revealCommunityRow') && !communityJs.includes("row.scrollIntoView"), 'a community link scrolls the room only');
+assert(communityJs.includes('nt-community-force-flash'), 'a community link rings the message the way an alert does');
+assert(communityJs.includes("acct.uid === uid"), 'your own reaction uses the name saved on the account');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
 assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');
@@ -869,6 +872,7 @@ assert(mapTab.includes('compareNearbyTrainLikelihood'), 'nearby modal ranks like
 
 assert(formatAccountDisplayName('Enock Leo Kazembe') === 'Enock LK', 'display name is first word plus remaining initials');
 assert(formatAccountDisplayName('Enock') === 'Enock', 'single-word display name stays the first name');
+assert(formatAccountDisplayName('Enock LK') === 'Enock LK', 'a saved short name is not abbreviated again');
 assert(clampDisplayName('  Enock   LK  ') === 'Enock LK', 'custom display name is trimmed');
 assert(refuseDisplayName('').ok === true, 'empty display name is allowed for Auth fallback');
 assert(refuseDisplayName('https://spam.example').ok === false, 'display names that look like URLs are refused');

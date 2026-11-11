@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.10': [
+        'A saved Community name such as Enock LK stays Enock LK on a reaction. A shared community message rings that bubble, and the room scrolls inside the tab so the page does not grow a blank under the composer. The Community field is the same two-row curve as Feedback Hub. With the keyboard open, the wallpaper stays put and the latest messages sit above the keys. The shell is not shortened, so the blank slab under the composer stays gone. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.9': [
         'The Community composer sits on the same wallpaper as Feedback Hub, so the area around the message field is not a white bar. Feedback Hub uses the Community bubble, name, and avatar. A run of your own messages shows You once. An admin reply uses that admin\'s account name and Community photo, so Enock LK stays Enock LK. One person has one reaction. A commuter reaction on an admin message badges that message and leaves the thread in Archives. Opening the thread clears the badge. No commuter What\'s New. forceShow stays false.',
     ],

@@ -302,6 +302,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             root.style.setProperty('--nt-kb-h', kbH + 'px');
           }
           root.classList.toggle('nt-keyboard', keyboard);
+          if (keyboard && (communityOn || hubOn)) {
+            try {
+              var page = document.scrollingElement || document.documentElement;
+              if (page && page.scrollTop) page.scrollTop = 0;
+              if (document.body && document.body.scrollTop) document.body.scrollTop = 0;
+              var appScroll = document.getElementById('app-scroll');
+              if (appScroll && appScroll.scrollTop) appScroll.scrollTop = 0;
+            } catch (e) {}
+          }
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
           try {
@@ -1366,14 +1375,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       /* Keyboard: keep Community filling leftover height (no gray slab)
          without shrinking the room chrome to fit Next Train. The composer
-         docks to --nt-kb-h. Oval stays hidden. #app-scroll stays scrollable
-         so the header can leave. */
+         docks to --nt-kb-h. The page scroll stays put so the wallpaper
+         does not slide. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
         flex: 1 1 auto;
         min-height: 0;
         overflow: hidden;
         height: auto;
-        padding-bottom: 0;
+        /* Keep the resting bottom pad. Dropping it grew the pane, so the
+           wallpaper pattern shifted down when the keyboard opened. */
       }
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-pane {
         flex: 1 1 auto;
@@ -1390,6 +1400,17 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         max-width: 28rem;
         margin-left: auto;
         margin-right: auto;
+      }
+      /* The dock leaves the flow, so the room would keep its last rows behind
+         the keys. Pad the scroller by the keyboard plus the dock. The shell
+         stays full size, so the wallpaper does not jump and no slab opens. */
+      html.nt-keyboard.nt-in-app #view-community .community-feed-scroll {
+        padding-bottom: max(0px, calc(var(--nt-kb-h, 0px) + var(--nt-community-dock-h, 6.5rem) - var(--nt-nav-h, 4rem) - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) - 0.75rem));
+      }
+      html.nt-keyboard #view-community .community-pane > .nt-pack-wallpaper,
+      html.nt-keyboard #messages-thread-modal .nt-pack-wallpaper {
+        height: var(--nt-wallpaper-lock, 100%);
+        bottom: auto;
       }
       /* Feedback Hub composer: same IME dock as Community. iOS ignores
          visualViewport height on position:fixed overlays, so shrinking the

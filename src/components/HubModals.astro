@@ -1081,6 +1081,9 @@ import { withBase } from '../lib/config.js';
     border-top: 0;
     padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   }
+  html.nt-keyboard #messages-thread-list {
+    padding-bottom: calc(var(--nt-kb-h, 0px) + var(--nt-hub-dock-h, 10.5rem));
+  }
   html.nt-keyboard #messages-thread-form {
     position: fixed;
     left: 0;
@@ -1089,7 +1092,7 @@ import { withBase } from '../lib/config.js';
     z-index: 136;
     width: 100%;
     padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
-    background-color: color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas));
+    background-color: transparent;
   }
   html.nt-keyboard #messages-thread-modal > div {
     transform: none !important;

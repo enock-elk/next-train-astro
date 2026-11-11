@@ -416,15 +416,17 @@ function publishUser(user, extras = {}) {
     const providerId = Array.isArray(user.providerData)
         ? (user.providerData.find((row) => row?.providerId)?.providerId || null)
         : null;
+    const prev = $account.get();
+    const keepCustom = !extras.displayName && prev?.uid === user.uid && prev.displayNameCustom && prev.displayName;
     $account.set({
         status: 'signed-in',
         uid: user.uid,
-        displayName: extras.displayName || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger')),
+        displayName: extras.displayName || (keepCustom ? prev.displayName : formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'))),
         photoURL,
         email: user.email || null,
         emailVerified: !!user.emailVerified,
         authProvider: extras.authProvider || providerId,
-        displayNameCustom: !!extras.displayNameCustom,
+        displayNameCustom: extras.displayNameCustom != null ? !!extras.displayNameCustom : !!keepCustom,
         chatDeviceId: extras.chatDeviceId || $account.get().chatDeviceId || null,
     });
     safeStorage.setItem('authUid', user.uid);

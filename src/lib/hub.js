@@ -48,6 +48,7 @@ import {
     submitInboxReaction,
 } from './inbox-reactions.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { bindKeyboardThread } from './keyboard-thread.js';
 import { showPhotoInAlerts } from './rider-marks.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
@@ -430,6 +431,7 @@ function bindFeedbackViewportHandling() {
         [0, 80, 200, 500, 1000].forEach((ms) => setTimeout(settleHubAfterKeyboard, ms));
     });
     syncFeedbackModalViewport();
+    bindKeyboardThread();
 }
 
 function checkFeedbackRate() {

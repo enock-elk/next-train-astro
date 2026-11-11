@@ -124,6 +124,10 @@ const UNREAD_AWAY_MS = 3 * 60 * 1000;
 let unreadPolledAt = 0;
 /** @type {Record<string, number>} */
 let cachedUnreadByRoute = {};
+/** Route whose feed is actually on screen. Opening the tab is not enough. */
+let paintedCommunityRouteId = '';
+/** True once auth has moved off the default guest placeholder. */
+let communityAuthSettled = false;
 
 /** @type {Record<string, object[]>} local-only posts for shadow-banned authors */
 const localOverlayByRoute = {};
@@ -431,6 +435,35 @@ function mergeOverlayPosts(routeId, list) {
     return merged;
 }
 
+function upsertOutgoingPost(post) {
+    if (!post?.postId || !post.routeId) return;
+    const bucket = localOverlayByRoute[post.routeId] || (localOverlayByRoute[post.routeId] = []);
+    const at = bucket.findIndex((p) => p.postId === post.postId);
+    if (at >= 0) bucket[at] = post;
+    else bucket.push(post);
+    const idx = cachedFeedPosts.findIndex((p) => p.postId === post.postId);
+    if (idx >= 0) cachedFeedPosts[idx] = { ...cachedFeedPosts[idx], ...post };
+    else cachedFeedPosts = [...cachedFeedPosts, post].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    communityFeedPinned = true;
+    applyFeedFilter(post.routeId);
+}
+
+function dropOutgoingPost(routeId, postId) {
+    if (!routeId || !postId) return;
+    if (localOverlayByRoute[routeId]) {
+        localOverlayByRoute[routeId] = localOverlayByRoute[routeId].filter((p) => p.postId !== postId);
+    }
+    cachedFeedPosts = cachedFeedPosts.filter((p) => p.postId !== postId);
+    applyFeedFilter(routeId);
+}
+
+function receiptMarkHtml(pending) {
+    if (pending) {
+        return `<span class="community-msg-receipt is-pending" aria-label="Sending"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.6V8.2l2.3 1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+    }
+    return `<span class="community-msg-receipt is-sent" aria-label="Sent"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4l3 3 6.6-6.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+}
+
 function stopRealtimePosts() {
     if (typeof postsUnsub === 'function') {
         try { postsUnsub(); } catch { /* ignore */ }
@@ -731,7 +764,7 @@ export async function deleteCommunityMessage({ routeId, postId, replyId = '', mo
     return data;
 }
 
-export async function submitCommunityPost(body, routeId = $currentRouteId.get()) {
+export async function submitCommunityPost(body, routeId = $currentRouteId.get(), options = {}) {
     const text = (body || '').trim();
     const acct = $account.get();
     const operator = isAdminAuthed();
@@ -807,7 +840,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         return { ok: true, held: true, message: safety.message };
     }
 
-    const postId = newId('cp');
+    const postId = options.postId || newId('cp');
     const category = 'general';
     const payload = {
         postId,
@@ -817,17 +850,22 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         category: COMMUNITY_CATEGORIES[category] ? category : 'general',
         uid: acct.uid,
         displayName: communityNameFor(acct),
-        photoURL: await publicCommuterPhoto(acct),
         email: acct.email || null,
         deviceId: getDeviceId(),
         timestamp: Date.now(),
         hidden: false,
         replyCount: 0,
         appVersion: APP_VERSION,
+        photoURL: null,
         ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
         ...(linkUrl ? { linkUrl } : {}),
         ...replyToPayload,
     };
+
+    if (typeof options.onStage === 'function') {
+        try { options.onStage({ ...payload, pendingSend: true }); } catch { /* the composer can stay if paint fails */ }
+    }
+    payload.photoURL = await publicCommuterPhoto(acct);
 
     const banned = await isShadowBanned(acct.uid);
     if (banned) {
@@ -843,7 +881,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         // Prefer Cloudflare write bouncer when configured (rate + sanitize + Admin write).
         if (COMMUNITY_WORKER_URL) {
             const token = await ensureAuthToken();
-            if (!token) return { ok: false, needsAuth: true };
+            if (!token) return { ok: false, needsAuth: true, postId };
             const res = await fetch(`${COMMUNITY_WORKER_URL}/community/post`, {
                 method: 'POST',
                 headers: {
@@ -860,13 +898,14 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
             if (res.status === 429) {
                 return {
                     ok: false,
+                    postId,
                     message: data.error || 'Please wait before you can send another message.',
                     retryAfterMs: data.retryAfterMs || 20000,
                     reason: data.reason || 'cooldown',
                 };
             }
             if (data.blocked) {
-                return { ok: false, message: data.error || 'That message isn’t allowed.' };
+                return { ok: false, postId, message: data.error || 'That message isn’t allowed.' };
             }
             if (data.held) {
                 recordRateHit();
@@ -931,7 +970,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         import('./account.js').then((m) => m.recordAccountActivity?.('community_post', { routeId })).catch(() => {});
         return { ok: true, post: payload };
     } catch (e) {
-        return { ok: false, message: safeCommunityWriteError(e?.message) };
+        return { ok: false, postId, message: safeCommunityWriteError(e?.message) };
     }
 }
 
@@ -1647,7 +1686,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
               <div class="community-bubble-body">
                 ${quoteHtml}
                 ${renderCommunityMedia(post)}
-                ${body ? `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${body}<span class="community-msg-time">${clock}</span></div>` : `<div class="community-msg-text"><span class="community-msg-time">${clock}</span></div>`}
+                ${body ? `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${body}<span class="community-msg-time">${clock}${isOwn && !tombstone ? receiptMarkHtml(!!post.pendingSend) : ''}</span></div>` : `<div class="community-msg-text"><span class="community-msg-time">${clock}${isOwn && !tombstone ? receiptMarkHtml(!!post.pendingSend) : ''}</span></div>`}
               </div>
             </div>
             ${tombstone ? '' : renderReactionSummary(post.postId || '', isOwn, routeId)}
@@ -1675,6 +1714,7 @@ function applyFeedFilter(routeId) {
             emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
                    <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up, or ask a question.</p>`;
         }
+        rememberPaintedCommunityRoute(routeId);
         return;
     }
     if (emptyEl) emptyEl.classList.add('hidden');
@@ -1701,6 +1741,7 @@ function applyFeedFilter(routeId) {
     armGifPlayers(listEl);
     wireCommunityChatGestures(listEl);
     pinCommunityFeedToLatest();
+    rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
     const uids = posts.map((p) => p.uid);
     loadPublicProfiles(uids).then((changed) => {
@@ -1832,11 +1873,20 @@ function resolveCommunityRoute(routeId) {
 
 function viewingCommunityRouteId() {
     if (safeStorage.getItem('activeTab') !== 'community') return '';
-    return document.getElementById('community-route-select')?.value
-        || getLastCommunityRoom()
-        || $currentRouteId.get()
-        || getPinnedRouteId()
-        || '';
+    const selected = document.getElementById('community-route-select')?.value || '';
+    if (!selected || selected !== paintedCommunityRouteId) return '';
+    return selected;
+}
+
+/** Mark only the room whose messages are on screen. Other rooms keep their counts. */
+function rememberPaintedCommunityRoute(routeId) {
+    if (!routeId || safeStorage.getItem('activeTab') !== 'community') return;
+    const selected = document.getElementById('community-route-select')?.value || '';
+    if (selected !== routeId) return;
+    paintedCommunityRouteId = routeId;
+    if (feedSilentRepaint || profileRepaintRoute === routeId) return;
+    markCommunityRouteSeen(routeId);
+    refreshCommunityUnreadBadge();
 }
 
 function unreadSeenKey(routeId) {
@@ -1858,6 +1908,17 @@ export function communityUnreadCursor(localRaw, remoteSeen) {
         lastSeen: Math.max(hasLocal ? local : 0, hasRemote ? remote : 0),
         established: true,
     };
+}
+
+/**
+ * A signed-in count waits until this account's seen cursors have loaded.
+ * A guest count waits until auth has settled, so a restoring session
+ * does not paint every recent message as unread and then clear it.
+ */
+export function communityUnreadMayCount(status, opts = {}) {
+    if (status === 'signed-in') return opts.seenLoaded === true;
+    if (status === 'guest') return opts.authSettled === true;
+    return false;
 }
 
 function communityMessageCountsAsUnread(message, myUid, lastSeen) {
@@ -1886,24 +1947,24 @@ let accountSeenCache = { uid: '', at: 0, map: null };
 
 async function readAccountCommunitySeen() {
     const acct = $account.get();
-    if (acct?.status !== 'signed-in' || !acct.uid) return null;
+    if (acct?.status !== 'signed-in' || !acct.uid) return undefined;
     const now = Date.now();
     if (accountSeenCache.uid === acct.uid && accountSeenCache.map && now - accountSeenCache.at < 60 * 1000) {
         return accountSeenCache.map;
     }
     try {
         const q = await authQuery();
-        if (!q) return accountSeenCache.uid === acct.uid ? accountSeenCache.map : null;
+        if (!q) return null;
         const res = await fetch(
             `${DYNAMIC_BASE_URL}users/${encodeURIComponent(acct.uid)}/community_seen.json${q}`
         );
-        if (!res.ok) return accountSeenCache.uid === acct.uid ? accountSeenCache.map : null;
+        if (!res.ok) return null;
         const data = await res.json();
         const map = data && typeof data === 'object' ? data : {};
         accountSeenCache = { uid: acct.uid, at: now, map };
         return map;
     } catch {
-        return accountSeenCache.uid === acct.uid ? accountSeenCache.map : null;
+        return null;
     }
 }
 
@@ -2037,6 +2098,18 @@ export async function refreshCommunityUnreadBadge() {
     const token = ++unreadRefreshToken;
     try { await fetchFeatures(); } catch { /* defaults */ }
     if (token !== unreadRefreshToken) return 0;
+    const acct = $account.get();
+    const signedIn = acct?.status === 'signed-in' && !!acct.uid;
+    let accountSeen = null;
+    if (signedIn) {
+        accountSeen = await readAccountCommunitySeen();
+        if (token !== unreadRefreshToken) return 0;
+    }
+    const mayCount = communityUnreadMayCount(acct?.status, {
+        seenLoaded: signedIn && accountSeen != null,
+        authSettled: communityAuthSettled,
+    });
+    if (!mayCount) return Object.values(cachedUnreadByRoute).reduce((sum, n) => sum + (Number(n) || 0), 0);
     const routes = regionCommunityRoutes();
     if (!routes.length) {
         cachedUnreadByRoute = {};
@@ -2050,10 +2123,9 @@ export async function refreshCommunityUnreadBadge() {
         void markCommunityRouteSeen(viewing, { silent: true });
     }
 
-    const accountSeen = await readAccountCommunitySeen();
     const next = {};
     await Promise.all(routes.map(async (r) => {
-        next[r.id] = await countUnreadOnRoute(r.id, viewing, accountSeen);
+        next[r.id] = await countUnreadOnRoute(r.id, viewing, signedIn ? accountSeen : null);
     }));
     if (token !== unreadRefreshToken) return 0;
     const stillViewing = viewingCommunityRouteId();
@@ -2073,6 +2145,22 @@ export function startCommunityUnreadWatch() {
     if (typeof window === 'undefined' || window.__ntCommunityUnreadWatch) return;
     window.__ntCommunityUnreadWatch = true;
     unreadPolledAt = Date.now();
+    const noteAccount = (acct) => {
+        if (acct?.status === 'loading' || acct?.status === 'pending' || acct?.status === 'signed-in') {
+            communityAuthSettled = true;
+        }
+        if (acct?.status === 'guest' && window.firebaseAuth && (!window.firebaseAuth.currentUser || window.firebaseAuth.currentUser.isAnonymous)) {
+            communityAuthSettled = true;
+        }
+        if ((acct?.uid || '') !== (accountSeenCache.uid || '')) {
+            accountSeenCache = { uid: acct?.uid || '', at: 0, map: null };
+        }
+    };
+    noteAccount($account.get());
+    $account.subscribe((acct) => {
+        noteAccount(acct);
+        refreshCommunityUnreadBadge();
+    });
     refreshCommunityUnreadBadge();
     unreadPollTimer = setInterval(() => {
         if (document.hidden || !unreadPollDue()) return;
@@ -2157,10 +2245,11 @@ function syncCommunityRoutePicker(routeId) {
 
     const label = formatRouteDisplayName(ROUTES[routeSel.value]?.name || routeSel.value || 'Select route');
     if (display) display.textContent = label;
+    const openId = paintedCommunityRouteId && routeSel.value === paintedCommunityRouteId ? routeSel.value : '';
     const triggerUnread = document.getElementById('community-route-unread');
     if (triggerUnread) {
         const other = Object.entries(cachedUnreadByRoute)
-            .filter(([id, n]) => n > 0 && id !== routeSel.value)
+            .filter(([id, n]) => n > 0 && id !== openId)
             .reduce((sum, [, n]) => sum + n, 0);
         if (other > 0) {
             triggerUnread.classList.remove('hidden');
@@ -2175,7 +2264,7 @@ function syncCommunityRoutePicker(routeId) {
         const allRoutes = [...routes];
         list.innerHTML = allRoutes.map((r) => {
             const selected = r.id === routeSel.value;
-            const unread = r.id === routeSel.value ? 0 : (cachedUnreadByRoute[r.id] || 0);
+            const unread = r.id === openId ? 0 : (cachedUnreadByRoute[r.id] || 0);
             const unreadHtml = unread > 0
                 ? `<span class="community-room-unread">${unread > 99 ? '99+' : unread}</span>`
                 : '';
@@ -2468,8 +2557,6 @@ async function openRouteCommunityNow(opts = {}) {
     communityFeedPinned = true;
     renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
-    if (activeRoute) markCommunityRouteSeen(activeRoute);
-    refreshCommunityUnreadBadge();
     refreshCommunitySendMax().finally(() => paintCommunityQuotaHint());
     startQuotaHintWatch();
 }
@@ -2611,9 +2698,29 @@ async function handlePostSubmit() {
     }
     if (btn) btn.disabled = true;
 
-    const result = await submitCommunityPost(body, routeId);
+    const draft = body;
+    let stagedId = '';
+    const result = await submitCommunityPost(body, routeId, {
+        onStage(post) {
+            stagedId = post.postId;
+            if (composer) {
+                composer.value = '';
+                composer.style.height = '';
+            }
+            rememberComposerDraft('');
+            upsertOutgoingPost(post);
+        },
+    });
     paintCommunityQuotaHint();
     if (!result.ok) {
+        const failedId = result.postId || stagedId;
+        if (failedId) dropOutgoingPost(routeId, failedId);
+        if (composer && draft && !composer.value) {
+            composer.value = draft;
+            composer.style.height = 'auto';
+            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 44), 160)}px`;
+            rememberComposerDraft(draft);
+        }
         if (errEl) errEl.textContent = result.needsAuth ? '' : (result.message || '');
         if (result.retryAfterMs) {
             paintCommunityWait(result);
@@ -2632,7 +2739,13 @@ async function handlePostSubmit() {
         return;
     }
 
-    if (composer) {
+    if (result.held) {
+        const heldId = result.post?.postId || result.postId || stagedId;
+        if (heldId) dropOutgoingPost(routeId, heldId);
+    } else if (result.post) {
+        upsertOutgoingPost({ ...result.post, pendingSend: false });
+    }
+    if (composer && composer.value) {
         composer.value = '';
         composer.style.height = '';
     }
@@ -2750,8 +2863,6 @@ export function bindCommunityUi() {
         renderCommunityFeed(rid);
         joinCommunityPresence(rid);
         communityFeedPinned = true;
-        if (rid) markCommunityRouteSeen(rid);
-        refreshCommunityUnreadBadge();
         paintCommunityQuotaHint();
     });
     document.getElementById('community-route-trigger')?.addEventListener('click', (e) => {

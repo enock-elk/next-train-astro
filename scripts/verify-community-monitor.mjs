@@ -168,6 +168,7 @@ assert.doesNotMatch(community, /setItem\(unreadSeenKey\(routeId\), String\(Date\
     new Function(`${community.slice(start, end).replace(/^export /gm, '')}
 this.cursor = communityUnreadCursor;
 this.count = countCommunityUnreadPosts;
+this.may = communityUnreadMayCount;
 `).call(unread);
     assert.equal(unread.cursor(null, null).established, false, 'no cursor means the room is still unseen');
     assert.equal(unread.cursor('100', null).lastSeen, 100);
@@ -185,6 +186,10 @@ this.count = countCommunityUnreadPosts;
     ];
     assert.equal(unread.count(posts, '', 0), 4, 'an unseen room counts posts and nested replies');
     assert.equal(unread.count(posts, 'me', 20), 2, 'messages after the cursor stay unread, including a reply');
+    assert.equal(unread.may('signed-in', { seenLoaded: false }), false, 'a signed-in badge waits for the account seen cursors');
+    assert.equal(unread.may('guest', { authSettled: false }), false, 'a restoring session does not count every message as unread');
+    assert.equal(unread.may('guest', { authSettled: true }), true, 'a settled guest uses this phone cursor');
+    assert.equal(unread.may('signed-in', { seenLoaded: true }), true, 'a loaded account cursor can count');
 }
 assert.match(rules.rules.users.$uid.community_seen.$routeId['.validate'], /newData\.isNumber/, 'account seen cursors are timestamps');
 assert.match(community, /\.\.\.replyToPayload/, 'quote-reply top-level posts keep their quote when held or published');
@@ -229,6 +234,9 @@ assert.match(communityView, /community-avatar-spacer/, 'Community CSS keeps What
 assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
 assert.match(community, /left > 3/, 'quota hint stays hidden until 3 messages remain');
 assert.match(community, /viewing\) cachedUnreadByRoute\[viewing\] = 0/, 'the open room is cleared before a slower unread count returns');
+assert.match(community, /paintedCommunityRouteId/, 'only a painted room is treated as open');
+assert.match(community, /pendingSend: true/, 'a send appears in the room before the server answers');
+assert.match(community, /community-msg-receipt/, 'a sending message shows a clock, then a tick');
 assert.match(community, /orderBy=%22timestamp%22&startAt=/, 'unread counts only posts newer than the last visit');
 assert.match(community, /public_profile\/\$\{encodeURIComponent\(uid\)\}/, 'community bubbles read the latest public points');
 assert.ok(rules.rules.public_profile, 'public profile rules exist');

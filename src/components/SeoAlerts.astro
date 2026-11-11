@@ -25,6 +25,9 @@ const routeIdAttr = routeIds.join(',');
     <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="sync" class="max-w-full max-h-full object-contain select-none pointer-events-none">
     <ZoomControls />
   </div>
+  <button type="button" id="alert-image-lightbox-download" class="absolute top-[max(0.75rem,env(safe-area-inset-top))] left-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center border border-white/20 focus:outline-none [touch-action:manipulation]" aria-label="Download">
+    <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v10m0 0l-4-4m4 4l4-4M5 20h14"></path></svg>
+  </button>
   <button type="button" id="alert-image-lightbox-close" class="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center border border-white/20 focus:outline-none [touch-action:manipulation]" aria-label="Close">
     <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
   </button>

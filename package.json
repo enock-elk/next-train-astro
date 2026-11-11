@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "10.11.11.3",
+  "version": "10.11.11.4",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/fetch-live-schedules-for-seo.mjs && node scripts/generate-sitemap.mjs",
@@ -80,6 +80,7 @@
     "firebase": "latest",
     "jpeg-js": "^0.4.4",
     "nanostores": "latest",
+    "pdfjs-dist": "^4.10.38",
     "tailwindcss": "latest",
     "typescript": "latest",
     "workbox-window": "latest"

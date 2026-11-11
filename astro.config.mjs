@@ -127,7 +127,8 @@ export default defineConfig({
             // Never cache the stub in the PWA or Facebook IAB gets a dead hop.
             urlPattern: ({ url }) => url.pathname === '/og/share'
                 || url.pathname.endsWith('/og/share')
-                || /^\/og\/l(?:ive)?(?:\/|$)/i.test(url.pathname),
+                || /^\/og\/l(?:ive)?(?:\/|$)/i.test(url.pathname)
+                || /^\/og\/[ac](?:\/|$)/i.test(url.pathname),
             handler: 'NetworkOnly',
           },
           {

@@ -1384,12 +1384,24 @@ async function paintWhoReacted(postId) {
 let selectedCommunity = null;
 let pendingCommunityFocus = null;
 
-export function queueCommunityFocus(routeId, postId = '') {
+export function queueCommunityFocus(routeId, postId = '', opts = {}) {
     pendingCommunityFocus = {
         routeId: String(routeId || ''),
         postId: String(postId || ''),
         fetched: false,
+        announce: opts.announce === true,
+        announced: false,
     };
+}
+
+function announceCommunityFocus(focus, found) {
+    if (!focus?.announce || focus.announced) return;
+    focus.announced = true;
+    showToast(
+        found ? 'Opened a community message' : 'This message is no longer available',
+        found ? 'success' : 'info',
+        found ? 2500 : 4000
+    );
 }
 
 async function fetchOneCommunityPost(routeId, postId) {
@@ -1405,23 +1417,42 @@ async function fetchOneCommunityPost(routeId, postId) {
     }
 }
 
+function communityPostGone(post) {
+    return !post || post.deleted || post.hidden || post.removed;
+}
+
 async function revealCommunityFocus(routeId) {
     const focus = pendingCommunityFocus;
     if (!focus || focus.routeId !== routeId || !focus.postId) return;
-    if (!findCachedPost(focus.postId) && !focus.fetched) {
+    const cached = findCachedPost(focus.postId);
+    if (communityPostGone(cached) && cached) {
+        pendingCommunityFocus = null;
+        announceCommunityFocus(focus, false);
+        return;
+    }
+    if (!cached && !focus.fetched) {
         focus.fetched = true;
         const one = await fetchOneCommunityPost(routeId, focus.postId);
-        if (one && pendingCommunityFocus === focus) {
+        if (!communityPostGone(one) && pendingCommunityFocus === focus) {
             cachedFeedPosts = [...cachedFeedPosts.filter((row) => row.postId !== one.postId), one]
                 .sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
             applyFeedFilter(routeId);
             return;
         }
+        if (communityPostGone(one)) {
+            pendingCommunityFocus = null;
+            announceCommunityFocus(focus, false);
+            return;
+        }
     }
     pendingCommunityFocus = null;
     const row = [...document.querySelectorAll('.community-post-row')].find((el) => el.getAttribute('data-post-id') === focus.postId);
-    if (!row) return;
+    if (!row) {
+        announceCommunityFocus(focus, false);
+        return;
+    }
     row.scrollIntoView({ block: 'center' });
+    announceCommunityFocus(focus, true);
 }
 
 function shareOrigin() {
@@ -1430,7 +1461,39 @@ function shareOrigin() {
 }
 
 function communityShareUrl(routeId, postId) {
-    return `${shareOrigin()}/#community/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`;
+    return `${shareOrigin()}/og/c/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`;
+}
+
+async function copyPlainText(text) {
+    const value = String(text || '').trim().slice(0, 4000);
+    if (!value) return false;
+    try {
+        if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+        await Promise.race([
+            navigator.clipboard.writeText(value),
+            new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 1500); }),
+        ]);
+        showToast('Copied', 'success');
+        return true;
+    } catch {
+        try {
+            const area = document.createElement('textarea');
+            area.value = value;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand('copy');
+            area.remove();
+            if (ok) {
+                showToast('Copied', 'success');
+                return true;
+            }
+        } catch { /* leave the selection bar up */ }
+        showToast('Could not copy.', 'error');
+        return false;
+    }
 }
 
 function clearCommunitySelection() {
@@ -2944,24 +3007,29 @@ export function bindCommunityUi() {
         const post = selectedCommunity?.post;
         if (!post) return;
         const link = communityShareUrl(selectedCommunity.routeId, post.postId);
-        let text = String(post.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        let text = String(post.body || '').slice(0, 8000)
+            .replace(/<img\b[^>]*>/gi, ' ')
+            .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
         if (text.length < 12) text = text ? `${text}\n${link}` : link;
-        try {
-            await navigator.clipboard.writeText(text);
-            showToast('Copied', 'success');
-        } catch {
-            showToast('Could not copy.', 'error');
-        }
+        copyPlainText(text);
     });
     document.getElementById('community-select-share')?.addEventListener('click', async (e) => {
         e.preventDefault();
         const post = selectedCommunity?.post;
         if (!post) return;
         const url = communityShareUrl(selectedCommunity.routeId, post.postId);
-        const text = String(post.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || 'Next Train';
+        const text = String(post.body || '').slice(0, 8000)
+            .replace(/<img\b[^>]*>/gi, ' ')
+            .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
         if (typeof navigator.share === 'function') {
             try {
-                await navigator.share({ title: 'Next Train', text, url });
+                await navigator.share({ title: 'Next Train', text: text || 'Community message', url });
                 return;
             } catch (err) {
                 if (err?.name === 'AbortError') return;

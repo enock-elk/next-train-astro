@@ -11,8 +11,8 @@
  * goes to the zone origin and does not re-enter this Worker.
  */
 import catalog from './catalog.json';
-import { isSocialCrawler, parseShareIntent, parseLiveSharePath, parseLiveTrainImagePath, dayLabel, stationLabel, decodeDay } from './parse.js';
-import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
+import { isSocialCrawler, parseShareIntent, parseLiveSharePath, parseLiveTrainImagePath, parseAlertSharePath, parseCommunitySharePath, dayLabel, stationLabel, decodeDay } from './parse.js';
+import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, buildContentOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
 import { extractGridPreview, loadRegionDb, loadRegionGridOrder } from './schedule.js';
 import { timetablePng, plannerPng, liveTrainPng, buildTimetableSvg, buildPlannerSvg, buildLiveTrainSvg } from './og-images.js';
 
@@ -22,7 +22,97 @@ function siteBase(env, requestUrl) {
 
 function isOgSharePath(pathname) {
   if (pathname === '/og/share' || pathname.endsWith('/og/share')) return true;
+  if (parseAlertSharePath(pathname) || parseCommunitySharePath(pathname)) return true;
   return !!parseLiveSharePath(pathname);
+}
+
+function plainBits(html, max = 180) {
+  return String(html || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+function safePreviewImage(raw) {
+  try {
+    const u = new URL(String(raw || ''));
+    if (u.protocol !== 'https:' || u.username || u.password) return '';
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    const allowed = host === 'nexttrain.co.za'
+      || host.endsWith('.nexttrain.co.za')
+      || host === 'nexttrain-community.enock.workers.dev'
+      || host === 'firebasestorage.googleapis.com'
+      || host === 'storage.googleapis.com'
+      || host.endsWith('.firebasestorage.app')
+      || host.endsWith('.googleusercontent.com');
+    if (!allowed) return '';
+    const path = decodeURIComponent(u.pathname || '');
+    if (/\.pdf($|\?)/i.test(path)) return '';
+    if (!/\.(jpe?g|png|gif|webp)$/i.test(path) && !/google|firebasestorage/.test(host)) return '';
+    const type = /\.gif$/i.test(path) ? 'image/gif'
+      : (/\.png$/i.test(path) ? 'image/png'
+        : (/\.webp$/i.test(path) ? 'image/webp' : 'image/jpeg'));
+    return { href: u.href, imageType: type };
+  } catch {
+    return '';
+  }
+}
+
+function firstImage(node) {
+  const list = Array.isArray(node?.imageUrls) ? node.imageUrls : [];
+  const candidates = [...list, node?.imageUrl];
+  const attachments = Array.isArray(node?.attachments) ? node.attachments : [];
+  attachments.forEach((item) => candidates.push(item?.url || item));
+  const html = String(node?.message || node?.text || node?.body || '');
+  const img = html.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
+  if (img) candidates.push(img[1]);
+  for (const raw of candidates) {
+    const image = safePreviewImage(raw);
+    if (image) return image;
+  }
+  return null;
+}
+
+async function readRtdb(env, path) {
+  const base = String(env.SCHEDULE_BASE || 'https://metrorail-next-train-default-rtdb.firebaseio.com/').replace(/\/?$/, '/');
+  const res = await fetch(`${base}${path}.json`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function loadContentPreview(env, intent) {
+  if (intent.kind === 'alert') {
+    const source = intent.source || 'all';
+    const node = await readRtdb(env, `notices/${encodeURIComponent(source)}/${encodeURIComponent(intent.id)}`);
+    if (!node || typeof node !== 'object' || node.deleted || node.hidden) {
+      return { title: 'Service update', description: 'This update is no longer available.' };
+    }
+    const exp = Number(node.expiresAt || 0);
+    if (exp && exp <= Date.now()) {
+      return { title: 'Service update', description: 'This update is no longer available.' };
+    }
+    const title = plainBits(node.title, 80) || 'Service update';
+    const description = plainBits(node.message || node.text, 180) || 'Open this update in Next Train.';
+    const image = firstImage(node);
+    return { title, description, image: image?.href || '', imageType: image?.imageType || 'image/png' };
+  }
+  const node = await readRtdb(env, `route_community/${encodeURIComponent(intent.routeId)}/posts/${encodeURIComponent(intent.postId)}`);
+  if (!node || typeof node !== 'object' || node.deleted || node.hidden || node.removed) {
+    return { title: 'Community message', description: 'This message is no longer available.' };
+  }
+  const description = plainBits(node.body, 180) || 'Open this message in Next Train.';
+  const image = firstImage(node);
+  return {
+    title: 'Community message',
+    description,
+    image: image?.href || '',
+    imageType: image?.imageType || 'image/png',
+  };
 }
 
 function ogHtmlHeaders() {
@@ -149,6 +239,19 @@ async function handleBotShare(url, env, ctx) {
   const intent = parseShareIntent(url);
   if (!intent) return null;
   const site = siteBase(env, url);
+
+  if (intent.kind === 'alert' || intent.kind === 'community') {
+    let detail = {};
+    try { detail = await loadContentPreview(env, intent); } catch (e) {
+      console.warn('OG content load failed', e.message || e);
+      detail = {
+        title: intent.kind === 'community' ? 'Community message' : 'Service update',
+        description: 'Open this in Next Train.',
+      };
+    }
+    const meta = buildContentOgMeta(intent, site, detail);
+    return new Response(renderOgHtml(meta), { headers: ogHtmlHeaders() });
+  }
 
   if (intent.kind === 'live') {
     const meta = buildLiveTrainOgMeta(intent, site);

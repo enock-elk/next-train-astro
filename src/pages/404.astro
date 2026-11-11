@@ -77,9 +77,25 @@ import { withBase } from '../lib/config.js';
   <!-- Shadow-ban "lost" mode: Home tries the app; cloak sends them back here if still banned. -->
   <script is:inline define:vars={{ homeHref: withBase('/') }}>
     (function () {
-      // GitHub Pages has no OG worker. /og/l/{train}/... 404s here; send humans
-      // into the app with ?live= so the map opens that train (or toasts if it ended).
-      var livePath = String(location.pathname || '').match(/\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+      // GitHub Pages has no OG worker. /og/l, /og/a, and /og/c 404 here; send humans
+      // into the app with the query the share was for.
+      var pathName = String(location.pathname || '');
+      var alertPath = pathName.match(/\/og\/a\/([^/]+)\/([^/]+)\/?$/i);
+      var roomPath = pathName.match(/\/og\/c\/([^/]+)\/([^/]+)\/?$/i);
+      if (alertPath || roomPath) {
+        var content = new URLSearchParams();
+        var homeBase = homeHref.charAt(homeHref.length - 1) === '/' ? homeHref : (homeHref + '/');
+        if (alertPath) {
+          try { content.set('src', decodeURIComponent(alertPath[1])); } catch (e) { content.set('src', alertPath[1]); }
+          try { content.set('alert', decodeURIComponent(alertPath[2])); } catch (e2) { content.set('alert', alertPath[2]); }
+        } else {
+          try { content.set('room', decodeURIComponent(roomPath[1])); } catch (e3) { content.set('room', roomPath[1]); }
+          try { content.set('post', decodeURIComponent(roomPath[2])); } catch (e4) { content.set('post', roomPath[2]); }
+        }
+        location.replace(homeBase + '?' + content.toString());
+        return;
+      }
+      var livePath = pathName.match(/\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
       if (livePath) {
         var q = new URLSearchParams();
         try { q.set('live', decodeURIComponent(livePath[1])); } catch (e) { q.set('live', livePath[1]); }

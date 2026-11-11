@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.4': [
+        'Copy on an alert uses the words only, so an image-only notice cannot freeze the phone. Full view has a download button for the picture or GIF already on screen. A PDF on an alert opens in the app after a tap, with scripting off, and is not fetched before that tap. Pull to refresh reloads the open Alerts list. A shared alert or community link opens that notice or message, including when the app was already open, and says when it is gone. The share address is /og/a or /og/c so the preview can name the update. Deploy the nexttrain-og worker for those previews. Creating an account keeps this phone\'s user id, and a later sign-in on another phone keeps that same user id. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.3': [
         'Alerts do not have Report. The header menu on an alert is Pin and Delete, and only for an admin session. Community can be switched off for every commuter, or left on and blocked for one region or one route. An admin session can still open it. The old enabled:false pilot config still does not hide the tab. No commuter What\'s New. forceShow stays false.',
     ],

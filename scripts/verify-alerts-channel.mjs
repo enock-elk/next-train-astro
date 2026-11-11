@@ -25,6 +25,8 @@ import {
     alertVideoPosterUrl,
     alertVideoEmbedUrl,
     renderAlertVideoMarkup,
+    sanitizeAlertPdfUrl,
+    renderAlertPdfMarkup,
     preferSavedPosterSrc,
     shouldIgnoreAlertLongPress,
     shouldForceOpen,
@@ -314,6 +316,22 @@ const now = 1_700_000_000_000;
     assert(!/autoplay/i.test(videoHtml), 'video markup does not autoplay');
     assert(!/<video\b[^>]*\ssrc=/i.test(videoHtml), 'player has no address until play');
     assert(videoHtml.includes('data-alert-video-src="https://cdn.example.com/briefing/ucv-update.mp4"'), 'play control keeps the address');
+    const pdf = 'https://nexttrain.co.za/images/alerts/notice.pdf';
+    assert(sanitizeAlertPdfUrl(pdf) === pdf, 'a Next Train PDF is allowed');
+    assert(sanitizeAlertPdfUrl('https://evil.example/notice.pdf') === null, 'a PDF on another host is refused');
+    assert(sanitizeAlertPdfUrl('http://nexttrain.co.za/images/alerts/notice.pdf') === null, 'a plain http PDF is refused');
+    const withPdf = layoutAlertPost({
+        message: `<p>Read the notice ${pdf} today.</p>`,
+        imageUrls: [pdf],
+    });
+    assert(withPdf.pdfUrls[0] === pdf, 'PDF is lifted onto the alert');
+    assert(!withPdf.imageUrls.includes(pdf), 'PDF is not treated as a poster');
+    assert(!withPdf.body.includes(pdf), 'PDF address is not left in the text');
+    const pdfHtml = renderAlertPdfMarkup(withPdf.pdfUrls);
+    assert(pdfHtml.includes('data-alert-pdf='), 'PDF control keeps the address for a tap');
+    assert(pdfHtml.includes('Open PDF'), 'PDF control is labeled Open PDF');
+    assert(!/<a\b/i.test(pdfHtml), 'PDF control is not a link');
+    assert(!/download/i.test(pdfHtml), 'PDF control does not download on its own');
     assert(preferSavedPosterSrc('blob:poster', 'https://i.ibb.co/x.png', 'https://i.ibb.co/x.png') === 'blob:poster', 'full view reuses the saved poster');
     assert(imageMimeForUrl('https://i.ibb.co/hR3kQ1p/ucv.png') === 'image/png', 'saved poster keeps a png type');
     const cacheSrc = readFileSync(new URL('../src/lib/alert-image-cache.js', import.meta.url), 'utf8');

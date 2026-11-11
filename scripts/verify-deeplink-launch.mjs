@@ -94,6 +94,24 @@ const pathLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/og/l/9115/pta-
 ok(pathLaunch && pathLaunch.kind === 'live' && pathLaunch.trainId === '9115', 'launch /og/l snapshots live');
 ok(String(globalThis.location.pathname) === '/' && String(globalThis.location.search).includes('live=9115'), 'path launch rewrites to /?live=');
 
+consumeShareDeeplinkSnapshot();
+const alertLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/og/a/all/1794297920885');
+ok(alertLaunch && alertLaunch.kind === 'alert' && alertLaunch.id === '1794297920885' && alertLaunch.source === 'all', 'launch /og/a snapshots the notice');
+ok(String(globalThis.location.pathname) === '/' && String(globalThis.location.search).includes('alert=1794297920885'), 'alert launch rewrites to /?alert=');
+ok(hasInboundShareIntent(), 'alert snapshot counts as an inbound share');
+const alertIntent = parseShareIntent(new URL('https://nexttrain.co.za/og/a/all_GP/1794297920885'));
+ok(alertIntent && alertIntent.kind === 'alert' && alertIntent.source === 'all_GP', 'worker reads /og/a/{source}/{id}');
+const alertApp = buildAppDeepLink(alertIntent, 'https://nexttrain.co.za');
+ok(alertApp.includes('alert=1794297920885') && alertApp.includes('src=all_GP'), 'alert human target is /?alert=');
+const alertOg = buildOgShareLink(alertIntent, 'https://nexttrain.co.za');
+ok(alertOg.includes('/og/a/all_GP/1794297920885'), 'alert OG URL stays on /og/a/');
+
+consumeShareDeeplinkSnapshot();
+const roomLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/#community/pta-mabopane/cp123');
+ok(roomLaunch && roomLaunch.kind === 'community' && roomLaunch.routeId === 'pta-mabopane' && roomLaunch.postId === 'cp123', 'community hash launch opens that message');
+ok(String(globalThis.location.search).includes('room=pta-mabopane') && String(globalThis.location.search).includes('post=cp123'), 'community hash rewrites to /?room=');
+ok(!String(globalThis.location.hash || '').includes('#community/'), 'community hash is not left on the app URL');
+
 const shareLinks = readFileSync(join(ROOT, 'src/lib/share-links.js'), 'utf8');
 ok(shareLinks.includes('buildLiveTrainShareUrl'), 'client can mint live share URL');
 ok(shareLinks.includes('/og/l/'), 'client mints /og/l/ path shares so WhatsApp cannot wrap ?live=');
@@ -101,6 +119,8 @@ ok(shareLinks.includes('liveShareBasePrefix'), 'preview live share URLs keep the
 ok(shareLinks.includes('/og\\/(?:l|live)\\/'), 'live path parse allows a base prefix before /og/l/');
 const notFound = readFileSync(join(ROOT, 'src/pages/404.astro'), 'utf8');
 ok(notFound.includes('/og\\/(?:l|live)\\/'), 'GitHub 404 sends /og/l/ humans into ?live=');
+ok(notFound.includes('/og\\/a\\/') && notFound.includes('alert'), 'GitHub 404 sends /og/a/ humans into ?alert=');
+ok(notFound.includes('/og\\/c\\/') && notFound.includes('room'), 'GitHub 404 sends /og/c/ humans into ?room=');
 ok(shareLinks.includes("params.get('live')"), 'route parser ignores live shares');
 
 const ogHtml = readFileSync(join(ROOT, 'workers/nexttrain-og/src/og-html.js'), 'utf8');
@@ -140,6 +160,7 @@ ok(layout.includes('launchQueue') && layout.includes('nt_launch_target_url'), 'h
 const astroCfg = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
 ok(astroCfg.includes("url.pathname === '/og/share'") && astroCfg.includes('NetworkOnly'), 'SW does not cache /og/share');
 ok(astroCfg.includes('/og/l'), 'SW does not cache /og/l live shares');
+ok(astroCfg.includes('/og\\/[ac]'), 'SW does not cache /og/a or /og/c shares');
 ok(astroCfg.includes('privacy\\.html'), 'SW does not treat /privacy.html as the app shell');
 ok(astroCfg.includes('account-delete\\.html'), 'SW does not treat /account-delete.html as the app shell');
 ok(astroCfg.includes('sitemap\\.xml'), 'SW does not treat /sitemap.xml as the app shell');

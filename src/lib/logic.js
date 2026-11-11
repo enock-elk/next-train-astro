@@ -2669,16 +2669,25 @@ const PULL_CLAIM_PX = 36;
 const PULL_RING_R = 16;
 const PULL_RING_C = 2 * Math.PI * PULL_RING_R;
 
+function alertsChannelOpen() {
+    const el = document.getElementById('alerts-channel');
+    return !!(el && !el.classList.contains('hidden'));
+}
+
 function pullRefreshBlocked() {
     if (typeof document === 'undefined') return true;
     if (document.body.classList.contains('sidenav-open')) return true;
-    if (document.body.classList.contains('modal-active')) return true;
+    if (document.body.classList.contains('modal-active') && !alertsChannelOpen()) return true;
     if (document.getElementById('app-scroll')?.classList.contains('is-tab-swiping')) return true;
     const tab = safeStorage.getItem('activeTab') || 'next-train';
     return tab === 'map' || tab === 'options';
 }
 
 function activePullSurface() {
+    if (alertsChannelOpen()) {
+        return document.getElementById('alerts-channel-scroll')
+            || document.getElementById('alerts-channel');
+    }
     const tab = safeStorage.getItem('activeTab') || 'next-train';
     if (tab === 'community') {
         return document.querySelector('#view-community .community-feed-scroll')
@@ -2804,6 +2813,11 @@ export function initSessionPullRefresh() {
     };
 
     const refreshOpenTab = async () => {
+        if (alertsChannelOpen()) {
+            const hub = await import('./hub.js');
+            await hub.checkServiceAlerts?.({ force: true });
+            return;
+        }
         const tab = safeStorage.getItem('activeTab') || 'next-train';
         if (tab === 'community') {
             const community = await import('./community.js');
@@ -2822,7 +2836,7 @@ export function initSessionPullRefresh() {
         }
     };
 
-    scroller.addEventListener('touchstart', (event) => {
+    document.addEventListener('touchstart', (event) => {
         tracking = false;
         claimed = false;
         armed = false;
@@ -2830,14 +2844,14 @@ export function initSessionPullRefresh() {
         const surface = activePullSurface();
         const touch = event.touches?.[0];
         if (!touch || !surface || !(event.target instanceof Element) || !surface.contains(event.target)) return;
-        if (event.target.closest('input, textarea, select, a')) return;
+        if (event.target.closest('input, textarea, select, a, button')) return;
         if (!chainIsAtTop(event.target, surface)) return;
         startY = touch.clientY;
         startX = touch.clientX;
         tracking = true;
     }, { capture: true, passive: true });
 
-    scroller.addEventListener('touchmove', (event) => {
+    document.addEventListener('touchmove', (event) => {
         if (!tracking) return;
         if (pullRefreshBlocked()) {
             tracking = false;
@@ -2883,8 +2897,8 @@ export function initSessionPullRefresh() {
         } catch { /* the open tab keeps what it already showed */ }
         finally { window.__ntPullRefreshing = false; }
     };
-    scroller.addEventListener('touchend', () => { release(); }, { capture: true, passive: true });
-    scroller.addEventListener('touchcancel', () => {
+    document.addEventListener('touchend', () => { release(); }, { capture: true, passive: true });
+    document.addEventListener('touchcancel', () => {
         tracking = false;
         claimed = false;
         armed = false;

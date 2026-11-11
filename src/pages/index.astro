@@ -340,6 +340,8 @@ const faqLd = {
         flushPendingDeeplinkIntents,
         applyMapDeepLink,
         applyLiveTrainDeepLink,
+        applyAlertDeepLink,
+        applyCommunityDeepLink,
         bindLaunchQueueDeeplinks,
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
@@ -465,7 +467,8 @@ const faqLd = {
         });
         if (canAccessPilotSurface('community')) {
             import('../lib/community.js').then((m) => {
-                if (parts[0]) m.queueCommunityFocus?.(parts[0], parts[1] || '');
+                if (parts[0] && parts[1]) m.queueCommunityFocus?.(parts[0], parts[1], { announce: true });
+                else if (parts[0]) m.queueCommunityFocus?.(parts[0], '');
                 switchTab('community');
             }).catch(() => switchTab('community'));
         } else switchTab('next-train');
@@ -474,13 +477,23 @@ const faqLd = {
             ? (() => { try { return decodeURIComponent(hash.slice('#alerts/'.length)); } catch { return hash.slice('#alerts/'.length); } })()
             : '';
         switchTab('next-train');
-        const openNotice = () => window.openAlertsChannel?.({
-            highlightId: noticeId || null,
-            focusTop: !!noticeId,
-        });
-        import('../lib/session-stability.js').then((m) => {
-            m.whenSettledForAutoNotices?.(openNotice);
-        }).catch(openNotice);
+        if (noticeId) {
+            import('../lib/alerts-channel.js').then(async (m) => {
+                const state = await m.focusSharedAlert?.(noticeId, '');
+                window.showToast?.(
+                    state === 'opened' ? 'Opened service update' : 'This update is no longer available',
+                    state === 'opened' ? 'success' : 'info',
+                    state === 'opened' ? 2500 : 4000
+                );
+            }).catch(() => {
+                window.showToast?.('This update is no longer available', 'info', 4000);
+            });
+        } else {
+            const openNotice = () => window.openAlertsChannel?.({ highlightId: null, focusTop: false });
+            import('../lib/session-stability.js').then((m) => {
+                m.whenSettledForAutoNotices?.(openNotice);
+            }).catch(openNotice);
+        }
     } else if (hash === '#map') {
         if (canOpenTrackingMap()) switchTab('map');
         else switchTab('next-train');
@@ -523,6 +536,16 @@ const faqLd = {
         // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.
         try {
             bindKillswitchWatch();
+            if (await applyAlertDeepLink()) {
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
+            if (await applyCommunityDeepLink()) {
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
             if (await applyLiveTrainDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();

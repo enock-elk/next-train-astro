@@ -94,10 +94,47 @@ export function parseLiveTrainImagePath(pathname) {
   return { trainId, routeId, dest: stationLabel(dest) };
 }
 
+const SHARE_TOKEN = /^[A-Za-z0-9_-]{1,80}$/;
+
+function shareToken(raw) {
+  let value = String(raw || '').trim();
+  if (!value) return '';
+  try { value = decodeURIComponent(value).trim(); } catch { /* already decoded */ }
+  return SHARE_TOKEN.test(value) ? value : '';
+}
+
+export function parseAlertSharePath(pathname) {
+  const m = String(pathname || '').match(/\/og\/a\/([^/]+)\/([^/]+)\/?$/i);
+  if (!m) return null;
+  const source = shareToken(m[1]);
+  const id = shareToken(m[2]);
+  if (!source || !id) return null;
+  return { kind: 'alert', id, source };
+}
+
+export function parseCommunitySharePath(pathname) {
+  const m = String(pathname || '').match(/\/og\/c\/([^/]+)\/([^/]+)\/?$/i);
+  if (!m) return null;
+  const routeId = shareToken(m[1]);
+  const postId = shareToken(m[2]);
+  if (!routeId || !postId) return null;
+  return { kind: 'community', routeId, postId };
+}
+
 export function parseShareIntent(url) {
   const params = url.searchParams;
   const pathLive = parseLiveSharePath(url.pathname);
   if (pathLive) return pathLive;
+
+  const alertPath = parseAlertSharePath(url.pathname);
+  if (alertPath) return alertPath;
+  const communityPath = parseCommunitySharePath(url.pathname);
+  if (communityPath) return communityPath;
+  const alertId = shareToken(params.get('alert') || '');
+  if (alertId) return { kind: 'alert', id: alertId, source: shareToken(params.get('src') || '') };
+  const roomId = shareToken(params.get('room') || '');
+  const postId = shareToken(params.get('post') || '');
+  if (roomId && postId) return { kind: 'community', routeId: roomId, postId };
 
   // Live must win over rt=/to= (those are also on live shares). Production
   // previously treated ?live=9115&rt=pta-pien as a timetable card.

@@ -1567,6 +1567,39 @@ function followLightboxDrag(dx) {
     placeLightboxStrip(drag, false);
 }
 
+function lightboxImageExt(type, src) {
+    const kind = String(type || '').toLowerCase();
+    if (kind.includes('gif') || /\.gif(\?|$)/i.test(src)) return 'gif';
+    if (kind.includes('png') || /\.png(\?|$)/i.test(src)) return 'png';
+    if (kind.includes('webp') || /\.webp(\?|$)/i.test(src)) return 'webp';
+    return 'jpg';
+}
+
+/** Save the picture already on screen. The tap is the only fetch. */
+async function downloadLightboxImage() {
+    const img = document.getElementById('alert-image-lightbox-img');
+    const src = img?.currentSrc || img?.src || '';
+    if (!src) return;
+    try {
+        const res = await fetch(src, { credentials: 'omit' });
+        if (!res.ok) throw new Error('download');
+        const blob = await res.blob();
+        const type = blob.type || '';
+        if (type && !type.startsWith('image/')) throw new Error('download');
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `next-train.${lightboxImageExt(type, src)}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+        showToast('Download started', 'success');
+    } catch {
+        showToast('Could not download this picture', 'error');
+    }
+}
+
 function bindAlertImageLightbox() {
     if (typeof document === 'undefined' || window._alertLightboxBound) return;
     window._alertLightboxBound = true;
@@ -1574,6 +1607,11 @@ function bindAlertImageLightbox() {
     document.getElementById('alert-image-lightbox-close')?.addEventListener('click', (e) => {
         e.preventDefault();
         closeLightbox();
+    });
+    document.getElementById('alert-image-lightbox-download')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        downloadLightboxImage();
     });
     const blockPageZoom = (e) => {
         if (e.touches && e.touches.length > 1) e.preventDefault();

@@ -601,6 +601,7 @@ export function splitAlertTitleAndBody(html, explicitTitle = '') {
 
 const PUBLIC_IMAGE_FILE = /\.(jpe?g|png|gif|webp)$/i;
 const PUBLIC_VIDEO_FILE = /\.(mp4|webm|mov|m4v|ogv)$/i;
+const PUBLIC_PDF_FILE = /\.pdf$/i;
 
 function isStoredImageHost(host) {
     const name = String(host || '').toLowerCase();
@@ -723,6 +724,62 @@ export function sanitizeAlertVideoUrl(url) {
     return clean;
 }
 
+function isPdfHost(host) {
+    const name = String(host || '').toLowerCase().replace(/\.$/, '');
+    return name === 'nexttrain.co.za'
+        || name.endsWith('.nexttrain.co.za')
+        || name === 'nexttrain-community.enock.workers.dev'
+        || name === 'firebasestorage.googleapis.com'
+        || name === 'storage.googleapis.com'
+        || name.endsWith('.firebasestorage.app')
+        || name.endsWith('.googleusercontent.com');
+}
+
+/**
+ * A PDF we are willing to fetch later, only after a tap.
+ * Catalog and storage hosts only. Nothing is downloaded here.
+ */
+export function sanitizeAlertPdfUrl(url) {
+    const clean = cleanHttpUrl(String(url || '').trim().replace(/&amp;/gi, '&'));
+    if (!clean || !isPublicPreviewUrl(clean)) return null;
+    try {
+        const pub = new URL(clean);
+        if (pub.username || pub.password) return null;
+        if (!isPdfHost(pub.hostname)) return null;
+        let path = pub.pathname || '';
+        try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+        const hint = `${path} ${pub.searchParams.get('name') || ''}`.toLowerCase();
+        if (!PUBLIC_PDF_FILE.test(path) && !hint.includes('.pdf')) return null;
+        return pub.href;
+    } catch {
+        return null;
+    }
+}
+
+function pushPdfUrl(urls, raw) {
+    const clean = sanitizeAlertPdfUrl(raw);
+    if (clean && !urls.includes(clean)) urls.push(clean);
+}
+
+/** Lift PDF links out of the body. The file stays put until Open PDF is tapped. */
+export function extractAlertPdfUrls(html) {
+    const urls = [];
+    let body = String(html || '');
+    body = body.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const before = urls.length;
+        pushPdfUrl(urls, href);
+        return urls.length > before ? '' : tag;
+    });
+    body = body.replace(/https:\/\/[^\s<>"']+/gi, (raw) => {
+        const trimmed = raw.replace(/[),.;]+$/, '');
+        const before = urls.length;
+        pushPdfUrl(urls, trimmed);
+        if (urls.length === before) return raw;
+        return raw.slice(trimmed.length);
+    });
+    return { urls, body };
+}
+
 function pushVideoUrl(urls, raw) {
     const clean = sanitizeAlertVideoUrl(String(raw || '').trim().replace(/&amp;/gi, '&'));
     if (clean && !urls.includes(clean)) urls.push(clean);
@@ -824,11 +881,17 @@ export function layoutAlertPost(notice) {
     pushVideoUrl(videos, notice?.ctaUrl);
     const extracted = extractAlertVideoUrls(hoisted.body);
     extracted.urls.forEach((u) => pushVideoUrl(videos, u));
+    const pdfs = [];
+    rawMedia.forEach((u) => pushPdfUrl(pdfs, u));
+    pushPdfUrl(pdfs, notice?.ctaUrl);
+    const extractedPdf = extractAlertPdfUrls(extracted.body);
+    extractedPdf.urls.forEach((u) => pushPdfUrl(pdfs, u));
     return {
         title: split.title,
-        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u)).slice(0, ALERT_POSTER_MAX),
+        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u) && !sanitizeAlertPdfUrl(u)).slice(0, ALERT_POSTER_MAX),
         videoUrls: videos.slice(0, 2),
-        body: stripAlertSignoffHtml(extracted.body),
+        pdfUrls: pdfs.slice(0, 2),
+        body: stripAlertSignoffHtml(extractedPdf.body),
     };
 }
 
@@ -840,6 +903,17 @@ const ALERT_VIDEO_PLAY_ICON = `<svg class="h-8 w-8" width="32" height="32" viewB
  */
 function escapeAlertAttr(value) {
     return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+const ALERT_PDF_ICON = `<svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M14 3v6h6"></path></svg>`;
+
+/** A button only. The PDF is not fetched until the commuter taps it. */
+export function renderAlertPdfMarkup(urls) {
+    const list = (Array.isArray(urls) ? urls : []).map((u) => sanitizeAlertPdfUrl(u)).filter(Boolean).slice(0, 2);
+    if (!list.length) return '';
+    return list.map((href) => (
+        `<button type="button" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold text-gray-900 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-white" data-alert-pdf="${escapeAlertAttr(href)}">${ALERT_PDF_ICON}<span>Open PDF</span></button>`
+    )).join('');
 }
 
 export function renderAlertVideoMarkup(urls) {

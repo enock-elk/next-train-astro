@@ -29,6 +29,16 @@ export function buildAppDeepLink(intent, site) {
     if (intent.region) app.searchParams.set('r', intent.region);
     return app.toString();
   }
+  if (intent.kind === 'alert') {
+    app.searchParams.set('alert', intent.id);
+    if (intent.source) app.searchParams.set('src', intent.source);
+    return app.toString();
+  }
+  if (intent.kind === 'community') {
+    app.searchParams.set('room', intent.routeId);
+    app.searchParams.set('post', intent.postId);
+    return app.toString();
+  }
   if (intent.kind === 'live') {
     app.searchParams.set('live', intent.trainId);
     if (intent.routeId) app.searchParams.set('rt', intent.routeId);
@@ -51,6 +61,16 @@ export function buildOgShareLink(intent, site) {
     if (intent.day) share.searchParams.set('d', dayCode(intent.day));
     if (intent.region) share.searchParams.set('r', intent.region);
     return share.toString();
+  }
+  if (intent.kind === 'alert') {
+    const source = encodeURIComponent(String(intent.source || 'all'));
+    const id = encodeURIComponent(String(intent.id || ''));
+    return `${site.replace(/\/$/, '')}/og/a/${source}/${id}`;
+  }
+  if (intent.kind === 'community') {
+    const routeId = encodeURIComponent(String(intent.routeId || ''));
+    const postId = encodeURIComponent(String(intent.postId || ''));
+    return `${site.replace(/\/$/, '')}/og/c/${routeId}/${postId}`;
   }
   if (intent.kind === 'live') {
     const id = encodeURIComponent(String(intent.trainId || '').trim());
@@ -148,6 +168,21 @@ export function buildLiveTrainOgMeta(intent, site) {
   };
 }
 
+export function buildContentOgMeta(intent, site, detail = {}) {
+  const title = detail.title || (intent.kind === 'community' ? 'Community message' : 'Service update');
+  const description = detail.description || 'Open this in Next Train.';
+  const image = detail.image || `${site.replace(/\/$/, '')}/icons/loading-logo.png`;
+  return {
+    title,
+    description,
+    url: buildOgShareLink(intent, site),
+    appUrl: buildAppDeepLink(intent, site),
+    image,
+    imageAlt: title,
+    imageType: detail.imageType || 'image/png',
+  };
+}
+
 export function renderOgHtml({
   title,
   description,
@@ -155,6 +190,7 @@ export function renderOgHtml({
   image,
   imageAlt,
   appUrl,
+  imageType = 'image/png',
   siteName = 'Metrorail Next Train',
 }) {
   const openUrl = appUrl || url;
@@ -175,7 +211,7 @@ export function renderOgHtml({
 <meta property="og:url" content="${esc(url)}"/>
 <meta property="og:image" content="${esc(image)}"/>
 <meta property="og:image:secure_url" content="${esc(image)}"/>
-<meta property="og:image:type" content="image/png"/>
+<meta property="og:image:type" content="${esc(imageType)}"/>
 <meta property="og:image:width" content="${OG_IMAGE_WIDTH}"/>
 <meta property="og:image:height" content="${OG_IMAGE_HEIGHT}"/>
 <meta property="og:image:alt" content="${esc(alt)}"/>

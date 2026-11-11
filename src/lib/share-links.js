@@ -365,6 +365,81 @@ export function parseShareTargetDeepLink(search = typeof location !== 'undefined
     };
 }
 
+const SHARE_TOKEN = /^[A-Za-z0-9_-]{1,80}$/;
+
+function shareToken(raw) {
+    let value = String(raw || '').trim();
+    if (!value) return '';
+    try { value = decodeURIComponent(value).trim(); } catch { /* already decoded */ }
+    return SHARE_TOKEN.test(value) ? value : '';
+}
+
+/** `/og/a/{source}/{id}` so a crawler can read the notice without the hash. */
+export function parseAlertSharePath(pathname) {
+    const m = String(pathname || '').match(/\/og\/a\/([^/]+)\/([^/]+)\/?$/i);
+    if (!m) return null;
+    const source = shareToken(m[1]);
+    const id = shareToken(m[2]);
+    if (!source || !id) return null;
+    return { kind: 'alert', id, source };
+}
+
+/** `/og/c/{route}/{post}` */
+export function parseCommunitySharePath(pathname) {
+    const m = String(pathname || '').match(/\/og\/c\/([^/]+)\/([^/]+)\/?$/i);
+    if (!m) return null;
+    const routeId = shareToken(m[1]);
+    const postId = shareToken(m[2]);
+    if (!routeId || !postId) return null;
+    return { kind: 'community', routeId, postId };
+}
+
+export function parseContentQuery(search) {
+    const params = search instanceof URLSearchParams
+        ? search
+        : new URLSearchParams(typeof search === 'string' ? search : '');
+    const alert = shareToken(params.get('alert') || '');
+    if (alert) return { kind: 'alert', id: alert, source: shareToken(params.get('src') || '') };
+    const routeId = shareToken(params.get('room') || '');
+    const postId = shareToken(params.get('post') || '');
+    if (routeId && postId) return { kind: 'community', routeId, postId };
+    return null;
+}
+
+/** Path, hash, or query. Hash links stay for older shares. */
+export function parseContentDeepLink({ search = '', hash = '', pathname = '' } = {}) {
+    const fromPath = parseAlertSharePath(pathname) || parseCommunitySharePath(pathname);
+    if (fromPath) return fromPath;
+    const hashText = String(hash || '');
+    const alertHash = hashText.match(/^#alerts\/([^/?#]+)/i);
+    if (alertHash) {
+        const id = shareToken(alertHash[1]);
+        if (id) return { kind: 'alert', id, source: '' };
+    }
+    const roomHash = hashText.match(/^#community\/([^/]+)\/([^/?#]+)/i);
+    if (roomHash) {
+        const routeId = shareToken(roomHash[1]);
+        const postId = shareToken(roomHash[2]);
+        if (routeId && postId) return { kind: 'community', routeId, postId };
+    }
+    return parseContentQuery(search);
+}
+
+export function contentDeepLinkSearch(content) {
+    const params = new URLSearchParams();
+    if (!content) return '';
+    if (content.kind === 'alert') {
+        params.set('alert', content.id);
+        if (content.source) params.set('src', content.source);
+    } else if (content.kind === 'community') {
+        params.set('room', content.routeId);
+        params.set('post', content.postId);
+    } else {
+        return '';
+    }
+    return `?${params.toString()}`;
+}
+
 export function stripShareParamsFromUrl() {
     try {
         const urlObj = new URL(location.href);
@@ -374,6 +449,7 @@ export function stripShareParamsFromUrl() {
             'plan', 'rt', 'v', 't', 'd', 'r',
             'live', 'onboard',
             'src', 'source',
+            'alert', 'room', 'post',
             // Web Share Target GET params
             'title', 'text', 'url',
         ].forEach((k) => urlObj.searchParams.delete(k));

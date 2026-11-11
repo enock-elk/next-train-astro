@@ -22,6 +22,7 @@ import {
     ALERT_REACTION_EMOJI,
     buildAlertReactionBreakdown,
     noticeTimestamp,
+    isNoticeLive,
     noticeScopeKeys as scopeKeysFor,
     parseNoticeBucket,
     mergeUnionNotices,
@@ -35,9 +36,11 @@ import {
     sanitizeAlertImageUrl,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
+    sanitizeAlertPdfUrl,
     alertVideoEmbedUrl,
     alertVideoKind,
     renderAlertVideoMarkup,
+    renderAlertPdfMarkup,
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
@@ -843,14 +846,14 @@ function renderPostCard(notice, opts = {}) {
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${linkedPlainHtml(layout.title)}</h3>`
         : '';
-    const mediaHtml = `${renderPosterHtml(layout.imageUrls, notice)}${renderAlertVideoMarkup(layout.videoUrls)}`;
+    const mediaHtml = `${renderPosterHtml(layout.imageUrls, notice)}${renderAlertVideoMarkup(layout.videoUrls)}${renderAlertPdfMarkup(layout.pdfUrls)}`;
     const bodyHtml = body
         ? (alertCopyNeedsSeeMore(body)
             ? buildAlertSeeMoreMarkup(body, { className: mediaHtml ? 'mt-3' : '' })
             : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';
-    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl)) {
+    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl) && !sanitizeAlertPdfUrl(notice.ctaUrl)) {
         extra += `<a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800">${escapeHTML(notice.ctaText)}</a>`;
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
@@ -910,7 +913,14 @@ function renderPostCard(notice, opts = {}) {
 
 function htmlToPlainSnippet(html, maxWords = 8) {
     if (!html) return '';
-    const spaced = String(html)
+    // Cap first. An image-only notice can carry a multi-megabyte data URL, and
+    // parsing that freezes the phone. Copy is the words, not the picture.
+    let spaced = String(html);
+    if (spaced.length > 12000) spaced = spaced.slice(0, 12000);
+    spaced = spaced
+        .replace(/<img\b[^>]*>/gi, ' ')
+        .replace(/<video\b[^>]*>[\s\S]*?<\/video>/gi, ' ')
+        .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
         .replace(/<\s*br\s*\/?>/gi, ' ')
         .replace(/<\/\s*(h[1-6]|p|div|li|tr|section|article)\s*>/gi, ' ')
         .replace(/<\s*(h[1-6]|p|div|li|tr|section|article)(\s[^>]*)?>/gi, ' ');
@@ -1058,7 +1068,11 @@ export function closeAlertsChannel() {
 }
 
 export function openAlertsChannel(opts = {}) {
-    const notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
+    let notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
+    const pinned = opts.pinNotice;
+    if (pinned?.id && !notices.some((n) => String(n.id) === String(pinned.id))) {
+        notices = [pinned, ...notices];
+    }
     if (opts.resetVisible !== false) visibleCount = ALERTS_PAGE_SIZE;
     highlightNoticeId = opts.highlightId || null;
     const focusTop = !!opts.focusTop && !!highlightNoticeId;
@@ -1085,7 +1099,7 @@ export function openAlertsChannel(opts = {}) {
     setTimeout(align, 280);
     bindAlertsChannelOnce();
     // Opening Alerts always revalidates notices (idle poll may be 2–3 min).
-    if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
+    if (!opts.skipReload && typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
         try { window.checkServiceAlerts({ force: true }); } catch { /* ignore */ }
     }
 }
@@ -1399,12 +1413,15 @@ function shareOrigin() {
 }
 
 function alertShareUrl(notice) {
-    return `${shareOrigin()}/#alerts/${encodeURIComponent(String(notice?.id || ''))}`;
+    const id = encodeURIComponent(String(notice?.id || ''));
+    const src = encodeURIComponent(String(notice?._sourceKey || 'all'));
+    return `${shareOrigin()}/og/a/${src}/${id}`;
 }
 
 function alertPlainText(notice) {
-    const title = String(notice?.title || layoutAlertPost(notice)?.title || '').trim();
-    const body = htmlToPlainSnippet(notice?.message || notice?.text || '', 80);
+    const laid = layoutAlertPost(notice);
+    const title = String(laid?.title || '').trim();
+    const body = htmlToPlainSnippet(laid?.body || '', 80);
     return [title, body].filter(Boolean).join('\n').trim();
 }
 
@@ -1432,22 +1449,46 @@ function selectAlertNotice(notice) {
 }
 
 async function copyText(text) {
-    const value = String(text || '').trim();
+    const value = String(text || '').trim().slice(0, 4000);
     if (!value) return false;
+    const write = async () => {
+        if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+        await Promise.race([
+            navigator.clipboard.writeText(value),
+            new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 1500); }),
+        ]);
+    };
     try {
-        await navigator.clipboard.writeText(value);
+        await write();
         showToast('Copied', 'success');
         return true;
     } catch {
+        try {
+            const area = document.createElement('textarea');
+            area.value = value;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand('copy');
+            area.remove();
+            if (ok) {
+                showToast('Copied', 'success');
+                return true;
+            }
+        } catch { /* the selection bar stays up */ }
         showToast('Could not copy.', 'error');
         return false;
     }
 }
 
-async function shareLink(url, text) {
+async function shareLink(url, text, title) {
+    const body = String(text || '').trim();
+    const heading = String(title || '').trim() || 'Service update';
     if (typeof navigator.share === 'function') {
         try {
-            await navigator.share({ title: 'Next Train', text: text || 'Next Train', url });
+            await navigator.share({ title: heading, text: body || heading, url });
             return;
         } catch (e) {
             if (e?.name === 'AbortError') return;
@@ -1488,6 +1529,134 @@ function paintAlertSelectMenu() {
     menu.classList.remove('hidden');
 }
 
+const PDF_MAX_BYTES = 8 * 1024 * 1024;
+let pdfOpening = false;
+
+function ensurePdfSheet() {
+    let sheet = document.getElementById('alert-pdf-sheet');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'alert-pdf-sheet';
+    sheet.className = 'fixed inset-0 z-[170] hidden flex-col bg-gray-100 dark:bg-gray-950';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-label', 'PDF');
+    sheet.innerHTML = `<div class="flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
+        <p class="text-sm font-bold text-gray-900 dark:text-white">PDF</p>
+        <button type="button" data-alert-pdf-close class="flex h-11 w-11 items-center justify-center rounded-full focus:outline-none" aria-label="Close">
+            <svg class="h-6 w-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+    <div id="alert-pdf-pages" class="min-h-0 flex-1 overflow-y-auto px-3 py-3"></div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('[data-alert-pdf-close]')?.addEventListener('click', () => {
+        sheet.classList.add('hidden');
+        sheet.classList.remove('flex');
+        const pages = sheet.querySelector('#alert-pdf-pages');
+        if (pages) pages.innerHTML = '';
+    });
+    return sheet;
+}
+
+/** Fetch and paint a PDF only after a tap. Scripting stays off. No preview download. */
+async function openAlertPdf(raw) {
+    const url = sanitizeAlertPdfUrl(raw);
+    if (!url) {
+        showToast('This PDF cannot be opened', 'error');
+        return;
+    }
+    if (pdfOpening) return;
+    pdfOpening = true;
+    const sheet = ensurePdfSheet();
+    const pages = sheet.querySelector('#alert-pdf-pages');
+    if (pages) pages.textContent = 'Opening PDF';
+    sheet.classList.remove('hidden');
+    sheet.classList.add('flex');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+        const res = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctrl.signal });
+        const finalUrl = sanitizeAlertPdfUrl(res.url || url);
+        if (!res.ok || !finalUrl) throw new Error('pdf');
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength < 5 || buf.byteLength > PDF_MAX_BYTES) throw new Error('pdf');
+        const head = new TextDecoder('latin1').decode(buf.slice(0, 5));
+        if (head !== '%PDF-') throw new Error('pdf');
+        const pdfjs = await import('pdfjs-dist');
+        if (!pdfjs.GlobalWorkerOptions.workerPort) {
+            const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker')).default;
+            pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
+        }
+        const doc = await pdfjs.getDocument({
+            data: new Uint8Array(buf),
+            isEvalSupported: false,
+            enableScripting: false,
+        }).promise;
+        if (pages) pages.innerHTML = '';
+        const count = Math.min(doc.numPages || 0, 12);
+        for (let i = 1; i <= count; i += 1) {
+            const page = await doc.getPage(i);
+            const viewport = page.getViewport({ scale: 1.2 });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            canvas.className = 'mx-auto mb-3 block h-auto max-w-full bg-white';
+            pages?.appendChild(canvas);
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+        if (!count) throw new Error('pdf');
+    } catch {
+        if (pages) pages.innerHTML = '';
+        sheet.classList.add('hidden');
+        sheet.classList.remove('flex');
+        showToast('This PDF cannot be opened', 'error');
+    } finally {
+        clearTimeout(timer);
+        pdfOpening = false;
+    }
+}
+
+const ALERT_SHARE_TOKEN = /^[A-Za-z0-9_-]{1,80}$/;
+
+async function fetchNoticeRecord(source, id) {
+    if (!ALERT_SHARE_TOKEN.test(source) || !ALERT_SHARE_TOKEN.test(id)) return null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}notices/${encodeURIComponent(source)}/${encodeURIComponent(id)}.json`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+        return { ...data, id: data.id || id, _sourceKey: source };
+    } catch {
+        return null;
+    }
+}
+
+/** Open one shared notice. Returns opened or gone. Does not prefetch a PDF. */
+export async function focusSharedAlert(id, source = '') {
+    const cleanId = String(id || '').trim();
+    const cleanSource = String(source || '').trim();
+    if (!ALERT_SHARE_TOKEN.test(cleanId)) return 'gone';
+    try {
+        const hub = await import('./hub.js');
+        await hub.checkServiceAlerts?.({ force: true });
+    } catch { /* the last list may still hold it */ }
+    let notice = cachedLiveNotices.find((n) => String(n.id) === cleanId && (!cleanSource || String(n._sourceKey) === cleanSource))
+        || cachedLiveNotices.find((n) => String(n.id) === cleanId)
+        || null;
+    if (!notice && ALERT_SHARE_TOKEN.test(cleanSource)) {
+        notice = await fetchNoticeRecord(cleanSource, cleanId);
+    }
+    if (!notice || notice.deleted || notice.hidden || !isNoticeLive(notice)) return 'gone';
+    openAlertsChannel({
+        notices: cachedLiveNotices,
+        pinNotice: notice,
+        highlightId: cleanId,
+        focusTop: true,
+        skipReload: true,
+    });
+    return 'opened';
+}
+
 function bindAlertsChannelOnce() {
     if (channelBound) return;
     const root = document.getElementById('alerts-channel');
@@ -1498,6 +1667,13 @@ function bindAlertsChannelOnce() {
         e.preventDefault();
         closeAlertsChannel();
     };
+    root.addEventListener('click', (e) => {
+        const pdfBtn = e.target?.closest?.('[data-alert-pdf]');
+        if (!pdfBtn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openAlertPdf(pdfBtn.getAttribute('data-alert-pdf'));
+    });
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-select-back')?.addEventListener('click', (e) => {
@@ -1515,7 +1691,9 @@ function bindAlertsChannelOnce() {
     document.getElementById('alerts-select-share')?.addEventListener('click', (e) => {
         e.preventDefault();
         if (!selectedAlert) return;
-        shareLink(alertShareUrl(selectedAlert), alertPlainText(selectedAlert) || 'Service update');
+        const text = alertPlainText(selectedAlert);
+        const title = text.split('\n')[0] || 'Service update';
+        shareLink(alertShareUrl(selectedAlert), text, title);
     });
     document.getElementById('alerts-select-menu-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1732,6 +1910,7 @@ export function initAlertsChannel() {
     bindLightboxReactionClicks();
     if (typeof window === 'undefined') return;
     window.openAlertsChannel = openAlertsChannel;
+    window.focusSharedAlert = focusSharedAlert;
     window.__ntHideAlertReactionBreakdown = hideAlertReactionBreakdown;
     window.closeAlertsChannel = closeAlertsChannel;
     window.renderAlertsChannel = renderAlertsChannel;

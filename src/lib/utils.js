@@ -1330,7 +1330,7 @@ function writeDidCookie(id) {
     } catch { /* ignore */ }
 }
 
-function applyCanonicalDeviceId(id) {
+export function applyCanonicalDeviceId(id) {
     if (!id) return;
     safeStorage.setItem('next_train_device_id', id);
     writeDidCookie(id);

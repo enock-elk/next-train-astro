@@ -19,7 +19,7 @@ import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
 import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION } from './config.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { safeStorage } from './utils.js';
+import { safeStorage, applyCanonicalDeviceId } from './utils.js';
 import {
     getAuthProviders,
     isAuthProviderActionDisabled,
@@ -58,6 +58,18 @@ const MARKS_COMMUNITY_PREF_KEY = 'ntShowMarksInCommunity';
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || null;
+}
+
+/** Keep the account's first usr_ id on this phone, including a later sign-in. */
+function adoptAccountUserId(canonical) {
+    const id = String(canonical || '').trim();
+    if (!/^usr_[a-z0-9]{4,}_[0-9]{10,13}$/i.test(id)) return '';
+    if (getDeviceId() !== id) {
+        applyCanonicalDeviceId(id);
+        $deviceId.set(id);
+        if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = id;
+    }
+    return id;
 }
 
 export function deviceIdAgeMs(id, linkedAt) {
@@ -475,11 +487,19 @@ export async function ensureUserProfile(user, opts = {}) {
             displayNameCustom: !!(customName || existing?.displayNameCustom),
         });
         const localPrefs = readLocalAccountPrefs();
-        const mergedDeviceIds = { ...(existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : {}) };
+        const priorIds = existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : null;
+        const canonical = (priorIds && Object.keys(priorIds).length)
+            ? pickCanonicalChatDeviceId(priorIds, '')
+            : deviceId;
+        const adopted = adoptAccountUserId(canonical) || deviceId;
+        const mergedDeviceIds = { ...(priorIds || {}) };
         if (deviceId && mergedDeviceIds[deviceId] == null) {
             mergedDeviceIds[deviceId] = now;
         }
-        const chatDeviceId = pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
+        if (adopted && mergedDeviceIds[adopted] == null) {
+            mergedDeviceIds[adopted] = priorIds?.[adopted] || now;
+        }
+        const chatDeviceId = adopted || pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
         const photoURL = (await adoptProviderPhoto(user)) || cleanPhotoUrl(existing?.photoURL) || null;
 
@@ -546,12 +566,15 @@ export async function ensureUserProfile(user, opts = {}) {
             }
         }
 
-        if (deviceId) {
+        const linkDevice = async (id) => {
+            if (!id) return;
             await window.firebaseDbUpdate(
-                window.firebaseDbRef(window.firebaseDb, `devices/${deviceId}`),
-                { uid: user.uid, linkedAt: typeof existing?.deviceIds?.[deviceId] === 'number' ? existing.deviceIds[deviceId] : now }
+                window.firebaseDbRef(window.firebaseDb, `devices/${id}`),
+                { uid: user.uid, linkedAt: typeof existing?.deviceIds?.[id] === 'number' ? existing.deviceIds[id] : now }
             );
-        }
+        };
+        await linkDevice(adopted || deviceId);
+        if (deviceId && deviceId !== adopted) await linkDevice(deviceId);
 
         try {
             const provider = user.providerData?.[0]?.providerId || (user.email ? 'password' : '');

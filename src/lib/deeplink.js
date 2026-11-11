@@ -16,6 +16,9 @@ import {
     parseMapDeepLink,
     parsePlannerShortcutDeepLink,
     parseShareTargetDeepLink,
+    parseContentDeepLink,
+    parseContentQuery,
+    contentDeepLinkSearch,
     stripShareParamsFromUrl,
     isSeoAppHandoff,
 } from './share-links.js';
@@ -26,6 +29,7 @@ const LAUNCH_URL_KEY = 'nt_launch_target_url';
 
 function parseShareFromSearch(search) {
     return parseLiveTrainDeepLink(search)
+        || parseContentQuery(search)
         || parsePlannerDeepLink(search)
         || parseRouteDeepLinkParams(search)
         || parseMapDeepLink(search)
@@ -42,6 +46,8 @@ function shareFingerprint(snap) {
     if (snap.kind === 'planner-shortcut') return 'planner-shortcut';
     if (snap.kind === 'map') return 'map';
     if (snap.kind === 'share-target') return `share-target:${snap.url || ''}:${snap.text || ''}`;
+    if (snap.kind === 'alert') return `alert:${snap.id}:${snap.source || ''}`;
+    if (snap.kind === 'community') return `community:${snap.routeId}:${snap.postId}`;
     return snap.kind;
 }
 
@@ -103,6 +109,25 @@ function stripHashKeepQuery() {
 export function snapshotShareDeeplink(searchOverride, opts = {}) {
     if (typeof window === 'undefined') return null;
     try {
+        if (searchOverride == null && typeof location !== 'undefined') {
+            const located = parseContentDeepLink({
+                search: location.search,
+                hash: location.hash,
+                pathname: location.pathname,
+            });
+            const hashLink = location.hash.startsWith('#alerts/') || location.hash.startsWith('#community/');
+            const pathLink = /\/og\/[ac]\//i.test(location.pathname);
+            if (located && (hashLink || pathLink)) {
+                const destSearch = contentDeepLinkSearch(located);
+                try {
+                    const next = withBase('/') + destSearch;
+                    if ((location.pathname + location.search + location.hash) !== next) {
+                        history.replaceState(history.state || {}, '', next);
+                    }
+                } catch { /* ignore */ }
+                searchOverride = destSearch;
+            }
+        }
         const search = searchOverride != null
             ? searchOverride
             : (typeof location !== 'undefined' ? location.search : '');
@@ -187,6 +212,18 @@ export function ingestLaunchTargetUrl(targetURL) {
     }
     if (url.origin !== location.origin) return null;
 
+    const content = parseContentDeepLink({ search: url.search, hash: url.hash, pathname: url.pathname });
+    if (content && (content.kind === 'alert' || content.kind === 'community')) {
+        const destSearch = contentDeepLinkSearch(content);
+        snapshotShareDeeplink(destSearch, { prefer: true });
+        try {
+            const next = withBase('/') + destSearch;
+            const cur = location.pathname + location.search + location.hash;
+            if (next !== cur) history.replaceState(history.state || {}, '', next);
+        } catch { /* ignore */ }
+        return content;
+    }
+
     const search = liveShareSearchFromUrl(url) || url.search;
     const pathLive = parseLiveSharePath(url.pathname);
     const snap = snapshotShareDeeplink(search);
@@ -214,6 +251,8 @@ export function hasInboundShareIntent(search = typeof location !== 'undefined' ?
         || snap.kind === 'planner-shortcut'
         || snap.kind === 'map'
         || snap.kind === 'share-target'
+        || snap.kind === 'alert'
+        || snap.kind === 'community'
     ));
 }
 
@@ -486,6 +525,85 @@ export async function applyLiveTrainDeepLink() {
     return true;
 }
 
+function contentLinkFromPage() {
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap && (snap.kind === 'alert' || snap.kind === 'community')) return snap;
+    if (typeof location === 'undefined') return null;
+    return parseContentDeepLink({ search: location.search, hash: location.hash, pathname: location.pathname });
+}
+
+function armContentEntry() {
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
+    stripShareParamsFromUrl();
+    return slowToast;
+}
+
+/** Open the notice a shared alert link points at, and say so. */
+export async function applyAlertDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const link = contentLinkFromPage();
+    if (!link || link.kind !== 'alert') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap && snap.kind === 'alert') consumeShareDeeplinkSnapshot();
+    const slowToast = armContentEntry();
+    if (typeof window.switchTab === 'function') window.switchTab('next-train');
+    let state = 'gone';
+    try {
+        const alerts = await import('./alerts-channel.js');
+        state = await alerts.focusSharedAlert?.(link.id, link.source || '');
+    } catch { /* gone */ }
+    slowToast.cancel();
+    if (typeof window.showToast === 'function') {
+        window.showToast(
+            state === 'opened' ? 'Opened service update' : 'This update is no longer available',
+            state === 'opened' ? 'success' : 'info',
+            state === 'opened' ? 2500 : 4000
+        );
+    }
+    return true;
+}
+
+/** Open the community message a shared link points at. The room toasts if it is gone. */
+export async function applyCommunityDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const link = contentLinkFromPage();
+    if (!link || link.kind !== 'community') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap && snap.kind === 'community') consumeShareDeeplinkSnapshot();
+    const slowToast = armContentEntry();
+    let allowed = false;
+    try {
+        const chrome = await import('./admin-chrome.js');
+        allowed = chrome.canAccessPilotSurface?.('community') !== false;
+    } catch { allowed = true; }
+    if (!allowed) {
+        slowToast.cancel();
+        if (typeof window.switchTab === 'function') window.switchTab('next-train');
+        if (typeof window.showToast === 'function') {
+            window.showToast('Community is not available', 'info', 4000);
+        }
+        return true;
+    }
+    try {
+        const community = await import('./community.js');
+        community.queueCommunityFocus?.(link.routeId, link.postId, { announce: true });
+        if (typeof window.switchTab === 'function') window.switchTab('community');
+        else community.openRouteCommunity?.({ routeId: link.routeId });
+    } catch {
+        if (typeof window.showToast === 'function') {
+            window.showToast('This message is no longer available', 'info', 4000);
+        }
+    }
+    slowToast.cancel();
+    return true;
+}
+
 /**
  * Legacy SPA `?action=map` — open the interactive Map tab (fallback: static PRASA modal).
  */
@@ -621,7 +739,8 @@ export function bindPwaSameOriginLinks() {
                     try { return decodeURIComponent(part); } catch { return part; }
                 });
                 import('./community.js').then((m) => {
-                    if (parts[0]) m.queueCommunityFocus?.(parts[0], parts[1] || '');
+                    if (parts[0] && parts[1]) m.queueCommunityFocus?.(parts[0], parts[1], { announce: true });
+                    else if (parts[0]) m.queueCommunityFocus?.(parts[0], '');
                     if (typeof window.switchTab === 'function') window.switchTab('community');
                 }).catch(() => {
                     if (typeof window.switchTab === 'function') window.switchTab('community');
@@ -642,12 +761,26 @@ export function bindPwaSameOriginLinks() {
                 const noticeId = hash.startsWith('#alerts/')
                     ? (() => { try { return decodeURIComponent(hash.slice('#alerts/'.length)); } catch { return hash.slice('#alerts/'.length); } })()
                     : '';
+                if (noticeId) {
+                    import('./alerts-channel.js').then(async (m) => {
+                        const state = await m.focusSharedAlert?.(noticeId, '');
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(
+                                state === 'opened' ? 'Opened service update' : 'This update is no longer available',
+                                state === 'opened' ? 'success' : 'info',
+                                state === 'opened' ? 2500 : 4000
+                            );
+                        }
+                    }).catch(() => {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast('This update is no longer available', 'info', 4000);
+                        }
+                    });
+                    return;
+                }
                 whenSettledForAutoNotices(() => {
                     if (typeof window.openAlertsChannel === 'function') {
-                        window.openAlertsChannel({
-                            highlightId: noticeId || null,
-                            focusTop: !!noticeId,
-                        });
+                        window.openAlertsChannel({ highlightId: null, focusTop: false });
                     }
                 });
                 return;

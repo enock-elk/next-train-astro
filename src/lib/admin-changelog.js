@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.14': [
+        'On the guest account page, Sign in sits under the sign-in line, and Passenger type no longer has the fare-estimates line so it lines up with Points. The community reactions sheet closes when you leave Community. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.13': [
         'The De Wildt weekday grid effective 16 November 2026 is in the timetable catalogue, both directions on one sheet, labelled Weekday both ways grid, 16 Nov 2026, so an admin can post it. The guest account line says Sign in to sync and unlock features. No commuter What\'s New. forceShow stays false.',
     ],

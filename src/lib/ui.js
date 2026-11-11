@@ -2345,6 +2345,20 @@ export function setImmersiveChrome(on) {
     });
 }
 
+/** Reactions and the emoji tray belong to Community. Leaving the tab hides them. */
+function dismissCommunityTabSheets() {
+    const tray = document.getElementById('community-reaction-sheet');
+    if (tray) {
+        tray.classList.add('hidden');
+        tray.style.zIndex = '';
+    }
+    hideFixedModal('community-reactions-modal');
+    hideFixedModal('community-attach-modal');
+    if (location.hash === '#community-reactions') {
+        try { history.replaceState(history.state || { tab: 'community' }, '', '#community'); } catch { /* ignore */ }
+    }
+}
+
 export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
 
@@ -2359,6 +2373,7 @@ export function switchTab(tab, opts = null) {
     }
 
     const prev = safeStorage.getItem('activeTab') || 'next-train';
+    if (tab !== 'community' && prev === 'community') dismissCommunityTabSheets();
 
     if (tab === 'trip-planner') {
         if (location.hash !== '#planner' && location.hash !== '#planner-results') {

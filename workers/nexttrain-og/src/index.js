@@ -38,9 +38,24 @@ function plainBits(html, max = 180) {
     .slice(0, max);
 }
 
-function safePreviewImage(raw) {
+function imageTypeForPath(path) {
+  if (/\.gif$/i.test(path)) return 'image/gif';
+  if (/\.png$/i.test(path)) return 'image/png';
+  if (/\.webp$/i.test(path)) return 'image/webp';
+  return 'image/jpeg';
+}
+
+function safePreviewImage(raw, site) {
+  const text = String(raw || '').trim();
+  if (text.startsWith('/') && !text.startsWith('//')) {
+    const pathOnly = text.split('?')[0];
+    if (!/^\/(?:images|icons)\//.test(pathOnly)) return '';
+    if (/\.pdf$/i.test(pathOnly) || !/\.(jpe?g|png|gif|webp)$/i.test(pathOnly)) return '';
+    const base = String(site || 'https://nexttrain.co.za').replace(/\/$/, '');
+    return { href: `${base}${pathOnly}`, imageType: imageTypeForPath(pathOnly) };
+  }
   try {
-    const u = new URL(String(raw || ''));
+    const u = new URL(text);
     if (u.protocol !== 'https:' || u.username || u.password) return '';
     const host = u.hostname.toLowerCase().replace(/\.$/, '');
     const allowed = host === 'nexttrain.co.za'
@@ -54,16 +69,13 @@ function safePreviewImage(raw) {
     const path = decodeURIComponent(u.pathname || '');
     if (/\.pdf($|\?)/i.test(path)) return '';
     if (!/\.(jpe?g|png|gif|webp)$/i.test(path) && !/google|firebasestorage/.test(host)) return '';
-    const type = /\.gif$/i.test(path) ? 'image/gif'
-      : (/\.png$/i.test(path) ? 'image/png'
-        : (/\.webp$/i.test(path) ? 'image/webp' : 'image/jpeg'));
-    return { href: u.href, imageType: type };
+    return { href: u.href, imageType: imageTypeForPath(path) };
   } catch {
     return '';
   }
 }
 
-function firstImage(node) {
+function firstImage(node, site) {
   const list = Array.isArray(node?.imageUrls) ? node.imageUrls : [];
   const candidates = [...list, node?.imageUrl];
   const attachments = Array.isArray(node?.attachments) ? node.attachments : [];
@@ -72,7 +84,7 @@ function firstImage(node) {
   const img = html.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
   if (img) candidates.push(img[1]);
   for (const raw of candidates) {
-    const image = safePreviewImage(raw);
+    const image = safePreviewImage(raw, site);
     if (image) return image;
   }
   return null;
@@ -86,6 +98,7 @@ async function readRtdb(env, path) {
 }
 
 async function loadContentPreview(env, intent) {
+  const site = siteBase(env, new URL(String(env.PUBLIC_SITE || 'https://nexttrain.co.za')));
   if (intent.kind === 'alert') {
     const source = intent.source || 'all';
     const node = await readRtdb(env, `notices/${encodeURIComponent(source)}/${encodeURIComponent(intent.id)}`);
@@ -98,7 +111,7 @@ async function loadContentPreview(env, intent) {
     }
     const title = plainBits(node.title, 80) || 'Service update';
     const description = plainBits(node.message || node.text, 180) || 'Open this update in Next Train.';
-    const image = firstImage(node);
+    const image = firstImage(node, site);
     return { title, description, image: image?.href || '', imageType: image?.imageType || 'image/png' };
   }
   const node = await readRtdb(env, `route_community/${encodeURIComponent(intent.routeId)}/posts/${encodeURIComponent(intent.postId)}`);
@@ -106,7 +119,7 @@ async function loadContentPreview(env, intent) {
     return { title: 'Community message', description: 'This message is no longer available.' };
   }
   const description = plainBits(node.body, 180) || 'Open this message in Next Train.';
-  const image = firstImage(node);
+  const image = firstImage(node, site);
   return {
     title: 'Community message',
     description,

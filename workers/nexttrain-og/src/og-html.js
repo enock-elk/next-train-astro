@@ -172,6 +172,7 @@ export function buildContentOgMeta(intent, site, detail = {}) {
   const title = detail.title || (intent.kind === 'community' ? 'Community message' : 'Service update');
   const description = detail.description || 'Open this in Next Train.';
   const image = detail.image || `${site.replace(/\/$/, '')}/icons/loading-logo.png`;
+  const hasPhoto = !!detail.image;
   return {
     title,
     description,
@@ -180,6 +181,9 @@ export function buildContentOgMeta(intent, site, detail = {}) {
     image,
     imageAlt: title,
     imageType: detail.imageType || 'image/png',
+    // A real poster is not the 3000×1575 timetable sheet. A wrong size makes WhatsApp drop the card.
+    imageWidth: hasPhoto ? '' : 512,
+    imageHeight: hasPhoto ? '' : 512,
   };
 }
 
@@ -191,6 +195,8 @@ export function renderOgHtml({
   imageAlt,
   appUrl,
   imageType = 'image/png',
+  imageWidth = OG_IMAGE_WIDTH,
+  imageHeight = OG_IMAGE_HEIGHT,
   siteName = 'Metrorail Next Train',
 }) {
   const openUrl = appUrl || url;
@@ -212,9 +218,7 @@ export function renderOgHtml({
 <meta property="og:image" content="${esc(image)}"/>
 <meta property="og:image:secure_url" content="${esc(image)}"/>
 <meta property="og:image:type" content="${esc(imageType)}"/>
-<meta property="og:image:width" content="${OG_IMAGE_WIDTH}"/>
-<meta property="og:image:height" content="${OG_IMAGE_HEIGHT}"/>
-<meta property="og:image:alt" content="${esc(alt)}"/>
+${imageWidth && imageHeight ? `<meta property="og:image:width" content="${esc(imageWidth)}"/>\n<meta property="og:image:height" content="${esc(imageHeight)}"/>\n` : ''}<meta property="og:image:alt" content="${esc(alt)}"/>
 <link rel="image_src" href="${esc(image)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${esc(title)}"/>

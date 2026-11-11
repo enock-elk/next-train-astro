@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.13': [
+        'The De Wildt weekday grid effective 16 November 2026 is in the timetable catalogue, both directions on one sheet, labelled Weekday both ways grid, 16 Nov 2026, so an admin can post it. The guest account line says Sign in to sync and unlock features. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.12': [
         'The community reactions sheet sits on the bottom bar, with no gap above it. Each photo on an alert has its own link, /1 and /2 and so on, and opening that link opens that photo. Sharing a community message names who posted it. Copy on an alert with no words is greyed out. Deploy the nexttrain-og worker so the preview card uses the name and the photo. No commuter What\'s New. forceShow stays false.',
     ],

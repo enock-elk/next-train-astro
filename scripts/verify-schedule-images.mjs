@@ -23,6 +23,10 @@ assert(manifest.sheets.some((s) => s.region === 'GP'), 'GP sheets are filed');
 assert(manifest.sheets.some((s) => String(s.file || '').includes('-p32')), 'KZN multi-page parts are kept');
 assert(manifest.sheets.some((s) => s.effective === '2026-10-12'), 'Stellenbosch 12 Oct 2026 sheets are filed');
 assert(
+    manifest.sheets.some((s) => s.id === 'gp-dewildt-weekday-combined-2026-11-16-grid' && s.direction === 'combined' && s.effective === '2026-11-16'),
+    'De Wildt 16 Nov 2026 weekday grid is filed'
+);
+assert(
     manifest.sheets.some((s) => s.part === 'grid') && manifest.sheets.some((s) => s.part === 'departures'),
     'grid and departures format variants are both filed'
 );
@@ -62,6 +66,11 @@ const naledi = flat.find((route) => route.id === 'jhb-soweto');
 const pien = flat.find((route) => route.id === 'pta-pien');
 assert(naledi && naledi.name === 'Johannesburg - Naledi', 'Naledi sheets sit under Johannesburg - Naledi');
 assert(pien && flat.indexOf(pien) < flat.indexOf(naledi), 'routes follow the board order');
+const dewildt = flat.find((route) => route.id === 'pta-dewildt');
+assert(
+    dewildt && dewildt.sheets.some((sheet) => sheet.label === 'Weekday both ways grid, 16 Nov 2026'),
+    'De Wildt 16 Nov 2026 is labelled for the Timetables picker'
+);
 assert(naledi.sheets.length >= 2, 'Naledi lists each filed sheet');
 assert(naledi.sheets.every((sheet) => sheet.path.startsWith('/images/schedules/')), 'a sheet click target is the catalogue file');
 assert(!flat.some((route) => route.id === 'ec-berlin'), 'a route with no printed sheet is left out');

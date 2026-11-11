@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.11.11': [
+        'The community reactions sheet stops above the bottom bar, so that bar stays its own colour. The grey face on that sheet opens the reaction choices. An admin attach on Community is the Feedback Hub paperclip, and it opens the poster and link sheet. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.11.10': [
         'A saved Community name such as Enock LK stays Enock LK on a reaction. A shared community message rings that bubble, and the room scrolls inside the tab so the page does not grow a blank under the composer. The Community field is the same two-row curve as Feedback Hub. With the keyboard open, the wallpaper stays put and the latest messages sit above the keys. The shell is not shortened, so the blank slab under the composer stays gone. No commuter What\'s New. forceShow stays false.',
     ],

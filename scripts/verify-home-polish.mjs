@@ -460,6 +460,9 @@ assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the s
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
 assert(communityJs.includes('revealCommunityRow') && !communityJs.includes("row.scrollIntoView"), 'a community link scrolls the room only');
 assert(communityJs.includes('nt-community-force-flash'), 'a community link rings the message the way an alert does');
+assert(communityJs.includes('data-community-react-choose') && communityJs.includes('nt-sheet-above-nav'), 'the grey face opens reaction choices and the sheet stays off the bottom bar');
+assert(communityView.includes('id="community-attach-modal"') && communityView.includes('community-poster-select') && communityView.includes('M21.44 11.05'), 'admin attach is the paperclip and opens the poster sheet');
+assert(!communityView.includes('>Attach</button>'), 'community attach is not a full-width Attach button');
 assert(communityJs.includes("acct.uid === uid"), 'your own reaction uses the name saved on the account');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');

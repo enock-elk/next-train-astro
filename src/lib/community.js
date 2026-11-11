@@ -1364,6 +1364,39 @@ function syncCommunitySelectActions(post) {
 }
 
 /** Emoji pill by the message. No scrim, so the header stays usable. */
+function placeSheetAboveNav(sheet) {
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    const root = document.documentElement;
+    if (root.classList.contains('nt-keyboard')) {
+        const kb = parseFloat(getComputedStyle(root).getPropertyValue('--nt-kb-h')) || 0;
+        sheet.style.bottom = `${Math.round(kb)}px`;
+        return;
+    }
+    const nav = document.getElementById('bottom-nav');
+    const style = nav ? getComputedStyle(nav) : null;
+    const shown = !!(nav && style && style.display !== 'none' && style.visibility !== 'hidden' && !nav.classList.contains('hidden'));
+    if (!shown) {
+        sheet.style.bottom = '0px';
+        return;
+    }
+    const top = nav.getBoundingClientRect().top;
+    sheet.style.bottom = `${Math.max(0, Math.round(window.innerHeight - top))}px`;
+}
+
+function openReactionChooser(postId, anchorEl) {
+    const row = document.querySelector(`.community-post-row[data-post-id="${String(postId).replace(/"/g, '')}"]`);
+    const routeId = row?.getAttribute('data-route')
+        || document.getElementById('community-route-select')?.value
+        || '';
+    const rect = anchorEl?.getBoundingClientRect?.();
+    if (rect && (rect.width || rect.height)) {
+        reactionPress = { x: rect.left + rect.width / 2, y: rect.top + 4 };
+    }
+    openReactionSheet(postId, routeId, anchorEl);
+    const tray = document.getElementById('community-reaction-sheet');
+    if (tray) tray.style.zIndex = '160';
+}
+
 function openReactionSheet(postId, routeId, anchorEl) {
     const post = findCachedPost(postId);
     const tombstone = isCommunityTombstone(post);
@@ -1414,24 +1447,33 @@ function ensureCommunityReactionsModal() {
     if (sheet) return sheet;
     sheet = document.createElement('div');
     sheet.id = 'community-reactions-modal';
-    sheet.className = 'fixed inset-0 z-[140] hidden flex items-end justify-center bg-black/50';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[140] hidden flex items-end justify-center bg-black/50';
     sheet.innerHTML = `
         <div class="flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
             <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-community-react-title>Reactions</p>
             <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-community-react-chips></div>
-            <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-[max(1rem,env(safe-area-inset-bottom))]" data-community-react-list></div>
+            <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3" data-community-react-list></div>
         </div>`;
     document.body.appendChild(sheet);
     sheet.addEventListener('click', (e) => {
         if (e.target === sheet) {
+            closeReactionSheet();
             closeSmoothModal('community-reactions-modal');
+            return;
+        }
+        const choose = e.target.closest?.('[data-community-react-choose]');
+        if (choose && sheet.contains(choose)) {
+            e.preventDefault();
+            e.stopPropagation();
+            openReactionChooser(sheet.dataset.postId || '', choose);
             return;
         }
         const chip = e.target.closest?.('[data-community-react-filter]');
         if (!chip || !sheet.contains(chip)) return;
         e.preventDefault();
-        communityReactFilter = chip.getAttribute('data-community-react-filter') || 'all';
+        const next = chip.getAttribute('data-community-react-filter') || 'all';
+        communityReactFilter = communityReactFilter === next ? 'all' : next;
         void paintCommunityReactionsModal(sheet.dataset.postId || '');
     });
     return sheet;
@@ -1446,6 +1488,8 @@ function openCommunityReactionsModal(postId) {
     const wasHidden = sheet.classList.contains('hidden');
     void paintCommunityReactionsModal(postId);
     if (wasHidden) openSmoothModal('community-reactions-modal');
+    placeSheetAboveNav(sheet);
+    requestAnimationFrame(() => placeSheetAboveNav(sheet));
     triggerHaptic();
 }
 
@@ -1481,9 +1525,8 @@ function drawCommunityReactionsModal(sheet, people) {
         const faces = WA_REACTIONS
             .filter((r) => counts[r.id])
             .sort((a, b) => counts[b.id] - counts[a.id] || WA_REACTIONS.indexOf(a) - WA_REACTIONS.indexOf(b));
-        const allOn = communityReactFilter === 'all';
         chips.innerHTML = [
-            `<button type="button" data-community-react-filter="all" class="${chipClass(allOn)}" aria-pressed="${allOn ? 'true' : 'false'}" aria-label="All reactions">${COMMUNITY_REACT_ALL}</button>`,
+            `<button type="button" data-community-react-choose="1" class="${chipClass(false)}" aria-label="Choose a reaction">${COMMUNITY_REACT_ALL}</button>`,
             ...faces.map((r) => {
                 const on = communityReactFilter === r.id;
                 return `<button type="button" data-community-react-filter="${r.id}" class="${chipClass(on)}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${escapeHTML(r.emoji)} ${counts[r.id]}"><span aria-hidden="true">${r.emoji}</span><span class="tabular-nums">${counts[r.id]}</span></button>`;
@@ -1702,7 +1745,9 @@ function selectCommunityPost(postId, routeId) {
 }
 
 function closeReactionSheet() {
-    document.getElementById('community-reaction-sheet')?.classList.add('hidden');
+    const tray = document.getElementById('community-reaction-sheet');
+    tray?.classList.add('hidden');
+    if (tray) tray.style.zIndex = '';
 }
 
 function communityActionTarget() {
@@ -2755,7 +2800,8 @@ function syncComposerChrome() {
     composer.disabled = false;
     const operator = isAdminAuthed();
     composer.maxLength = operator ? COMMUNITY_ADMIN_BODY_MAX : BODY_MAX;
-    document.getElementById('community-admin-tools')?.classList.toggle('hidden', !operator);
+    document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
+    composer.classList.toggle('community-composer-with-clip', operator);
     restoreComposerDraft(composer);
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
@@ -3275,10 +3321,16 @@ export function bindCommunityUi() {
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
     document.getElementById('community-suggest-btn')?.addEventListener('click', () => { suggestCommunityReply(); });
     document.getElementById('community-attach-btn')?.addEventListener('click', () => {
-        const tray = document.getElementById('community-attach-tray');
-        if (!tray || !isAdminAuthed()) return;
-        tray.classList.toggle('hidden');
-        if (!tray.classList.contains('hidden')) fillCommunityPosterSelect();
+        const modal = document.getElementById('community-attach-modal');
+        if (!modal || !isAdminAuthed()) return;
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
+        modal.classList.remove('hidden');
+        placeSheetAboveNav(modal);
+        requestAnimationFrame(() => placeSheetAboveNav(modal));
+        fillCommunityPosterSelect();
+    });
+    document.getElementById('community-attach-modal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
     });
     document.getElementById('community-attach-add')?.addEventListener('click', () => {
         const input = document.getElementById('community-attach-url');
@@ -3378,6 +3430,10 @@ export function bindCommunityUi() {
     });
     restoreComposerDraft(composerEl);
     bindKeyboardThread();
+    window.visualViewport?.addEventListener('resize', () => {
+        placeSheetAboveNav(document.getElementById('community-reactions-modal'));
+        placeSheetAboveNav(document.getElementById('community-attach-modal'));
+    }, { passive: true });
     composerEl?.addEventListener('input', () => {
         rememberComposerDraft(composerEl.value);
         // Auto-grow with new lines (WhatsApp-style), capped
@@ -3549,6 +3605,11 @@ export function bindCommunityUi() {
             clearCommunitySelection();
             const rid = document.getElementById('community-route-select')?.value || routeId;
             applyFeedFilter(rid);
+            closeReactionSheet();
+            const who = document.getElementById('community-reactions-modal');
+            if (who && !who.classList.contains('hidden') && who.dataset.postId === String(postId)) {
+                void paintCommunityReactionsModal(postId);
+            }
             return;
         }
 

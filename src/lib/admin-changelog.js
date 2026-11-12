@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.7': [
+        'Holding a community message no longer shifts the thread. The selection bar covers the route header instead of replacing it. A bubble grows with the text, up to most of the row, and a short line stays narrow. A second tap cannot send the same reply twice. A reply that did not save is put back in the box instead of looking sent. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.6': [
         'The bottom bar highlight follows the screen that is open. Back from the map returns to the board. Community bubbles keep their width when the keyboard opens, and the last one sits above the composer. Sent messages use a double tick. Reactions sit on the outer edge, left for other people and right for your own. Pulling the reaction list closed slides it behind the blue bar. Suggest reply answers only the message you held, or the latest passenger message, and does not reply to the rest of the room. Sitemap lastmod regenerated for the current routes and stations. No commuter What\'s New. forceShow stays false.',
     ],

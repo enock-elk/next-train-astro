@@ -13,6 +13,16 @@ import {
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
 import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays, buildGridOrderWriteRecord, viaCodesFromGridOrderRecord } from './utils.js';
+import {
+    clearTrainTime,
+    displaySheetClock,
+    fillTrainColumn,
+    formatSheetClock,
+    isGridStationName,
+    parseSheetClock,
+    removeTrainFromRows,
+    stationRowIndexes,
+} from './grid-column-edit.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
 import { extraSheetKey, suggestedSheetTab, normalizeRouteSheetDates } from './route-sheets.js';
 import {
@@ -187,6 +197,16 @@ export function exposeAdminGlobals() {
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;
     window.normalizeStationName = normalizeStationName;
+    window.ntGridColumnEdit = {
+        clearTrainTime,
+        displaySheetClock,
+        fillTrainColumn,
+        formatSheetClock,
+        isGridStationName,
+        parseSheetClock,
+        removeTrainFromRows,
+        stationRowIndexes,
+    };
     window.flattenPublicHolidays = flattenPublicHolidays;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;

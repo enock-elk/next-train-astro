@@ -20,6 +20,7 @@ import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { haltPanelText } from './reply-suggest.js';
 import { closeSmoothModal, openLightbox, openSmoothModal, showToast, triggerHaptic } from './ui.js';
 import { bindKeyboardThread } from './keyboard-thread.js';
 import { bootFirebase } from './firebase-boot.js';
@@ -2769,14 +2770,24 @@ function rememberComposerDraft(value) {
     else safeStorage.removeItem(COMPOSER_DRAFT_KEY);
 }
 
+function fitCommunityComposer(el) {
+    if (!el) return;
+    const cap = 160;
+    el.style.height = 'auto';
+    const next = Math.min(Math.max(el.scrollHeight, 60), cap);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > cap + 2 ? 'auto' : 'hidden';
+    const end = el.selectionEnd ?? el.value.length;
+    if (el.style.overflowY === 'auto' && end >= el.value.length - 1) el.scrollTop = el.scrollHeight;
+}
+
 function restoreComposerDraft(composer) {
     const el = composer || document.getElementById('community-composer');
     if (!el || el.value) return;
     const saved = safeStorage.getItem(COMPOSER_DRAFT_KEY) || '';
     if (!saved) return;
     el.value = saved;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 60), 160)}px`;
+    fitCommunityComposer(el);
 }
 
 function keepComposerText(composer) {
@@ -2818,6 +2829,7 @@ function syncComposerChrome() {
     composer.maxLength = operator ? COMMUNITY_ADMIN_BODY_MAX : BODY_MAX;
     document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
     composer.classList.toggle('community-composer-with-clip', operator);
+    document.getElementById('community-copilot')?.classList.toggle('hidden', !operator);
     restoreComposerDraft(composer);
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
@@ -2925,8 +2937,23 @@ async function suggestCommunityReply(focusPostId = '') {
         showToast('Sign in again to use Co-Pilot.', 'error');
         return;
     }
+    const status = document.getElementById('community-suggest-status');
+    const statusText = document.getElementById('community-suggest-status-text');
+    const halt = document.getElementById('community-suggest-halt');
+    const guideBtn = document.getElementById('community-guide-open');
     if (btn) btn.disabled = true;
     if (errEl) errEl.textContent = '';
+    if (status && statusText) {
+        status.classList.remove('hidden');
+        statusText.textContent = 'Reading this room and writing a reply.';
+    }
+    const guidance = [
+        document.getElementById('community-guide-text')?.value || '',
+        document.getElementById('community-suggest-context')?.value || '',
+    ].map((part) => String(part || '').trim()).filter(Boolean).join('\n');
+    const roomNote = focus
+        ? 'This is the public community room for one train line. The line marked PRIORITY is the message to answer. The other lines are the past 24 hours, for context only. Answer the priority message first. One short reply an operator can post. No email sign-off.'
+        : 'This is the public community room for one train line. Write one short reply an operator can post in that room. No email sign-off. Answer the latest passenger questions.';
     try {
         const res = await fetch(`${REPLY_WORKER_URL}/suggest`, {
             method: 'POST',
@@ -2937,16 +2964,19 @@ async function suggestCommunityReply(focusPostId = '') {
             body: JSON.stringify({
                 region: $userRegion.get() || 'GP',
                 routeId,
-                note: focus
-                    ? 'This is the public community room for one train line. The line marked PRIORITY is the message to answer. The other lines are the past 24 hours, for context only. Answer the priority message first. One short reply an operator can post. No email sign-off. Stay under 280 characters.'
-                    : 'This is the public community room for one train line. Write one short reply an operator can post in that room. No email sign-off. Stay under 280 characters. Answer the latest passenger questions.',
+                note: guidance ? `${roomNote}\n\nOperator guidance for this draft:\n${guidance}` : roomNote,
                 thread,
             }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Co-Pilot could not draft a reply.');
         if (data.action === 'halt') {
-            if (errEl) errEl.textContent = data.reason || 'Co-Pilot needs a fact before it can draft this.';
+            const text = haltPanelText(data) || data.reason || 'Co-Pilot needs a fact before it can draft this.';
+            const haltText = document.getElementById('community-suggest-halt-text');
+            if (haltText) haltText.textContent = text;
+            halt?.classList.remove('hidden');
+            btn?.classList.add('hidden');
+            guideBtn?.classList.add('hidden');
             return;
         }
         const draft = String(data.reply || '').trim();
@@ -2954,10 +2984,12 @@ async function suggestCommunityReply(focusPostId = '') {
             if (errEl) errEl.textContent = 'Co-Pilot returned an empty draft.';
             return;
         }
+        halt?.classList.add('hidden');
+        btn?.classList.remove('hidden');
+        guideBtn?.classList.remove('hidden');
         if (composer) {
             composer.value = draft.slice(0, COMMUNITY_ADMIN_BODY_MAX);
-            composer.style.height = 'auto';
-            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 60), 160)}px`;
+            fitCommunityComposer(composer);
             rememberComposerDraft(composer.value);
             composer.focus();
         }
@@ -2965,6 +2997,7 @@ async function suggestCommunityReply(focusPostId = '') {
         showToast(err?.message || 'Co-Pilot could not draft a reply.', 'error');
     } finally {
         if (btn) btn.disabled = false;
+        status?.classList.add('hidden');
     }
 }
 
@@ -3182,8 +3215,7 @@ async function handlePostSubmit() {
         if (failedId) dropOutgoingPost(routeId, failedId);
         if (composer && draft && !composer.value) {
             composer.value = draft;
-            composer.style.height = 'auto';
-            composer.style.height = `${Math.min(Math.max(composer.scrollHeight, 60), 160)}px`;
+            fitCommunityComposer(composer);
             rememberComposerDraft(draft);
         }
         if (errEl) errEl.textContent = result.needsAuth ? '' : (result.message || '');
@@ -3338,6 +3370,23 @@ export function bindCommunityUi() {
 
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
     document.getElementById('community-suggest-btn')?.addEventListener('click', () => { suggestCommunityReply(); });
+    document.getElementById('community-suggest-again')?.addEventListener('click', () => { suggestCommunityReply(); });
+    const closeCommunityGuide = () => document.getElementById('community-guide-modal')?.classList.add('hidden');
+    document.getElementById('community-guide-open')?.addEventListener('click', () => {
+        document.getElementById('community-guide-modal')?.classList.remove('hidden');
+    });
+    document.getElementById('community-guide-close')?.addEventListener('click', closeCommunityGuide);
+    document.getElementById('community-guide-cancel')?.addEventListener('click', closeCommunityGuide);
+    document.getElementById('community-guide-modal')?.addEventListener('click', (event) => {
+        if (event.target === event.currentTarget) closeCommunityGuide();
+    });
+    document.getElementById('community-guide-go')?.addEventListener('click', () => {
+        const guide = document.getElementById('community-guide-text')?.value || '';
+        const context = document.getElementById('community-suggest-context');
+        if (context) context.value = guide;
+        closeCommunityGuide();
+        suggestCommunityReply();
+    });
     document.getElementById('community-attach-btn')?.addEventListener('click', () => {
         const modal = document.getElementById('community-attach-modal');
         if (!modal || !isAdminAuthed()) return;
@@ -3457,9 +3506,7 @@ export function bindCommunityUi() {
     composerEl?.addEventListener('input', () => {
         rememberComposerDraft(composerEl.value);
         // Auto-grow with new lines (WhatsApp-style), capped
-        composerEl.style.height = 'auto';
-        const next = Math.min(Math.max(composerEl.scrollHeight, 60), 160);
-        composerEl.style.height = `${next}px`;
+        fitCommunityComposer(composerEl);
         liveModerateComposer();
         paintCommunityQuotaHint();
 

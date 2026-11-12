@@ -273,8 +273,21 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 
-    // Failsafe telemetry wipe for admin panel
-    if (window.Admin && window.Admin.telemetryInterval) {
+    // Failsafe telemetry wipe for admin panel. The loading toast is until-dismiss,
+    // so closing Dev Mode has to take it down here. A fetch already in flight
+    // must not paint it again.
+    if (modalId === 'dev-modal' && window.Admin) {
+        if (window.Admin.telemetryInterval) {
+            clearInterval(window.Admin.telemetryInterval);
+            window.Admin.telemetryInterval = null;
+        }
+        window.Admin._telemetryGen = (window.Admin._telemetryGen || 0) + 1;
+        const telemetryToast = window.Admin._telemetryLoadToast || 'Loading telemetry…';
+        if (typeof hideToastIfMessage === 'function') {
+            hideToastIfMessage(telemetryToast);
+            setTimeout(() => hideToastIfMessage(telemetryToast), 400);
+        }
+    } else if (window.Admin && window.Admin.telemetryInterval) {
         clearInterval(window.Admin.telemetryInterval);
         window.Admin.telemetryInterval = null;
     }

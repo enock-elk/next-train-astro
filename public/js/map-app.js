@@ -1153,6 +1153,22 @@
             return `${base}regions/${slug}.html`;
         }
 
+        function appHomeHref() {
+            return (typeof window.APP_BASE === 'string' ? window.APP_BASE : '/').replace(/\/?$/, '/');
+        }
+
+        /** A first visit has not picked a regular route. Back opens Welcome, not the region timetable. */
+        function coldMapVisitor() {
+            try {
+                if (localStorage.getItem('welcomeSeen') === 'true') return false;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.indexOf('defaultRoute_') === 0 && localStorage.getItem(key)) return false;
+                }
+            } catch (e) {}
+            return true;
+        }
+
         function syncMapChromeRegion(region) {
             const code = VALID_MAP_REGIONS.includes(region) ? region : 'GP';
             const label = document.getElementById('region-toggle-label');
@@ -1163,7 +1179,13 @@
                 el.classList.toggle('is-active', el.getAttribute('data-region') === code);
             });
             const back = document.getElementById('map-back-link');
-            if (back) back.setAttribute('data-href', regionRoutesHref(code));
+            if (!back) return;
+            if (coldMapVisitor()) {
+                back.setAttribute('data-href', appHomeHref());
+                back.setAttribute('aria-label', 'Back to Next Train');
+                return;
+            }
+            back.setAttribute('data-href', regionRoutesHref(code));
         }
 
         function switchMapRegion(region) {

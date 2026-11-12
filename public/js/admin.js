@@ -4863,6 +4863,7 @@ const Admin = {
                 Admin.telemetryInterval = null;
                 console.log("Guardian: Dev Modal closed. Telemetry polling suspended.");
             }
+            if (typeof hideToastIfMessage === 'function') hideToastIfMessage(Admin._telemetryLoadToast);
             return;
         }
 
@@ -4914,7 +4915,7 @@ const Admin = {
             const t = (el?.textContent || '').trim();
             return t === '--' || t === '';
         });
-        if ((headlinesWaiting || chartText.includes('Loading')) && typeof showToast === 'function') {
+        if (telemetryGen === Admin._telemetryGen && devModal && !devModal.classList.contains('hidden') && (headlinesWaiting || chartText.includes('Loading')) && typeof showToast === 'function') {
             showToast(Admin._telemetryLoadToast, 'info', 0, '', { dismissible: true, untilDismiss: true, force: true });
         }
         
@@ -22224,7 +22225,27 @@ const Admin = {
                 <svg id="grid-order-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="grid-order-body" class="hidden mt-4 space-y-3">
-                <p class="text-sm leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
+                <style>
+                  #grid-order-list { overflow: auto; max-height: min(68vh, 34rem); border: 1px solid #e5e7eb; border-radius: 0.75rem; background: #fff; }
+                  html.dark #grid-order-list { border-color: #374151; background: #111827; }
+                  #grid-order-list table { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
+                  #grid-order-list th, #grid-order-list td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 0.35rem 0.4rem; text-align: center; white-space: nowrap; min-width: 4.6rem; background: #fff; color: #111827; }
+                  html.dark #grid-order-list th, html.dark #grid-order-list td { border-color: #374151; background: #111827; color: #f3f4f6; }
+                  #grid-order-list tbody tr:nth-child(even) td { background: #eff6ff; }
+                  html.dark #grid-order-list tbody tr:nth-child(even) td { background: #1e293b; }
+                  #grid-order-list .nt-station-col { position: sticky; left: 0; z-index: 2; text-align: left; font-weight: 700; background: #f3f4f6; min-width: 7.2rem; max-width: 9.5rem; }
+                  html.dark #grid-order-list .nt-station-col { background: #1f2937; }
+                  #grid-order-list thead th { position: sticky; top: 0; z-index: 3; background: #e5e7eb; font-size: 11px; }
+                  html.dark #grid-order-list thead th { background: #374151; }
+                  #grid-order-list thead .nt-station-col { z-index: 4; background: #e5e7eb; }
+                  html.dark #grid-order-list thead .nt-station-col { background: #374151; }
+                  #grid-order-list th[data-grid-col] { cursor: grab; touch-action: none; }
+                  #grid-order-list th.is-selected, #grid-order-list td.is-selected { box-shadow: inset 0 0 0 2px #2563eb; }
+                  #grid-order-list td.is-origin { font-weight: 800; }
+                  #grid-order-list .grid-order-move { height: 1.6rem; min-width: 1.6rem; padding: 0 0.3rem; border-radius: 0.4rem; border: 1px solid #d1d5db; background: #fff; font-size: 10px; font-weight: 700; }
+                  #grid-order-list select[data-grid-via] { max-width: 6.5rem; height: 1.7rem; font-size: 10px; }
+                </style>
+                <p class="text-sm leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. The sheet matches the in-app timetable. Hold a train column and drag it. The first station sets the column: later stops follow the other trains. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Monte Vista and Maitland are Western Cape only. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Route
                     <select id="grid-order-route" class="mt-1 w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white"></select>
                 </label>
@@ -22245,14 +22266,28 @@ const Admin = {
                 </div>
                 <button id="grid-order-load" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Load order</button>
                 <div id="grid-order-meta" class="hidden rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-500 dark:text-gray-400" aria-live="polite"></div>
-                <ol id="grid-order-list" class="admin-sheet-list" aria-label="Train column order"></ol>
+                <div id="grid-order-time" class="hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 space-y-2">
+                    <p id="grid-order-time-label" class="text-sm font-semibold text-gray-800 dark:text-gray-100"></p>
+                    <div class="flex gap-2">
+                        <input id="grid-order-time-input" type="time" class="min-w-0 flex-1 h-11 px-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white" />
+                        <button id="grid-order-time-apply" type="button" class="h-11 px-3 rounded-xl bg-blue-600 text-white text-sm font-semibold focus:outline-none">Set time</button>
+                        <button id="grid-order-time-clear" type="button" class="h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-semibold text-gray-800 dark:text-gray-100 focus:outline-none">Clear</button>
+                    </div>
+                    <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Set the first station and the rest of that train is calculated from the other trains. Clear removes one stop. Add train asks for a number and that same first time.</p>
+                </div>
+                <div id="grid-order-list" aria-label="Train column order"></div>
                 <div id="grid-order-actions" class="hidden space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="grid-order-add-train" type="button" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Add train</button>
+                        <button id="grid-order-delete-train" type="button" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Delete train</button>
+                    </div>
                     <div class="grid grid-cols-2 gap-2">
                         <button id="grid-order-reset" type="button" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Reset to fallback</button>
                         <button id="grid-order-save" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save order</button>
                     </div>
+                    <button id="grid-order-save-times" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save times to Firebase</button>
                     <button id="grid-order-via-all-days" type="button" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Save via marks to all days</button>
-                    <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
+                    <p id="grid-order-via-note" class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
                 </div>
             </div>
         `;
@@ -22272,6 +22307,11 @@ const Admin = {
         let currentRecord = null;
         let draggedIndex = -1;
         let loadedSelection = null;
+        let sheetRows = [];
+        let baselineSheet = '';
+        let selectedTrain = '';
+        let selectedRow = -1;
+        const gridEdit = () => window.ntGridColumnEdit || {};
 
         const routes = typeof ROUTES === 'undefined' ? [] : Object.values(ROUTES)
             .filter((route) => route?.isActive !== false && route?.sheetKeys)
@@ -22337,11 +22377,39 @@ const Admin = {
 
         const viaSnapshot = (map) => JSON.stringify(Object.keys(map || {}).sort().map((id) => [id, map[id]]));
 
+        const scheduleDirty = () => JSON.stringify(sheetRows) !== baselineSheet;
+        const westernCapeSheet = () => ROUTES?.[routeEl.value]?.region === 'WC';
+        const syncViaChrome = () => {
+            const show = westernCapeSheet();
+            panel.querySelector('#grid-order-via-all-days')?.classList.toggle('hidden', !show);
+            panel.querySelector('#grid-order-via-note')?.classList.toggle('hidden', !show);
+        };
+        const sheetFirebasePath = (sheetKey) => {
+            const region = ROUTES?.[routeEl.value]?.region;
+            const node = { GP: 'gauteng', WC: 'westerncape', KZN: 'kzn', EC: 'easterncape' }[region];
+            if (!node || !sheetKey) return '';
+            if (/_pub$/.test(sheetKey)) {
+                return `schedules/${node}/public_holidays/${sheetKey}`;
+            }
+            return `schedules/${node}/${sheetKey}`;
+        };
+
         const markDirty = () => {
             Admin.gridOrderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline)
+                || viaSnapshot(currentVia) !== viaSnapshot(baselineVia)
+                || scheduleDirty();
+            const orderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline)
                 || viaSnapshot(currentVia) !== viaSnapshot(baselineVia);
-            panel.querySelector('#grid-order-save').disabled = !Admin.gridOrderDirty;
-            panel.querySelector('#grid-order-save').classList.toggle('opacity-50', !Admin.gridOrderDirty);
+            const saveOrder = panel.querySelector('#grid-order-save');
+            if (saveOrder) {
+                saveOrder.disabled = !orderDirty;
+                saveOrder.classList.toggle('opacity-50', !orderDirty);
+            }
+            const saveTimes = panel.querySelector('#grid-order-save-times');
+            if (saveTimes) {
+                saveTimes.disabled = !scheduleDirty();
+                saveTimes.classList.toggle('opacity-50', !scheduleDirty());
+            }
         };
 
         const writeBody = (action) => {
@@ -22373,34 +22441,74 @@ const Admin = {
             markDirty();
         };
 
+        const clockText = (raw) => {
+            const show = gridEdit().displaySheetClock;
+            return typeof show === 'function' ? show(raw) : String(raw || '').trim();
+        };
+        const stationIndexes = () => {
+            const fn = gridEdit().stationRowIndexes;
+            return typeof fn === 'function' ? fn(sheetRows) : [];
+        };
+        const paintTimeEditor = () => {
+            const box = panel.querySelector('#grid-order-time');
+            const label = panel.querySelector('#grid-order-time-label');
+            const input = panel.querySelector('#grid-order-time-input');
+            if (!box || !label || !input) return;
+            const row = sheetRows[selectedRow];
+            if (!selectedTrain || !row) {
+                box.classList.add('hidden');
+                return;
+            }
+            const name = String(row.STATION || row.station || 'Station');
+            const origin = stationIndexes()[0] === selectedRow;
+            label.textContent = origin
+                ? `${selectedTrain} at ${name}. This is the first station. Setting it fills the column.`
+                : `${selectedTrain} at ${name}.`;
+            const shown = clockText(row[selectedTrain]);
+            input.value = /^\d{2}:\d{2}$/.test(shown) ? shown : '';
+            box.classList.remove('hidden');
+        };
         const paintList = () => {
-            listEl.innerHTML = currentOrder.map((id, index) => {
+            const showVia = westernCapeSheet();
+            const stations = stationIndexes();
+            const origin = stations[0];
+            if (!currentOrder.length || !sheetRows.length) {
+                listEl.innerHTML = '';
+                paintTimeEditor();
+                return;
+            }
+            const head = currentOrder.map((id, index) => {
                 const via = currentVia[id] || '';
-                return `
-                <li draggable="true" data-grid-order-row="${index}" class="admin-sheet-card">
-                    <div class="flex items-center gap-2">
-                        <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none h-11 w-11 shrink-0 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-500 focus:outline-none" aria-label="Drag train ${id}">
-                            <svg class="w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="7" r="1.4"/><circle cx="15" cy="7" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="17" r="1.4"/><circle cx="15" cy="17" r="1.4"/></svg>
-                        </button>
-                        <span class="admin-sheet-index">${String(index + 1).padStart(2, '0')}</span>
-                        <span class="admin-sheet-card-title flex-1">${ntAdminSecureEscape(id)}</span>
-                        <button type="button" data-grid-order-up="${index}" class="h-11 min-w-11 px-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-200 disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>Up</button>
-                        <button type="button" data-grid-order-down="${index}" class="h-11 min-w-11 px-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-200 disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>Down</button>
+                const viaSelect = showVia ? `<select data-grid-via="${ntAdminSecureEscape(id)}" aria-label="Via branch for train ${ntAdminSecureEscape(id)}">
+                    <option value="" ${via ? '' : 'selected'}>Via</option>
+                    <option value="MONTE_VISTA" ${via === 'MONTE_VISTA' ? 'selected' : ''}>Monte Vista</option>
+                    <option value="MAITLAND" ${via === 'MAITLAND' ? 'selected' : ''}>Maitland</option>
+                </select>` : '';
+                const selected = id === selectedTrain ? ' is-selected' : '';
+                return `<th draggable="true" data-grid-col="${index}" data-grid-order-row="${index}" class="${selected}">
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button" data-grid-order-up="${index}" class="grid-order-move" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>Up</button>
+                        <button type="button" data-grid-order-down="${index}" class="grid-order-move" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>Down</button>
                     </div>
-                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                        <span class="shrink-0">Via</span>
-                        <select data-grid-via="${ntAdminSecureEscape(id)}" class="min-w-0 flex-1 h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-semibold text-gray-900 dark:text-white" aria-label="Via branch for train ${ntAdminSecureEscape(id)}">
-                            <option value="" ${via ? '' : 'selected'}>None</option>
-                            <option value="MONTE_VISTA" ${via === 'MONTE_VISTA' ? 'selected' : ''}>Monte Vista</option>
-                            <option value="MAITLAND" ${via === 'MAITLAND' ? 'selected' : ''}>Maitland</option>
-                        </select>
-                    </label>
-                </li>`;
+                    <div class="mt-1 font-black tracking-wide">${ntAdminSecureEscape(id)}</div>
+                    ${viaSelect}
+                </th>`;
             }).join('');
+            const body = stations.map((rowIndex) => {
+                const row = sheetRows[rowIndex];
+                const name = String(row.STATION || row.station || '');
+                const cells = currentOrder.map((id) => {
+                    const selected = id === selectedTrain && rowIndex === selectedRow ? ' is-selected' : '';
+                    const originClass = rowIndex === origin ? ' is-origin' : '';
+                    return `<td data-grid-cell="${ntAdminSecureEscape(id)}" data-grid-row="${rowIndex}" class="${selected}${originClass}">${ntAdminSecureEscape(clockText(row[id]) || '')}</td>`;
+                }).join('');
+                return `<tr><th class="nt-station-col">${ntAdminSecureEscape(name)}</th>${cells}</tr>`;
+            }).join('');
+            listEl.innerHTML = `<table><thead><tr><th class="nt-station-col">Station</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
             listEl.querySelectorAll('[data-grid-via]').forEach((select) => {
                 const stopDrag = (event) => event.stopPropagation();
+                select.addEventListener('pointerdown', stopDrag);
                 select.addEventListener('mousedown', stopDrag);
-                select.addEventListener('touchstart', stopDrag, { passive: true });
                 select.addEventListener('change', () => {
                     const trainId = select.getAttribute('data-grid-via');
                     if (!trainId) return;
@@ -22410,20 +22518,25 @@ const Admin = {
                 });
             });
             listEl.querySelectorAll('[data-grid-order-up]').forEach((button) => {
-                button.onclick = () => move(Number(button.dataset.gridOrderUp), Number(button.dataset.gridOrderUp) - 1);
-            });
-            listEl.querySelectorAll('[data-grid-order-down]').forEach((button) => {
-                button.onclick = () => move(Number(button.dataset.gridOrderDown), Number(button.dataset.gridOrderDown) + 1);
-            });
-            listEl.querySelectorAll('[data-grid-order-row]').forEach((row) => {
-                row.ondragstart = () => { draggedIndex = Number(row.dataset.gridOrderRow); };
-                row.ondragover = (event) => event.preventDefault();
-                row.ondrop = (event) => {
-                    event.preventDefault();
-                    move(draggedIndex, Number(row.dataset.gridOrderRow));
-                    draggedIndex = -1;
+                button.onclick = (event) => {
+                    event.stopPropagation();
+                    move(Number(button.dataset.gridOrderUp), Number(button.dataset.gridOrderUp) - 1);
                 };
             });
+            listEl.querySelectorAll('[data-grid-order-down]').forEach((button) => {
+                button.onclick = (event) => {
+                    event.stopPropagation();
+                    move(Number(button.dataset.gridOrderDown), Number(button.dataset.gridOrderDown) + 1);
+                };
+            });
+            listEl.querySelectorAll('[data-grid-cell]').forEach((cell) => {
+                cell.onclick = () => {
+                    selectedTrain = cell.getAttribute('data-grid-cell') || '';
+                    selectedRow = Number(cell.getAttribute('data-grid-row'));
+                    paintList();
+                };
+            });
+            paintTimeEditor();
         };
 
         const describeRecord = (record) => {
@@ -22455,6 +22568,10 @@ const Admin = {
                 baseline = [];
                 currentVia = {};
                 baselineVia = {};
+                sheetRows = [];
+                baselineSheet = '[]';
+                selectedTrain = '';
+                selectedRow = -1;
                 paintList();
                 actionsEl.classList.add('hidden');
                 Admin.gridOrderDirty = false;
@@ -22466,6 +22583,10 @@ const Admin = {
                 baseline = [];
                 currentVia = {};
                 baselineVia = {};
+                sheetRows = [];
+                baselineSheet = '[]';
+                selectedTrain = '';
+                selectedRow = -1;
                 paintList();
                 actionsEl.classList.add('hidden');
                 metaEl.classList.remove('hidden');
@@ -22493,6 +22614,11 @@ const Admin = {
                 manifestOrder,
             });
             baseline = currentOrder.slice();
+            sheetRows = rows.map((row) => ({ ...(row || {}) }));
+            baselineSheet = JSON.stringify(sheetRows);
+            selectedTrain = '';
+            selectedRow = -1;
+            syncViaChrome();
             currentVia = typeof window.viaCodesFromGridOrderRecord === 'function'
                 ? window.viaCodesFromGridOrderRecord(currentRecord)
                 : {};
@@ -22657,8 +22783,165 @@ const Admin = {
                 if (typeof showToast === 'function') showToast(error.message || 'Grid order reset failed.', 'error');
             }
         };
+        let columnDrag = null;
+        listEl.addEventListener('dragstart', (event) => {
+            if (event.target.closest?.('[data-grid-col]')) {
+                draggedIndex = Number(event.target.closest('[data-grid-col]').dataset.gridCol);
+            }
+            event.preventDefault();
+        });
+        listEl.addEventListener('pointerdown', (event) => {
+            const head = event.target.closest?.('[data-grid-col]');
+            if (!head || event.target.closest('select,button,input')) return;
+            columnDrag = {
+                index: Number(head.dataset.gridCol),
+                x: event.clientX,
+                started: false,
+                pointerId: event.pointerId,
+            };
+            try { listEl.setPointerCapture(event.pointerId); } catch { /* ignore */ }
+        });
+        listEl.addEventListener('pointermove', (event) => {
+            if (!columnDrag || event.pointerId !== columnDrag.pointerId) return;
+            if (!columnDrag.started && Math.abs(event.clientX - columnDrag.x) < 10) return;
+            columnDrag.started = true;
+            const heads = [...listEl.querySelectorAll('[data-grid-col]')];
+            const over = heads.find((head) => {
+                const box = head.getBoundingClientRect();
+                return event.clientX >= box.left && event.clientX <= box.right;
+            });
+            if (!over) return;
+            const to = Number(over.dataset.gridCol);
+            if (to === columnDrag.index || Number.isNaN(to)) return;
+            move(columnDrag.index, to);
+            columnDrag.index = to;
+        });
+        const endColumnDrag = (event) => {
+            if (!columnDrag || (event && event.pointerId !== columnDrag.pointerId)) return;
+            if (!columnDrag.started) {
+                selectedTrain = currentOrder[columnDrag.index] || '';
+                selectedRow = stationIndexes()[0] ?? -1;
+                paintList();
+            }
+            columnDrag = null;
+        };
+        listEl.addEventListener('pointerup', endColumnDrag);
+        listEl.addEventListener('pointercancel', endColumnDrag);
+
+        const applySelectedTime = () => {
+            const row = sheetRows[selectedRow];
+            const input = panel.querySelector('#grid-order-time-input');
+            const edit = gridEdit();
+            if (!row || !selectedTrain || !input?.value || typeof edit.parseSheetClock !== 'function') return;
+            const seconds = edit.parseSheetClock(input.value);
+            if (seconds == null) {
+                if (typeof showToast === 'function') showToast('Enter a time like 05:35.', 'error');
+                return;
+            }
+            const origin = stationIndexes()[0];
+            if (selectedRow === origin && typeof edit.fillTrainColumn === 'function') {
+                const had = edit.parseSheetClock(row[selectedTrain]) != null;
+                edit.fillTrainColumn(sheetRows, selectedTrain, seconds, currentOrder, { fillBlanks: !had });
+            } else {
+                row[selectedTrain] = edit.formatSheetClock(seconds);
+            }
+            paintList();
+            markDirty();
+        };
+        panel.querySelector('#grid-order-time-apply').onclick = applySelectedTime;
+        panel.querySelector('#grid-order-time-clear').onclick = () => {
+            const edit = gridEdit();
+            if (typeof edit.clearTrainTime === 'function') edit.clearTrainTime(sheetRows, selectedTrain, selectedRow);
+            else if (sheetRows[selectedRow]) delete sheetRows[selectedRow][selectedTrain];
+            paintList();
+            markDirty();
+        };
+        panel.querySelector('#grid-order-add-train').onclick = () => {
+            const edit = gridEdit();
+            const rawId = window.prompt('Train number. Four digits, and a letter if the sheet uses one.');
+            const trainId = String(rawId || '').trim();
+            if (!trainId) return;
+            if (!/^\d{4}[a-zA-Z]*$/.test(trainId)) {
+                if (typeof showToast === 'function') showToast('Use a train number like 9001.', 'error');
+                return;
+            }
+            if (currentOrder.includes(trainId)) {
+                if (typeof showToast === 'function') showToast('That train is already on this sheet.', 'error');
+                return;
+            }
+            const rawTime = window.prompt('Starting time at the first station (HH:MM).');
+            const seconds = typeof edit.parseSheetClock === 'function' ? edit.parseSheetClock(rawTime) : null;
+            if (seconds == null) {
+                if (typeof showToast === 'function') showToast('Enter a start time like 05:35.', 'error');
+                return;
+            }
+            currentOrder.push(trainId);
+            if (typeof edit.fillTrainColumn === 'function') {
+                edit.fillTrainColumn(sheetRows, trainId, seconds, currentOrder, { fillBlanks: true });
+            }
+            selectedTrain = trainId;
+            selectedRow = stationIndexes()[0] ?? -1;
+            paintList();
+            markDirty();
+        };
+        panel.querySelector('#grid-order-delete-train').onclick = () => {
+            if (!selectedTrain) {
+                if (typeof showToast === 'function') showToast('Tap a train column first.', 'error');
+                return;
+            }
+            if (!window.confirm(`Delete train ${selectedTrain} and its times from this sheet?`)) return;
+            const edit = gridEdit();
+            if (typeof edit.removeTrainFromRows === 'function') edit.removeTrainFromRows(sheetRows, selectedTrain);
+            else sheetRows.forEach((row) => { if (row) delete row[selectedTrain]; });
+            delete currentVia[selectedTrain];
+            currentOrder = currentOrder.filter((id) => id !== selectedTrain);
+            selectedTrain = '';
+            selectedRow = -1;
+            paintList();
+            markDirty();
+        };
+        panel.querySelector('#grid-order-save-times').onclick = async () => {
+            const button = panel.querySelector('#grid-order-save-times');
+            const path = sheetFirebasePath(currentSheetKey);
+            if (!path || !sheetRows.length) return;
+            if (dayEl.value === 'public_holiday' && !/_pub$/.test(currentSheetKey)) {
+                if (typeof showToast === 'function') showToast('This public holiday uses the Saturday sheet. Open Saturday to edit these times.', 'error');
+                return;
+            }
+            if (!window.confirm('Save these times to the live Firebase schedule?')) return;
+            button.disabled = true;
+            try {
+                const token = await Admin.getAuthKey();
+                if (!token) throw new Error('Authentication required.');
+                const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+                const put = async (nodePath, body) => {
+                    const response = await window.guardianFetch(
+                        `${endpoint}${nodePath}.json?auth=${encodeURIComponent(token)}`,
+                        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+                        15000
+                    );
+                    if (!response.ok) throw new Error(`RTDB write failed (${response.status})`);
+                };
+                await put(path, sheetRows);
+                await put(`${path}_columnOrder`, currentOrder.slice());
+                await writeRecord(writeBody());
+                baselineSheet = JSON.stringify(sheetRows);
+                const region = ROUTES?.[routeEl.value]?.region;
+                if (region && Admin._gridOrderRegionDb?.[region]) {
+                    Admin._gridOrderRegionDb[region][currentSheetKey] = sheetRows.map((row) => ({ ...row }));
+                    Admin._gridOrderRegionDb[region][`${currentSheetKey}_columnOrder`] = currentOrder.slice();
+                }
+                markDirty();
+                if (typeof showToast === 'function') showToast('Train times saved.', 'success');
+            } catch (error) {
+                if (typeof showToast === 'function') showToast(error.message || 'Could not save train times.', 'error');
+                markDirty();
+            }
+        };
+
         [routeEl, dayEl, directionEl].forEach((el) => {
             el.addEventListener('change', () => {
+                syncViaChrome();
                 if (Admin.gridOrderDirty && !window.confirm('Discard unsaved grid order changes?')) {
                     if (loadedSelection) {
                         routeEl.value = loadedSelection.route;

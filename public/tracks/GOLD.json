@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "f5556b97ec3d3aedda84bf763bb7088ac21a0d3e",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: the ad observer scans for overlays once per pass and checks the safe zone and fill once per mutation batch, so start-up board paints stop paying for a whole-document scan per record. Ad placement, cloaking, timing, the bottom overlay, rail geometry, station pins, MapView, map-tab, and map runtime are unchanged. frozenAt is the ad-observer commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: a first visit to the network map sends Back to the app welcome screen. A saved route still returns to that region's timetable page. Rail geometry, station pins, MapView, map-tab, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "4baba3b7d507f1c3069f26126ddcd931fd94a5425edfb84ce42985a78741ba99"
     },
     "public/js/map-app.js": {
-      "md5": "2c51e394e9ec6908953d52060eedb7ea",
-      "sha256": "cd55f437d6d52381876eca7cab5ab2470943b973059e8972a0bce0aee33a395a"
+      "md5": "1d5e8fe600a95e9c81b7aa4171c2a5a4",
+      "sha256": "fedc5ec686ef092bf25af3fa97e6b6a7b81cbe2354ffa8c6ff4245ab0fffe798"
     },
     "src/pages/map.astro": {
       "md5": "97fc25e4b1d8bf7aa32e8a2234113ce5",

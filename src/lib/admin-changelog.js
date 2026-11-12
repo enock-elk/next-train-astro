@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.15': [
+        'Community photos go in the nexttrain-community-images bucket. Alert photos stay in nexttrain-alert-images. A photo on a community message is uploaded there, and a pasted image address is copied there before the message is saved. A catalog poster stays on the site. Deploy the community worker so the new bucket is created. A phone that blocks localStorage no longer throws while a room loads. Sentry ignores Script error, plus xbrowser and swbrowser. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.14': [
         'Disclaimer is a pill on the left of the community room line. Who is here sits on the right. The note is three short paragraphs: what people share, that Next Train is independent of PRASA, and that the chat is for commuters to update each other. The route list fades at the bottom while more routes are below. Guide this reply is a short card, and Guide sits above Post after a draft. No commuter What\'s New. forceShow stays false.',
     ],

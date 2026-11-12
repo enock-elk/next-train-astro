@@ -1046,6 +1046,15 @@ assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'versi
     const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
     assert(utilsSrc.includes('export function applyFittedLabels') && utilsSrc.includes('const fittedLabels = new WeakMap()'), 'label fits are batched and memoised (INP)');
 }
+{
+    // CLS: the board must not jump while the app boots.
+    const bodyStart = layout.match(/<RecoveryLifeline \/>\s*<script is:inline>([\s\S]*?)<\/script>/)?.[1] || '';
+    assert(bodyStart.includes("body.classList.add('nav-bottom')"), 'body has nav-bottom before the board parses (CLS)');
+    assert(bodyStart.includes("localStorage.getItem('welcomeSeen') === 'true'") && bodyStart.includes("body.classList.add('chrome-compact')"), 'returning commuters get the compact header before the board parses (CLS)');
+    const liveBoardMarkup = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
+    assert(!liveBoardMarkup.includes('min-h-[72px]'), 'board placeholders are not shorter than a departure card (CLS)');
+    assert((liveBoardMarkup.match(/min-h-\[96px\]/g) || []).length >= 2, 'both board placeholders reserve the departure card height (CLS)');
+}
 if (failures.length) {
     console.error('verify-home-polish failed:');
     failures.forEach((f) => console.error(' -', f));

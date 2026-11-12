@@ -1669,6 +1669,19 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
   <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen overflow-hidden transition-colors duration-300">
 
     <RecoveryLifeline />
+    <script is:inline>
+      // The board's bottom-bar padding (nav-bottom) and the compact header
+      // (chrome-compact) must be on <body> before the header parses, or the
+      // board jumps when prefs.js boots. prefs.js re-applies both; keep this in
+      // step with applyNavChrome and applyReturningUserChrome.
+      (function () {
+        var body = document.body;
+        body.classList.add('nav-bottom');
+        try {
+          if (localStorage.getItem('welcomeSeen') === 'true') body.classList.add('chrome-compact');
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 

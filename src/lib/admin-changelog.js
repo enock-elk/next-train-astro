@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.13': [
+        'The community room line says Disclaimer on the right, with a dotted underline. It still opens the note that Next Train is independent of PRASA. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.12': [
         'Sharing an alert or a community message sends the link alone. The message text stays on Copy. Deleting a community message asks first, including Remove completely and Deleted by an Admin. Cancel leaves the message. Who is here sits on the left of the room line, and Not part of PRASA on the right opens a short note that Next Train is independent. A pasted trip button, such as Belle Ombre to Mamelodi Gardens, takes the tap by itself and does not dim or select the bubble. No commuter What\'s New. forceShow stays false.',
     ],

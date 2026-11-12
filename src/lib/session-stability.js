@@ -84,7 +84,7 @@ let lastInputAt = 0;
 let inputWatchBound = false;
 
 function bindInputWatch() {
-    if (inputWatchBound || typeof window === 'undefined') return;
+    if (inputWatchBound || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     inputWatchBound = true;
     const mark = () => { lastInputAt = Date.now(); };
     for (const type of ['pointerdown', 'keydown', 'touchstart']) {

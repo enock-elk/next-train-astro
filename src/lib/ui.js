@@ -9,7 +9,7 @@
 import { safeStorage, escapeHTML } from './utils.js';
 import { isAdminAuthed, canAccessPilotSurface, canOpenTrackingMap } from './admin-chrome.js';
 import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
-import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
+import { DYNAMIC_BASE_URL, APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
 import { markPendingReload, isSettledForAutoNotices, whenSettledForAutoNotices } from './session-stability.js';
 import { clearLiveTrainFollow, isLiveTrainFollowActive } from './live-train-follow.js';
@@ -1577,17 +1577,34 @@ function lightboxImageExt(type, src) {
     return 'jpg';
 }
 
+/** A cross-origin host (an image link on a community message) has no CORS, so the save goes through the community worker. */
+async function fetchLightboxBlob(src) {
+    try {
+        const res = await fetch(src, { credentials: 'omit' });
+        if (res.ok) {
+            const blob = await res.blob();
+            if (blob.size && (!blob.type || blob.type.startsWith('image/'))) return blob;
+        }
+    } catch { /* the image host did not allow the page to read the file */ }
+    if (!/^https:\/\//i.test(src)) return null;
+    const base = String(COMMUNITY_WORKER_URL || (typeof window !== 'undefined' && window.COMMUNITY_WORKER_URL) || COMMUNITY_WORKER_FALLBACK_URL).replace(/\/$/, '');
+    if (!base) return null;
+    const res = await fetch(`${base}/media/file?u=${encodeURIComponent(src)}`, { credentials: 'omit' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.size || (blob.type && !blob.type.startsWith('image/'))) return null;
+    return blob;
+}
+
 /** Save the picture already on screen. The tap is the only fetch. */
 async function downloadLightboxImage() {
     const img = document.getElementById('alert-image-lightbox-img');
     const src = img?.currentSrc || img?.src || '';
     if (!src) return;
     try {
-        const res = await fetch(src, { credentials: 'omit' });
-        if (!res.ok) throw new Error('download');
-        const blob = await res.blob();
+        const blob = await fetchLightboxBlob(src);
+        if (!blob) throw new Error('download');
         const type = blob.type || '';
-        if (type && !type.startsWith('image/')) throw new Error('download');
         const objectUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = objectUrl;

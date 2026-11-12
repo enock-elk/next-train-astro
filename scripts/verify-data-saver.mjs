@@ -104,6 +104,7 @@ assert(channel.includes('ntPosterChecking'), 'a tap during the cache check does 
 assert(channel.includes('settleHeldPicture'), 'a held poster asks for the blurred preview');
 const worker = readFileSync(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
 assert(worker.includes("url.pathname === '/media/preview'"), 'the community worker serves a small preview');
+assert(worker.includes("url.pathname === '/media/file'"), 'the community worker can hand a picture to the save button');
 const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 assert(admin.includes("tabBtn('timetables', 'Timetables')"), 'alert posters include a Timetables tab');
 assert(admin.includes('openScheduleSheet'), 'a timetable row opens the image');
@@ -118,7 +119,11 @@ assert(hub.includes('shouldHoldPicture(href)'), 'the notice keeps its picture wh
 assert(hub.includes('rememberPicture(href)'), 'a notice picture that loads is remembered');
 
 const community = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
-assert(community.includes('pictureMarkup(url, { link: true })'), 'community pictures use the same hold');
+assert(community.includes('pictureMarkup(url)'), 'community pictures use the same hold');
+assert(!community.includes('pictureMarkup(url, { link: true })'), 'a community picture does not open the image host');
+assert(community.includes('openLightbox(src, host)'), 'a community picture opens in the alert viewer');
+assert(community.includes("host.setAttribute('data-alert-ready', '1')"), 'a shown community picture is allowed into full view');
+assert(community.includes("images.length === 1 ? ' is-single'"), 'one picture fills the bubble');
 assert(community.includes('profilePhotosOn()'), 'profile photos can stay off');
 assert(community.includes('settleDeferredPictures(listEl)'), 'community checks the cache before showing a download');
 
@@ -128,6 +133,7 @@ assert(cards.includes('shouldHoldPicture(card.image)'), 'a link card picture wai
 
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('#account-data'), 'back treats Data saving as its own page');
+assert(ui.includes('/media/file?u='), 'saving a cross-origin picture goes through the community worker');
 
 const utils = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
 assert(utils.includes("'ntDataSaver'") && utils.includes("'ntDataSaverSeen'"), 'a volatile flush keeps the choice and the pictures already shown');

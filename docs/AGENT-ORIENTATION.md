@@ -230,6 +230,7 @@ Details and absolute bans live in `AGENTS.md`. Skim these before large edits:
 - **Map opens over the ocean** → missing lat/lon must stay `null`, not `Number(null) === 0`.
 - **Map geometry** → never whole-region Overpass refresh; never smooth KZN; never silence `verify:map-gold` by editing hashes only.
 - **Deploy production fails at Verify map gold** → a listed file differs from `GOLD.json`. Diff `origin/map-gold`. Freeze a proven improvement (update hashes and `frozenAt`, fast-forward `map-gold`). Do not hash-bump an unproved edit. Run `verify:map-gold` before every app push, even when the edit is not a map.
+- **Play Store “Google Play is enabled” dialog** over a full-screen app is Play Console Automatic protection, not a broken `assetlinks.json`. A hidden address bar means the links already verified. See `AGENTS.md` → Play Store dialog.
 - **Core Web Vitals (INP / LCP / CLS)** → read [CWV-NEXT-STEPS.md](./CWV-NEXT-STEPS.md) first. The Firebase popup resolver and lazy module steps are documented, not shipped; both need owner sign-off and real-device testing.
 - **About black box misses the waterfall** → production `drop_console` strips bundled `console.*`. Log through `window.ntTrace`. Admin lines still appear because `admin.js` is not bundled.
 - **Ads** → overlay from bottom; no reserved blank gap; advert gold.

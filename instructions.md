@@ -267,6 +267,10 @@ Search Console flagged mobile INP 729 ms, LCP 2.8 s, CLS 0.11 (Nov 2026). Fixes 
 - **Next step B, lazy index / Welcome module evaluation (about 300 ms + 210 ms at 8x).** Higher risk. Inventory `window.*` hooks before moving any module behind `import()`. Do not touch `manualChunks`.
 - Ask the owner before starting either step. Neither is a drive-by change.
 
+## Play Store dialog
+
+The dialog **Something went wrong. Check that Google Play is enabled on your device…** on top of a running full-screen app is Play's license check, injected into `za.co.nexttrain.app` by Play Console **Automatic protection** (`com.pairip.licensecheck`). It shows every so often when that check fails for a moment. A hidden address bar means `public/.well-known/assetlinks.json` already verified. Do not edit asset links to chase this dialog. The website cannot dismiss it. It stops when Automatic protection is turned off and a new Android build is shipped.
+
 ## Testing
 
 Run the existing verify scripts that match the change (`npm run verify:alerts`, `verify:schedule`, `verify:urls`, …). Do not add walkthrough videos or screenshot demos unless the owner asks.

@@ -1158,6 +1158,7 @@ function newId(prefix) {
 }
 
 const ALERT_IMAGE_MAX = 4 * 1024 * 1024;
+const MEDIA_FILE_MAX = 5 * 1024 * 1024;
 
 function sniffAlertImage(bytes) {
     if (!bytes || bytes.length < 12) return null;
@@ -1368,6 +1369,36 @@ async function handleMediaPreview(request, env) {
         status: 200,
         headers: previewResponseHeaders(env, request, size, 'image/jpeg'),
     }));
+}
+
+/** The full picture, for the in-app save button. Same address rules as the preview. */
+async function handleMediaFile(request, env) {
+    const target = canonicalPreviewTarget(new URL(request.url).searchParams.get('u') || '');
+    if (!target) return json(env, request, 400, { ok: false, error: 'That picture cannot be saved.' });
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`mediafile:${ip}`, 60_000, 40)) {
+        return json(env, request, 429, { ok: false, error: 'Slow down a moment.' });
+    }
+    let upstream;
+    try {
+        upstream = await fetch(target, { redirect: 'follow' });
+    } catch {
+        return json(env, request, 502, { ok: false, error: 'That picture cannot be saved.' });
+    }
+    if (!upstream.ok) return json(env, request, 404, { ok: false, error: 'That picture cannot be saved.' });
+    const declared = Number(upstream.headers.get('content-length') || 0);
+    if (declared > MEDIA_FILE_MAX) return json(env, request, 413, { ok: false, error: 'That picture is too large to save.' });
+    const buf = new Uint8Array(await upstream.arrayBuffer());
+    if (!buf.length || buf.length > MEDIA_FILE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'That picture is too large to save.' });
+    }
+    const sniffed = sniffAlertImage(buf);
+    if (!sniffed) return json(env, request, 415, { ok: false, error: 'That file is not a picture.' });
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Content-Type', sniffed.type);
+    headers.set('Cache-Control', 'private, max-age=300');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    return new Response(buf, { status: 200, headers });
 }
 
 async function handleAlertImageGet(request, env, file) {
@@ -1941,6 +1972,9 @@ export default {
         }
         if (request.method === 'GET' && url.pathname === '/media/preview') {
             return handleMediaPreview(request, env);
+        }
+        if (request.method === 'GET' && url.pathname === '/media/file') {
+            return handleMediaFile(request, env);
         }
         if (request.method === 'GET') {
             const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);

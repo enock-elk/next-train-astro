@@ -340,10 +340,34 @@
     gap: 0.25rem;
     margin-bottom: 0.3rem;
   }
+  /* One photo used to occupy only the left cell, with empty bubble beside it. */
+  .community-msg-images.is-single {
+    grid-template-columns: 1fr;
+    margin-left: -0.65rem;
+    margin-right: -0.65rem;
+  }
+  .community-msg-images.is-single:first-child {
+    margin-top: -0.35rem;
+  }
+  .community-msg-photo {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+  }
   .community-msg-images .nt-picture-hold {
     min-height: 7.5rem;
     width: 100%;
     border-radius: 0.4rem;
+  }
+  .community-msg-images.is-single .nt-picture-hold {
+    min-height: 12rem;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
   }
   .community-msg-images img {
     display: block;
@@ -352,6 +376,15 @@
     object-fit: cover;
     border-radius: 0.4rem;
     background: rgba(0, 0, 0, 0.06);
+    -webkit-touch-callout: none;
+  }
+  .community-msg-images.is-single img {
+    height: auto;
+    max-height: 28rem;
+    object-fit: contain;
+    object-position: center top;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.45);
   }
   .community-msg-link {
     display: block;

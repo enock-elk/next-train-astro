@@ -20,7 +20,7 @@ import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
-import { closeSmoothModal, openSmoothModal, showToast, triggerHaptic } from './ui.js';
+import { closeSmoothModal, openLightbox, openSmoothModal, showToast, triggerHaptic } from './ui.js';
 import { bindKeyboardThread } from './keyboard-thread.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
@@ -2040,11 +2040,19 @@ function communityImageUrls(post) {
     return sanitizeCommunityAttachments(post?.attachments, { admin: true });
 }
 
+function communityPictureHtml(url) {
+    const inner = pictureMarkup(url);
+    // The data-saver hold is already a button. A shown photo gets its own,
+    // so a tap stays in the app instead of opening the image host.
+    if (inner.includes('data-nt-defer-src')) return inner;
+    return `<button type="button" class="community-msg-photo" aria-label="View photo">${inner}</button>`;
+}
+
 function renderCommunityMedia(post) {
     if (isCommunityTombstone(post)) return '';
     const images = communityImageUrls(post);
     const imageHtml = images.length
-        ? `<div class="community-msg-images">${images.map((url) => pictureMarkup(url, { link: true })).join('')}</div>`
+        ? `<div class="community-msg-images${images.length === 1 ? ' is-single' : ''}">${images.map((url) => communityPictureHtml(url)).join('')}</div>`
         : '';
     const link = sanitizeCommunityLinkUrl(post?.linkUrl);
     const linkHtml = link
@@ -3484,6 +3492,21 @@ export function bindCommunityUi() {
 
     document.addEventListener('click', async (e) => {
         const t = e.target;
+
+        const photo = t.closest?.('.community-msg-photo, .community-msg-images img, .community-msg-images .nt-gif, .community-msg-images a');
+        if (photo?.closest?.('.community-msg-images')) {
+            if (t.closest?.('[data-nt-defer-src], [data-nt-gif-replay]')) return;
+            if (Date.now() < reactionGuardUntil) return;
+            e.preventDefault();
+            const img = photo.tagName === 'IMG' ? photo : photo.querySelector('img');
+            const src = img?.dataset?.ntGifSrc || img?.dataset?.ntGifPlay || img?.currentSrc || img?.getAttribute?.('src') || photo.getAttribute?.('href') || '';
+            // The viewer treats a bare image as an unloaded poster and refuses
+            // to open it. The button around the photo is the poster host.
+            const host = img?.closest?.('.community-msg-photo') || img || photo;
+            if (host?.setAttribute) host.setAttribute('data-alert-ready', '1');
+            if (src) openLightbox(src, host);
+            return;
+        }
 
         const whoPill = t.closest?.('.community-reaction-who');
         if (whoPill) {

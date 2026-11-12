@@ -141,7 +141,28 @@ function setAdPadding(_on) {
     } catch { /* ignore */ }
 }
 
+/**
+ * One document scan per synchronous pass. The attribute-substring selector walks
+ * every element, and a single observer batch or shell sync used to run it 5+
+ * times (once per childList record before the first fill). Our own writes in a
+ * pass (dock, idle flag, undocked class) never change which nodes match.
+ */
+let overlayNodesMemo = null;
+
+function clearOverlayNodesMemo() {
+    overlayNodesMemo = null;
+}
+
 function cleverOverlayNodes() {
+    if (overlayNodesMemo) return overlayNodesMemo.slice();
+    const nodes = scanCleverOverlayNodes();
+    overlayNodesMemo = nodes;
+    if (typeof queueMicrotask === 'function') queueMicrotask(clearOverlayNodesMemo);
+    else Promise.resolve().then(clearOverlayNodesMemo);
+    return nodes.slice();
+}
+
+function scanCleverOverlayNodes() {
     const out = [];
     const seen = new Set();
     const add = (el) => {
@@ -459,6 +480,11 @@ function setShellVar(name, px, animate) {
     if (!shell) return;
     const numeric = Math.round(Number(px) || 0);
     const next = `${numeric}px`;
+    if (!animate && !adEntering && !shellMotionLock && shell.style.getPropertyValue(name) === next) {
+        // Unchanged and nothing easing: the no-motion flip would only force a reflow.
+        syncNtAdShiftedClass(shell);
+        return;
+    }
     if (numeric !== 0) shell.classList.add('nt-ad-shifted');
     if (!animate) shell.classList.add('nt-ad-no-motion');
     shell.style.setProperty(name, next);
@@ -853,6 +879,9 @@ export function initCleverAds() {
     if (window.MutationObserver && document.body) {
         const adObserver = new MutationObserver((mutations) => {
             let sawChildList = false;
+            // Same answer for every record in a batch; isAdFilled() scans the document.
+            let safeThisBatch = null;
+            let filledThisBatch = null;
             for (const m of mutations) {
                 if (m.type === 'attributes' && m.attributeName === 'class' && isSafeZoneSignal(m.target)) {
                     scheduleSafeZoneCheck();
@@ -885,7 +914,11 @@ export function initCleverAds() {
                     requestAdShellSync();
                 }
                 if (m.type === 'childList') sawChildList = true;
-                if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled() && isSafeZone()) {
+                if (!window._adTelemetryFired && m.type === 'childList') {
+                    if (safeThisBatch === null) safeThisBatch = isSafeZone();
+                    if (safeThisBatch && filledThisBatch === null) filledThisBatch = isAdFilled();
+                }
+                if (!window._adTelemetryFired && m.type === 'childList' && safeThisBatch && filledThisBatch) {
                     window._adTelemetryFired = true;
                     uncloak();
                     setAdPadding(false);
@@ -900,7 +933,12 @@ export function initCleverAds() {
                 requestAdShellSync();
             }
         });
-        adObserver.observe(document.documentElement, { attributes: true, childList: true, subtree: true });
+        adObserver.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class', 'style', 'src'],
+            childList: true,
+            subtree: true,
+        });
     }
 
     const stopSchedule = (reason) => {

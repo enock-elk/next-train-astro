@@ -1137,7 +1137,7 @@ import { withBase } from '../lib/config.js';
   #feedback-panel .inbox-bubble-own {
     background: #d9fdd3;
     color: #111827;
-    border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+    border-radius: 0.75rem 0.2rem 0.75rem 0.75rem;
   }
   html.dark #messages-thread-modal .inbox-bubble-own,
   html.dark #feedback-panel .inbox-bubble-own {
@@ -1148,7 +1148,7 @@ import { withBase } from '../lib/config.js';
   #feedback-panel .inbox-bubble-other {
     background: #ffffff;
     color: #111827;
-    border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+    border-radius: 0.2rem 0.75rem 0.75rem 0.75rem;
     border: 1px solid rgba(229, 231, 235, 0.9);
   }
   html.dark #messages-thread-modal .inbox-bubble-other,
@@ -1252,19 +1252,19 @@ import { withBase } from '../lib/config.js';
     overflow: hidden;
     margin-top: 0.15rem;
   }
-  /* WhatsApp-style tails on the admin inbox (commuter hub keeps overflow:hidden). */
+  /* Tails sit at the top, beside the avatar. Commuter hub keeps overflow:hidden. */
   #feedback-panel .inbox-bubble-own::after,
   #feedback-panel .inbox-bubble-other::after {
     content: "";
     position: absolute;
-    bottom: 0;
+    top: 0;
     width: 8px;
     height: 12px;
   }
   #feedback-panel .inbox-bubble-own::after {
     right: -6px;
     background: #d9fdd3;
-    clip-path: polygon(0 0, 0 100%, 100% 100%);
+    clip-path: polygon(0 0, 100% 0, 0 100%);
   }
   html.dark #feedback-panel .inbox-bubble-own::after {
     background: #005c4b;
@@ -1272,7 +1272,7 @@ import { withBase } from '../lib/config.js';
   #feedback-panel .inbox-bubble-other::after {
     left: -6px;
     background: #ffffff;
-    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
   }
   html.dark #feedback-panel .inbox-bubble-other::after {
     background: #1f2937;

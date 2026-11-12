@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.3': [
+        'A community photo on its own fills the message, edge to edge, and a tap opens the same full-screen viewer as an alert, with download and close. It no longer opens the image host, so the address bar does not show supaimg or imagebb. Saving a picture from a host that blocks the page goes through the community worker at /media/file. That worker deploys from this push. The Play Store dialog that says Google Play is enabled is Play Console Automatic protection inside za.co.nexttrain.app, not a broken asset links file. The address bar staying hidden means the links are already verified. Turning Automatic protection off and shipping a new Android build is what stops that dialog. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.2': [
         'Core Web Vitals, part two. A first-time visitor is no longer restarted a few seconds after the app loads: with no older copy of the app on the phone, the current killswitch is recorded as already applied. Returning phones, an interrupted NUKE and a newer killswitch still clean up and restart as before, and the black box logs "NUKE skipped on a first visit" when the skip happens. The critical Alerts auto-open now waits until the phone is idle and a second has passed since the last tap (at most eight extra seconds), so it no longer lands under a commuter\'s first taps. Shared Alerts links still open straight away. The deferred Firebase sign-in and start-up module steps are written up in docs/CWV-NEXT-STEPS.md, not shipped. No commuter What\'s New. forceShow stays false.',
     ],

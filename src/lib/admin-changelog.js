@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.14': [
+        'Disclaimer is a pill on the left of the community room line. Who is here sits on the right. The note is three short paragraphs: what people share, that Next Train is independent of PRASA, and that the chat is for commuters to update each other. The route list fades at the bottom while more routes are below. Guide this reply is a short card, and Guide sits above Post after a draft. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.13': [
         'The community room line says Disclaimer on the right, with a dotted underline. It still opens the note that Next Train is independent of PRASA. No commuter What\'s New. forceShow stays false.',
     ],

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "d12ebe7a780d37a3859f7015bafbd841dc398e8b",
+  "frozenAt": "f5556b97ec3d3aedda84bf763bb7088ac21a0d3e",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: the first-visit region sheet uses the welcome look. The choice still does not seed Gauteng. Rail geometry, station pins, MapView, map-tab, map runtime, and advert handling are unchanged. frozenAt is the welcome-sheet commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: the ad observer scans for overlays once per pass and checks the safe zone and fill once per mutation batch, so start-up board paints stop paying for a whole-document scan per record. Ad placement, cloaking, timing, the bottom overlay, rail geometry, station pins, MapView, map-tab, and map runtime are unchanged. frozenAt is the ad-observer commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -41,8 +41,8 @@
       "sha256": "f23684682a6f221421eafb1cf83fa1e2f1eb8b8bad6dd87a965fb36b24c9ad2b"
     },
     "src/lib/clever-ads.js": {
-      "md5": "9de4e93c20057598507ad7fce024b9e9",
-      "sha256": "a5a3c6560fff2be7c31e120505e3caf675fe4f123b9beb78814cc6f4475577dd"
+      "md5": "c048ebcc86be6be60709d1a56b899393",
+      "sha256": "472705aaae32d26276d9f3800e97573e15b672ed9af160e588e0f2223f3bd340"
     },
     "src/lib/clever-ad-lifecycle.js": {
       "md5": "cb7881c006e3b658e05c7fde77cfa6c6",

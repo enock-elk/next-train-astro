@@ -101,7 +101,7 @@ export function bindKeyboardThread() {
         if (!event.target?.closest?.('#community-composer, #messages-thread-input')) return;
         const feed = document.querySelector('#view-community .community-feed-scroll');
         if (feed && !document.documentElement.classList.contains('nt-keyboard')) {
-            const locked = Math.round(feed.clientWidth * 2 / 3);
+            const locked = Math.round(feed.clientWidth * 0.88);
             if (locked > 80) document.documentElement.style.setProperty('--nt-bubble-lock', `${locked}px`);
         }
         rememberWallpaper();

@@ -424,17 +424,43 @@ function postsVisibleFilter(list, myUid) {
         .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 }
 
+function sameVisiblePost(a, b) {
+    if (!a || !b) return false;
+    if (a.postId && b.postId && a.postId === b.postId) return true;
+    if (!a.uid || a.uid !== b.uid) return false;
+    const bodyA = String(a.body || '').trim();
+    const bodyB = String(b.body || '').trim();
+    if (!bodyA || bodyA !== bodyB) return false;
+    if ((a.replyTo?.postId || '') !== (b.replyTo?.postId || '')) return false;
+    return Math.abs((Number(a.timestamp) || 0) - (Number(b.timestamp) || 0)) < 20000;
+}
+
+/** One send can land twice (a second tap, or the local copy and the saved copy). Keep one. */
+function dedupeFeedPosts(list) {
+    const out = [];
+    (list || []).forEach((p) => {
+        if (!p) return;
+        const hit = out.findIndex((q) => sameVisiblePost(q, p));
+        if (hit < 0) {
+            out.push(p);
+            return;
+        }
+        const prev = out[hit];
+        if ((prev.pendingSend && !p.pendingSend) || (!prev.postId && p.postId)) out[hit] = p;
+    });
+    return out;
+}
+
 function mergeOverlayPosts(routeId, list) {
     const acct = $account.get();
     const myUid = acct.status === 'signed-in' ? acct.uid : null;
     const merged = [...list];
     const overlay = (localOverlayByRoute[routeId] || []).filter((p) => p.uid === myUid);
-    const ids = new Set(merged.map((p) => p.postId));
     overlay.forEach((p) => {
-        if (!ids.has(p.postId)) merged.push(p);
+        if (!merged.some((q) => sameVisiblePost(q, p))) merged.push(p);
     });
     merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    return merged;
+    return dedupeFeedPosts(merged);
 }
 
 function upsertOutgoingPost(post) {
@@ -917,11 +943,14 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
             }
             if (res.ok && data.ok) {
                 if (data.shadowSilenced) {
+                    const shown = { ...payload, ...(data.post || {}), postId: payload.postId, shadowOnly: true };
                     if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
-                    localOverlayByRoute[routeId].push({ ...(data.post || payload), shadowOnly: true });
+                    const at = localOverlayByRoute[routeId].findIndex((p) => p.postId === payload.postId);
+                    if (at >= 0) localOverlayByRoute[routeId][at] = shown;
+                    else localOverlayByRoute[routeId].push(shown);
                     recordRateHit();
                     rememberBody(text);
-                    return { ok: true, post: data.post || payload, shadowSilenced: true };
+                    return { ok: true, post: shown, shadowSilenced: true };
                 }
                 recordRateHit();
                 rememberBody(text);
@@ -930,11 +959,17 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
                 }
                 return { ok: true, post: data.post || payload };
             }
-            if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
+            if (data.shadowSilenced) {
+                const shown = { ...payload, shadowOnly: true };
                 if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
-                localOverlayByRoute[routeId].push({ ...payload, shadowOnly: true });
+                const at = localOverlayByRoute[routeId].findIndex((p) => p.postId === payload.postId);
+                if (at >= 0) localOverlayByRoute[routeId][at] = shown;
+                else localOverlayByRoute[routeId].push(shown);
                 recordRateHit();
-                return { ok: true, post: payload, shadowSilenced: true };
+                return { ok: true, post: shown, shadowSilenced: true };
+            }
+            if (res.status === 401 || res.status === 403) {
+                return { ok: false, needsAuth: res.status === 401, postId, message: 'Sign in again to post.' };
             }
             if (!shouldFallbackCommunityWrite(res, data)) {
                 throw new Error(safeCommunityWriteError(data.error, res.status));
@@ -1724,6 +1759,13 @@ async function copyPlainText(text) {
     }
 }
 
+function setCommunitySelecting(on) {
+    document.querySelector('#view-community .community-chrome')?.classList.toggle('is-selecting', !!on);
+    const home = document.getElementById('community-chrome-home');
+    if (on) home?.setAttribute('aria-hidden', 'true');
+    else home?.removeAttribute('aria-hidden');
+}
+
 function clearCommunitySelection() {
     selectedCommunity = null;
     document.querySelectorAll('.community-post-row.is-selected').forEach((el) => el.classList.remove('is-selected'));
@@ -1731,6 +1773,7 @@ function clearCommunitySelection() {
     const bar = document.getElementById('community-select-bar');
     bar?.classList.add('hidden');
     bar?.classList.remove('flex');
+    setCommunitySelecting(false);
     document.getElementById('community-select-menu')?.classList.add('hidden');
     document.getElementById('community-select-report')?.classList.add('hidden');
     document.getElementById('community-select-delete')?.classList.add('hidden');
@@ -1745,10 +1788,11 @@ function selectCommunityPost(postId, routeId) {
     document.querySelectorAll('.community-post-row').forEach((el) => {
         el.classList.toggle('is-selected', el.getAttribute('data-post-id') === String(postId));
     });
-    document.getElementById('community-chrome-home')?.classList.add('hidden');
+    document.getElementById('community-chrome-home')?.classList.remove('hidden');
     const bar = document.getElementById('community-select-bar');
     bar?.classList.remove('hidden');
     bar?.classList.add('flex');
+    setCommunitySelecting(true);
     document.getElementById('community-select-menu')?.classList.add('hidden');
     syncCommunitySelectActions(post);
 }
@@ -2138,7 +2182,7 @@ function applyFeedFilter(routeId) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
     if (!listEl) return;
-    const posts = cachedFeedPosts;
+    const posts = dedupeFeedPosts(cachedFeedPosts);
     feedAuthorMeta = latestAuthorMeta(posts);
     bindCommunityFeedPin();
 
@@ -3176,7 +3220,12 @@ function liveModerateComposer() {
     }
 }
 
+let communityPostBusy = false;
+
 async function handlePostSubmit() {
+    if (communityPostBusy) return;
+    communityPostBusy = true;
+    try {
     const routeSel = document.getElementById('community-route-select');
     const composer = document.getElementById('community-composer');
     const errEl = document.getElementById('community-error');
@@ -3266,6 +3315,9 @@ async function handlePostSubmit() {
     }
     if (btn) btn.disabled = false;
     paintCommunityQuotaHint();
+    } finally {
+        communityPostBusy = false;
+    }
 }
 
 async function expandReplies(postId, routeId, container) {

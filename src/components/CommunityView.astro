@@ -205,6 +205,20 @@
   #view-community .community-chrome {
     z-index: 20;
   }
+  /* The select bar covers the route header. Hiding that header used to
+     shorten the chrome and shift every message. */
+  #view-community .community-chrome.is-selecting #community-chrome-home {
+    visibility: hidden;
+  }
+  #view-community .community-chrome.is-selecting #community-select-bar {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background-color: inherit;
+  }
+  #view-community .community-feed-scroll {
+    overflow-anchor: none;
+  }
   #view-community .community-route-row {
     z-index: 10;
   }
@@ -277,26 +291,26 @@
   }
   .community-bubble-wrap {
     position: relative;
-    width: 66.666%;
-    max-width: 66.666%;
-    flex: 0 0 66.666%;
+    width: fit-content;
+    max-width: min(88%, 32rem);
+    flex: 0 1 auto;
     min-width: 0;
     padding-bottom: 0.15rem;
   }
   #view-community .community-bubble-wrap:has(.community-reaction-pills) {
     padding-bottom: 1.45rem;
   }
-  /* The keyboard must not reflow a bubble. The width is the feed's width
-     from before the keys opened. */
+  /* The keyboard must not reflow a bubble. The cap is the feed's width
+     from before the keys opened. Short lines stay narrow. */
   html.nt-keyboard .community-bubble-wrap {
-    width: var(--nt-bubble-lock, 66.666%);
-    max-width: var(--nt-bubble-lock, 66.666%);
-    flex-basis: var(--nt-bubble-lock, 66.666%);
+    width: fit-content;
+    max-width: var(--nt-bubble-lock, min(88%, 32rem));
+    flex-basis: auto;
     flex-shrink: 0;
   }
   .community-bubble {
     position: relative;
-    width: 100%;
+    width: fit-content;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;

@@ -253,10 +253,10 @@ function explainCommunityRoom() {
         modal.className = 'fixed inset-0 bg-black/70 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm';
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5">
-                <h3 class="text-base font-black text-gray-900 dark:text-white mb-2">About this room</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
-                    People on this line can share a delay, a question, or what they see at a station. Next Train is an independent app. It is not part of PRASA or Metrorail. A message here is not an official notice.
-                </p>
+                <h3 class="text-base font-black text-gray-900 dark:text-white mb-2">Disclaimer</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">People on this line can share a delay, a question, or what they see at a station.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">Next Train is an independent app. It is not part of PRASA or Metrorail.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">This chat is for commuters to update each other.</p>
                 <button type="button" id="community-room-about-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
             </div>`;
         document.body.appendChild(modal);

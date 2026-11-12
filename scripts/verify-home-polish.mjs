@@ -491,9 +491,14 @@ const communityView = readFileSync(new URL('../src/components/CommunityView.astr
 assert(communityView.includes('community-pane relative'), 'Community wallpaper is pinned to the pane');
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
-assert(communityView.includes('id="community-room-about"') && communityView.includes('>Disclaimer</button>') && communityView.includes('decoration-dotted'), 'the room disclaimer sits on the presence line');
-assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('id="community-room-about"'), 'who is here stays left of the disclaimer');
+assert(communityView.includes('id="community-room-about"') && communityView.includes('>Disclaimer</button>') && communityView.includes('border-radius: 999px'), 'the room disclaimer is a pill');
+assert(!communityView.includes('decoration-dotted underline-offset-2 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm'), 'the disclaimer pill has no dotted underline');
+assert(communityView.indexOf('id="community-room-about"') < communityView.indexOf('id="community-presence"'), 'the disclaimer sits left of who is here');
 assert(presence.includes('It is not part of PRASA or Metrorail'), 'the room note says Next Train is not part of PRASA');
+assert(presence.includes('This chat is for commuters to update each other.'), 'the room note says commuters update each other');
+assert(communityView.includes('>Guide</button>'), 'Guide sits as a short label');
+assert(communityView.includes('#community-route-list.has-more-below') && communityView.includes('mask-image:'), 'the route list fades when more routes sit below');
+assert(!communityView.includes('h-full w-full min-h-0 flex-col'), 'Guide this reply does not stretch a blank panel');
 assert(!communityView.includes('>Community</p>'), 'the room does not repeat the Community tab name');
 assert(communityView.includes('id="community-marks-chip"'), 'Community chrome keeps the leftover title chip id');
 assert(communityView.includes('community-bubble-marks'), 'Community name row can hold medal and points');

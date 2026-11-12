@@ -78,9 +78,9 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
             </div>
-            <div id="community-room-meta" class="flex items-center justify-between gap-3 px-4 min-w-0">
-                <button type="button" id="community-presence" class="min-w-0 truncate text-left text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
-                <button type="button" id="community-room-about" class="shrink-0 text-right text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide underline decoration-dotted underline-offset-2 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="Disclaimer">Disclaimer</button>
+            <div id="community-room-meta" class="flex items-center gap-3 px-4 min-w-0">
+                <button type="button" id="community-room-about" class="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Disclaimer">Disclaimer</button>
+                <button type="button" id="community-presence" class="min-w-0 flex-1 truncate text-right text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
             </div>
             <h2 id="community-route-title" class="sr-only">Route feed</h2>
             <p id="community-typing" class="px-4 text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate"></p>
@@ -150,35 +150,33 @@
                         <div id="community-suggest-status" class="hidden rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
                             <p id="community-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                         </div>
-                        <div class="flex justify-end">
-                            <button type="button" id="community-guide-open" class="hidden rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Guide this reply</button>
-                        </div>
                     </div>
                     <textarea id="community-composer" rows="2" maxlength="8000" class="block w-full min-h-[3.75rem] max-h-[10rem] py-2.5 pl-3.5 pr-3 rounded-[1.35rem] bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-auto" placeholder="Please be kind and respectful."></textarea>
                     <button type="button" id="community-attach-btn" class="hidden absolute right-1.5 bottom-1.5 w-9 h-9 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700 flex items-center justify-center focus:outline-none" aria-label="Attach">
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                     </button>
                 </div>
-                <button type="button" id="community-post-btn" class="shrink-0 h-[2.75rem] px-3.5 min-w-[3.25rem] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
+                <div class="flex shrink-0 flex-col justify-end gap-1">
+                    <button type="button" id="community-guide-open" class="hidden h-8 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Guide</button>
+                    <button type="button" id="community-post-btn" class="h-[2.75rem] px-3.5 min-w-[3.25rem] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div id="community-guide-modal" class="fixed inset-0 z-[150] hidden flex bg-black/80" role="dialog" aria-modal="true" aria-labelledby="community-guide-title">
-    <div class="flex h-full w-full min-h-0 flex-col bg-white px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:bg-gray-800">
+<div id="community-guide-modal" class="fixed inset-0 z-[150] hidden flex items-start justify-center bg-black/80 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]" role="dialog" aria-modal="true" aria-labelledby="community-guide-title">
+    <div class="flex w-full max-w-lg flex-col rounded-2xl bg-white px-3 py-3 shadow-2xl dark:bg-gray-800">
         <div class="mb-3 flex shrink-0 items-center justify-between gap-3">
             <h3 id="community-guide-title" class="text-lg font-black text-gray-900 dark:text-white">Guide this reply</h3>
             <button type="button" id="community-guide-close" class="rounded-full p-2 text-gray-500 hover:bg-gray-100 focus:outline-none dark:hover:bg-gray-700" aria-label="Close">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
-        <div class="min-h-0 flex-1 space-y-3 overflow-y-auto">
-            <p class="text-[11px] leading-snug text-gray-500 dark:text-gray-400">This note steers only the next draft in this room. It is not posted.</p>
-            <label for="community-guide-text" class="block text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Guidance</label>
-            <textarea id="community-guide-text" rows="8" maxlength="2000" class="min-h-[10rem] w-full rounded-xl border border-gray-300 bg-white p-3 text-sm leading-relaxed text-gray-900 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-white" placeholder="What should this draft say or correct?"></textarea>
-        </div>
-        <div class="grid shrink-0 grid-cols-2 gap-2 pt-3">
+        <p class="text-[11px] leading-snug text-gray-500 dark:text-gray-400">This note steers only the next draft in this room. It is not posted.</p>
+        <label for="community-guide-text" class="mt-3 block text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Guidance</label>
+        <textarea id="community-guide-text" rows="6" maxlength="2000" class="mt-2 max-h-[40vh] w-full rounded-xl border border-gray-300 bg-white p-3 text-sm leading-relaxed text-gray-900 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-white" placeholder="What should this draft say or correct?"></textarea>
+        <div class="mt-3 grid grid-cols-2 gap-2">
             <button type="button" id="community-guide-cancel" class="min-h-[2.75rem] rounded-xl border border-gray-300 bg-white text-sm font-bold text-gray-800 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Cancel</button>
             <button type="button" id="community-guide-go" class="min-h-[2.75rem] rounded-xl bg-gray-900 text-sm font-bold text-white focus:outline-none dark:bg-white dark:text-gray-900">Regenerate</button>
         </div>
@@ -245,9 +243,30 @@
     z-index: 10;
   }
   #community-room-about {
-    text-decoration-line: underline;
-    text-decoration-style: dotted;
-    text-underline-offset: 2px;
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 0.08rem 0.48rem;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, #1d4ed8 14%, #fff);
+    color: #1d4ed8;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+  }
+  html.dark #community-room-about {
+    background: color-mix(in srgb, #93c5fd 22%, #1f2937);
+    color: #dbeafe;
+  }
+  #community-route-list.has-more-below {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 0.95rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 0.95rem), transparent);
+    box-shadow: 0 16px 22px -12px rgba(15, 23, 42, 0.45);
   }
   #community-route-dropdown.is-open {
     z-index: 40;

@@ -2922,7 +2922,21 @@ function setCommunityRouteListOpen(open) {
     }
     if (chevron) chevron.classList.toggle('rotate-180', open);
     if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) requestAnimationFrame(() => fitCommunityRouteLabels());
+    if (open) {
+        requestAnimationFrame(() => {
+            fitCommunityRouteLabels();
+            paintCommunityRouteMore();
+        });
+    } else {
+        list.classList.remove('has-more-below');
+    }
+}
+
+function paintCommunityRouteMore() {
+    const list = document.getElementById('community-route-list');
+    if (!list || list.classList.contains('hidden')) return;
+    const more = list.scrollHeight - list.clientHeight - list.scrollTop > 6;
+    list.classList.toggle('has-more-below', more);
 }
 
 const KIND_PLACEHOLDER = 'Please be kind and respectful.';
@@ -2992,7 +3006,7 @@ function syncCommunityCopilot() {
         const el = document.getElementById(id);
         return !!(el && !el.classList.contains('hidden'));
     };
-    const show = isAdminAuthed() && (visible('community-guide-open') || visible('community-suggest-halt') || visible('community-suggest-status'));
+    const show = isAdminAuthed() && (visible('community-suggest-halt') || visible('community-suggest-status'));
     box.classList.toggle('hidden', !show);
 }
 
@@ -3679,6 +3693,7 @@ export function bindCommunityUi() {
         const open = list?.classList.contains('hidden');
         setCommunityRouteListOpen(!!open);
     });
+    document.getElementById('community-route-list')?.addEventListener('scroll', () => paintCommunityRouteMore(), { passive: true });
     document.getElementById('community-route-list')?.addEventListener('click', (e) => {
         const item = e.target.closest?.('[data-route-id]');
         if (!item) return;

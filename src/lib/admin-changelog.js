@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.9': [
+        'A community message over the limit is not cut off and saved. The whole text stays in the box, and the screen says nothing was sent. If a short copy was already saved, the rest stays in the box instead of going out as a second message. Passenger messages can be 364 characters and operator messages 1300, both 30 percent higher. Deploy the community worker and Firebase rules so the higher limits are what the server accepts. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.8': [
         'On a wide screen the community reactions list sits in the app column, on the bottom bar. It no longer opens on the left edge of the window. No commuter What\'s New. forceShow stays false.',
     ],

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.8': [
+        'On a wide screen the community reactions list sits in the app column, on the bottom bar. It no longer opens on the left edge of the window. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.7': [
         'Holding a community message no longer shifts the thread. The selection bar covers the route header instead of replacing it. A bubble grows with the text, up to most of the row, and a short line stays narrow. A second tap cannot send the same reply twice. A reply that did not save is put back in the box instead of looking sent. No commuter What\'s New. forceShow stays false.',
     ],

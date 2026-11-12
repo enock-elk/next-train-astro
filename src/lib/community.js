@@ -353,12 +353,12 @@ function renderAvatarHtml(photoURL, name, color) {
     const mark = avatarMarkHtml(name, color);
     const safePhoto = profilePhotosOn() ? sanitizeCommunityPhotoUrl(photoURL) : '';
     if (safePhoto) {
-        return `<span class="relative inline-flex w-8 h-8 shrink-0">
-            <img src="${escapeHTML(safePhoto)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
-            <span class="avatar-fallback hidden absolute inset-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">${mark}</span>
+        return `<span class="relative inline-flex w-[1.625rem] h-[1.625rem] shrink-0">
+            <img src="${escapeHTML(safePhoto)}" alt="" class="w-[1.625rem] h-[1.625rem] rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
+            <span class="avatar-fallback hidden absolute inset-0 w-[1.625rem] h-[1.625rem] rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">${mark}</span>
         </span>`;
     }
-    return `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0">${mark}</span>`;
+    return `<span class="w-[1.625rem] h-[1.625rem] rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm shrink-0">${mark}</span>`;
 }
 
 async function publicCommuterPhoto(acct) {
@@ -2216,7 +2216,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${marksHtml}</div>`;
 
     return `
-      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}"${tombstone ? ' data-deleted="1"' : ''}>
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}"${tombstone ? ' data-deleted="1"' : ''}>
         <div class="community-swipe-hint" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
         </div>
@@ -2929,6 +2929,45 @@ function paintAdminAttachPreview() {
     box.innerHTML = `${images}${link}`;
 }
 
+function syncCommunityCopilot() {
+    const box = document.getElementById('community-copilot');
+    if (!box) return;
+    const visible = (id) => {
+        const el = document.getElementById(id);
+        return !!(el && !el.classList.contains('hidden'));
+    };
+    const show = isAdminAuthed() && (visible('community-guide-open') || visible('community-suggest-halt') || visible('community-suggest-status'));
+    box.classList.toggle('hidden', !show);
+}
+
+function setCommunityGuideReady(on) {
+    document.getElementById('community-guide-open')?.classList.toggle('hidden', !on);
+    syncCommunityCopilot();
+}
+
+const CHAR_HINT_REMAINING = 400;
+
+function paintCommunityCharHint() {
+    const el = document.getElementById('community-char-hint');
+    const composer = document.getElementById('community-composer');
+    if (!el || !composer) return;
+    const max = isAdminAuthed() ? COMMUNITY_ADMIN_BODY_MAX : BODY_MAX;
+    const left = max - String(composer.value || '').length;
+    const postBtn = document.getElementById('community-post-btn');
+    if (postBtn && !communityPostBusy) postBtn.disabled = left < 0;
+    if (left > CHAR_HINT_REMAINING) {
+        el.hidden = true;
+        el.textContent = '';
+        el.classList.remove('is-over');
+        return;
+    }
+    el.hidden = false;
+    el.classList.toggle('is-over', left < 0);
+    el.textContent = left < 0
+        ? 'Over the limit. Shorten it or it will not send.'
+        : `${left} characters left`;
+}
+
 function syncComposerChrome() {
     const composer = document.getElementById('community-composer');
     if (!composer) return;
@@ -2937,8 +2976,9 @@ function syncComposerChrome() {
     composer.maxLength = COMPOSER_HOLD_MAX;
     document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
     composer.classList.toggle('community-composer-with-clip', operator);
-    document.getElementById('community-copilot')?.classList.toggle('hidden', !operator);
+    syncCommunityCopilot();
     restoreComposerDraft(composer);
+    paintCommunityCharHint();
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
     paintAdminAttachPreview();
@@ -3012,7 +3052,6 @@ async function communityPostsSince(routeId, since) {
 
 async function suggestCommunityReply(focusPostId = '') {
     if (!isAdminAuthed()) return;
-    const btn = document.getElementById('community-suggest-btn');
     const composer = document.getElementById('community-composer');
     const errEl = document.getElementById('community-error');
     const routeId = document.getElementById('community-route-select')?.value || $currentRouteId.get();
@@ -3049,11 +3088,12 @@ async function suggestCommunityReply(focusPostId = '') {
     const statusText = document.getElementById('community-suggest-status-text');
     const halt = document.getElementById('community-suggest-halt');
     const guideBtn = document.getElementById('community-guide-open');
-    if (btn) btn.disabled = true;
+    guideBtn?.classList.add('hidden');
     if (errEl) errEl.textContent = '';
     if (status && statusText) {
         status.classList.remove('hidden');
         statusText.textContent = 'Reading this message and writing a reply.';
+        syncCommunityCopilot();
     }
     const guidance = [
         document.getElementById('community-guide-text')?.value || '',
@@ -3081,8 +3121,8 @@ async function suggestCommunityReply(focusPostId = '') {
             const haltText = document.getElementById('community-suggest-halt-text');
             if (haltText) haltText.textContent = text;
             halt?.classList.remove('hidden');
-            btn?.classList.add('hidden');
             guideBtn?.classList.add('hidden');
+            syncCommunityCopilot();
             return;
         }
         const draft = String(data.reply || '').trim();
@@ -3091,8 +3131,8 @@ async function suggestCommunityReply(focusPostId = '') {
             return;
         }
         halt?.classList.add('hidden');
-        btn?.classList.remove('hidden');
         guideBtn?.classList.remove('hidden');
+        syncCommunityCopilot();
         if (composer) {
             composer.value = draft.slice(0, COMPOSER_HOLD_MAX);
             fitCommunityComposer(composer);
@@ -3101,12 +3141,13 @@ async function suggestCommunityReply(focusPostId = '') {
             if (draft.length > COMMUNITY_ADMIN_BODY_MAX && errEl) {
                 errEl.textContent = communityTooLongMessage();
             }
+            paintCommunityCharHint();
         }
     } catch (err) {
         showToast(err?.message || 'Co-Pilot could not draft a reply.', 'error');
     } finally {
-        if (btn) btn.disabled = false;
         status?.classList.add('hidden');
+        syncCommunityCopilot();
     }
 }
 
@@ -3353,6 +3394,19 @@ async function handlePostSubmit() {
     const typedFlat = String(draft || '').replace(/\s+/g, ' ').trim();
     const sentFlat = String(result.post?.body || '').replace(/\s+/g, ' ').trim();
     const cutShort = !result.held && typedFlat.length > sentFlat.length && sentFlat.length > 0 && typedFlat.startsWith(sentFlat);
+    if (cutShort) {
+        const failedId = result.post?.postId || result.postId || stagedId;
+        if (failedId) dropOutgoingPost(routeId, failedId);
+        if (composer && draft) {
+            composer.value = draft;
+            fitCommunityComposer(composer);
+            rememberComposerDraft(draft);
+        }
+        if (errEl) errEl.textContent = communityTooLongMessage();
+        paintCommunityCharHint();
+        if (btn) btn.disabled = false;
+        return;
+    }
     if (result.held) {
         const heldId = result.post?.postId || result.postId || stagedId;
         if (heldId) dropOutgoingPost(routeId, heldId);
@@ -3364,22 +3418,14 @@ async function handlePostSubmit() {
         composer.style.height = '';
     }
     rememberComposerDraft('');
+    setCommunityGuideReady(false);
+    paintCommunityCharHint();
     clearReplyDraft();
     adminImages.splice(0, adminImages.length);
     adminLinkUrl = '';
     paintAdminAttachPreview();
     signalCommunityTyping(routeId, false);
-    if (cutShort) {
-        const rest = typedFlat.slice(sentFlat.length).trim();
-        if (composer && rest) {
-            composer.value = rest;
-            fitCommunityComposer(composer);
-            rememberComposerDraft(rest);
-        }
-        const note = 'The first part was sent. The rest is still in the box.';
-        if (errEl) errEl.textContent = note;
-        showToast(note, 'info');
-    } else if (result.held) {
+    if (result.held) {
         showToast(result.message || 'Held for review - it won’t show until an admin approves it.', 'info');
         if (errEl) errEl.textContent = result.message || 'Held for review. It won’t appear until approved.';
     } else {
@@ -3495,12 +3541,18 @@ export function bindCommunityUi() {
     document.getElementById('community-select-menu-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        document.getElementById('community-select-menu')?.classList.toggle('hidden');
+        const menu = document.getElementById('community-select-menu');
+        const opening = menu?.classList.contains('hidden');
+        if (opening) closeReactionSheet();
+        menu?.classList.toggle('hidden');
     });
 
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
-    document.getElementById('community-suggest-btn')?.addEventListener('click', () => { suggestCommunityReply(); });
     document.getElementById('community-suggest-again')?.addEventListener('click', () => { suggestCommunityReply(); });
+    document.getElementById('community-composer')?.addEventListener('input', () => {
+        paintCommunityCharHint();
+        if (!document.getElementById('community-composer')?.value) setCommunityGuideReady(false);
+    });
     const closeCommunityGuide = () => document.getElementById('community-guide-modal')?.classList.add('hidden');
     document.getElementById('community-guide-open')?.addEventListener('click', () => {
         document.getElementById('community-guide-modal')?.classList.remove('hidden');

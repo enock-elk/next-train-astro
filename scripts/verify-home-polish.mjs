@@ -491,10 +491,10 @@ const communityView = readFileSync(new URL('../src/components/CommunityView.astr
 assert(communityView.includes('community-pane relative'), 'Community wallpaper is pinned to the pane');
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
-assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
+assert(!communityView.includes('>Community</p>'), 'the room does not repeat the Community tab name');
 assert(communityView.includes('id="community-marks-chip"'), 'Community chrome keeps the leftover title chip id');
 assert(communityView.includes('community-bubble-marks'), 'Community name row can hold medal and points');
-assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
+assert(communityView.indexOf('community-route-select') < communityView.indexOf('id="community-presence"'), 'presence sits below the route name');
 assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('rows="2"') && communityView.includes('min-h-[3.75rem]') && communityView.includes('rounded-[1.35rem]'), 'community composer matches the Feedback Hub field');
@@ -516,7 +516,7 @@ assert(!communityView.includes('>Attach</button>'), 'community attach is not a f
 assert(communityJs.includes("acct.uid === uid"), 'your own reaction uses the name saved on the account');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
-assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');
+assert(hubModals.includes('color-mix(in srgb, #111827 6%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)))'), 'feedback wallpaper uses the community wash');
 assert(hubModals.includes('id="about-champions"') && hubModals.includes('Next Train Champions'), 'About has Next Train Champions under admin credits');
 assert(hubModals.indexOf('Built & Maintained By') < hubModals.indexOf('id="about-champions"'), 'Champions sit below Built & Maintained');
 const championsJs = readFileSync(new URL('../src/lib/community-champions.js', import.meta.url), 'utf8');

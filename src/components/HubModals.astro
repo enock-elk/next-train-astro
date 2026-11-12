@@ -1281,23 +1281,17 @@ import { withBase } from '../lib/config.js';
     position: relative;
     background: transparent;
   }
-  /* Commuter bubbles are white; keep this darker than the bubble so text stays readable. */
+  /* Same wash as the community room, so white bubbles sit forward of the pattern. */
   #feedback-panel .feedback-thread-chat.nt-pack-wallpaper {
-    background-color: #6f8070;
-    background-image:
-      radial-gradient(circle at 14% 18%, rgba(255,255,255,0.10) 0 1.5px, transparent 2.2px),
-      radial-gradient(circle at 62% 8%, rgba(255,255,255,0.08) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 80% 42%, rgba(255,255,255,0.09) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 28% 72%, rgba(255,255,255,0.07) 0 1.2px, transparent 1.9px),
-      radial-gradient(circle at 88% 88%, rgba(255,255,255,0.08) 0 1px, transparent 1.7px),
-      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.10));
+    background-color: color-mix(in srgb, #111827 6%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)));
+    background-image: none;
   }
   html.dark #feedback-panel .feedback-thread-chat.nt-pack-wallpaper {
-    background-color: #121a14;
-    background-image:
-      radial-gradient(circle at 14% 18%, rgba(255,255,255,0.05) 0 1.5px, transparent 2.2px),
-      radial-gradient(circle at 62% 8%, rgba(255,255,255,0.04) 0 1px, transparent 1.8px),
-      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.22));
+    background-color: color-mix(in srgb, #000 8%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)));
+    background-image: none;
+  }
+  #feedback-panel .feedback-thread-chat.nt-pack-wallpaper::before {
+    opacity: 0.11;
   }
   /* .nt-pack-wallpaper is pointer-events:none and that value is inherited.
      On Alerts the decoration is an empty sibling. Here it is the chat itself,

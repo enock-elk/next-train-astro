@@ -86,7 +86,7 @@ assert.match(community, /replyTo\.body/);
 assert.match(community, /data-delete-as="author"/);
 assert.match(community, /data-delete-mode="purge"/);
 assert.match(community, /Deleted by an Admin/);
-assert.match(community, /community-suggest-btn/);
+assert.match(community, /community-sheet-suggest/);
 assert.match(community, /\/community\/message/);
 assert.match(worker, /trimRouteBuckets/);
 assert.match(worker, /Community Monitor keeps the full log/);

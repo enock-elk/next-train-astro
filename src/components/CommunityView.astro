@@ -58,21 +58,15 @@
           paint on top. Taps then hit the feed, the list looks see-through, and
           the room never changes. Do not drop this chrome below the feed again.
         -->
-        <div class="community-chrome relative z-20 shrink-0 pt-2.5 pb-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div id="community-chrome-home" class="space-y-1.5">
-            <div class="flex items-center justify-between gap-3 px-4">
-                <div class="flex items-center gap-2 min-w-0">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
-                    <span id="community-marks-chip" hidden aria-hidden="true" class="hidden shrink-0 max-w-[58%] truncate text-[10px] font-bold text-amber-700 dark:text-amber-300 tracking-wide"></span>
-                </div>
-                <button type="button" id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide text-right truncate max-w-[42%] hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
-            </div>
+        <div class="community-chrome relative z-20 shrink-0 pt-1.5 pb-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div id="community-chrome-home" class="space-y-1">
+            <span id="community-marks-chip" hidden aria-hidden="true" class="hidden"></span>
             <div class="community-route-row relative z-10 flex items-center justify-between gap-2 px-4">
                 <div class="min-w-0 flex-1">
                     <label for="community-route-select" class="sr-only">Route room</label>
                     <div class="relative min-w-0" id="community-route-dropdown">
                         <select id="community-route-select" class="sr-only" tabindex="-1" aria-hidden="true"></select>
-                        <button type="button" id="community-route-trigger" class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-left shadow-sm hover:border-blue-300 dark:hover:border-blue-600 hover:bg-white dark:hover:bg-gray-800/80 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" aria-haspopup="listbox" aria-expanded="false">
+                        <button type="button" id="community-route-trigger" class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-left shadow-sm hover:border-blue-300 dark:hover:border-blue-600 hover:bg-white dark:hover:bg-gray-800/80 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" aria-haspopup="listbox" aria-expanded="false">
                             <span id="community-route-display" class="min-w-0 flex-1 text-sm sm:text-base font-black text-gray-900 dark:text-white tracking-tight truncate leading-tight">Select route</span>
                             <span id="community-route-unread" class="community-room-unread hidden">0</span>
                             <svg id="community-route-chevron" class="w-4 h-4 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -83,6 +77,9 @@
                 <button type="button" id="community-refresh-btn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none shrink-0" aria-label="Refresh" title="Refresh">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
+            </div>
+            <div class="flex justify-center px-4">
+                <button type="button" id="community-presence" class="max-w-full truncate text-center text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
             </div>
             <h2 id="community-route-title" class="sr-only">Route feed</h2>
             <p id="community-typing" class="px-4 text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate"></p>
@@ -100,17 +97,17 @@
                 </button>
                 <span id="community-select-count" class="text-lg font-black text-gray-900 dark:text-white tabular-nums">1</span>
                 <span class="flex-1"></span>
+                <button type="button" id="community-select-delete" class="community-sheet-delete hidden p-2 rounded-full text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 focus:outline-none" aria-label="Delete" data-delete-mode="tombstone" data-delete-as="author">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/><path d="M7 7l1 13a1 1 0 001 1h6a1 1 0 001-1l1-13"/></svg>
+                </button>
+                <button type="button" id="community-select-report" class="community-sheet-report hidden p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Report">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg>
+                </button>
                 <button type="button" id="community-select-copy" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Copy">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" stroke-width="2"></rect><path stroke-width="2" d="M4 16V6a2 2 0 012-2h10"></path></svg>
                 </button>
                 <button type="button" id="community-select-share" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Share">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
-                </button>
-                <button type="button" id="community-select-report" class="community-sheet-report hidden p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Report">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg>
-                </button>
-                <button type="button" id="community-select-delete" class="community-sheet-delete hidden p-2 rounded-full text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 focus:outline-none" aria-label="Delete" data-delete-mode="tombstone" data-delete-as="author">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/><path d="M7 7l1 13a1 1 0 001 1h6a1 1 0 001-1l1-13"/></svg>
                 </button>
                 <button type="button" id="community-select-menu-btn" class="hidden p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="More" aria-haspopup="menu">
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
@@ -128,6 +125,7 @@
         <div id="community-composer-dock" class="relative z-[1] shrink-0 px-3 pt-2 pb-2 bg-transparent">
             <div id="community-attach-preview" class="mb-1.5 flex flex-wrap gap-1.5 empty:hidden"></div>
             <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 mb-1 empty:hidden empty:mb-0"></p>
+            <p id="community-char-hint" hidden class="mb-1 text-left text-[11px] leading-snug text-gray-500 dark:text-gray-400"></p>
             <button type="button" id="community-quota-hint" hidden class="mb-1 bg-transparent p-0 text-left text-[11px] leading-snug text-gray-500 underline decoration-dotted underline-offset-2 focus:outline-none dark:text-gray-400"></button>
             <p id="community-quota-note" hidden class="mb-2 text-[13px] font-normal leading-snug text-gray-600 dark:text-gray-300"></p>
             <div class="flex gap-2 items-end">
@@ -148,10 +146,11 @@
                             <textarea id="community-suggest-context" rows="3" maxlength="2000" class="w-full rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
                             <button type="button" id="community-suggest-again" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-xl text-sm focus:outline-none">Suggest again</button>
                         </div>
-                        <button type="button" id="community-suggest-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-xl text-sm focus:outline-none">Suggest reply</button>
-                        <button type="button" id="community-guide-open" class="w-full min-h-[2.5rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Guide this reply</button>
                         <div id="community-suggest-status" class="hidden rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
                             <p id="community-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" id="community-guide-open" class="hidden rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Guide this reply</button>
                         </div>
                     </div>
                     <textarea id="community-composer" rows="2" maxlength="8000" class="block w-full min-h-[3.75rem] max-h-[10rem] py-2.5 pl-3.5 pr-3 rounded-[1.35rem] bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-auto" placeholder="Please be kind and respectful."></textarea>
@@ -282,13 +281,13 @@
     margin-top: 0;
   }
   .community-avatar-spacer {
-    width: 2rem;
-    height: 2rem;
+    width: 1.625rem;
+    height: 1.625rem;
     visibility: hidden;
     pointer-events: none;
   }
   .community-avatar-letter {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 700;
     line-height: 1;
   }
@@ -412,6 +411,10 @@
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  #community-char-hint.is-over {
+    color: #dc2626;
+    font-weight: 700;
   }
   .community-msg-text .nt-alert-see-more {
     min-height: 0;

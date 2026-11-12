@@ -207,6 +207,7 @@ Shell / FOUC changes: also prove `dist/` with `/_astro/*.css` returning 404 stil
 
 | Doc | When to open |
 | --- | --- |
+| [CWV-NEXT-STEPS.md](./CWV-NEXT-STEPS.md) | Any performance / Core Web Vitals work: what shipped, how to measure, next steps not yet shipped |
 | [ADMIN-GUIDE.md](./ADMIN-GUIDE.md) | Operator / Dev Hub behaviour |
 | [USER-GUIDE.md](./USER-GUIDE.md) | Commuter-facing product explanation |
 | [FCM-NOTIFICATIONS-SETUP.md](./FCM-NOTIFICATIONS-SETUP.md) | Push notification setup |
@@ -229,6 +230,7 @@ Details and absolute bans live in `AGENTS.md`. Skim these before large edits:
 - **Map opens over the ocean** → missing lat/lon must stay `null`, not `Number(null) === 0`.
 - **Map geometry** → never whole-region Overpass refresh; never smooth KZN; never silence `verify:map-gold` by editing hashes only.
 - **Deploy production fails at Verify map gold** → a listed file differs from `GOLD.json`. Diff `origin/map-gold`. Freeze a proven improvement (update hashes and `frozenAt`, fast-forward `map-gold`). Do not hash-bump an unproved edit. Run `verify:map-gold` before every app push, even when the edit is not a map.
+- **Core Web Vitals (INP / LCP / CLS)** → read [CWV-NEXT-STEPS.md](./CWV-NEXT-STEPS.md) first. The Firebase popup resolver and lazy module steps are documented, not shipped; both need owner sign-off and real-device testing.
 - **About black box misses the waterfall** → production `drop_console` strips bundled `console.*`. Log through `window.ntTrace`. Admin lines still appear because `admin.js` is not bundled.
 - **Ads** → overlay from bottom; no reserved blank gap; advert gold.
 - **Exclusions** → `DEFAULT_EXCLUSIONS` stays `{}`; bans in RTDB.

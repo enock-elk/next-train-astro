@@ -1047,6 +1047,35 @@ assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'versi
     assert(utilsSrc.includes('export function applyFittedLabels') && utilsSrc.includes('const fittedLabels = new WeakMap()'), 'label fits are batched and memoised (INP)');
 }
 {
+    // INP: the uninvited Alerts auto-open waits for idle and a quiet second after a tap.
+    const listeners = {};
+    const hadWindow = 'window' in globalThis;
+    const prevWindow = globalThis.window;
+    globalThis.window = {
+        _appStabilized: true,
+        addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+        requestIdleCallback: (fn) => setTimeout(fn, 0),
+    };
+    const { whenIdleForAutoNotices } = await import('../src/lib/session-stability.js');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let quietOpened = 0;
+    whenIdleForAutoNotices(() => { quietOpened = Date.now(); });
+    await sleep(60);
+    assert(quietOpened > 0, 'auto-open runs promptly on an idle phone (INP)');
+    let tapOpened = 0;
+    const tappedAt = Date.now();
+    (listeners.pointerdown || []).forEach((fn) => fn());
+    whenIdleForAutoNotices(() => { tapOpened = Date.now(); });
+    await sleep(500);
+    assert(tapOpened === 0, 'auto-open does not land under a fresh tap (INP)');
+    await sleep(700);
+    assert(tapOpened - tappedAt >= 950, 'auto-open waits a quiet second after the last tap (INP)');
+    if (hadWindow) globalThis.window = prevWindow; else delete globalThis.window;
+    const hubSrc = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    const autoOpen = hubSrc.slice(hubSrc.indexOf('const autoNotice = pickAutoOpenNotice'), hubSrc.indexOf('const pushNotice ='));
+    assert(autoOpen.includes('whenIdleForAutoNotices(() => {') && autoOpen.includes('canAutoOpenHomeNotices()'), 'critical auto-open waits for idle and still re-checks the home screen (INP)');
+}
+{
     // CLS: the board must not jump while the app boots.
     const bodyStart = layout.match(/<RecoveryLifeline \/>\s*<script is:inline>([\s\S]*?)<\/script>/)?.[1] || '';
     assert(bodyStart.includes("body.classList.add('nav-bottom')"), 'body has nav-bottom before the board parses (CLS)');

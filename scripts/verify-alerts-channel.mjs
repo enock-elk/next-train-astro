@@ -484,7 +484,7 @@ const now = 1_700_000_000_000;
     assert(hub.includes('paintAlertsForCurrentRoute'), 'open alerts drop the previous route immediately');
     assert(hub.includes('noticesPromise'), 'notice fetch does not wait on inbox');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
-    assert(hub.includes('whenSettledForAutoNotices'), 'force-open Alerts waits until the phone has settled');
+    assert(hub.includes('whenIdleForAutoNotices(() => {'), 'force-open Alerts waits until the phone has settled and gone idle');
     assert(ui.includes('isSettledForAutoNotices'), 'auto-open home notices require settled updates and ads');
     const stability = readFileSync(new URL('../src/lib/session-stability.js', import.meta.url), 'utf8');
     assert(stability.includes('isAdInjectionPending'), 'auto-open reads in-flight ad inject without changing ads');

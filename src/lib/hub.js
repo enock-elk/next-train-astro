@@ -58,7 +58,7 @@ import {
     showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
-import { whenSettledForAutoNotices } from './session-stability.js';
+import { whenIdleForAutoNotices } from './session-stability.js';
 import {
     fetchUnionNotices,
     setCachedLiveNotices,
@@ -2725,7 +2725,7 @@ export async function checkServiceAlerts(opts = {}) {
         const autoNotice = pickAutoOpenNotice(validNotices);
         if (autoNotice && !window._alertsChannelOpening) {
             window._alertsChannelOpening = true;
-            whenSettledForAutoNotices(() => {
+            whenIdleForAutoNotices(() => {
                 if (!canAutoOpenHomeNotices()) {
                     window._alertsChannelOpening = false;
                     return;

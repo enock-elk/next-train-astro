@@ -76,3 +76,50 @@ export function whenSettledForAutoNotices(fn, startedAt = Date.now()) {
     }
     setTimeout(() => whenSettledForAutoNotices(fn, startedAt), 400);
 }
+
+const AUTO_NOTICE_INPUT_QUIET_MS = 1000;
+const AUTO_NOTICE_IDLE_TIMEOUT_MS = 1500;
+const AUTO_NOTICE_IDLE_MAX_MS = 8000;
+let lastInputAt = 0;
+let inputWatchBound = false;
+
+function bindInputWatch() {
+    if (inputWatchBound || typeof window === 'undefined') return;
+    inputWatchBound = true;
+    const mark = () => { lastInputAt = Date.now(); };
+    for (const type of ['pointerdown', 'keydown', 'touchstart']) {
+        window.addEventListener(type, mark, { capture: true, passive: true });
+    }
+}
+bindInputWatch();
+
+/**
+ * Settled, then idle with no tap or key in the last second. Painting the
+ * Alerts overlay is a long task with a forced layout; opening it under a
+ * commuter's first taps is what showed up as start-up INP. Capped so a
+ * critical notice still opens if the phone never goes quiet.
+ */
+export function whenIdleForAutoNotices(fn) {
+    if (typeof window === 'undefined') return;
+    if (typeof fn !== 'function') return;
+    bindInputWatch();
+    whenSettledForAutoNotices(() => {
+        const startedAt = Date.now();
+        const attempt = () => {
+            const quietFor = Date.now() - lastInputAt;
+            if (quietFor < AUTO_NOTICE_INPUT_QUIET_MS && (Date.now() - startedAt) < AUTO_NOTICE_IDLE_MAX_MS) {
+                setTimeout(waitIdle, AUTO_NOTICE_INPUT_QUIET_MS - quietFor);
+                return;
+            }
+            try { fn(); } catch { /* ignore */ }
+        };
+        const waitIdle = () => {
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(attempt, { timeout: AUTO_NOTICE_IDLE_TIMEOUT_MS });
+            } else {
+                setTimeout(attempt, 200);
+            }
+        };
+        waitIdle();
+    });
+}

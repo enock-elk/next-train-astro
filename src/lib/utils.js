@@ -1044,6 +1044,18 @@ export function newestUnappliedKillswitchTimestamp(remote, pending, applied) {
     return newest > normalizeKillswitchTimestamp(applied) ? newest : 0;
 }
 
+/**
+ * A first visit (no controlling worker, no keys from an earlier run, nothing
+ * pending or applied) has no older shell to retire, so the current killswitch
+ * is recorded as applied instead of restarting a page that just loaded.
+ */
+export function shouldSeedFreshKillswitch({ freshProfile, pending, applied, target }) {
+    return freshProfile === true
+        && !normalizeKillswitchTimestamp(pending)
+        && !normalizeKillswitchTimestamp(applied)
+        && normalizeKillswitchTimestamp(target) > 0;
+}
+
 /** Small FIFO promise mutex used to serialize destructive maintenance work. */
 export function createAsyncMutex() {
     let tail = Promise.resolve();

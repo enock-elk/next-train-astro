@@ -467,6 +467,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     <meta name="twitter:image" content={ogImage} />
     <slot name="head" />
 
+    <script is:inline>
+      // Read before this page registers a worker or writes a device id. With no
+      // controlling worker and none of the keys an earlier run leaves, there is
+      // no older shell for a killswitch NUKE to retire (runKillswitchCheck).
+      try {
+        window.__ntFreshProfile = !(navigator.serviceWorker && navigator.serviceWorker.controller)
+          && !localStorage.getItem('app_installed_version')
+          && !localStorage.getItem('next_train_device_id')
+          && !localStorage.getItem('last_killswitch_timestamp')
+          && !localStorage.getItem('nt_killswitch_pending_timestamp');
+      } catch (e) {
+        window.__ntFreshProfile = false;
+      }
+    </script>
+
     <!-- PWA Manifest — always under base with trailing slash. Dev has no PWA
          plugin output, so linking it there only produces 404 noise. -->
     <!-- Manifest + SW only exist after build (astro preview / deploy). Dev has no SW on purpose. -->

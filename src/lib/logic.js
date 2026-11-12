@@ -24,7 +24,7 @@ import {
     simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet, resolveScheduleSheetFamily,
     pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
     KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
-    newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays,
+    newestUnappliedKillswitchTimestamp, shouldSeedFreshKillswitch, createAsyncMutex, flattenPublicHolidays,
     parseStationLatLon, coordsFromTimetableSheets
 } from './utils.js';
 import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
@@ -1046,6 +1046,14 @@ async function runKillswitchCheck() {
         const targetTimestamp = newestUnappliedKillswitchTimestamp(remoteTimestamp, pending, applied);
         if (!targetTimestamp) {
             if (pending) safeStorage.removeItem(KILLSWITCH_PENDING_KEY);
+            return false;
+        }
+
+        // A first visit loaded this shell from the network a few seconds ago.
+        // Restarting it retires nothing and costs the commuter a second cold load.
+        if (shouldSeedFreshKillswitch({ freshProfile: window.__ntFreshProfile, pending, applied, target: targetTimestamp })) {
+            safeStorage.setItem(KILLSWITCH_APPLIED_KEY, String(targetTimestamp));
+            traceLine('log', `NUKE skipped on a first visit: killswitch ${targetTimestamp} recorded as applied.`);
             return false;
         }
 

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.12': [
+        'Sharing an alert or a community message sends the link alone. The message text stays on Copy. Deleting a community message asks first, including Remove completely and Deleted by an Admin. Cancel leaves the message. Who is here sits on the left of the room line, and Not part of PRASA on the right opens a short note that Next Train is independent. A pasted trip button, such as Belle Ombre to Mamelodi Gardens, takes the tap by itself and does not dim or select the bubble. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.11': [
         'A community message still stops at 4000 characters. Within 400 of that, the composer shows how many characters are left, in the same spot as the messages-left line. Over the cap, Post does not send, so a cut-off copy cannot become a second message. The Community label is gone. Who is here sits under the route name. The room header and the selected-message header are the same height. Your own selection is delete, copy, share. Someone else\'s is report, copy, share. The three-dot menu closes the reaction tray and keeps the message selected. Suggest reply stays on that menu. Guide this reply appears only after a draft, as a small button. Other people\'s bubbles start further left on a slightly smaller avatar. Feedback Hub uses the same wallpaper wash as Community. No commuter What\'s New. forceShow stays false.',
     ],

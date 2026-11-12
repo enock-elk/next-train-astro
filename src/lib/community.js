@@ -808,7 +808,9 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
     }
     if (!routeId) return { ok: false, message: 'Select a route first.' };
     if ((!text || text.length < 2) && !attachments.length && !linkUrl) return { ok: false, message: 'Write a short message.' };
-    if (text.length > textMax) return { ok: false, message: `Max ${textMax} characters.` };
+    if (text.length > textMax) {
+        return { ok: false, message: `That message is over the ${textMax} character limit. Nothing was sent.` };
+    }
     if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
 
     if (isBlockedLocally(acct.uid)) {
@@ -1023,7 +1025,9 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     }
     if (!routeId || !postId) return { ok: false, message: 'Missing post.' };
     if (!text || text.length < 1) return { ok: false, message: 'Write a reply.' };
-    if (text.length > BODY_MAX) return { ok: false, message: `Max ${BODY_MAX} characters.` };
+    if (text.length > BODY_MAX) {
+        return { ok: false, message: `That message is over the ${BODY_MAX} character limit. Nothing was sent.` };
+    }
 
     if (isBlockedLocally(acct.uid)) {
         return { ok: false, message: 'Action not permitted.' };
@@ -3041,10 +3045,14 @@ async function suggestCommunityReply(focusPostId = '') {
         btn?.classList.remove('hidden');
         guideBtn?.classList.remove('hidden');
         if (composer) {
-            composer.value = draft.slice(0, COMMUNITY_ADMIN_BODY_MAX);
+            const room = COMMUNITY_ADMIN_BODY_MAX;
+            composer.value = draft.slice(0, room);
             fitCommunityComposer(composer);
             rememberComposerDraft(composer.value);
             composer.focus();
+            if (draft.length > room && errEl) {
+                errEl.textContent = `The draft was cut to ${room} characters. The rest was not added.`;
+            }
         }
     } catch (err) {
         showToast(err?.message || 'Co-Pilot could not draft a reply.', 'error');
@@ -3294,6 +3302,9 @@ async function handlePostSubmit() {
         return;
     }
 
+    const typedFlat = String(draft || '').replace(/\s+/g, ' ').trim();
+    const sentFlat = String(result.post?.body || '').replace(/\s+/g, ' ').trim();
+    const cutShort = !result.held && typedFlat.length > sentFlat.length && sentFlat.length > 0 && typedFlat.startsWith(sentFlat);
     if (result.held) {
         const heldId = result.post?.postId || result.postId || stagedId;
         if (heldId) dropOutgoingPost(routeId, heldId);
@@ -3310,7 +3321,17 @@ async function handlePostSubmit() {
     adminLinkUrl = '';
     paintAdminAttachPreview();
     signalCommunityTyping(routeId, false);
-    if (result.held) {
+    if (cutShort) {
+        const rest = typedFlat.slice(sentFlat.length).trim();
+        if (composer && rest) {
+            composer.value = rest;
+            fitCommunityComposer(composer);
+            rememberComposerDraft(rest);
+        }
+        const note = 'The first part was sent. The rest is still in the box.';
+        if (errEl) errEl.textContent = note;
+        showToast(note, 'info');
+    } else if (result.held) {
         showToast(result.message || 'Held for review - it won’t show until an admin approves it.', 'info');
         if (errEl) errEl.textContent = result.message || 'Held for review. It won’t appear until approved.';
     } else {

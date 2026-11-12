@@ -12935,7 +12935,7 @@ const Admin = {
                 return Number.isFinite(Number(value.points)) && optionalString(value.tier, 40);
             };
             if (
-                typeof payload.body !== 'string' || !payload.body.trim() || payload.body.length > 280
+                typeof payload.body !== 'string' || !payload.body.trim() || payload.body.length > 364
                 || typeof payload.uid !== 'string' || !payload.uid || payload.uid.length > 128
                 || typeof payload.displayName !== 'string' || !payload.displayName || payload.displayName.length > 80
                 || typeof payload.timestamp !== 'number' || !Number.isFinite(payload.timestamp)

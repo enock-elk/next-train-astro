@@ -5,14 +5,14 @@
  * Database for bytes downloaded. limitToLast(N) is a count, so N messages is
  * the cap a phone can actually enforce. The database keeps the older messages
  * so Community Monitor can page through the full log. Each message is already
- * capped (280 for a passenger, 1000 for an operator).
+ * capped (364 for a passenger, 1300 for an operator).
  */
 import { sanitizeInlineAlertImageUrl } from './alerts-feed.js';
 
 /** Newest messages a phone listens to. The database keeps the rest. */
 export const COMMUNITY_BUCKET_DEPTH = 80;
-export const COMMUNITY_BODY_MAX = 280;
-export const COMMUNITY_ADMIN_BODY_MAX = 1000;
+export const COMMUNITY_BODY_MAX = 364;
+export const COMMUNITY_ADMIN_BODY_MAX = 1300;
 /** Image addresses only. Bytes stay on the image host, not in the database. */
 export const COMMUNITY_ADMIN_IMAGE_MAX = 4;
 

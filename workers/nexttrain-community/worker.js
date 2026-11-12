@@ -20,6 +20,7 @@ import {
 import { sanitizeCommunityPhotoUrl } from '../../src/lib/community-photo.js';
 import {
     COMMUNITY_ADMIN_BODY_MAX,
+    COMMUNITY_BODY_MAX,
     COMMUNITY_BUCKET_DEPTH,
     communityTombstonePatch,
     sanitizeCommunityAttachments,
@@ -27,7 +28,7 @@ import {
 } from '../../src/lib/community-policy.js';
 import { jpegThumbnail } from './jpeg-thumb.js';
 
-const BODY_MAX = 280;
+const BODY_MAX = COMMUNITY_BODY_MAX;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
 const JOHANNESBURG_OFFSET_MS = 2 * 60 * 60 * 1000;
 const ALERT_CRON = '*/5 * * * *';
@@ -106,17 +107,18 @@ export function sanitizeBody(raw) {
     if (safety.block.length) {
         return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
     }
+    if (text.length > BODY_MAX) {
+        return { ok: false, verdict: 'block', error: `Max ${BODY_MAX} characters.` };
+    }
     if (safety.review.length || scam.review.length) {
-        const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
         return {
             ok: false,
             verdict: 'review',
-            text: clipped.trim(),
+            text: text.trim(),
             error: 'We’re checking this message. It won’t appear until an admin approves it.',
         };
     }
-    const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
-    return { ok: true, verdict: 'allow', text: clipped.trim() };
+    return { ok: true, verdict: 'allow', text: text.trim() };
 }
 
 /** Operators may post links. Severe language and scam packs still block. */
@@ -130,8 +132,10 @@ export function sanitizeAdminBody(raw) {
     if (safety.block.length) {
         return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
     }
-    const clipped = text.length > COMMUNITY_ADMIN_BODY_MAX ? text.slice(0, COMMUNITY_ADMIN_BODY_MAX) : text;
-    return { ok: true, verdict: 'allow', text: clipped.trim() };
+    if (text.length > COMMUNITY_ADMIN_BODY_MAX) {
+        return { ok: false, verdict: 'block', error: `Max ${COMMUNITY_ADMIN_BODY_MAX} characters.` };
+    }
+    return { ok: true, verdict: 'allow', text: text.trim() };
 }
 
 /** A quote is a snapshot. Keep a link that was already on the message. Drop a forged slur. */

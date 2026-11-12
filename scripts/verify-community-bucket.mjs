@@ -89,7 +89,12 @@ assert.match(logic, /tab === 'map' \|\| tab === 'options'/);
 assert.match(logic, /community-feed-scroll/);
 assert.match(logic, /pullRefreshBlocked/);
 assert.doesNotMatch(logic, /scroller\.prepend\(hint\)/);
-assert.match(rules, /length <= 1000/);
+assert.match(rules, /length <= 1300/);
+assert.match(rules, /length <= 364/);
+assert.equal(sanitizeBody('a'.repeat(365)).verdict, 'block');
+assert.equal(sanitizeBody('a'.repeat(364)).ok, true);
+assert.equal(sanitizeAdminBody('a'.repeat(1301)).verdict, 'block');
+assert.equal(sanitizeAdminBody('a'.repeat(1300)).ok, true);
 assert.match(rules, /!newData\.hasChild\('attachments'\)/);
 
 console.log('verify-community-bucket: ok');

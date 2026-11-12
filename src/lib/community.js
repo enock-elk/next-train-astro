@@ -1407,8 +1407,19 @@ function syncCommunitySelectActions(post) {
  * and reserving innerHeight minus the visual top lifts the sheet so the composer
  * shows between the card and the bar.
  */
+function pinSheetToAppColumn(sheet) {
+    const frame = document.getElementById('main-content');
+    if (!frame) return;
+    const box = frame.getBoundingClientRect();
+    if (box.width < 40) return;
+    sheet.style.left = `${Math.round(box.left)}px`;
+    sheet.style.right = 'auto';
+    sheet.style.width = `${Math.round(box.width)}px`;
+}
+
 function placeSheetAboveNav(sheet) {
     if (!sheet || sheet.classList.contains('hidden')) return;
+    pinSheetToAppColumn(sheet);
     const root = document.documentElement;
     if (root.classList.contains('nt-keyboard')) {
         const kb = parseFloat(getComputedStyle(root).getPropertyValue('--nt-kb-h')) || 0;
@@ -1493,7 +1504,7 @@ function ensureCommunityReactionsModal() {
     sheet.id = 'community-reactions-modal';
     sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[100] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
-        <div class="flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
+        <div class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
             <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-community-react-title>Reactions</p>
             <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-community-react-chips></div>

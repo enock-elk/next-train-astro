@@ -50,6 +50,9 @@ import {
     COMMUNITY_ADMIN_IMAGE_MAX,
     COMMUNITY_BODY_MAX,
     COMMUNITY_BUCKET_DEPTH,
+    COMMUNITY_SEE_MORE_WINDOW,
+    clipCommunityText,
+    communityTextLength,
     DELETED_BY_ADMIN,
     DELETED_MESSAGE,
     isCommunityTombstone,
@@ -59,6 +62,12 @@ import {
 } from './community-policy.js';
 
 const BODY_MAX = COMMUNITY_BODY_MAX;
+/** The box can hold a too-long draft. The send cap is what actually posts. */
+const COMPOSER_HOLD_MAX = 8000;
+
+function communityTooLongMessage() {
+    return 'That message is too long for one post. Shorten it a little. Your text is still in the box.';
+}
 /** Phone listeners share this count. The database keeps older messages for Community Monitor. */
 const FEED_LIMIT = COMMUNITY_BUCKET_DEPTH;
 const RATE_KEY = 'communityPostRateV1';
@@ -809,7 +818,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
     if (!routeId) return { ok: false, message: 'Select a route first.' };
     if ((!text || text.length < 2) && !attachments.length && !linkUrl) return { ok: false, message: 'Write a short message.' };
     if (text.length > textMax) {
-        return { ok: false, message: `That message is over the ${textMax} character limit. Nothing was sent.` };
+        return { ok: false, message: communityTooLongMessage() };
     }
     if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
 
@@ -1026,7 +1035,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     if (!routeId || !postId) return { ok: false, message: 'Missing post.' };
     if (!text || text.length < 1) return { ok: false, message: 'Write a reply.' };
     if (text.length > BODY_MAX) {
-        return { ok: false, message: `That message is over the ${BODY_MAX} character limit. Nothing was sent.` };
+        return { ok: false, message: communityTooLongMessage() };
     }
 
     if (isBlockedLocally(acct.uid)) {
@@ -2121,11 +2130,50 @@ function renderCommunityMedia(post) {
     return `${imageHtml}${linkHtml}`;
 }
 
+function communityBodyHtml(post, tombstone) {
+    if (tombstone) {
+        return escapeHTML(post.deletedBy === 'admin' || post.body === DELETED_BY_ADMIN ? DELETED_BY_ADMIN : DELETED_MESSAGE);
+    }
+    return String(post.body || '');
+}
+
+function communityBubbleTextHtml(body, clock, receipt, tombstone) {
+    const time = `<span class="community-msg-time">${clock}${receipt}</span>`;
+    if (!body) return `<div class="community-msg-text">${time}</div>`;
+    if (tombstone || communityTextLength(body) <= COMMUNITY_SEE_MORE_WINDOW) {
+        const shown = tombstone ? body : renderTextWithShareChips(body);
+        return `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${shown}${time}</div>`;
+    }
+    const clipped = renderTextWithShareChips(clipCommunityText(body, COMMUNITY_SEE_MORE_WINDOW));
+    return `<div class="community-msg-text" data-community-see-step="1"><span class="community-msg-copy">${clipped}</span>${time}<button type="button" class="nt-alert-see-more community-see-more" data-community-see-more>See more...</button><template data-community-full>${escapeHTML(body)}</template></div>`;
+}
+
+function expandCommunitySeeMore(button) {
+    const box = button.closest('.community-msg-text');
+    const copy = box?.querySelector('.community-msg-copy');
+    const template = box?.querySelector('template[data-community-full]');
+    if (!box || !copy || !template) {
+        button.remove();
+        return;
+    }
+    const full = template.content?.textContent || '';
+    const step = Math.max(1, Number(box.getAttribute('data-community-see-step')) || 1);
+    const next = step + 1;
+    const limit = COMMUNITY_SEE_MORE_WINDOW * next;
+    if (communityTextLength(full) > limit) {
+        copy.innerHTML = renderTextWithShareChips(clipCommunityText(full, limit));
+        box.setAttribute('data-community-see-step', String(next));
+        return;
+    }
+    copy.innerHTML = renderTextWithShareChips(full);
+    button.remove();
+    template.remove();
+    box.removeAttribute('data-community-see-step');
+}
+
 function renderPostCard(post, routeId, { grouped = false } = {}) {
     const tombstone = isCommunityTombstone(post);
-    const body = tombstone
-        ? escapeHTML(post.deletedBy === 'admin' || post.body === DELETED_BY_ADMIN ? DELETED_BY_ADMIN : DELETED_MESSAGE)
-        : renderTextWithShareChips(post.body || '');
+    const body = communityBodyHtml(post, tombstone);
     const clock = formatClock24(post.timestamp);
     const postId = escapeHTML(post.postId || '');
     const uid = escapeHTML(post.uid || '');
@@ -2180,7 +2228,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
               <div class="community-bubble-body">
                 ${quoteHtml}
                 ${renderCommunityMedia(post)}
-                ${body ? `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${body}<span class="community-msg-time">${clock}${isOwn && !tombstone ? receiptMarkHtml(!!post.pendingSend) : ''}</span></div>` : `<div class="community-msg-text"><span class="community-msg-time">${clock}${isOwn && !tombstone ? receiptMarkHtml(!!post.pendingSend) : ''}</span></div>`}
+                ${communityBubbleTextHtml(body, clock, isOwn && !tombstone ? receiptMarkHtml(!!post.pendingSend) : '', tombstone)}
               </div>
             </div>
             ${tombstone ? '' : renderReactionSummary(post.postId || '', isOwn, routeId)}
@@ -2285,6 +2333,7 @@ function wireCommunityChatGestures(listEl) {
     };
 
     listEl.addEventListener('touchstart', (e) => {
+        if (e.target.closest?.('[data-community-see-more]')) return;
         const row = e.target.closest?.('.community-post-row');
         if (!row || e.touches.length !== 1) return;
         activeRow = row;
@@ -2885,7 +2934,7 @@ function syncComposerChrome() {
     if (!composer) return;
     composer.disabled = false;
     const operator = isAdminAuthed();
-    composer.maxLength = operator ? COMMUNITY_ADMIN_BODY_MAX : BODY_MAX;
+    composer.maxLength = COMPOSER_HOLD_MAX;
     document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
     composer.classList.toggle('community-composer-with-clip', operator);
     document.getElementById('community-copilot')?.classList.toggle('hidden', !operator);
@@ -3045,13 +3094,12 @@ async function suggestCommunityReply(focusPostId = '') {
         btn?.classList.remove('hidden');
         guideBtn?.classList.remove('hidden');
         if (composer) {
-            const room = COMMUNITY_ADMIN_BODY_MAX;
-            composer.value = draft.slice(0, room);
+            composer.value = draft.slice(0, COMPOSER_HOLD_MAX);
             fitCommunityComposer(composer);
             rememberComposerDraft(composer.value);
             composer.focus();
-            if (draft.length > room && errEl) {
-                errEl.textContent = `The draft was cut to ${room} characters. The rest was not added.`;
+            if (draft.length > COMMUNITY_ADMIN_BODY_MAX && errEl) {
+                errEl.textContent = communityTooLongMessage();
             }
         }
     } catch (err) {
@@ -3367,7 +3415,7 @@ async function expandReplies(postId, routeId, container) {
 
     html += `
       <div class="pt-2 flex gap-2 items-start">
-        <input type="text" maxlength="${BODY_MAX}" class="community-reply-input flex-1 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Write a reply…" data-post-id="${escapeHTML(postId)}" />
+        <input type="text" maxlength="${COMPOSER_HOLD_MAX}" class="community-reply-input flex-1 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Write a reply…" data-post-id="${escapeHTML(postId)}" />
         <button type="button" class="community-reply-send shrink-0 px-2.5 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold disabled:opacity-50" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}">Reply</button>
       </div>`;
     container.innerHTML = html;
@@ -3621,6 +3669,14 @@ export function bindCommunityUi() {
 
     document.addEventListener('click', async (e) => {
         const t = e.target;
+
+        const seeMore = t.closest?.('[data-community-see-more]');
+        if (seeMore) {
+            e.preventDefault();
+            e.stopPropagation();
+            expandCommunitySeeMore(seeMore);
+            return;
+        }
 
         const photo = t.closest?.('.community-msg-photo, .community-msg-images img, .community-msg-images .nt-gif, .community-msg-images a');
         if (photo?.closest?.('.community-msg-images')) {

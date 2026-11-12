@@ -5,14 +5,54 @@
  * Database for bytes downloaded. limitToLast(N) is a count, so N messages is
  * the cap a phone can actually enforce. The database keeps the older messages
  * so Community Monitor can page through the full log. Each message is already
- * capped (364 for a passenger, 1300 for an operator).
+ * capped at 4000 characters. The bubble folds at the same length as an
+ * alert (See more...), so a real note is stored whole and a pasted essay is not.
  */
-import { sanitizeInlineAlertImageUrl } from './alerts-feed.js';
+import { ALERT_SEE_MORE_WINDOW, sanitizeInlineAlertImageUrl } from './alerts-feed.js';
 
 /** Newest messages a phone listens to. The database keeps the rest. */
 export const COMMUNITY_BUCKET_DEPTH = 80;
-export const COMMUNITY_BODY_MAX = 364;
-export const COMMUNITY_ADMIN_BODY_MAX = 1300;
+/** Hard send cap. A normal message fits. A pasted essay does not. */
+export const COMMUNITY_BODY_MAX = 4000;
+export const COMMUNITY_ADMIN_BODY_MAX = 4000;
+/** Same first window as an alert. Later taps reveal the same amount again. */
+export const COMMUNITY_SEE_MORE_WINDOW = ALERT_SEE_MORE_WINDOW;
+
+/** Collapsed length, matching how an alert counts its text. */
+export function communityTextLength(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim().length;
+}
+
+/**
+ * Cut plain text for the bubble. Line breaks stay. The cut uses the same
+ * collapsed-character count as an alert, then an ellipsis.
+ */
+export function clipCommunityText(text, limit) {
+    const raw = String(text || '');
+    const max = Math.max(0, Number(limit) || 0);
+    if (communityTextLength(raw) <= max) return raw;
+    let count = 0;
+    let i = 0;
+    let started = false;
+    while (i < raw.length && count < max) {
+        if (/\s/.test(raw[i])) {
+            let j = i;
+            while (j < raw.length && /\s/.test(raw[j])) j += 1;
+            if (!started) {
+                i = j;
+                continue;
+            }
+            if (count + 1 > max) break;
+            count += 1;
+            i = j;
+            continue;
+        }
+        count += 1;
+        started = true;
+        i += 1;
+    }
+    return `${raw.slice(0, i).replace(/\s+$/u, '')}…`;
+}
 /** Image addresses only. Bytes stay on the image host, not in the database. */
 export const COMMUNITY_ADMIN_IMAGE_MAX = 4;
 

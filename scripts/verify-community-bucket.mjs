@@ -7,6 +7,10 @@ import { readFile } from 'node:fs/promises';
 import {
     COMMUNITY_BUCKET_DEPTH,
     COMMUNITY_ADMIN_IMAGE_MAX,
+    COMMUNITY_BODY_MAX,
+    COMMUNITY_SEE_MORE_WINDOW,
+    clipCommunityText,
+    communityTextLength,
     DELETED_BY_ADMIN,
     DELETED_MESSAGE,
     communityIdsPastBucket,
@@ -54,6 +58,15 @@ assert.equal(sanitizeBody('https://chat.whatsapp.com/abc').verdict, 'block');
 assert.equal(sanitizeAdminBody('See https://www.prasa.com/ today').verdict, 'allow');
 assert.ok(sanitizeAdminBody('See https://www.prasa.com/ today').text.includes('https://www.prasa.com/'));
 assert.equal(sanitizeAdminBody('fuck').verdict, 'block');
+assert.equal(COMMUNITY_SEE_MORE_WINDOW, 764);
+assert.equal(COMMUNITY_BODY_MAX, 4000);
+const folded = `Hello\n\n${'word '.repeat(200)}`;
+assert.ok(communityTextLength(folded) > COMMUNITY_SEE_MORE_WINDOW);
+const preview = clipCommunityText(folded, COMMUNITY_SEE_MORE_WINDOW);
+assert.ok(preview.startsWith('Hello\n\n'));
+assert.ok(preview.endsWith('…'));
+assert.equal(communityTextLength(preview.slice(0, -1)), COMMUNITY_SEE_MORE_WINDOW);
+assert.equal(clipCommunityText('short note', COMMUNITY_SEE_MORE_WINDOW), 'short note');
 
 const laid = layoutAlertPost({
     imageUrls: Array.from({ length: 12 }, (_, i) => `/images/alerts/p${i}.png`),
@@ -89,12 +102,12 @@ assert.match(logic, /tab === 'map' \|\| tab === 'options'/);
 assert.match(logic, /community-feed-scroll/);
 assert.match(logic, /pullRefreshBlocked/);
 assert.doesNotMatch(logic, /scroller\.prepend\(hint\)/);
-assert.match(rules, /length <= 1300/);
-assert.match(rules, /length <= 364/);
-assert.equal(sanitizeBody('a'.repeat(365)).verdict, 'block');
-assert.equal(sanitizeBody('a'.repeat(364)).ok, true);
-assert.equal(sanitizeAdminBody('a'.repeat(1301)).verdict, 'block');
-assert.equal(sanitizeAdminBody('a'.repeat(1300)).ok, true);
+assert.match(rules, /length <= 4000/);
+assert.doesNotMatch(rules, /length <= 364/);
+assert.equal(sanitizeBody('a'.repeat(4001)).verdict, 'block');
+assert.equal(sanitizeBody('a'.repeat(4000)).ok, true);
+assert.equal(sanitizeAdminBody('a'.repeat(4001)).verdict, 'block');
+assert.equal(sanitizeAdminBody('a'.repeat(4000)).ok, true);
 assert.match(rules, /!newData\.hasChild\('attachments'\)/);
 
 console.log('verify-community-bucket: ok');

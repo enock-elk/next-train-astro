@@ -154,7 +154,7 @@
                             <p id="community-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                         </div>
                     </div>
-                    <textarea id="community-composer" rows="2" maxlength="364" class="block w-full min-h-[3.75rem] max-h-[10rem] py-2.5 pl-3.5 pr-3 rounded-[1.35rem] bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-auto" placeholder="Please be kind and respectful."></textarea>
+                    <textarea id="community-composer" rows="2" maxlength="8000" class="block w-full min-h-[3.75rem] max-h-[10rem] py-2.5 pl-3.5 pr-3 rounded-[1.35rem] bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-auto" placeholder="Please be kind and respectful."></textarea>
                     <button type="button" id="community-attach-btn" class="hidden absolute right-1.5 bottom-1.5 w-9 h-9 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700 flex items-center justify-center focus:outline-none" aria-label="Attach">
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                     </button>
@@ -218,6 +218,17 @@
   }
   #view-community .community-feed-scroll {
     overflow-anchor: none;
+  }
+  /* A little darker than the shared wash so the bubbles sit forward.
+     Alerts and Feedback Hub keep their own wallpaper. */
+  #view-community .nt-pack-wallpaper {
+    background-color: color-mix(in srgb, #111827 6%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)));
+  }
+  html.dark #view-community .nt-pack-wallpaper {
+    background-color: color-mix(in srgb, #000 8%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)));
+  }
+  #view-community .nt-pack-wallpaper::before {
+    opacity: 0.11;
   }
   #view-community .community-route-row {
     z-index: 10;
@@ -401,6 +412,12 @@
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  .community-msg-text .nt-alert-see-more {
+    min-height: 0;
+    width: auto;
+    padding: 0.15rem 0 0.05rem;
+    font-size: 0.84rem;
   }
   .community-msg-deleted {
     font-style: italic;

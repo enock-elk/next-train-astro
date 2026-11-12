@@ -20,8 +20,10 @@ export function inboxReactionActorId(deviceId = '') {
     try {
         if (window.firebaseAuth?.currentUser?.uid) return `uid_${window.firebaseAuth.currentUser.uid}`;
     } catch { /* ignore */ }
-    const device = String(deviceId || '').trim()
-        || (typeof localStorage !== 'undefined' ? (localStorage.getItem('next_train_device_id') || '') : '');
+    let device = String(deviceId || '').trim();
+    if (!device) {
+        try { device = localStorage.getItem('next_train_device_id') || ''; } catch { device = ''; }
+    }
     return device ? `dev_${device.slice(0, 80)}` : '';
 }
 

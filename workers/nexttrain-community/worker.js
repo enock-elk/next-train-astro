@@ -18,12 +18,15 @@ import {
     findDisallowedUrls,
 } from '../../src/lib/content-safety-core.js';
 import { sanitizeCommunityPhotoUrl } from '../../src/lib/community-photo.js';
+import { sanitizeAlertImageUrl } from '../../src/lib/alerts-feed.js';
 import {
     COMMUNITY_ADMIN_BODY_MAX,
     COMMUNITY_BODY_MAX,
     COMMUNITY_BUCKET_DEPTH,
     communityTombstonePatch,
     sanitizeCommunityAttachments,
+    sanitizeCommunityBucketImageUrl,
+    sanitizeCommunityImageUrl,
     sanitizeCommunityLinkUrl,
 } from '../../src/lib/community-policy.js';
 import { jpegThumbnail } from './jpeg-thumb.js';
@@ -1215,6 +1218,126 @@ async function handleAlertImageUpload(request, env) {
     return json(env, request, 200, { ok: true, url: `${origin}/alerts/${file}` });
 }
 
+async function requireOperator(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return { response: json(env, request, 401, { ok: false, error: 'Missing Authorization' }) };
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return { response: json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' }) };
+    }
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return { response: json(env, request, 403, { ok: false, error: 'Operators only.' }) };
+    }
+    return { user };
+}
+
+async function readImageBytes(response) {
+    const declared = Number(response.headers.get('content-length') || 0);
+    if (declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared };
+    const buf = new Uint8Array(await response.arrayBuffer());
+    if (!buf.length || buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared || buf.length };
+    return { buf, type: response.headers.get('content-type') || '' };
+}
+
+async function readOwnStoredImage(env, target) {
+    let url;
+    try { url = new URL(String(target || '')); } catch { return null; }
+    if (previewHostKind(url.hostname) !== 'r2') return null;
+    const communityFile = url.pathname.match(/^\/community-images\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+    if (communityFile) {
+        if (!env.COMMUNITY_IMAGES) return { missing: true };
+        const obj = await env.COMMUNITY_IMAGES.get(communityFile[1]);
+        if (!obj) return { missing: true };
+        const buf = new Uint8Array(await obj.arrayBuffer());
+        return { buf, type: obj.httpMetadata?.contentType || '', size: obj.size || buf.length };
+    }
+    const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+    if (alertFile) {
+        if (!env.ALERT_IMAGES) return { missing: true };
+        const obj = await env.ALERT_IMAGES.get(`alerts/${alertFile[1]}`);
+        if (!obj) return { missing: true };
+        const buf = new Uint8Array(await obj.arrayBuffer());
+        return { buf, type: obj.httpMetadata?.contentType || '', size: obj.size || buf.length };
+    }
+    return null;
+}
+
+async function storeCommunityImageBytes(env, request, buf) {
+    if (!env.COMMUNITY_IMAGES) return '';
+    const sniff = sniffAlertImage(buf);
+    if (!sniff || !buf.length || buf.length > ALERT_IMAGE_MAX) return '';
+    const file = `${newId('img')}.${sniff.ext}`;
+    await env.COMMUNITY_IMAGES.put(file, buf, {
+        httpMetadata: { contentType: sniff.type },
+    });
+    const origin = new URL(request.url).origin;
+    return `${origin}/community-images/${file}`;
+}
+
+/**
+ * Community photos live in nexttrain-community-images.
+ * Catalog posters and alert-bucket photos stay where they already are.
+ * Any other public image is copied into the community bucket.
+ */
+async function placeCommunityImage(env, request, raw) {
+    const clean = sanitizeCommunityImageUrl(raw);
+    if (!clean) return '';
+    const stored = sanitizeCommunityBucketImageUrl(clean);
+    if (stored) return stored;
+    const owned = sanitizeAlertImageUrl(clean);
+    if (owned && (owned.startsWith('/images/') || owned.includes('/alerts/'))) return owned;
+    if (!env.COMMUNITY_IMAGES) return '';
+    let remote;
+    try { remote = new URL(clean); } catch { return ''; }
+    if (remote.protocol !== 'https:' || previewHostIsPrivate(remote.hostname)) return '';
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`community-image:${ip}`, 60_000, 20)) return '';
+    let res;
+    try { res = await fetch(clean, { redirect: 'follow' }); } catch { return ''; }
+    if (!res.ok) return '';
+    try {
+        if (previewHostIsPrivate(new URL(res.url).hostname)) return '';
+    } catch { return ''; }
+    const got = await readImageBytes(res);
+    if (!got.buf) return '';
+    return storeCommunityImageBytes(env, request, got.buf);
+}
+
+async function handleCommunityImageUpload(request, env) {
+    const gate = await requireOperator(request, env);
+    if (gate.response) return gate.response;
+    if (!env.COMMUNITY_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Community photo storage is not ready yet.' });
+    }
+    const declared = Number(request.headers.get('Content-Length') || 0);
+    if (declared > ALERT_IMAGE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'Photo is too large. Max 4MB.' });
+    }
+    const buf = new Uint8Array(await request.arrayBuffer());
+    const url = await storeCommunityImageBytes(env, request, buf);
+    if (!url) return json(env, request, 400, { ok: false, error: 'Use a JPEG, PNG, GIF, or WebP photo.' });
+    return json(env, request, 200, { ok: true, url });
+}
+
+async function handleCommunityImageImport(request, env) {
+    const gate = await requireOperator(request, env);
+    if (gate.response) return gate.response;
+    if (!env.COMMUNITY_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Community photo storage is not ready yet.' });
+    }
+    let body;
+    try { body = await request.json(); } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const url = await placeCommunityImage(env, request, body?.url || '');
+    if (!url) return json(env, request, 400, { ok: false, error: 'Could not store that photo on Next Train.' });
+    return json(env, request, 200, { ok: true, url });
+}
+
 const PREVIEW_SITE_HOSTS = new Set([
     'nexttrain.co.za',
     'www.nexttrain.co.za',
@@ -1264,7 +1387,7 @@ function canonicalPreviewTarget(raw) {
         return `${url.origin}${path}`;
     }
     if (kind === 'r2') {
-        if (!/^\/alerts\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(path)) return '';
+        if (!/^\/(?:alerts|community-images)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(path)) return '';
         return `${url.origin}${path}`;
     }
     if (!PREVIEW_IMAGE_EXT.test(path)) return '';
@@ -1281,15 +1404,12 @@ function previewResponseHeaders(env, request, bytes, contentType) {
 }
 
 async function bytesForPreview(env, target) {
-    const url = new URL(target);
-    if (previewHostKind(url.hostname) === 'r2' && env.ALERT_IMAGES) {
-        const file = url.pathname.replace(/^\/alerts\//, '');
-        const obj = await env.ALERT_IMAGES.get(`alerts/${file}`);
-        if (!obj) return null;
-        const buf = new Uint8Array(await obj.arrayBuffer());
-        if (!buf.length || buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: obj.size || buf.length };
-        return { bytes: buf, size: obj.size || buf.length, type: obj.httpMetadata?.contentType || '' };
+    const own = await readOwnStoredImage(env, target);
+    if (own?.buf) {
+        if (!own.buf.length || own.buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: own.size || own.buf.length };
+        return { bytes: own.buf, size: own.size || own.buf.length, type: own.type || '' };
     }
+    if (own?.missing) return null;
     let fullSize = 0;
     try {
         const head = await fetch(target, { method: 'HEAD', redirect: 'follow' });
@@ -1383,6 +1503,17 @@ async function handleMediaFile(request, env) {
     if (!checkRate(`mediafile:${ip}`, 60_000, 40)) {
         return json(env, request, 429, { ok: false, error: 'Slow down a moment.' });
     }
+    const own = await readOwnStoredImage(env, target);
+    if (own?.buf && own.buf.length && own.buf.length <= MEDIA_FILE_MAX) {
+        const sniffed = sniffAlertImage(own.buf);
+        if (!sniffed) return json(env, request, 415, { ok: false, error: 'That file is not a picture.' });
+        const headers = new Headers(corsHeaders(env, request));
+        headers.set('Content-Type', sniffed.type);
+        headers.set('Cache-Control', 'private, max-age=300');
+        headers.set('X-Content-Type-Options', 'nosniff');
+        return new Response(own.buf, { status: 200, headers });
+    }
+    if (own?.missing) return json(env, request, 404, { ok: false, error: 'That picture cannot be saved.' });
     let upstream;
     try {
         upstream = await fetch(target, { redirect: 'follow' });
@@ -1410,6 +1541,18 @@ async function handleAlertImageGet(request, env, file) {
         return json(env, request, 503, { ok: false, error: 'Alert image storage is not ready yet.' });
     }
     const obj = await env.ALERT_IMAGES.get(`alerts/${file}`);
+    if (!obj) return json(env, request, 404, { ok: false, error: 'Not found' });
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return new Response(obj.body, { status: 200, headers });
+}
+
+async function handleCommunityImageGet(request, env, file) {
+    if (!env.COMMUNITY_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Community photo storage is not ready yet.' });
+    }
+    const obj = await env.COMMUNITY_IMAGES.get(file);
     if (!obj) return json(env, request, 404, { ok: false, error: 'Not found' });
     const headers = new Headers(corsHeaders(env, request));
     headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
@@ -1689,7 +1832,16 @@ async function handlePost(request, env) {
         return json(env, request, 400, { ok: false, error: 'Invalid routeId' });
     }
 
-    const attachments = sanitizeCommunityAttachments(body.attachments, { admin: isAdminPoster });
+    const requestedAttachments = sanitizeCommunityAttachments(body.attachments, { admin: isAdminPoster });
+    const storedAttachments = [];
+    for (const url of requestedAttachments) {
+        const placed = await placeCommunityImage(env, request, url);
+        if (!placed) {
+            return json(env, request, 400, { ok: false, error: 'Could not store that photo on Next Train.' });
+        }
+        if (!storedAttachments.includes(placed)) storedAttachments.push(placed);
+    }
+    const attachments = storedAttachments;
     const linkUrl = isAdminPoster ? sanitizeCommunityLinkUrl(body.linkUrl) : '';
     const cleaned = isAdminPoster ? sanitizeAdminBody(body.body || '') : sanitizeBody(body.body || '');
     if (!cleaned.ok && cleaned.verdict === 'block') {
@@ -1974,6 +2126,12 @@ export default {
         if (request.method === 'POST' && url.pathname === '/alerts/image') {
             return handleAlertImageUpload(request, env);
         }
+        if (request.method === 'POST' && url.pathname === '/community/image') {
+            return handleCommunityImageUpload(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/image-from-url') {
+            return handleCommunityImageImport(request, env);
+        }
         if (request.method === 'GET' && url.pathname === '/media/preview') {
             return handleMediaPreview(request, env);
         }
@@ -1983,6 +2141,8 @@ export default {
         if (request.method === 'GET') {
             const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
             if (alertFile) return handleAlertImageGet(request, env, alertFile[1]);
+            const communityFile = url.pathname.match(/^\/community-images\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+            if (communityFile) return handleCommunityImageGet(request, env, communityFile[1]);
         }
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);

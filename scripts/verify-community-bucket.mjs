@@ -17,6 +17,7 @@ import {
     communityTombstonePatch,
     isCommunityTombstone,
     sanitizeCommunityAttachments,
+    sanitizeCommunityBucketImageUrl,
     sanitizeCommunityLinkUrl,
 } from '../src/lib/community-policy.js';
 import { sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
@@ -51,6 +52,11 @@ assert.deepEqual(
 );
 assert.equal(sanitizeCommunityAttachments(['https://i.imgur.com/abcdEFG.png'], { admin: false }).length, 0);
 assert.equal(sanitizeCommunityAttachments(['/images/alerts/fare.png'], { admin: true })[0], '/images/alerts/fare.png');
+const communityPhoto = 'https://nexttrain-community.enock.workers.dev/community-images/img_abc.jpg';
+const alertPhoto = 'https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg';
+assert.equal(sanitizeCommunityBucketImageUrl(communityPhoto), communityPhoto);
+assert.equal(sanitizeCommunityBucketImageUrl(alertPhoto), '');
+assert.equal(sanitizeCommunityAttachments([communityPhoto], { admin: true })[0], communityPhoto);
 assert.equal(sanitizeCommunityLinkUrl('https://nexttrain.co.za/help'), 'https://nexttrain.co.za/help');
 assert.equal(sanitizeCommunityLinkUrl('http://nexttrain.co.za/help'), '');
 
@@ -75,6 +81,7 @@ assert.equal(laid.imageUrls.length, 10);
 assert.equal(collectNoticeImageUrls({ imageUrls: laid.imageUrls }).length, 10);
 
 const community = await readFile(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+const communityView = await readFile(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 const worker = await readFile(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
 const admin = await readFile(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 const logic = await readFile(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
@@ -83,17 +90,22 @@ const rules = await readFile(new URL('../firebase-database.rules.json', import.m
 assert.match(community, /COMMUNITY_BUCKET_DEPTH/);
 assert.doesNotMatch(community, /POST_TTL_MS/);
 assert.match(community, /replyTo\.body/);
-assert.match(community, /data-delete-as="author"/);
+assert.match(communityView, /data-delete-as="author"/);
 assert.match(community, /data-delete-mode="purge"/);
 assert.match(community, /Deleted by an Admin/);
 assert.match(community, /community-sheet-suggest/);
 assert.match(community, /\/community\/message/);
+assert.match(community, /\/community\/image/);
+assert.match(communityView, /id="community-attach-file"/);
 assert.match(worker, /trimRouteBuckets/);
 assert.match(worker, /Community Monitor keeps the full log/);
 assert.doesNotMatch(worker, /Community bucket trim failed/);
 assert.match(worker, /shallow: 'true'/);
 assert.doesNotMatch(worker, /wipeStalePosts/);
 assert.match(worker, /pathname === '\/community\/message'/);
+assert.match(worker, /pathname === '\/community\/image'/);
+assert.match(worker, /env\.COMMUNITY_IMAGES/, 'community photos use their own R2 binding');
+assert.doesNotMatch(worker.slice(worker.indexOf('async function storeCommunityImageBytes'), worker.indexOf('async function placeCommunityImage')), /ALERT_IMAGES/, 'community photo bytes are not written to the alerts bucket');
 assert.match(worker, /mode === 'purge'/);
 assert.match(admin, /Maximum 10 posters/);
 assert.match(admin, /data-mode="tombstone"/);

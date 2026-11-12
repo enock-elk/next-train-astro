@@ -41,4 +41,5 @@ jobs:
             exit 0
           fi
           npx --yes wrangler r2 bucket create nexttrain-alert-images || echo "Alert image bucket already exists, or this token cannot create R2 yet."
+          npx --yes wrangler r2 bucket create nexttrain-community-images || echo "Community image bucket already exists, or this token cannot create R2 yet."
           npx --yes wrangler deploy

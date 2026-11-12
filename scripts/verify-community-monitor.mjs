@@ -200,6 +200,8 @@ assert.match(worker, /ADMIN_EMAILS\.has/, 'alert photo upload stays on the opera
 assert.match(worker, /env\.ALERT_IMAGES/, 'alert photos use the R2 binding');
 const wrangler = await readFile(new URL('../workers/nexttrain-community/wrangler.jsonc', import.meta.url), 'utf8');
 assert.match(wrangler, /nexttrain-alert-images/, 'alert photos use the named R2 bucket');
+assert.match(wrangler, /nexttrain-community-images/, 'community photos use their own R2 bucket');
+assert.match(worker, /env\.COMMUNITY_IMAGES/, 'community photos use the community R2 binding');
 assert.match(worker, /isSafeRtdbKey\(routeId\)/);
 assert.match(worker, /isSafeRtdbKey\(postId\)/);
 assert.match(admin, /\[`community_activity\/\$\{routeId\}\//, 'admin approval indexes approved messages');

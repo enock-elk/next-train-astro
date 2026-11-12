@@ -27,6 +27,10 @@
     {
       "binding": "ALERT_IMAGES",
       "bucket_name": "nexttrain-alert-images"
+    },
+    {
+      "binding": "COMMUNITY_IMAGES",
+      "bucket_name": "nexttrain-community-images"
     }
   ]
 }

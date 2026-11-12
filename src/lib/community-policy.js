@@ -8,7 +8,7 @@
  * capped at 4000 characters. The bubble folds at the same length as an
  * alert (See more...), so a real note is stored whole and a pasted essay is not.
  */
-import { ALERT_SEE_MORE_WINDOW, sanitizeInlineAlertImageUrl } from './alerts-feed.js';
+import { ALERT_SEE_MORE_WINDOW, isNextTrainAlertImageHost, sanitizeInlineAlertImageUrl } from './alerts-feed.js';
 
 /** Newest messages a phone listens to. The database keeps the rest. */
 export const COMMUNITY_BUCKET_DEPTH = 80;
@@ -89,7 +89,26 @@ export function communityTombstonePatch(by, now = Date.now()) {
     };
 }
 
+const COMMUNITY_BUCKET_IMAGE = /^\/community-images\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
+
+/** A photo already stored in the community R2 bucket. Alert photos stay on /alerts/. */
+export function sanitizeCommunityBucketImageUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    try {
+        const parsed = new URL(raw);
+        if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return '';
+        if (!isNextTrainAlertImageHost(parsed.hostname)) return '';
+        if (!COMMUNITY_BUCKET_IMAGE.test(parsed.pathname) || parsed.pathname.includes('..')) return '';
+        return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+        return '';
+    }
+}
+
 export function sanitizeCommunityImageUrl(url) {
+    const stored = sanitizeCommunityBucketImageUrl(url);
+    if (stored) return stored;
     return sanitizeInlineAlertImageUrl(url);
 }
 

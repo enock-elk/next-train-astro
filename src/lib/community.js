@@ -1911,9 +1911,9 @@ const bestPublicPoints = new Map();
 const hintedPointUids = new Set();
 
 function loadBestPublicPoints() {
-    if (bestPublicPoints.size || typeof localStorage === 'undefined') return;
+    if (bestPublicPoints.size) return;
     try {
-        const data = JSON.parse(localStorage.getItem(BEST_POINTS_KEY) || '{}');
+        const data = JSON.parse(safeStorage.getItem(BEST_POINTS_KEY) || '{}');
         Object.entries(data || {}).forEach(([uid, value]) => {
             const points = Number(value);
             if (uid && Number.isFinite(points) && points > 0) bestPublicPoints.set(uid, points);
@@ -1933,7 +1933,7 @@ function rememberPublicPoints(uid, points) {
     try {
         const obj = {};
         bestPublicPoints.forEach((value, key) => { obj[key] = value; });
-        localStorage.setItem(BEST_POINTS_KEY, JSON.stringify(obj));
+        safeStorage.setItem(BEST_POINTS_KEY, JSON.stringify(obj));
     } catch {
         /* the in-memory total still covers this visit */
     }
@@ -1944,9 +1944,9 @@ const PUBLIC_NAMES_KEY = 'nt-public-names-v1';
 const bestPublicNames = new Map();
 
 function loadBestPublicNames() {
-    if (bestPublicNames.size || typeof localStorage === 'undefined') return;
+    if (bestPublicNames.size) return;
     try {
-        const data = JSON.parse(localStorage.getItem(PUBLIC_NAMES_KEY) || '{}');
+        const data = JSON.parse(safeStorage.getItem(PUBLIC_NAMES_KEY) || '{}');
         Object.entries(data || {}).forEach(([uid, row]) => {
             const name = String(row?.name || '').trim();
             const ts = Number(row?.ts) || 0;
@@ -1964,7 +1964,7 @@ function persistPublicNames() {
             .slice(0, 200);
         const obj = {};
         rows.forEach(([uid, row]) => { obj[uid] = row; });
-        localStorage.setItem(PUBLIC_NAMES_KEY, JSON.stringify(obj));
+        safeStorage.setItem(PUBLIC_NAMES_KEY, JSON.stringify(obj));
     } catch {
         /* the in-memory name still covers this visit */
     }
@@ -3074,6 +3074,70 @@ async function fillCommunityPosterSelect() {
     }
 }
 
+function communityImageAlreadyStored(url) {
+    const clean = sanitizeCommunityImageUrl(url);
+    if (!clean) return false;
+    if (clean.startsWith('/images/')) return true;
+    try {
+        const parsed = new URL(clean);
+        const host = parsed.hostname.toLowerCase();
+        const ours = host === 'nexttrain-community.enock.workers.dev'
+            || /^nexttrain-community\.[a-z0-9-]+\.workers\.dev$/.test(host);
+        return ours && (parsed.pathname.startsWith('/community-images/') || parsed.pathname.startsWith('/alerts/'));
+    } catch {
+        return false;
+    }
+}
+
+async function uploadCommunityPhoto(file) {
+    if (!file) return '';
+    if (file.size > 4 * 1024 * 1024) {
+        showToast('Photo is too large. Max 4MB.', 'error');
+        return '';
+    }
+    const token = await ensureAuthToken();
+    if (!token) {
+        showToast('Sign in again to add a photo.', 'error');
+        return '';
+    }
+    const res = await fetch(`${communityWorkerBase().replace(/\/$/, '')}/community/image`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) {
+        showToast(data.error || 'Could not store that photo.', 'error');
+        return '';
+    }
+    return data.url;
+}
+
+async function importCommunityPhoto(raw) {
+    const token = await ensureAuthToken();
+    if (!token) {
+        showToast('Sign in again to add a photo.', 'error');
+        return '';
+    }
+    const res = await fetch(`${communityWorkerBase().replace(/\/$/, '')}/community/image-from-url`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: raw }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) {
+        showToast(data.error || 'Could not store that photo.', 'error');
+        return '';
+    }
+    return data.url;
+}
+
 function addAdminImage(raw) {
     const url = sanitizeCommunityImageUrl(raw);
     if (!url) {
@@ -3090,11 +3154,12 @@ function addAdminImage(raw) {
     return true;
 }
 
-function addAdminAddress(raw) {
+async function addAdminAddress(raw) {
     const value = String(raw || '').trim();
     if (!value) return;
     if (sanitizeCommunityImageUrl(value)) {
-        addAdminImage(value);
+        const stored = communityImageAlreadyStored(value) ? value : await importCommunityPhoto(value);
+        if (stored) addAdminImage(stored);
         return;
     }
     const link = sanitizeCommunityLinkUrl(value);
@@ -3651,8 +3716,17 @@ export function bindCommunityUi() {
     });
     document.getElementById('community-attach-add')?.addEventListener('click', () => {
         const input = document.getElementById('community-attach-url');
-        addAdminAddress(input?.value || '');
+        const value = input?.value || '';
         if (input) input.value = '';
+        addAdminAddress(value);
+    });
+    document.getElementById('community-attach-file')?.addEventListener('change', async (e) => {
+        const input = e.target;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file || !isAdminAuthed()) return;
+        const url = await uploadCommunityPhoto(file);
+        if (url) addAdminImage(url);
     });
     document.getElementById('community-poster-select')?.addEventListener('change', (e) => {
         const value = e.target.value;

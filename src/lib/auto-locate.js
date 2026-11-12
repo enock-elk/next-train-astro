@@ -202,17 +202,23 @@ export function fromStationIsClaimed(doc = typeof document !== 'undefined' ? doc
     return false;
 }
 
-export function hasRememberedGeoGrant(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+function openLocalStorage() {
+    try { return localStorage; } catch { return null; }
+}
+
+export function hasRememberedGeoGrant(storage) {
+    const box = storage === undefined ? openLocalStorage() : storage;
     try {
-        return storage?.getItem?.(GEO_GRANTED_KEY) === '1';
+        return box?.getItem?.(GEO_GRANTED_KEY) === '1';
     } catch {
         return false;
     }
 }
 
-export function rememberGeolocationGranted(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+export function rememberGeolocationGranted(storage) {
+    const box = storage === undefined ? openLocalStorage() : storage;
     try {
-        storage?.setItem?.(GEO_GRANTED_KEY, '1');
+        box?.setItem?.(GEO_GRANTED_KEY, '1');
     } catch { /* ignore */ }
 }
 

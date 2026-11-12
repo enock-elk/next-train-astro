@@ -150,6 +150,7 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
         if (!chip) return;
         event.preventDefault();
         event.stopPropagation();
+        chip.closest('.community-post-row')?.classList.remove('is-pressing');
         const opened = await openShareUrl(chip.getAttribute('data-share-url') || '');
         if (!opened && chip.getAttribute('data-share-kind') !== 'live' && typeof window.showToast === 'function') {
             window.showToast('Could not open that link.', 'error');

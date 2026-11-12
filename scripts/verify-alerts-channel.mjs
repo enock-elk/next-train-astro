@@ -791,6 +791,8 @@ const now = 1_700_000_000_000;
     assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');
     assert(channelJs.includes('reactionBreakdownPushed') && channelJs.includes("__ntHideAlertReactionBreakdown"), 'back closes the reaction counts sheet before the alerts page');
     assert(channelJs.includes('alerts-select-copy') && channelJs.includes('alerts-select-share'), 'a selected alert uses the header for copy and share');
+    assert(channelJs.includes('navigator.share({ url: link })'), 'alert share sends the link alone');
+    assert(!channelJs.includes('text: body || heading'), 'alert share does not attach the notice text');
     assert(!channelJs.includes("type: 'alert'"), 'an alert is not reported back to admins');
     assert(channelJs.includes('alertMenuActions'), 'the alert menu is only there when an admin can pin or delete');
     const alertsMarkup = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');

@@ -1565,18 +1565,24 @@ async function copyText(text) {
     }
 }
 
-async function shareLink(url, text, title) {
-    const body = String(text || '').trim();
-    const heading = String(title || '').trim() || 'Service update';
+async function shareLink(url) {
+    const link = String(url || '').trim();
+    if (!link) return;
     if (typeof navigator.share === 'function') {
         try {
-            await navigator.share({ title: heading, text: body || heading, url });
+            await navigator.share({ url: link });
             return;
         } catch (e) {
             if (e?.name === 'AbortError') return;
+            try {
+                await navigator.share({ text: link });
+                return;
+            } catch (err) {
+                if (err?.name === 'AbortError') return;
+            }
         }
     }
-    await copyText(url);
+    await copyText(link);
 }
 
 function alertMenuActions(notice) {
@@ -1791,9 +1797,7 @@ function bindAlertsChannelOnce() {
     document.getElementById('alerts-select-share')?.addEventListener('click', (e) => {
         e.preventDefault();
         if (!selectedAlert) return;
-        const text = alertPlainText(selectedAlert);
-        const title = text.split('\n')[0] || 'Service update';
-        shareLink(alertShareUrl(selectedAlert), text, title);
+        shareLink(alertShareUrl(selectedAlert));
     });
     document.getElementById('alerts-select-menu-btn')?.addEventListener('click', (e) => {
         e.preventDefault();

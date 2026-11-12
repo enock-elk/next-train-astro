@@ -245,12 +245,46 @@ function explainCommunityPresence() {
     else modal.classList.remove('hidden');
 }
 
+function explainCommunityRoom() {
+    let modal = document.getElementById('community-room-about-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'community-room-about-modal';
+        modal.className = 'fixed inset-0 bg-black/70 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5">
+                <h3 class="text-base font-black text-gray-900 dark:text-white mb-2">About this room</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+                    People on this line can share a delay, a question, or what they see at a station. Next Train is an independent app. It is not part of PRASA or Metrorail. A message here is not an official notice.
+                </p>
+                <button type="button" id="community-room-about-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('community-room-about-modal');
+                else modal.classList.add('hidden');
+            }
+        });
+        modal.querySelector('#community-room-about-close')?.addEventListener('click', () => {
+            if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('community-room-about-modal');
+            else modal.classList.add('hidden');
+        });
+    }
+    if (typeof window.openSmoothModal === 'function') window.openSmoothModal('community-room-about-modal');
+    else modal.classList.remove('hidden');
+}
+
 export function bindCommunityPresenceInfo() {
     if (typeof document === 'undefined' || window.__ntCommunityPresenceInfoBound) return;
     window.__ntCommunityPresenceInfoBound = true;
     document.getElementById('community-presence')?.addEventListener('click', (e) => {
         e.preventDefault();
         explainCommunityPresence();
+    });
+    document.getElementById('community-room-about')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        explainCommunityRoom();
     });
 }
 

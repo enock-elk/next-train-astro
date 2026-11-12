@@ -750,6 +750,58 @@ function safeCommunityWriteError(message, status) {
     return text || (status ? `Post failed (${status})` : 'Could not post.');
 }
 
+let communityDeleteAsk = null;
+
+function askCommunityDelete({ title, body, confirmLabel } = {}) {
+    if (communityDeleteAsk) return Promise.resolve(false);
+    const modal = document.getElementById('community-delete-modal');
+    const prompt = [title, body].filter(Boolean).join('\n\n');
+    if (!modal) {
+        return Promise.resolve(typeof window.confirm === 'function' ? window.confirm(prompt) : false);
+    }
+    const pending = new Promise((resolve) => {
+        const titleEl = document.getElementById('community-delete-title');
+        const bodyEl = document.getElementById('community-delete-body');
+        const okBtn = document.getElementById('community-delete-confirm');
+        const cancelBtn = document.getElementById('community-delete-cancel');
+        if (titleEl) titleEl.textContent = title || 'Delete this message?';
+        if (bodyEl) bodyEl.textContent = body || '';
+        if (okBtn) okBtn.textContent = confirmLabel || 'Delete';
+        let settled = false;
+        const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            communityDeleteAsk = null;
+            modal.classList.add('hidden');
+            document.removeEventListener('keydown', onKey);
+            resolve(!!ok);
+        };
+        const onKey = (ev) => {
+            if (ev.key !== 'Escape') return;
+            ev.preventDefault();
+            finish(false);
+        };
+        modal.onclick = (ev) => {
+            if (ev.target === modal) finish(false);
+        };
+        if (cancelBtn) cancelBtn.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            finish(false);
+        };
+        if (okBtn) okBtn.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            finish(true);
+        };
+        document.addEventListener('keydown', onKey);
+        modal.classList.remove('hidden');
+        (cancelBtn || okBtn)?.focus();
+    });
+    communityDeleteAsk = pending;
+    return pending;
+}
+
 export async function deleteCommunityMessage({ routeId, postId, replyId = '', mode = 'tombstone', as = 'author' } = {}) {
     const token = await ensureAuthToken();
     if (!token) throw new Error('Sign in again to delete this message.');
@@ -2251,6 +2303,7 @@ function applyFeedFilter(routeId) {
 
     if (!posts.length) {
         listEl.innerHTML = '';
+        wireCommunityChatGestures(listEl);
         if (emptyEl) {
             emptyEl.classList.remove('hidden');
             emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
@@ -2332,8 +2385,10 @@ function wireCommunityChatGestures(listEl) {
         longTimer = null;
     };
 
+    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, [data-community-see-more]');
+
     listEl.addEventListener('touchstart', (e) => {
-        if (e.target.closest?.('[data-community-see-more]')) return;
+        if (communityInlineControl(e.target)) return;
         const row = e.target.closest?.('.community-post-row');
         if (!row || e.touches.length !== 1) return;
         activeRow = row;
@@ -2410,6 +2465,7 @@ function wireCommunityChatGestures(listEl) {
 
     // Desktop: context menu / long-click alternate
     listEl.addEventListener('contextmenu', (e) => {
+        if (communityInlineControl(e.target)) return;
         const row = e.target.closest?.('.community-post-row');
         if (!row) return;
         e.preventDefault();
@@ -3515,20 +3571,18 @@ export function bindCommunityUi() {
         const post = selectedCommunity?.post;
         if (!post) return;
         const url = communityShareUrl(selectedCommunity.routeId, post.postId);
-        const text = String(post.body || '').slice(0, 8000)
-            .replace(/<img\b[^>]*>/gi, ' ')
-            .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        const who = String(post.displayName || '').trim();
-        const shareTitle = who && !/^(you|passenger)$/i.test(who) ? who : 'Community message';
         if (typeof navigator.share === 'function') {
             try {
-                await navigator.share({ title: shareTitle, text: text || shareTitle, url });
+                await navigator.share({ url });
                 return;
             } catch (err) {
                 if (err?.name === 'AbortError') return;
+                try {
+                    await navigator.share({ text: url });
+                    return;
+                } catch (err2) {
+                    if (err2?.name === 'AbortError') return;
+                }
             }
         }
         try {
@@ -3713,7 +3767,7 @@ export function bindCommunityUi() {
         const menuOpen = !!(menu && !menu.classList.contains('hidden'));
         const selecting = !!(bar && !bar.classList.contains('hidden'));
         if (!trayOpen && !menuOpen && !selecting) return;
-        if (e.target.closest?.('#community-reaction-sheet, #community-reactions-modal, #community-select-bar, #community-select-menu')) return;
+        if (e.target.closest?.('#community-reaction-sheet, #community-reactions-modal, #community-select-bar, #community-select-menu, #community-delete-modal')) return;
         closeReactionSheet();
         menu?.classList.add('hidden');
         clearCommunitySelection();
@@ -3721,6 +3775,7 @@ export function bindCommunityUi() {
 
     document.addEventListener('click', async (e) => {
         const t = e.target;
+        if (t.closest?.('#community-delete-modal')) return;
 
         const seeMore = t.closest?.('[data-community-see-more]');
         if (seeMore) {
@@ -3806,12 +3861,24 @@ export function bindCommunityUi() {
             closeReactionSheet();
             document.getElementById('community-select-menu')?.classList.add('hidden');
             if (!routeId || !postId) return;
-            const prompt = mode === 'purge'
-                ? 'Remove this message completely? Quotes people already made keep their text.'
+            const ask = mode === 'purge'
+                ? {
+                    title: 'Remove this message?',
+                    body: 'This takes the bubble away. Quotes people already made keep their text.',
+                    confirmLabel: 'Remove',
+                }
                 : (as === 'admin'
-                    ? 'Replace this message with Deleted by an Admin? Quotes people already made keep their text.'
-                    : 'Delete this message? It will say Deleted message. Quotes people already made keep their text.');
-            const ok = typeof window.confirm === 'function' ? window.confirm(prompt) : true;
+                    ? {
+                        title: 'Deleted by an Admin?',
+                        body: 'The bubble will say Deleted by an Admin. Quotes people already made keep their text.',
+                        confirmLabel: 'Delete',
+                    }
+                    : {
+                        title: 'Delete this message?',
+                        body: 'It will say Deleted message. Quotes people already made keep their text.',
+                        confirmLabel: 'Delete',
+                    });
+            const ok = await askCommunityDelete(ask);
             if (!ok) return;
             clearCommunitySelection();
             try {

@@ -2319,6 +2319,8 @@ html.dark .admin-sheet-tabs { background: #111827; }
   line-height: 1.25;
   text-align: left;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .community-bubble-own .community-share-chip,
 .inbox-bubble-own .community-share-chip {

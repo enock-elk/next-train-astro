@@ -1942,10 +1942,16 @@ async function shareLightboxPhoto() {
     if (!url) return;
     if (typeof navigator.share === 'function') {
         try {
-            await navigator.share({ title: 'Service update', url });
+            await navigator.share({ url });
             return;
         } catch (err) {
             if (err?.name === 'AbortError') return;
+            try {
+                await navigator.share({ text: url });
+                return;
+            } catch (err2) {
+                if (err2?.name === 'AbortError') return;
+            }
         }
     }
     try {

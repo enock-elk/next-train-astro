@@ -145,6 +145,15 @@ assert.match(workerSource, /sanitizeCommunityPhotoUrl/, 'worker allowlists commu
 assert.match(workerSource, /next-train-lab\.pages\.dev/, 'worker CORS is limited to Next Train lab previews');
 assert.doesNotMatch(workerSource, /host\.endsWith\('\.pages\.dev'\)/, 'worker CORS does not allow every pages.dev host');
 assert.match(community, /community-sheet-delete/, 'a message can be deleted from the community tab');
+assert.match(community, /askCommunityDelete\(/, 'author and admin deletes ask before they remove a message');
+assert.match(community, /title: 'Delete this message\?'/, 'a passenger delete asks before it changes the bubble');
+assert.match(community, /title: 'Deleted by an Admin\?'/, 'an admin tombstone asks first');
+assert.match(community, /title: 'Remove this message\?'/, 'an admin remove asks first');
+assert.match(community, /id="community-delete-modal"|community-delete-modal/, 'delete confirmation is an in-app dialog');
+assert.doesNotMatch(community, /window\.confirm\([^)]*\) : true/, 'a missing confirm does not delete');
+assert.match(community, /navigator\.share\(\{ url \}\)/, 'community share sends the link alone');
+assert.doesNotMatch(community, /text: text \|\| shareTitle/, 'community share does not attach the message');
+assert.match(community, /communityInlineControl\(e\.target\)/, 'a share chip touch does not press the whole message');
 assert.match(readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8'), /data-delete-as="author"/, 'the poster can delete their own message');
 assert.match(community, /as === 'author'[\s\S]{0,280}if \(!ownMessage\) return/, 'a rider can delete only their own message');
 assert.match(community, /Remove completely/, 'an operator can still remove a message with no bubble left');

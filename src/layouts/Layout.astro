@@ -1424,11 +1424,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
       }
-      /* The dock leaves the flow, so the room would keep its last rows behind
-         the keys. Pad the scroller by the keyboard plus the dock. The shell
-         stays full size, so the wallpaper does not jump and no slab opens. */
+      /* The dock leaves the flow and sits over the feed. Pad by the keys plus
+         the dock, with a little extra, so the last bubble stays full size
+         above the composer. The shell stays full size, so the wallpaper
+         does not jump. */
       html.nt-keyboard.nt-in-app #view-community .community-feed-scroll {
-        padding-bottom: max(0px, calc(var(--nt-kb-h, 0px) + var(--nt-community-dock-h, 6.5rem) - var(--nt-nav-h, 4rem) - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) - 0.75rem));
+        padding-bottom: calc(var(--nt-kb-h, 0px) + var(--nt-community-dock-h, 8rem) - var(--nt-nav-h, 4rem) + 1.25rem);
+        scroll-padding-bottom: 1.25rem;
       }
       html.nt-keyboard #view-community .community-pane > .nt-pack-wallpaper,
       html.nt-keyboard #messages-thread-modal .nt-pack-wallpaper {

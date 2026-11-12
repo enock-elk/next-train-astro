@@ -463,7 +463,7 @@ function receiptMarkHtml(pending) {
     if (pending) {
         return `<span class="community-msg-receipt is-pending" aria-label="Sending"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.6V8.2l2.3 1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
     }
-    return `<span class="community-msg-receipt is-sent" aria-label="Sent"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4l3 3 6.6-6.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+    return `<span class="community-msg-receipt is-sent" aria-label="Sent"><svg viewBox="0 0 18 14" aria-hidden="true"><path d="M1 7.4 3.3 9.8 8.2 4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.4 7.4 7.7 9.8 13.6 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 }
 
 function stopRealtimePosts() {
@@ -1280,7 +1280,7 @@ function renderReactionSummary(postId, isOwn = false, routeId = '') {
         })
         .join('');
     if (!pills) return '';
-    return `<div class="community-reaction-pills ${isOwn ? 'ml-auto mr-1' : ''}" data-reactions-for="${escapeHTML(postId)}">${pills}</div>`;
+    return `<div class="community-reaction-pills" data-reactions-for="${escapeHTML(postId)}">${pills}</div>`;
 }
 
 function ensureReactionTray() {
@@ -1456,7 +1456,7 @@ function ensureCommunityReactionsModal() {
     if (sheet) return sheet;
     sheet = document.createElement('div');
     sheet.id = 'community-reactions-modal';
-    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[140] hidden flex flex-col justify-end bg-black/50';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[100] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
         <div class="flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
@@ -2911,23 +2911,23 @@ async function suggestCommunityReply(focusPostId = '') {
     const since = Date.now() - 24 * 60 * 60 * 1000;
     const loaded = routeId ? await communityPostsSince(routeId, since) : [];
     const focus = findCachedPost(focusPostId) || loaded.find((p) => p?.postId === focusPostId) || null;
-    const windowPosts = loaded
-        .filter((p) => p && !isCommunityTombstone(p) && (p.body || p.linkUrl) && (Number(p.timestamp) || 0) >= since)
-        .slice(-60);
-    if (focus && !isCommunityTombstone(focus) && !windowPosts.some((p) => p.postId === focus.postId)) {
-        windowPosts.push(focus);
+    const adminAuthor = (p) => {
+        const mine = $account.get()?.uid && p.uid === $account.get().uid;
+        return !!(mine || ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'].includes(String(p?.email || '').toLowerCase()));
+    };
+    // The held message is the only thing to answer. The rest of the room
+    // was making Co-Pilot reply to older posts. One message, priority 10.
+    let target = focus && !isCommunityTombstone(focus) ? focus : null;
+    if (!target) {
+        target = [...loaded].reverse().find((p) => p && !isCommunityTombstone(p) && (p.body || p.linkUrl) && !adminAuthor(p)) || null;
     }
-    const thread = windowPosts
-        .map((p) => {
-            const mine = $account.get()?.uid && p.uid === $account.get().uid;
-            const fromAdmin = mine || ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'].includes(String(p.email || '').toLowerCase());
-            const priority = focus && p.postId === focus.postId;
-            return {
-                from: fromAdmin ? 'admin' : 'commuter',
-                text: `${priority ? 'PRIORITY: ' : ''}${p.displayName || 'Passenger'}: ${p.body || p.linkUrl || ''}`,
-                at: Number(p.timestamp) || 0,
-            };
-        });
+    const thread = target
+        ? [{
+            from: adminAuthor(target) ? 'admin' : 'commuter',
+            text: `${target.displayName || 'Passenger'}: ${target.body || target.linkUrl || ''}`,
+            at: Number(target.timestamp) || 0,
+        }]
+        : [];
     if (!thread.length) {
         if (errEl) errEl.textContent = 'Nothing in this room to answer yet.';
         return;
@@ -2945,15 +2945,13 @@ async function suggestCommunityReply(focusPostId = '') {
     if (errEl) errEl.textContent = '';
     if (status && statusText) {
         status.classList.remove('hidden');
-        statusText.textContent = 'Reading this room and writing a reply.';
+        statusText.textContent = 'Reading this message and writing a reply.';
     }
     const guidance = [
         document.getElementById('community-guide-text')?.value || '',
         document.getElementById('community-suggest-context')?.value || '',
     ].map((part) => String(part || '').trim()).filter(Boolean).join('\n');
-    const roomNote = focus
-        ? 'This is the public community room for one train line. The line marked PRIORITY is the message to answer. The other lines are the past 24 hours, for context only. Answer the priority message first. One short reply an operator can post. No email sign-off.'
-        : 'This is the public community room for one train line. Write one short reply an operator can post in that room. No email sign-off. Answer the latest passenger questions.';
+    const roomNote = 'Answer only the single message in this thread. Do not answer any other message. One short reply an operator can post. No email sign-off.';
     try {
         const res = await fetch(`${REPLY_WORKER_URL}/suggest`, {
             method: 'POST',

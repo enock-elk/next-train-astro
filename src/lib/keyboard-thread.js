@@ -99,10 +99,20 @@ export function bindKeyboardThread() {
     window.visualViewport?.addEventListener('scroll', run, { passive: true });
     document.addEventListener('focusin', (event) => {
         if (!event.target?.closest?.('#community-composer, #messages-thread-input')) return;
+        const feed = document.querySelector('#view-community .community-feed-scroll');
+        if (feed && !document.documentElement.classList.contains('nt-keyboard')) {
+            const locked = Math.round(feed.clientWidth * 2 / 3);
+            if (locked > 80) document.documentElement.style.setProperty('--nt-bubble-lock', `${locked}px`);
+        }
         rememberWallpaper();
         [0, 60, 180, 400].forEach((ms) => setTimeout(run, ms));
     });
     document.addEventListener('focusout', () => {
         [40, 200, 500].forEach((ms) => setTimeout(run, ms));
+        setTimeout(() => {
+            if (!document.documentElement.classList.contains('nt-keyboard')) {
+                document.documentElement.style.removeProperty('--nt-bubble-lock');
+            }
+        }, 520);
     });
 }

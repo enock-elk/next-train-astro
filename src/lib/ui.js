@@ -462,7 +462,7 @@ export function bindHistoryBackNavigation() {
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
             if (isStandalone) {
                 const activeTab = safeStorage.getItem('activeTab');
-                if (activeTab === 'trip-planner' || activeTab === 'community') {
+                if (activeTab === 'trip-planner' || activeTab === 'community' || activeTab === 'map') {
                     history.pushState({ view: 'home' }, '', '#home');
                     switchTab('next-train');
                     return;
@@ -638,7 +638,7 @@ export function bindHistoryBackNavigation() {
         const hash = location.hash;
         if (!hash || hash === '#home') {
             const activeTab = safeStorage.getItem('activeTab');
-            if (activeTab === 'trip-planner' || activeTab === 'community') {
+            if (activeTab === 'trip-planner' || activeTab === 'community' || activeTab === 'map') {
                 switchTab('next-train');
             }
         } else if (hash === '#planner' || hash === '#planner-results') {
@@ -2276,8 +2276,17 @@ export function moveTabIndicator(element) {
     });
 }
 
+/** The screen that is actually open. The highlight follows this, not a stale tab id. */
+function visibleShellTab() {
+    if (typeof document === 'undefined') return 'next-train';
+    if (document.getElementById('view-map')?.classList.contains('active')) return 'map';
+    if (document.getElementById('view-community')?.classList.contains('active')) return 'community';
+    if (document.getElementById('view-trip-planner')?.classList.contains('active')) return 'trip-planner';
+    return 'next-train';
+}
+
 /** Sync Home · Plan · Map · Community · Options on the bottom bar. */
-export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'next-train') {
+export function syncBottomNavActive(tab) {
     if (typeof document === 'undefined') return;
     const home = document.getElementById('bottom-nav-home');
     const plan = document.getElementById('bottom-nav-plan');
@@ -2286,9 +2295,15 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
     const options = document.getElementById('bottom-nav-options');
     if (!home && !plan && !map && !community && !options) return;
 
-    const mode = tab === 'community'
+    const swiping = document.getElementById('app-scroll')?.classList.contains('is-tab-swiping');
+    const seen = visibleShellTab();
+    const use = swiping && tab ? tab : (seen || tab || safeStorage.getItem('activeTab') || 'next-train');
+    if (!swiping && use && use !== 'options' && safeStorage.getItem('activeTab') !== use) {
+        safeStorage.setItem('activeTab', use);
+    }
+    const mode = use === 'community'
         ? 'community'
-        : (tab === 'map' ? 'map' : (tab === 'trip-planner' ? 'plan' : 'home'));
+        : (use === 'map' ? 'map' : (use === 'trip-planner' ? 'plan' : 'home'));
     const hubOpen = document.body.classList.contains('sidenav-open');
     const paint = (el, on) => {
         if (!el) return;
@@ -2521,6 +2536,17 @@ export function initTabIndicator() {
     }
     window.addEventListener('resize', updateIndicator);
     requestAnimationFrame(updateIndicator);
+    if (!window.__ntNavViewWatch && typeof MutationObserver !== 'undefined') {
+        window.__ntNavViewWatch = true;
+        const watch = () => {
+            if (document.getElementById('app-scroll')?.classList.contains('is-tab-swiping')) return;
+            syncBottomNavActive();
+        };
+        const mo = new MutationObserver(watch);
+        document.querySelectorAll('.view-section').forEach((el) => {
+            mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+        });
+    }
 }
 
 function swipeTabOrder() {
@@ -2605,15 +2631,8 @@ export function setupSwipeNavigation() {
         const cur = safeStorage.getItem('activeTab') || 'next-train';
         const safeCur = order.includes(cur) ? cur : 'next-train';
         const next = order[Math.max(0, order.indexOf(safeCur)) + direction];
-        const navId = {
-            'next-train': 'bottom-nav-home',
-            'trip-planner': 'bottom-nav-plan',
-            map: 'bottom-nav-map',
-            community: 'bottom-nav-community',
-        };
         const passed = Math.abs(dx) > width * 0.2;
-        document.getElementById(navId[safeCur])?.classList.toggle('is-active', !passed);
-        if (next) document.getElementById(navId[next])?.classList.toggle('is-active', passed);
+        syncBottomNavActive(passed && next ? next : safeCur);
     };
 
     contentArea.addEventListener('touchstart', (e) => {
@@ -2715,8 +2734,8 @@ export function setupSwipeNavigation() {
         const settle = () => {
             if (settled) return;
             settled = true;
-            clearSwipe();
             if (nextTab) switchTab(nextTab);
+            clearSwipe();
         };
         peer.addEventListener('transitionend', settle, { once: true });
         setTimeout(settle, 240);

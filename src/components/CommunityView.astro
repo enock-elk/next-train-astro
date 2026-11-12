@@ -276,10 +276,23 @@
     margin-top: -0.35rem;
   }
   .community-bubble-wrap {
+    position: relative;
     width: 66.666%;
     max-width: 66.666%;
     flex: 0 0 66.666%;
     min-width: 0;
+    padding-bottom: 0.15rem;
+  }
+  #view-community .community-bubble-wrap:has(.community-reaction-pills) {
+    padding-bottom: 1.45rem;
+  }
+  /* The keyboard must not reflow a bubble. The width is the feed's width
+     from before the keys opened. */
+  html.nt-keyboard .community-bubble-wrap {
+    width: var(--nt-bubble-lock, 66.666%);
+    max-width: var(--nt-bubble-lock, 66.666%);
+    flex-basis: var(--nt-bubble-lock, 66.666%);
+    flex-shrink: 0;
   }
   .community-bubble {
     position: relative;
@@ -288,6 +301,8 @@
     min-width: 0;
     box-sizing: border-box;
     overflow: hidden;
+    flex-shrink: 0;
+    height: auto;
   }
   .community-bubble-own {
     background: #d9fdd3;
@@ -457,10 +472,17 @@
   }
   .community-msg-receipt {
     display: inline-flex;
-    width: 0.85rem;
+    width: 1.05rem;
     height: 0.85rem;
     margin-left: 0.18rem;
     vertical-align: -0.15rem;
+  }
+  .community-msg-receipt.is-sent {
+    width: 1.15rem;
+    color: #667781;
+  }
+  .dark .community-bubble-own .community-msg-receipt.is-sent {
+    color: #8eb8b0;
   }
   .community-msg-receipt svg {
     width: 100%;
@@ -473,6 +495,27 @@
     margin-left: 0.35rem;
     position: relative;
     z-index: 1;
+  }
+  #view-community .community-reaction-pills {
+    position: absolute;
+    bottom: -0.2rem;
+    z-index: 2;
+    margin: 0;
+  }
+  #view-community .community-post-row.justify-start .community-reaction-pills {
+    left: 0;
+    right: auto;
+  }
+  #view-community .community-post-row.justify-end .community-reaction-pills {
+    right: 0;
+    left: auto;
+  }
+  /* The list slides down to close. The blue bar stays in front of that card. */
+  #community-reactions-modal {
+    z-index: 100;
+  }
+  html:has(#community-reactions-modal:not(.hidden)) #bottom-nav.bottom-nav-bar {
+    z-index: 160;
   }
   .community-reaction-pill {
     font-size: 0.7rem;

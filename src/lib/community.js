@@ -12,7 +12,7 @@
  */
 import { APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES } from './config.js';
 import { formatAccountDisplayName } from './display-name.js';
-import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel } from './utils.js';
+import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel, applyFittedLabels } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-saver.js';
 import { renderTextWithShareChips, shareChipHtml } from './share-chips.js';
@@ -1166,16 +1166,18 @@ function fitCommunityRouteLabels() {
             false
         );
     }
+    const items = [];
     document.querySelectorAll('#community-route-list [data-route-raw]').forEach((el) => {
         const name = el.getAttribute('data-route-raw') || '';
         if (!name) return;
-        applyFittedLabel(
+        items.push({
             el,
-            formatRouteDisplayName(name),
-            formatRouteDisplayName(expandJhbLabel(name)),
-            false
-        );
+            short: formatRouteDisplayName(name),
+            long: formatRouteDisplayName(expandJhbLabel(name)),
+            asHtml: false,
+        });
     });
+    applyFittedLabels(items);
 }
 
 export async function fetchPostReactions(routeId, postIds = null) {

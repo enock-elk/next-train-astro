@@ -309,6 +309,8 @@ export function paintHeaderDayLabel(opts = {}) {
     bindHeaderDayFit();
 }
 
+let headerDayFit = null;
+
 /** Fit #current-day to the Next Train title width. Keep the old subtitle face. */
 export function fitHeaderDayLabel() {
     if (typeof document === 'undefined') return;
@@ -321,6 +323,16 @@ export function fitHeaderDayLabel() {
     const minPx = 10;
     const titleW = title ? title.scrollWidth : 0;
     const avail = titleW > 8 ? titleW : (el.closest('.header-brand-block')?.clientWidth || 0);
+    // updateTime() lands here every second and the header ResizeObserver on
+    // every resize. The search below forces a layout per step, so skip it
+    // while the label, its rendered width (pack, font) and the title are
+    // where the last fit left them.
+    const last = headerDayFit;
+    if (last && last.el === el && last.sm === sm && last.avail === avail
+        && last.html === el.innerHTML && last.fontSize === el.style.fontSize
+        && last.width === el.scrollWidth) {
+        return;
+    }
     el.style.whiteSpace = 'nowrap';
     el.style.maxWidth = 'none';
     el.style.display = 'inline-block';
@@ -329,12 +341,14 @@ export function fitHeaderDayLabel() {
     el.style.color = '';
     if (avail < 16) {
         el.style.fontSize = `${basePx}px`;
+        headerDayFit = null;
         return;
     }
     let lo = minPx;
     let hi = maxPx;
     let best = minPx;
-    for (let i = 0; i < 18; i++) {
+    // Eight halvings of the 10–13px range settle within 0.012px of font size.
+    for (let i = 0; i < 8; i++) {
         const mid = (lo + hi) / 2;
         el.style.fontSize = `${mid}px`;
         if (el.scrollWidth <= avail + 0.75) {
@@ -345,6 +359,7 @@ export function fitHeaderDayLabel() {
         }
     }
     el.style.fontSize = `${Math.max(minPx, Math.min(best, maxPx))}px`;
+    headerDayFit = { el, sm, avail, html: el.innerHTML, fontSize: el.style.fontSize, width: el.scrollWidth };
 }
 
 function bindHeaderDayFit() {
@@ -362,6 +377,9 @@ function bindHeaderDayFit() {
     }
     if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(run).catch(() => {});
+    }
+    if (document.fonts && typeof document.fonts.addEventListener === 'function') {
+        document.fonts.addEventListener('loadingdone', run);
     }
 }
 

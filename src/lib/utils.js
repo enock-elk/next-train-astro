@@ -413,6 +413,8 @@ export function expandJhbLabel(text) {
     return String(text ?? '').replace(/\bJHB\b/g, 'Johannesburg');
 }
 
+const fittedLabels = new WeakMap();
+
 /**
  * Paint the long label only when it stays on one line inside `el`.
  * Otherwise keep the short label. Nowrap stays only when that short
@@ -422,6 +424,17 @@ export function applyFittedLabel(el, shortValue, longValue, asHtml = false) {
     if (!el) return;
     const short = shortValue == null ? '' : String(shortValue);
     const long = longValue == null ? short : String(longValue);
+    const read = () => (asHtml ? el.innerHTML : el.textContent);
+    // Every board refresh refits the same route labels, and a fit forces two
+    // to four layouts. Skip it while the text, the box and the rendered width
+    // (font, pack) are where the last fit left them.
+    const last = fittedLabels.get(el);
+    if (last && last.short === short && last.long === long && last.asHtml === asHtml
+        && el.style.whiteSpace === 'nowrap' && el.style.overflow === 'hidden' && last.out === read()
+        && last.width === el.clientWidth && last.scroll === el.scrollWidth) {
+        return;
+    }
+    fittedLabels.delete(el);
     const write = (value) => {
         if (asHtml) el.innerHTML = value;
         else el.textContent = value;
@@ -433,47 +446,113 @@ export function applyFittedLabel(el, shortValue, longValue, asHtml = false) {
         const display = window.getComputedStyle(el).display;
         if (display === 'inline') el.style.display = 'inline-block';
     }
-    const fits = () => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+    let width = 0;
+    let scroll = 0;
+    const fits = () => {
+        width = el.clientWidth;
+        scroll = el.scrollWidth;
+        return width > 0 && scroll <= width + 1;
+    };
     const release = () => {
         el.style.whiteSpace = '';
         el.style.overflow = '';
     };
-    if (!long || long === short || el.clientWidth <= 0) {
+    // Only a one-line fit with nothing longer left to try is kept. A short
+    // fallback must retry the long label: a narrower font or pack, or a box
+    // that was unmeasured, can let it fit without the box changing width.
+    const remember = () => {
+        fittedLabels.set(el, { short, long, asHtml, out: read(), width, scroll });
+    };
+    const onlyShort = !long || long === short;
+    if (onlyShort || el.clientWidth <= 0) {
         write(short);
         if (!fits()) release();
+        else if (onlyShort) remember();
         return;
     }
     write(long);
-    if (fits()) return;
+    if (fits()) {
+        remember();
+        return;
+    }
     write(short);
     if (!fits()) release();
+}
+
+/**
+ * applyFittedLabel for a whole list ({ el, short, long, asHtml }), with every
+ * read batched between writes. Per node it forced 2–4 layouts, so a route menu
+ * cost dozens of reflows on open. Only for nodes that each sit on their own
+ * row: a sibling's label must not change the width another is measured in.
+ */
+export function applyFittedLabels(items) {
+    if (!items.length) return;
+    const write = (it, value) => {
+        if (it.asHtml) it.el.innerHTML = value;
+        else it.el.textContent = value;
+    };
+    const fits = (el) => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+    const release = (el) => {
+        el.style.whiteSpace = '';
+        el.style.overflow = '';
+    };
+    items.forEach(({ el }) => {
+        el.style.whiteSpace = 'nowrap';
+        el.style.overflow = 'hidden';
+        el.style.maxWidth = '100%';
+    });
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+        const inline = items.filter(({ el }) => window.getComputedStyle(el).display === 'inline');
+        inline.forEach(({ el }) => { el.style.display = 'inline-block'; });
+    }
+    const tryLong = items.map((it) => !!it.long && it.long !== it.short && it.el.clientWidth > 0);
+    items.forEach((it, i) => write(it, tryLong[i] ? it.long : it.short));
+    const firstFits = items.map(({ el }) => fits(el));
+    const retryShort = [];
+    items.forEach((it, i) => {
+        if (firstFits[i]) return;
+        if (tryLong[i]) {
+            write(it, it.short);
+            retryShort.push(it);
+        } else {
+            release(it.el);
+        }
+    });
+    const shortFits = retryShort.map(({ el }) => fits(el));
+    retryShort.forEach((it, i) => {
+        if (!shortFits[i]) release(it.el);
+    });
 }
 
 /** Route-name nodes marked with data-route-raw. */
 export function fitRouteNameNodes(root) {
     if (!root || typeof root.querySelectorAll !== 'function') return;
+    const items = [];
     root.querySelectorAll('[data-route-raw]').forEach((el) => {
         const raw = el.getAttribute('data-route-raw') || '';
-        applyFittedLabel(
+        items.push({
             el,
-            formatRouteLabelHtml(raw),
-            formatRouteLabelHtml(expandJhbLabel(raw)),
-            true
-        );
+            short: formatRouteLabelHtml(raw),
+            long: formatRouteLabelHtml(expandJhbLabel(raw)),
+            asHtml: true,
+        });
     });
+    applyFittedLabels(items);
 }
 
 /** Plain-text nodes marked with data-jhb-short / data-jhb-long. */
 export function fitJhbNodes(root) {
     if (!root || typeof root.querySelectorAll !== 'function') return;
+    const items = [];
     root.querySelectorAll('[data-jhb-long]').forEach((el) => {
-        applyFittedLabel(
+        items.push({
             el,
-            el.getAttribute('data-jhb-short') || '',
-            el.getAttribute('data-jhb-long') || '',
-            false
-        );
+            short: el.getAttribute('data-jhb-short') || '',
+            long: el.getAttribute('data-jhb-long') || '',
+            asHtml: false,
+        });
     });
+    applyFittedLabels(items);
 }
 
 /** True for timetable clock cells (rejects notes like "Monte", dashes, blanks). */

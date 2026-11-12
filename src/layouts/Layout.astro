@@ -355,9 +355,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             return false;
           }
         }
-        function recoverAppViewport() {
+        function recoverAppViewport(keepEnv) {
           clearRecoverTimers();
-          cachedEnv = -1;
+          // A focus change cannot move the safe-area inset. Re-probing it
+          // appends and removes a body node (two mutations, two reflows) on
+          // every tap that moves focus.
+          if (keepEnv !== true) cachedEnv = -1;
           // Forget a toast-shrunk "full" height so apply() can re-expand.
           lastFullLayoutH = 0;
           lastLayoutH = 0;
@@ -395,7 +398,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           setTimeout(recoverAppViewport, 80);
         });
         document.addEventListener('focusin', apply, { passive: true });
-        document.addEventListener('focusout', function () { setTimeout(recoverAppViewport, 50); }, { passive: true });
+        document.addEventListener('focusout', function () { setTimeout(function () { recoverAppViewport(true); }, 50); }, { passive: true });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', onViewportPossiblyToasted, { passive: true });
           window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });

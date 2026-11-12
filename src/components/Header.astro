@@ -95,7 +95,7 @@ for (const [id, route] of Object.entries(ROUTES)) {
           if (avail <= 8) { el.style.fontSize = basePx + 'px'; }
           else {
             var lo = 10, hi = maxPx, best = 10;
-            for (var i = 0; i < 16; i++) {
+            for (var i = 0; i < 8; i++) {
               var mid = (lo + hi) / 2;
               el.style.fontSize = mid + 'px';
               if (el.scrollWidth <= avail + 0.75) { best = mid; lo = mid; }

@@ -68,6 +68,56 @@ const failures = [];
     applyFittedLabel(clipped, 'JHB West Line schedules', 'Johannesburg West Line schedules', false);
     assert(clipped.textContent === 'JHB West Line schedules', 'a short heading that cannot fit one line stays JHB');
     assert(clipped.style.whiteSpace === '', 'a short heading that cannot fit one line is allowed to wrap');
+    let writes = 0;
+    const repeat = {
+        clientWidth: 400,
+        scrollWidth: 0,
+        style: {},
+        _html: '',
+        widthOf: (value) => (value.includes('Johannesburg') ? 300 : 100),
+        set innerHTML(value) {
+            writes += 1;
+            this._html = value;
+            this.scrollWidth = this.widthOf(value);
+        },
+        get innerHTML() { return this._html; },
+    };
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    const fitted = writes;
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(writes === fitted, 'an unchanged route label is not refitted on the next board paint');
+    repeat.innerHTML = 'Pretoria';
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'Johannesburg <-> Randfontein', 'a label rewritten elsewhere is fitted again');
+    repeat.clientWidth = 200;
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'JHB' && repeat.style.whiteSpace === 'nowrap', 'a narrower box refits to the short label');
+    repeat.widthOf = (value) => (value.includes('Johannesburg') ? 180 : 60);
+    repeat.scrollWidth = repeat.widthOf(repeat.innerHTML);
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'Johannesburg <-> Randfontein', 'a short fallback tries the long label again after a narrower font');
+    repeat.widthOf = (value) => (value.includes('Johannesburg') ? 390 : 260);
+    repeat.scrollWidth = repeat.widthOf(repeat.innerHTML);
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'JHB' && repeat.style.whiteSpace === '', 'a label that grew (font swap) is measured again');
+    let unmeasuredWrites = 0;
+    const unmeasured = {
+        clientWidth: 0,
+        scrollWidth: 0,
+        style: {},
+        _text: '',
+        set textContent(value) {
+            unmeasuredWrites += 1;
+            this._text = value;
+            this.clientWidth = 200;
+            this.scrollWidth = value.includes('Johannesburg') ? 180 : 60;
+        },
+        get textContent() { return this._text; },
+    };
+    applyFittedLabel(unmeasured, 'JHB West Line', 'Johannesburg West Line', false);
+    assert(unmeasured.textContent === 'JHB West Line', 'an unmeasured label paints short first');
+    applyFittedLabel(unmeasured, 'JHB West Line', 'Johannesburg West Line', false);
+    assert(unmeasured.textContent === 'Johannesburg West Line' && unmeasuredWrites === 2, 'once measurable, the long label is tried again');
 }
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
@@ -984,6 +1034,17 @@ assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'versi
     const mapModal = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
     assert(mapModal.includes('<ZoomControls />') && mapModal.includes('id="map-container"'), 'the network map has desktop zoom controls');
     assert(!mapModal.includes('cursor-grab'), 'the map does not use a hand cursor before it is zoomed');
+}
+{
+    // INP: the clock tick and board refreshes must not force layouts when
+    // nothing on screen changed.
+    assert(layout.includes('function recoverAppViewport(keepEnv)') && layout.includes('if (keepEnv !== true) cachedEnv = -1'), 'focusout keeps the cached safe-area inset (INP)');
+    assert(layout.includes('setTimeout(function () { recoverAppViewport(true); }, 50)'), 'focusout recovers the viewport without re-probing the inset (INP)');
+    assert(logic.includes('let headerDayFit = null') && logic.includes('last.width === el.scrollWidth'), 'day label fit is skipped while nothing changed (INP)');
+    const dayFit = logic.match(/export function fitHeaderDayLabel\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+    assert(dayFit.includes('for (let i = 0; i < 8; i++)'), 'day label fit stays at 8 search steps (INP)');
+    const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+    assert(utilsSrc.includes('export function applyFittedLabels') && utilsSrc.includes('const fittedLabels = new WeakMap()'), 'label fits are batched and memoised (INP)');
 }
 if (failures.length) {
     console.error('verify-home-polish failed:');

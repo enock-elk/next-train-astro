@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.2': [
+        'Core Web Vitals, part two. A first-time visitor is no longer restarted a few seconds after the app loads: with no older copy of the app on the phone, the current killswitch is recorded as already applied. Returning phones, an interrupted NUKE and a newer killswitch still clean up and restart as before, and the black box logs "NUKE skipped on a first visit" when the skip happens. The critical Alerts auto-open now waits until the phone is idle and a second has passed since the last tap (at most eight extra seconds), so it no longer lands under a commuter\'s first taps. Shared Alerts links still open straight away. The deferred Firebase sign-in and start-up module steps are written up in docs/CWV-NEXT-STEPS.md, not shipped. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.1': [
         'Home page Core Web Vitals. A returning commuter\'s board no longer jumps on start-up: the bottom-bar padding and the compact header are set before the board draws, and the empty board cards already have the height of a departure card. There is less main-thread work between taps: the clock no longer re-measures the day label every second, route labels refit only when they change, and the advert watcher scans the page once per burst instead of five or more times. Advert gold hashes follow the new watcher. After the production deploy, press Validate fix on the Search Console Core Web Vitals report. No commuter What\'s New. forceShow stays false.',
     ],

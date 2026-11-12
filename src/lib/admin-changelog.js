@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.11': [
+        'A community message still stops at 4000 characters. Within 400 of that, the composer shows how many characters are left, in the same spot as the messages-left line. Over the cap, Post does not send, so a cut-off copy cannot become a second message. The Community label is gone. Who is here sits under the route name. The room header and the selected-message header are the same height. Your own selection is delete, copy, share. Someone else\'s is report, copy, share. The three-dot menu closes the reaction tray and keeps the message selected. Suggest reply stays on that menu. Guide this reply appears only after a draft, as a small button. Other people\'s bubbles start further left on a slightly smaller avatar. Feedback Hub uses the same wallpaper wash as Community. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.10': [
         'A community message is stored whole up to 4000 characters. The bubble folds at 764 characters, the same first window as an alert, and See more reveals another window each tap. A paste longer than 4000 stays in the box and is not sent. The community wallpaper is a little darker so the bubbles read. Alerts wallpaper is unchanged. Deploy the community worker and Firebase rules so the 4000 cap is what the server accepts. No commuter What\'s New. forceShow stays false.',
     ],

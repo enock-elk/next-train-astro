@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.4': [
+        'Community and Feedback Hub bubbles keep the flat corner at the top, beside the avatar. Own messages are flat at the top right. The Feedback Hub tail moved up with that corner. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.3': [
         'A community photo on its own fills the message, edge to edge, and a tap opens the same full-screen viewer as an alert, with download and close. It no longer opens the image host, so the address bar does not show supaimg or imagebb. Saving a picture from a host that blocks the page goes through the community worker at /media/file. That worker deploys from this push. The Play Store dialog that says Google Play is enabled is Play Console Automatic protection inside za.co.nexttrain.app, not a broken asset links file. The address bar staying hidden means the links are already verified. Turning Automatic protection off and shipping a new Android build is what stops that dialog. No commuter What\'s New. forceShow stays false.',
     ],

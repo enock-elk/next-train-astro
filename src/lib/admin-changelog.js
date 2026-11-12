@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.6': [
+        'The bottom bar highlight follows the screen that is open. Back from the map returns to the board. Community bubbles keep their width when the keyboard opens, and the last one sits above the composer. Sent messages use a double tick. Reactions sit on the outer edge, left for other people and right for your own. Pulling the reaction list closed slides it behind the blue bar. Suggest reply answers only the message you held, or the latest passenger message, and does not reply to the rest of the room. Sitemap lastmod regenerated for the current routes and stations. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.5': [
         'Grid Column Order paints the same timetable as the app. Hold a train column and drag it. Add or delete a train, clear one stop, or set the first station: the rest of that column follows the other trains. Monte Vista and Maitland stay on Western Cape sheets only. Save times writes that sheet to Firebase. The loading telemetry toast closes with Dev Mode. A long community draft scrolls inside the box, and the quote sits on the input rather than over Post. Operators get Suggest reply and Guide this reply on the community composer. A first visit that opens the map and taps Back lands on the welcome screen. A saved route still returns to that region page. Map gold hash updated for the Back target only. No commuter What\'s New. forceShow stays false.',
     ],

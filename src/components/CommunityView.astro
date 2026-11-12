@@ -80,7 +80,7 @@
             </div>
             <div id="community-room-meta" class="flex items-center justify-between gap-3 px-4 min-w-0">
                 <button type="button" id="community-presence" class="min-w-0 truncate text-left text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
-                <button type="button" id="community-room-about" class="shrink-0 text-right text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About this room">Not part of PRASA</button>
+                <button type="button" id="community-room-about" class="shrink-0 text-right text-[10px] font-bold leading-none text-gray-400 dark:text-gray-500 tracking-wide underline decoration-dotted underline-offset-2 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="Disclaimer">Disclaimer</button>
             </div>
             <h2 id="community-route-title" class="sr-only">Route feed</h2>
             <p id="community-typing" class="px-4 text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate"></p>
@@ -243,6 +243,11 @@
   }
   #view-community .community-route-row {
     z-index: 10;
+  }
+  #community-room-about {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
   }
   #community-route-dropdown.is-open {
     z-index: 40;

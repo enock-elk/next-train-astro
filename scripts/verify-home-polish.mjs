@@ -491,7 +491,7 @@ const communityView = readFileSync(new URL('../src/components/CommunityView.astr
 assert(communityView.includes('community-pane relative'), 'Community wallpaper is pinned to the pane');
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
-assert(communityView.includes('id="community-room-about"') && communityView.includes('>Not part of PRASA</button>'), 'the room disclaimer sits on the presence line');
+assert(communityView.includes('id="community-room-about"') && communityView.includes('>Disclaimer</button>') && communityView.includes('decoration-dotted'), 'the room disclaimer sits on the presence line');
 assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('id="community-room-about"'), 'who is here stays left of the disclaimer');
 assert(presence.includes('It is not part of PRASA or Metrorail'), 'the room note says Next Train is not part of PRASA');
 assert(!communityView.includes('>Community</p>'), 'the room does not repeat the Community tab name');

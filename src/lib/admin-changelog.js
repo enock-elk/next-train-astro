@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.12.10': [
+        'A community message is stored whole up to 4000 characters. The bubble folds at 764 characters, the same first window as an alert, and See more reveals another window each tap. A paste longer than 4000 stays in the box and is not sent. The community wallpaper is a little darker so the bubbles read. Alerts wallpaper is unchanged. Deploy the community worker and Firebase rules so the 4000 cap is what the server accepts. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.9': [
         'A community message over the limit is not cut off and saved. The whole text stays in the box, and the screen says nothing was sent. If a short copy was already saved, the rest stays in the box instead of going out as a second message. Passenger messages can be 364 characters and operator messages 1300, both 30 percent higher. Deploy the community worker and Firebase rules so the higher limits are what the server accepts. No commuter What\'s New. forceShow stays false.',
     ],

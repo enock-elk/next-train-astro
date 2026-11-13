@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "e2d8d592e875029f40fbb7ca17a3abf7f98e6f97",
+  "frozenAt": "be9c9c894ad92c2d912b4dedca243a3dc5568dea",
   "version": "V9_09.20.11",
   "note": "Gold snapshot: map pin labels say Pretoria North and Pretoria West. Rail geometry, station pins, MapView, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {

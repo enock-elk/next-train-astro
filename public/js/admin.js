@@ -2697,6 +2697,7 @@ const Admin = {
             'deploy-live-body',
             'cf-purge-body',
             'nuke-body',
+            'community-body',
         ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
         [
             'sched-override-chevron',
@@ -2705,6 +2706,7 @@ const Admin = {
             'deploy-live-chevron',
             'cf-purge-chevron',
             'nuke-chevron',
+            'community-chevron',
         ].forEach((id) => document.getElementById(id)?.classList.add('-rotate-90'));
     },
 
@@ -27898,7 +27900,7 @@ const Admin = {
         // Re-init if an older admin session left a panel without newer controls
         if (
             maintPanel.dataset.loaded === "true"
-            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn') || !document.getElementById('exp-features-header') || !document.getElementById('auth-providers-header'))
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn') || !document.getElementById('exp-features-header') || !document.getElementById('auth-providers-header') || !document.getElementById('community-header'))
         ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
@@ -28044,13 +28046,17 @@ const Admin = {
                 </div>
 
                 <!-- Community tab. On everywhere until this switch, a region, or a route is blocked. -->
-                <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm">
-                    <div class="px-3 py-3 space-y-3">
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="community-header" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-emerald-700 dark:text-emerald-300">${Admin.icon('message', 'w-4 h-4')}</span> Community
+                        </span>
+                        <svg id="community-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="community-body" class="hidden p-4 space-y-3">
+                        <p class="text-[10px] text-emerald-800/90 dark:text-emerald-300/90 leading-snug">On for commuters. Off hides the tab everywhere. Leave it on to block one region or one route. An admin session can still open it.</p>
                         <label class="flex items-center justify-between gap-3">
-                            <span>
-                                <span class="block text-sm font-bold text-emerald-950 dark:text-emerald-100">Community</span>
-                                <span class="block text-[10px] text-emerald-800/90 dark:text-emerald-300/90 leading-snug">On for commuters. Off hides the tab everywhere. Leave it on to block one region or one route. An admin session can still open it.</span>
-                            </span>
+                            <span class="text-sm font-bold text-emerald-950 dark:text-emerald-100">On for commuters</span>
                             <input type="checkbox" id="community-tab-switch" class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500" checked>
                         </label>
                         <p id="community-block-summary" class="text-[10px] font-bold text-emerald-800 dark:text-emerald-200">Nothing blocked</p>
@@ -28447,6 +28453,9 @@ const Admin = {
         const championsAdd = document.getElementById('champions-add');
         const championsSave = document.getElementById('champions-save');
         let championsDraft = [];
+        const communityHeader = document.getElementById('community-header');
+        const communityBody = document.getElementById('community-body');
+        const communityChevron = document.getElementById('community-chevron');
         const authProvidersHeader = document.getElementById('auth-providers-header');
         const authProvidersBody = document.getElementById('auth-providers-body');
         const authProvidersChevron = document.getElementById('auth-providers-chevron');
@@ -28630,6 +28639,13 @@ const Admin = {
                 authProvidersBody.classList.toggle('hidden');
                 if (authProvidersBody.classList.contains('hidden')) authProvidersChevron?.classList.add('-rotate-90');
                 else authProvidersChevron?.classList.remove('-rotate-90');
+            };
+        }
+        if (communityHeader && communityBody) {
+            communityHeader.onclick = () => {
+                communityBody.classList.toggle('hidden');
+                if (communityBody.classList.contains('hidden')) communityChevron?.classList.add('-rotate-90');
+                else communityChevron?.classList.remove('-rotate-90');
             };
         }
         const SCHED_DAY_TYPES_WC = [

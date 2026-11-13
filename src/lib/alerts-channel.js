@@ -7,7 +7,7 @@ import { fetchLinkPreview, hydrateLinkPreviews, linkPreviewMarkup } from './link
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
 import { isPublicPreviewUrl } from './link-preview.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { showCopyToast, showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { alertSharePath } from './share-links.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $account } from './account.js';
@@ -1490,21 +1490,26 @@ function alertShareUrl(notice, photo = 0) {
     return `${shareOrigin()}${alertSharePath(notice?._sourceKey || 'all', notice?.id || '', photo)}`;
 }
 
+function alertCaptionText(notice) {
+    if (!notice) return '';
+    try {
+        const laid = layoutAlertPost(notice);
+        const title = String(laid?.title || notice.title || '').trim();
+        const body = htmlToPlainSnippet(laid?.body || '', 800);
+        const text = [title, body].filter(Boolean).join('\n').trim();
+        if (text) return text.slice(0, 4000);
+    } catch { /* the raw message is still worth a copy */ }
+    return htmlToPlainSnippet(notice.message || notice.text || '', 800).slice(0, 4000);
+}
+
 function syncAlertCopyButton() {
     const btn = document.getElementById('alerts-select-copy');
     if (!btn) return;
-    const hasText = alertPlainText(selectedAlert).length > 0;
+    const hasText = alertCaptionText(selectedAlert).length > 0;
+    btn.classList.toggle('hidden', !hasText);
     btn.disabled = !hasText;
     btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
-    btn.classList.toggle('opacity-40', !hasText);
-    btn.classList.toggle('pointer-events-none', !hasText);
-}
-
-function alertPlainText(notice) {
-    const laid = layoutAlertPost(notice);
-    const title = String(laid?.title || '').trim();
-    const body = htmlToPlainSnippet(laid?.body || '', 80);
-    return [title, body].filter(Boolean).join('\n').trim();
+    btn.classList.remove('opacity-40', 'pointer-events-none');
 }
 
 function clearAlertSelection() {
@@ -1544,7 +1549,7 @@ async function copyText(text) {
     };
     try {
         await write();
-        showToast('Copied', 'success');
+        showCopyToast();
         return true;
     } catch {
         try {
@@ -1558,7 +1563,7 @@ async function copyText(text) {
             const ok = document.execCommand('copy');
             area.remove();
             if (ok) {
-                showToast('Copied', 'success');
+                showCopyToast();
                 return true;
             }
         } catch { /* the selection bar stays up */ }
@@ -1788,13 +1793,14 @@ function bindAlertsChannelOnce() {
         e.preventDefault();
         clearAlertSelection();
     });
-    document.getElementById('alerts-select-copy')?.addEventListener('click', (e) => {
+    document.getElementById('alerts-select-copy')?.addEventListener('click', async (e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (!selectedAlert) return;
-        let text = alertPlainText(selectedAlert);
-        if (!text || document.getElementById('alerts-select-copy')?.disabled) return;
-        if (text.length < 12) text = `${text}\n${alertShareUrl(selectedAlert)}`;
-        copyText(text);
+        const text = alertCaptionText(selectedAlert);
+        if (!text) return;
+        const ok = await copyText(text);
+        if (ok) clearAlertSelection();
     });
     document.getElementById('alerts-select-share')?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1916,10 +1922,11 @@ function bindAlertsChannelOnce() {
 
     root.addEventListener('click', (e) => {
         if (!longFired) return;
+        longFired = false;
+        if (e.target.closest?.('#alerts-select-bar, #alerts-select-menu, #alerts-channel-footer, #alerts-reaction-picker')) return;
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        longFired = false;
     }, true);
 
     root.addEventListener('click', (e) => {

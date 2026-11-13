@@ -23,7 +23,7 @@ import { stationChoiceLabel } from './feedback-diag-line.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { haltPanelText } from './reply-suggest.js';
-import { closeSmoothModal, openLightbox, openSmoothModal, showToast, triggerHaptic } from './ui.js';
+import { closeSmoothModal, openLightbox, openSmoothModal, showCopyToast, showToast, triggerHaptic } from './ui.js';
 import { bindKeyboardThread } from './keyboard-thread.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
@@ -1484,12 +1484,32 @@ function paintCommunityAdminMenu(post) {
     btn.classList.remove('hidden');
 }
 
+function communityCaptionText(post) {
+    return String(post?.body || '')
+        .slice(0, 8000)
+        .replace(/<img\b[^>]*>/gi, ' ')
+        .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function syncCommunityCopyButton(post) {
+    const btn = document.getElementById('community-select-copy');
+    if (!btn) return;
+    const hasText = communityCaptionText(post).length > 0;
+    btn.classList.toggle('hidden', !hasText);
+    btn.disabled = !hasText;
+    btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+}
+
 function syncCommunitySelectActions(post) {
     const acct = $account.get();
     const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const tombstone = isCommunityTombstone(post);
     document.getElementById('community-select-report')?.classList.toggle('hidden', !post || mine || tombstone);
     document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone);
+    syncCommunityCopyButton(post);
     paintCommunityAdminMenu(post);
 }
 
@@ -1821,6 +1841,40 @@ function revealCommunityRow(row, opts = {}) {
     bubble?.classList.add('nt-community-force-flash');
 }
 
+function jumpToQuotedCommunityPost(postId) {
+    const id = String(postId || '').trim();
+    const rows = [...document.querySelectorAll('#community-feed-list .community-post-row')];
+    const row = id ? rows.find((el) => el.getAttribute('data-post-id') === id) : null;
+    if (!row) {
+        showToast('That message is not in this chat.', 'info');
+        return;
+    }
+    const scroller = row.closest('.community-feed-scroll');
+    if (scroller) {
+        const generation = ++communityScrollGeneration;
+        communityScrollGuardUntil = Date.now() + 1800;
+        communityFeedPinned = false;
+        const place = () => {
+            const box = scroller.getBoundingClientRect();
+            const rowRect = row.getBoundingClientRect();
+            if (!box.height || !rowRect.height) return;
+            const delta = (rowRect.top + rowRect.height / 2) - (box.top + box.height / 2);
+            scroller.scrollTop = Math.max(0, scroller.scrollTop + delta);
+        };
+        place();
+        requestAnimationFrame(() => {
+            if (generation !== communityScrollGeneration) return;
+            place();
+        });
+    }
+    const bubble = row.querySelector('.community-bubble');
+    bubble?.classList.remove('nt-quote-flash');
+    if (bubble) void bubble.offsetWidth;
+    bubble?.classList.add('nt-quote-flash');
+    communityFlashPostId = id;
+    communityFocusHold = Date.now() + 1800;
+}
+
 function shareOrigin() {
     if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) return location.origin;
     return 'https://nexttrain.co.za';
@@ -1839,7 +1893,7 @@ async function copyPlainText(text) {
             navigator.clipboard.writeText(value),
             new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 1500); }),
         ]);
-        showToast('Copied', 'success');
+        showCopyToast();
         return true;
     } catch {
         try {
@@ -1853,7 +1907,7 @@ async function copyPlainText(text) {
             const ok = document.execCommand('copy');
             area.remove();
             if (ok) {
-                showToast('Copied', 'success');
+                showCopyToast();
                 return true;
             }
         } catch { /* leave the selection bar up */ }
@@ -1881,6 +1935,7 @@ function clearCommunitySelection() {
     document.getElementById('community-select-report')?.classList.add('hidden');
     document.getElementById('community-select-delete')?.classList.add('hidden');
     document.getElementById('community-select-menu-btn')?.classList.add('hidden');
+    syncCommunityCopyButton(null);
     closeReactionSheet();
 }
 
@@ -2197,6 +2252,7 @@ function hintPublicPoints(uid, points) {
 function pinCommunityFeedToLatest() {
     const scroller = document.querySelector('#view-community .community-feed-scroll');
     if (!scroller) return;
+    if (Date.now() < communityScrollGuardUntil) return;
     const generation = ++communityScrollGeneration;
     communityScrollGuardUntil = Date.now() + 450;
     const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
@@ -2346,10 +2402,10 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         ? nameColorFor(authorColorKey(replyTo.uid, quoteShown, replyTo.postId))
         : nameColor;
     const quoteHtml = replyTo
-        ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${quoteColor}">
+        ? `<button type="button" class="community-quote-jump ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'}" style="border-left-color:${quoteColor}" data-quote-post="${escapeHTML(String(replyTo.postId || ''))}">
              <p class="text-[11px] font-bold truncate" style="color:${quoteColor}">${escapeHTML(quoteShown || 'Passenger')}</p>
              <p class="text-[11px] opacity-80 truncate">${escapeHTML(String(replyTo.body || '').slice(0, 100))}</p>
-           </div>`
+           </button>`
         : '';
 
     const avatar = isOwn
@@ -2492,7 +2548,7 @@ function wireCommunityChatGestures(listEl) {
         longTimer = null;
     };
 
-    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, [data-community-see-more]');
+    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, .community-quote-jump, [data-community-see-more]');
 
     listEl.addEventListener('touchstart', (e) => {
         if (communityInlineControl(e.target)) return;
@@ -3747,17 +3803,13 @@ export function bindCommunityUi() {
     });
     document.getElementById('community-select-copy')?.addEventListener('click', async (e) => {
         e.preventDefault();
+        e.stopPropagation();
         const post = selectedCommunity?.post;
         if (!post) return;
-        const link = communityShareUrl(selectedCommunity.routeId, post.postId);
-        let text = String(post.body || '').slice(0, 8000)
-            .replace(/<img\b[^>]*>/gi, ' ')
-            .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        if (text.length < 12) text = text ? `${text}\n${link}` : link;
-        copyPlainText(text);
+        const text = communityCaptionText(post);
+        if (!text) return;
+        const ok = await copyPlainText(text);
+        if (ok) clearCommunitySelection();
     });
     document.getElementById('community-select-share')?.addEventListener('click', async (e) => {
         e.preventDefault();
@@ -3992,6 +4044,14 @@ export function bindCommunityUi() {
             e.preventDefault();
             e.stopPropagation();
             expandCommunitySeeMore(seeMore);
+            return;
+        }
+
+        const quoteJump = t.closest?.('[data-quote-post]');
+        if (quoteJump) {
+            e.preventDefault();
+            e.stopPropagation();
+            jumpToQuotedCommunityPost(quoteJump.getAttribute('data-quote-post'));
             return;
         }
 

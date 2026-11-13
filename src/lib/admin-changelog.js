@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.4': [
+        'Copy on an alert, a community message, and a Feedback Hub message is hidden when there is no caption. When there is text, Copy copies it, says Copied, and clears the highlight. Tapping a quoted community message scrolls to that message and flashes it. Community in System Controls opens collapsed, the same as the other sections. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.3': [
         'A device back press clears a highlighted community message, and a highlighted Feedback Hub message, before it leaves the room. A community message stores the closest station, and operators see it on the name, such as Asyria M - Pretoria (Auto). Commuter Feedback writes the route and that station as JHB ↔ Naledi | Pretoria (Auto), on the person and on the version card. The feedback alias follows the name they show on Community. Joined is the earlier of the first anonymous visit and the account, the account date is kept separately, and the older user id stays on the phone. No commuter What\'s New. forceShow stays false.',
     ],

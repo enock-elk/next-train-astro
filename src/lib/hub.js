@@ -55,7 +55,7 @@ import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref, linkedPlainHtml } from './rich-text.js';
 import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import {
-    showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
+    showCopyToast, showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
 import { whenIdleForAutoNotices } from './session-stability.js';
@@ -1897,6 +1897,7 @@ function clearInboxSelection() {
     bar?.classList.add('hidden');
     bar?.classList.remove('flex');
     document.getElementById('inbox-reaction-tray')?.classList.add('hidden');
+    syncInboxCopyButton(null);
 }
 
 if (typeof window !== 'undefined') {
@@ -1913,14 +1914,47 @@ function selectedInboxEntry(host) {
     return list.find((m) => String(m.id) === String(inboxSelectedId)) || null;
 }
 
+function syncInboxCopyButton(entry) {
+    const btn = document.getElementById('messages-select-copy');
+    if (!btn) return;
+    const hasText = inboxPlainText(entry).length > 0;
+    btn.classList.toggle('hidden', !hasText);
+    btn.disabled = !hasText;
+    btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+}
+
 async function copyInboxSelection(host) {
     const text = inboxPlainText(selectedInboxEntry(host));
-    if (!text) return;
+    if (!text) return false;
+    const write = async () => {
+        if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+        await Promise.race([
+            navigator.clipboard.writeText(text),
+            new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 1500); }),
+        ]);
+    };
     try {
-        await navigator.clipboard.writeText(text);
-        if (typeof showToast === 'function') showToast('Copied', 'success', 1600);
+        await write();
+        showCopyToast();
+        return true;
     } catch {
+        try {
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand('copy');
+            area.remove();
+            if (ok) {
+                showCopyToast();
+                return true;
+            }
+        } catch { /* the highlight stays so they can try again */ }
         if (typeof showToast === 'function') showToast('Could not copy.', 'error');
+        return false;
     }
 }
 
@@ -2137,6 +2171,7 @@ function selectInboxMessage(row, point) {
         btn.classList.toggle('ring-white/40', key && key === mineKey);
     });
     placeInboxReactionTray(point);
+    syncInboxCopyButton(entry);
     triggerHaptic();
 }
 
@@ -3424,9 +3459,13 @@ export function initHub() {
         e.preventDefault();
         clearInboxSelection();
     });
-    document.getElementById('messages-select-copy')?.addEventListener('click', (e) => {
+    document.getElementById('messages-select-copy')?.addEventListener('click', async (e) => {
         e.preventDefault();
-        copyInboxSelection(document.getElementById('messages-thread-list'));
+        e.stopPropagation();
+        const host = document.getElementById('messages-thread-list');
+        if (!inboxPlainText(selectedInboxEntry(host))) return;
+        const ok = await copyInboxSelection(host);
+        if (ok) clearInboxSelection();
     });
     document.getElementById('messages-select-share')?.addEventListener('click', (e) => {
         e.preventDefault();

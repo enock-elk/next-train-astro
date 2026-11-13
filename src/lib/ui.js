@@ -922,7 +922,7 @@ function toastAllowsShow(message, type, options = {}) {
         ? Number(options.cooldownMs)
         : (TOAST_COOLDOWN_MS[type] || TOAST_COOLDOWN_MS.info);
     const lastSame = toastLastByKey.get(key) || 0;
-    if (lastSame && now - lastSame < cooldown) return false;
+    if (!options.refresh && lastSame && now - lastSame < cooldown) return false;
     if (!options.force && lastToastAt && now - lastToastAt < TOAST_GLOBAL_GAP_MS) return false;
     while (toastShownAt.length && now - toastShownAt[0] > TOAST_WINDOW_MS) toastShownAt.shift();
     if (!options.force && toastShownAt.length >= TOAST_MAX_PER_WINDOW) return false;
@@ -950,7 +950,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     const holdMs = toastHoldMs(message, duration, { persist, untilDismiss });
 
     // Debounce spamming. Ignore if the exact same message is already visible.
-    if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
+    if (!options.refresh && toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
         return;
     }
     if (!toastAllowsShow(message, type, options)) return;
@@ -1097,6 +1097,11 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (safeDuration > 0) {
         toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration);
     }
+}
+
+/** Short "Copied" confirmation. Shows again if the same line is already up. */
+export function showCopyToast() {
+    showToast('Copied', 'success', 2500, '', { force: true, refresh: true });
 }
 
 /** Hide the toast only when it is still showing this message, so a later toast stays. */

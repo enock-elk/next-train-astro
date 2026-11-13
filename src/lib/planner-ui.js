@@ -3606,15 +3606,13 @@ export const PlannerRenderer = {
             }
 
             const changeLabel = plannerChangeLabel(transferCount);
-            const waitMins = plannerLongestWaitMins(opt);
-            const waitBit = waitMins ? ` · ${escapeHTML(PlannerRenderer.formatDuration(waitMins))} wait` : '';
             if (opt.dayLabel) label = ` · ${escapeHTML(compactPlannerDayLabel(opt.dayLabel, opt))}`;
             else if (midnightRollover) label = ' · Tomorrow';
             const clockLine = `${plannerClock24(opt.depTime)} → ${plannerClock24(opt.arrTime)}`;
-            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${waitBit}${label}`;
+            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${label}`;
             const isSelected = (idx === selectedIndex);
             if (isSelected) {
-                selectedText = `<span class="block truncate">${clockLine}</span><span class="block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${detailLine}</span>`;
+                selectedText = `<span class="block truncate">${clockLine}</span><span class="block truncate text-right text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${detailLine}</span>`;
             }
             const rowTone = isSelected
                 ? 'bg-blue-600 text-white hover:bg-blue-700 border-transparent'
@@ -3626,7 +3624,7 @@ export const PlannerRenderer = {
             return `
                 <li onclick="if(typeof window._selectCustomTrip === 'function') window._selectCustomTrip(${idx})" class="px-3.5 py-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm font-medium transition-colors ${rowTone}">
                     <span class="block font-bold tabular-nums">${clockLine}</span>
-                    <span class="block text-[11px] font-semibold mt-0.5 ${detailTone}">${detailLine}</span>
+                    <span class="block text-right text-[11px] font-semibold mt-0.5 ${detailTone}">${detailLine}</span>
                 </li>
             `;
         }).join('');
@@ -3644,7 +3642,7 @@ export const PlannerRenderer = {
                 </style>
                 <label class="text-[9px] uppercase font-black text-gray-400 mb-1.5 block tracking-widest pl-1">Departure Time</label>
                 <div onclick="this.classList.remove('planner-gentle-pulse'); if(typeof window._toggleCustomTimeDropdown === 'function') window._toggleCustomTimeDropdown(event)" class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg p-3 focus:outline-none font-bold shadow-sm cursor-pointer flex justify-between items-center transition-colors hover:border-blue-400 group planner-gentle-pulse">
-                    <span id="custom-time-display" class="min-w-0 pr-2 leading-tight">${selectedText}</span>
+                    <span id="custom-time-display" class="block min-w-0 flex-1 pr-2 leading-tight">${selectedText}</span>
                     <svg class="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0 transform transition-transform" id="custom-time-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
                 <ul id="custom-time-list" class="absolute z-[200] w-full left-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-64 overflow-y-auto hidden mt-1 custom-scrollbar flex flex-col text-left">
@@ -5387,30 +5385,6 @@ function plannerTripDurationLabel(step) {
     if (!Number.isFinite(mins)) return '';
     if (mins < 0) mins += 1440;
     return PlannerRenderer.formatDuration(mins);
-}
-
-/** Longest changeover. Short connections stay off the row. */
-function plannerLongestWaitMins(step) {
-    if (!step) return 0;
-    let max = 0;
-    const consider = (arr, dep) => {
-        if (!arr || !dep) return;
-        let wait = Math.floor((timeToSeconds(dep) - timeToSeconds(arr)) / 60);
-        if (!Number.isFinite(wait)) return;
-        if (wait < 0) wait += 1440;
-        if (wait > max) max = wait;
-    };
-    if (step.type === 'TRANSFER') consider(step.leg1?.arrTime, step.leg2?.depTime);
-    if (step.type === 'DOUBLE_TRANSFER') {
-        consider(step.leg1?.arrTime, step.leg2?.depTime);
-        consider(step.leg2?.arrTime, step.leg3?.depTime);
-    }
-    if (step.type === 'MULTI_TRANSFER' && Array.isArray(step.legs)) {
-        for (let i = 0; i < step.legs.length - 1; i++) {
-            consider(step.legs[i]?.arrTime, step.legs[i + 1]?.depTime);
-        }
-    }
-    return max >= 20 ? max : 0;
 }
 
 function plannerDepartureMenuOpen() {

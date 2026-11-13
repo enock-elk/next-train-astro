@@ -199,7 +199,15 @@ function anyFixedModalOpen() {
 }
 
 /** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
+function hideCommunityReactionTray() {
+    const tray = document.getElementById('community-reaction-sheet');
+    if (!tray) return;
+    tray.classList.add('hidden');
+    tray.style.zIndex = '';
+}
+
 function hideFixedModal(modalId) {
+    if (modalId === 'community-reactions-modal') hideCommunityReactionTray();
     const modal = document.getElementById(modalId);
     if (!modal) return;
     const inner = modal.firstElementChild;
@@ -295,6 +303,8 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     // Ensure cinematic scrim is released when ANY modal closes
     if (typeof toggleDropdownScrim === 'function') toggleDropdownScrim();
     
+    if (modalId === 'community-reactions-modal') hideCommunityReactionTray();
+
     const modal = document.getElementById(modalId);
     if (modal) {
         const inner = modal.firstElementChild;

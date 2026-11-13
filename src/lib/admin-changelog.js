@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.2': [
+        'Sending a community reply clears the quote above the box as soon as the message is staged, and puts the quote back if the send fails. A tap outside the reaction tray closes it. A tap on the who-reacted list keeps that list and closes the tray, and closing the list closes the tray too. Planner departure options keep the times on the left and the length and changes on the right, without the wait. The alerts bell starts as the idle disc, so it does not flash red before notices load. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.1': [
         'Community Monitor can mark a message read or unread, asks before Hide, and replies from the thread with Suggest, Guide, and Post. Opening a room scrolls to the new messages. The thread uses the community wallpaper. A reaction clears the alert selection and the selection header. A community bubble keeps its width when the keyboard opens. The black box keeps a cache probe message, a GA4 error, and how fast the board painted, separate from the config tail. Config reads wait five minutes on the same region unless the load is forced, and the killswitch is fetched once a minute. A GA4 error is not cached for two minutes. No commuter What\'s New. forceShow stays false.',
     ],

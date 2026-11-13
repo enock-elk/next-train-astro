@@ -403,18 +403,31 @@ function setReplyDraft(post, routeId) {
         displayName: post.displayName || 'Passenger',
         body: String(post.body || (communityImageUrls(post).length ? 'Photo' : '')).slice(0, 120),
     };
+    paintReplyBar();
+    document.getElementById('community-composer')?.focus();
+}
+
+function paintReplyBar() {
     const bar = document.getElementById('community-reply-bar');
+    if (!replyDraft) {
+        bar?.classList.add('hidden');
+        return;
+    }
     const nameEl = document.getElementById('community-reply-bar-name');
     const snipEl = document.getElementById('community-reply-bar-snippet');
     if (nameEl) nameEl.textContent = replyDraft.displayName;
     if (snipEl) snipEl.textContent = replyDraft.body;
     bar?.classList.remove('hidden');
-    document.getElementById('community-composer')?.focus();
 }
 
 function clearReplyDraft() {
     replyDraft = null;
-    document.getElementById('community-reply-bar')?.classList.add('hidden');
+    paintReplyBar();
+}
+
+function restoreReplyDraft(saved) {
+    replyDraft = saved || null;
+    paintReplyBar();
 }
 
 function findCachedPost(postId) {
@@ -3553,6 +3566,8 @@ async function handlePostSubmit() {
     if (btn) btn.disabled = true;
 
     const draft = body;
+    const savedQuote = replyDraft;
+    let quoteCleared = false;
     let stagedId = '';
     const result = await submitCommunityPost(body, routeId, {
         onStage(post) {
@@ -3562,6 +3577,8 @@ async function handlePostSubmit() {
                 composer.style.height = '';
             }
             rememberComposerDraft('');
+            clearReplyDraft();
+            quoteCleared = true;
             upsertOutgoingPost(post);
         },
     });
@@ -3574,6 +3591,7 @@ async function handlePostSubmit() {
             fitCommunityComposer(composer);
             rememberComposerDraft(draft);
         }
+        if (quoteCleared && savedQuote && !replyDraft) restoreReplyDraft(savedQuote);
         if (errEl) errEl.textContent = result.needsAuth ? '' : (result.message || '');
         if (result.retryAfterMs) {
             paintCommunityWait(result);
@@ -3603,6 +3621,7 @@ async function handlePostSubmit() {
             fitCommunityComposer(composer);
             rememberComposerDraft(draft);
         }
+        if (quoteCleared && savedQuote && !replyDraft) restoreReplyDraft(savedQuote);
         if (errEl) errEl.textContent = communityTooLongMessage();
         paintCommunityCharHint();
         if (btn) btn.disabled = false;
@@ -3922,7 +3941,14 @@ export function bindCommunityUi() {
         const menuOpen = !!(menu && !menu.classList.contains('hidden'));
         const selecting = !!(bar && !bar.classList.contains('hidden'));
         if (!trayOpen && !menuOpen && !selecting) return;
-        if (e.target.closest?.('#community-reaction-sheet, #community-reactions-modal, #community-select-bar, #community-select-menu, #community-delete-modal')) return;
+        if (e.target.closest?.('#community-reaction-sheet')) return;
+        const reactionsModal = document.getElementById('community-reactions-modal');
+        const inReactionsModal = !!(reactionsModal && !reactionsModal.classList.contains('hidden') && e.target.closest?.('#community-reactions-modal'));
+        if (inReactionsModal) {
+            if (trayOpen) closeReactionSheet();
+            return;
+        }
+        if (e.target.closest?.('#community-select-bar, #community-select-menu, #community-delete-modal')) return;
         closeReactionSheet();
         menu?.classList.add('hidden');
         clearCommunitySelection();

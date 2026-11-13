@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.7': [
+        'Live Telemetry 7-day, 30-day, and all-time cards said ERR because Google rejected a users-only date range. Those three now ask for a daily breakdown and use Google\'s deduplicated total. Publish the telemetry worker for the cards to fill in. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.6': [
         'Live Telemetry was sitting on Wait because the worker held the whole reply until every Google report finished, and a failed reply still said Wait with Loading Graph. Each report now stops after a few seconds, a finished reply is kept for two minutes, and a failed load says ERR instead of Wait. Station lists say PRETORIA WEST and PRETORIA NORTH, in capitals like the other stops. No commuter What\'s New. forceShow stays false.',
     ],

@@ -100,6 +100,7 @@ ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4
 ok(workerJs.includes('AbortSignal.timeout(6000)'), 'a slow GA4 report cannot hold Live Telemetry');
 ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
 ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
+ok(workerJs.includes('metricAggregations: ["TOTAL"]'), '7-day, 30-day, and all-time read the deduplicated total');
 ok(!workerJs.includes('int64Value'), 'the minutesAgo numeric filter is gone');
 ok(readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8').includes('telemetry-ga-detail'), 'Live Telemetry shows the GA4 error');
 ok(readFileSync(join(ROOT, 'src/components/HubModals.astro'), 'utf8').includes('id="telemetry-ga-detail"'), 'telemetry panel has a GA4 error line');

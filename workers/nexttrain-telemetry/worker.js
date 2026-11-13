@@ -17,6 +17,9 @@
  *        GA4 query no longer blanks the other tiles.
  * V1.14: Each Google and Sentry call gives up after a few seconds, so one
  *        slow report cannot hold the whole Live Telemetry response.
+ * V1.15: 7-day, 28-day, and all-time totals ask for a date breakdown and
+ *        read Google's deduplicated total. A bare activeUsers range was
+ *        rejected as an incompatible report.
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
@@ -492,9 +495,9 @@ export default {
                                 metrics: [{ name: "activeUsers" }, { name: "sessions" }],
                             },
                         },
-                        { name: 'wau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
-                        { name: 'mau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
-                        { name: 'all', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'wau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], metricAggregations: ["TOTAL"] } },
+                        { name: 'mau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], metricAggregations: ["TOTAL"] } },
+                        { name: 'all', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], metricAggregations: ["TOTAL"] } },
                         {
                             name: 'trend',
                             url: `${gaProperty}:runReport`,
@@ -531,7 +534,9 @@ export default {
                     const gaByName = Object.fromEntries(gaParts.map((part) => [part.name, part]));
                     const metricAt = (part, index = 0) => {
                         if (!part?.ok) return 'ERR';
-                        const n = parseInt(part.json?.rows?.[0]?.metricValues?.[index]?.value, 10);
+                        const total = part.json?.totals?.[0]?.metricValues?.[index]?.value;
+                        const raw = total != null ? total : part.json?.rows?.[0]?.metricValues?.[index]?.value;
+                        const n = parseInt(raw, 10);
                         return String(Number.isFinite(n) ? n : 0);
                     };
                     const failures = gaParts.filter((part) => !part.ok).map((part) => `${part.name}: ${part.error}`);

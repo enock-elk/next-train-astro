@@ -74,8 +74,7 @@ export const GITHUB_SCHEDULE_CDN = "https://cdn.jsdelivr.net/gh/enock-elk/next-t
 /**
  * Cache worker on our own zone. Campus networks often drop *.workers.dev
  * while nexttrain.co.za, Firebase, and jsDelivr still answer. The hostname
- * is unused until a proxied DNS record routes it at the existing
- * nexttrain-cache worker. The app skips it quickly until then.
+ * is a custom domain on the nexttrain-cache worker. workers.dev stays the fallback.
  */
 export const CACHE_EDGE_URL = 'https://cache.nexttrain.co.za/';
 /** Same cache worker on the public workers.dev host. Fallback only. */

@@ -97,6 +97,7 @@ ok(intraView.counts[37] === null, 'hours after latest available stay unplotted (
 
 ok(!workerJs.includes('lagBuffer'), 'worker no longer applies a 3h lagBuffer');
 ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4 bucket');
+ok(workerJs.includes('AbortSignal.timeout(6000)'), 'a slow GA4 report cannot hold Live Telemetry');
 ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
 ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
 ok(!workerJs.includes('int64Value'), 'the minutesAgo numeric filter is gone');

@@ -3104,7 +3104,7 @@ export const PlannerRenderer = {
         if (!stationName) return "";
         const cleaned = String(stationName).replace(/ STATION/gi, '').trim();
         const named = commuterStationName(cleaned);
-        if (named !== cleaned) return named;
+        if (named !== cleaned || named === 'PRETORIA NORTH' || named === 'PRETORIA WEST' || named === 'Waltloo') return named;
         return cleaned.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
     },
 

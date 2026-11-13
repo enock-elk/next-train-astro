@@ -1676,8 +1676,8 @@
             function commuterMapStationName(raw) {
                 const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
                 const key = cleaned.toUpperCase();
-                if (key === 'PRETORIA-N' || key === 'PRETORIA N' || key === 'PRETORIA NORTH') return 'Pretoria North';
-                if (key === 'PRETORIA WES' || key === 'PRETORIA WEST') return 'Pretoria West';
+                if (key === 'PRETORIA-N' || key === 'PRETORIA N' || key === 'PRETORIA NORTH') return 'PRETORIA NORTH';
+                if (key === 'PRETORIA WES' || key === 'PRETORIA WEST') return 'PRETORIA WEST';
                 if (key === 'WALTOO' || key === 'WALTLOO') return 'Waltloo';
                 return cleaned;
             }

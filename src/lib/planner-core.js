@@ -1297,7 +1297,7 @@ function titleCaseStation(s) {
     if (!s) return '';
     const cleaned = String(s).replace(/ STATION/gi, '').trim();
     const named = commuterStationName(cleaned);
-    if (named !== cleaned) return named;
+    if (named !== cleaned || named === 'PRETORIA NORTH' || named === 'PRETORIA WEST' || named === 'Waltloo') return named;
     return cleaned.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 }
 

@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "be9c9c894ad92c2d912b4dedca243a3dc5568dea",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: map pin labels say Pretoria North and Pretoria West. Rail geometry, station pins, MapView, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: map pin labels say PRETORIA NORTH and PRETORIA WEST. Rail geometry, station pins, MapView, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "4baba3b7d507f1c3069f26126ddcd931fd94a5425edfb84ce42985a78741ba99"
     },
     "public/js/map-app.js": {
-      "md5": "5f377f0cbbdf4c0b0d0495feea2daf94",
-      "sha256": "58b332f252f0b6f6e3fe39a39ef0cf7045ed534d97e5811310260073b131c667"
+      "md5": "30ffd78f0f4c107576fb3bc3257e0538",
+      "sha256": "4b999af4d1ea3fea1d93b4259586987daadd5dbe2af554d23dbc0337941d03c1"
     },
     "src/pages/map.astro": {
       "md5": "97fc25e4b1d8bf7aa32e8a2234113ce5",

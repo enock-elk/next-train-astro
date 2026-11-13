@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.6': [
+        'Live Telemetry was sitting on Wait because the worker held the whole reply until every Google report finished, and a failed reply still said Wait with Loading Graph. Each report now stops after a few seconds, a finished reply is kept for two minutes, and a failed load says ERR instead of Wait. Station lists say PRETORIA WEST and PRETORIA NORTH, in capitals like the other stops. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.5': [
         'Live Telemetry showed ERR on every GA4 card because one rejected Google query threw away the rest. The last 5 minutes card now asks for a minute range, a failed query leaves the other cards as numbers, and the error is written under the cards. Publish the telemetry worker for that to reach Live Telemetry. Station lists, the timetable, the planner, and the map say Pretoria North and Pretoria West instead of Pretoria-N and Pretoria Wes. No commuter What\'s New. forceShow stays false.',
     ],

@@ -795,7 +795,7 @@ export function openScheduleModal(destination, dayOverride = null) {
         if (!str) return '';
         const cleaned = String(str).replace(/ STATION/gi, '').trim();
         const named = commuterStationName(cleaned);
-        if (named !== cleaned) return named;
+        if (named !== cleaned || named === 'PRETORIA NORTH' || named === 'PRETORIA WEST' || named === 'Waltloo') return named;
         return cleaned.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
     };
 

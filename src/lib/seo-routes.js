@@ -18,10 +18,17 @@ export function seoIntroParagraphs(text) {
     return parts.map((part) => part.trim()).filter(Boolean);
 }
 
-/** Sheet names that are not the shared commuter labels (Johannesburg stays a full word). */
+/** Web pages stay sentence case. The in-app list uses board capitals. */
 const STATION_DISPLAY_ALIASES = {
     JOHANNESBURG: 'Johannesburg',
     'JOHANNESBURG PARK': 'Johannesburg',
+    'PRETORIA-N': 'Pretoria North',
+    'PRETORIA N': 'Pretoria North',
+    'PRETORIA NORTH': 'Pretoria North',
+    'PRETORIA WES': 'Pretoria West',
+    'PRETORIA WEST': 'Pretoria West',
+    WALTOO: 'Waltloo',
+    WALTLOO: 'Waltloo',
 };
 
 /**
@@ -37,10 +44,10 @@ export function stationLabel(raw, options = {}) {
         cleaned = cleaned.replace(/\s+YARD$/i, '');
     }
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    const pretty = commuterStationName(cleaned);
-    if (pretty !== cleaned) return pretty;
     const key = cleaned.toUpperCase();
     if (STATION_DISPLAY_ALIASES[key]) return STATION_DISPLAY_ALIASES[key];
+    const pretty = commuterStationName(cleaned);
+    if (pretty !== cleaned) return pretty;
     if (cleaned && cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) {
         return cleaned
             .toLowerCase()

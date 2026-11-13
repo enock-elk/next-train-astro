@@ -826,11 +826,11 @@ export function resolveStationAlias(raw) {
  * Other names stay as stored (board caps). SEO title case is stationLabel.
  */
 const COMMUTER_STATION_LABELS = Object.freeze({
-    'PRETORIA-N': 'Pretoria North',
-    'PRETORIA N': 'Pretoria North',
-    'PRETORIA NORTH': 'Pretoria North',
-    'PRETORIA WES': 'Pretoria West',
-    'PRETORIA WEST': 'Pretoria West',
+    'PRETORIA-N': 'PRETORIA NORTH',
+    'PRETORIA N': 'PRETORIA NORTH',
+    'PRETORIA NORTH': 'PRETORIA NORTH',
+    'PRETORIA WES': 'PRETORIA WEST',
+    'PRETORIA WEST': 'PRETORIA WEST',
     WALTOO: 'Waltloo',
     WALTLOO: 'Waltloo',
 });
@@ -841,7 +841,7 @@ export function commuterStationName(raw) {
     return COMMUTER_STATION_LABELS[cleaned.toUpperCase()] || cleaned;
 }
 
-/** Visible station text. Johannesburg recents stay in caps. North and West do not. */
+/** Visible station text. Same capitals as the rest of the board list. */
 export function plannerStationDisplayName(canonical) {
     return commuterStationName(canonical);
 }

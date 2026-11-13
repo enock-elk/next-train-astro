@@ -1430,7 +1430,7 @@ export const Renderer = {
         const upperName = name.toUpperCase();
         if (upperName === 'DURBAN YARD') return 'Durban';
         const pretty = commuterStationName(name);
-        if (pretty !== name) return pretty;
+        if (pretty !== name || pretty === 'PRETORIA NORTH' || pretty === 'PRETORIA WEST' || pretty === 'Waltloo') return pretty;
         return Renderer._toTitleCase(name);
     },
 

@@ -15,6 +15,8 @@
  *        status is separate from Firebase app diagnostics.
  * V1.13: The last-5-minutes tile uses a realtime minute range. One rejected
  *        GA4 query no longer blanks the other tiles.
+ * V1.14: Each Google and Sentry call gives up after a few seconds, so one
+ *        slow report cannot hold the whole Live Telemetry response.
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
@@ -71,6 +73,7 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
     const jwt = `${dataToSign}.${encodedSignature}`;
 
     const response = await fetch('https://oauth2.googleapis.com/token', {
+        signal: AbortSignal.timeout(4000),
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
@@ -401,7 +404,8 @@ export default {
             let cachedGaFailed = false;
             try {
                 const cachedJson = JSON.parse(cachedText);
-                cachedGaFailed = cachedJson?.todayUsers === 'ERR' || cachedJson?.active30m === 'ERR' || !!cachedJson?.gaErrorDetail;
+                const cachedHeadlines = [cachedJson?.active5m, cachedJson?.active30m, cachedJson?.todayUsers, cachedJson?.wauUsers, cachedJson?.mauUsers, cachedJson?.allTimeUsers];
+                cachedGaFailed = cachedHeadlines.every((value) => value === 'ERR' || value === '--' || value == null);
             } catch { cachedGaFailed = false; }
             if (!cachedGaFailed) {
                 return new Response(cachedText, {
@@ -415,7 +419,10 @@ export default {
 
         telemetryTasks.push((async () => {
             try {
-                const split = await readRegionalSplit(env.REGION_PRESENCE_DB);
+                const split = await Promise.race([
+                    readRegionalSplit(env.REGION_PRESENCE_DB),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Regional split timed out')), 4000)),
+                ]);
                 telemetryData.regionalBreakdown = {
                     ...telemetryData.regionalBreakdown,
                     ...split,
@@ -506,6 +513,7 @@ export default {
                                 method: 'POST',
                                 headers: gaHeaders,
                                 body: JSON.stringify(call.body),
+                                signal: AbortSignal.timeout(6000),
                             });
                             const text = await res.text();
                             let json = null;
@@ -646,7 +654,8 @@ export default {
             telemetryTasks.push((async () => {
                 try {
                     const sentryRes = await fetch(`https://sentry.io/api/0/projects/${env.SENTRY_ORG}/${env.SENTRY_PROJECT}/stats/?stat=received&resolution=1d`, {
-                        headers: { 'Authorization': `Bearer ${env.SENTRY_AUTH_TOKEN}` }
+                        headers: { 'Authorization': `Bearer ${env.SENTRY_AUTH_TOKEN}` },
+                        signal: AbortSignal.timeout(4000),
                     });
 
                     if (!sentryRes.ok) {
@@ -681,7 +690,8 @@ export default {
         if (telemetryData.gaErrorDetail) {
             telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
         }
-        const gaFailed = telemetryData.todayUsers === 'ERR' || telemetryData.active30m === 'ERR' || !!telemetryData.gaErrorDetail;
+        const headlineValues = [telemetryData.active5m, telemetryData.active30m, telemetryData.todayUsers, telemetryData.wauUsers, telemetryData.mauUsers, telemetryData.allTimeUsers];
+        const gaFailed = headlineValues.every((value) => value === 'ERR' || value === '--');
         const finalResponsePayload = JSON.stringify(telemetryData);
 
         if (!gaFailed) {

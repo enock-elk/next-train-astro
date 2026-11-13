@@ -5475,10 +5475,16 @@ const Admin = {
             }
             
             if (telemetryGen !== Admin._telemetryGen) return;
-            const markWait = (el) => {
-                if (el && (el.textContent || '').trim() === '--') el.textContent = 'Wait';
+            const markStopped = (el) => {
+                if (!el) return;
+                const t = (el.textContent || '').trim();
+                if (t === '--' || t === 'Wait') el.textContent = 'ERR';
             };
-            [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(markWait);
+            [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(markStopped);
+            const graph = document.getElementById('tel-trend-container');
+            if (graph && /Loading Graph/i.test(graph.textContent || '')) {
+                graph.innerHTML = '<span class="text-xs text-gray-400 italic">Could not load the graph.</span>';
+            }
 
             [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
                 if(el) el.classList.remove('animate-pulse');

@@ -355,13 +355,20 @@
   #view-community .community-bubble-wrap:has(.community-reaction-pills) {
     padding-bottom: 1.45rem;
   }
-  /* The keyboard must not reflow a bubble. The cap is the feed's width
-     from before the keys opened. Short lines stay narrow. */
+  /* The keyboard must not reflow a bubble. The cap is the wrap's
+     max-width from before the keys opened. Short lines stay narrow. */
   html.nt-keyboard .community-bubble-wrap {
     width: fit-content;
-    max-width: var(--nt-bubble-lock, min(88%, 32rem));
+    max-width: min(var(--nt-bubble-lock, min(88%, 32rem)), 100%);
+    min-width: 0;
+    height: auto;
+    align-self: flex-start;
     flex-basis: auto;
-    flex-shrink: 0;
+    flex-shrink: 1;
+  }
+  html.nt-keyboard .community-bubble {
+    height: auto;
+    max-width: 100%;
   }
   .community-bubble {
     position: relative;

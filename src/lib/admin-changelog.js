@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.1': [
+        'Community Monitor can mark a message read or unread, asks before Hide, and replies from the thread with Suggest, Guide, and Post. Opening a room scrolls to the new messages. The thread uses the community wallpaper. A reaction clears the alert selection and the selection header. A community bubble keeps its width when the keyboard opens. The black box keeps a cache probe message, a GA4 error, and how fast the board painted, separate from the config tail. Config reads wait five minutes on the same region unless the load is forced, and the killswitch is fetched once a minute. A GA4 error is not cached for two minutes. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.12.15': [
         'Community photos go in the nexttrain-community-images bucket. Alert photos stay in nexttrain-alert-images. A photo on a community message is uploaded there, and a pasted image address is copied there before the message is saved. A catalog poster stays on the site. Deploy the community worker so the new bucket is created. A phone that blocks localStorage no longer throws while a room loads. Sentry ignores Script error, plus xbrowser and swbrowser. No commuter What\'s New. forceShow stays false.',
     ],

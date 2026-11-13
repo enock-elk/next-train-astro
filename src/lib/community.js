@@ -1905,6 +1905,20 @@ function communityActionTarget() {
 const publicProfiles = new Map();
 let feedAuthorMeta = new Map();
 let communityFeedPinned = true;
+let communityScrollGuardUntil = 0;
+let communityScrollGeneration = 0;
+let communityOpenAnchor = null;
+
+function beginCommunityOpenAnchor(routeId) {
+    const raw = safeStorage.getItem(unreadSeenKey(routeId));
+    const n = parseInt(raw || '', 10);
+    communityOpenAnchor = {
+        routeId,
+        seen: Number.isFinite(n) && n > 0 ? n : 0,
+        placed: false,
+        scrollTop: 0,
+    };
+}
 let profileRepaintRoute = '';
 const BEST_POINTS_KEY = 'nt-public-points-v1';
 const bestPublicPoints = new Map();
@@ -2142,8 +2156,48 @@ function hintPublicPoints(uid, points) {
 function pinCommunityFeedToLatest() {
     const scroller = document.querySelector('#view-community .community-feed-scroll');
     if (!scroller) return;
+    const generation = ++communityScrollGeneration;
+    communityScrollGuardUntil = Date.now() + 450;
     const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-    if (communityFeedPinned || gap < 160) scroller.scrollTop = scroller.scrollHeight;
+    if (communityFeedPinned || gap < 160) {
+        scroller.scrollTop = scroller.scrollHeight;
+        requestAnimationFrame(() => {
+            if (generation !== communityScrollGeneration) return;
+            if (communityFeedPinned || gap < 160) scroller.scrollTop = scroller.scrollHeight;
+        });
+    }
+}
+
+function placeCommunityOpen(routeId, listEl) {
+    const scroller = listEl?.closest?.('.community-feed-scroll');
+    const anchor = communityOpenAnchor;
+    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.placed) return false;
+    const generation = ++communityScrollGeneration;
+    const mine = $account.get()?.uid || '';
+    const rows = [...listEl.querySelectorAll('.community-post-row')];
+    const firstNew = anchor.seen > 0
+        ? rows.find((row) => Number(row.dataset.ts || 0) > anchor.seen && row.dataset.uid !== mine)
+        : null;
+    communityScrollGuardUntil = Date.now() + 500;
+    const place = () => {
+        if (firstNew) {
+            const top = firstNew.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+            scroller.scrollTop = Math.max(0, top - 12);
+            communityFeedPinned = false;
+        } else {
+            communityFeedPinned = true;
+            scroller.scrollTop = scroller.scrollHeight;
+        }
+        anchor.scrollTop = scroller.scrollTop;
+    };
+    place();
+    anchor.placed = true;
+    requestAnimationFrame(() => {
+        if (generation !== communityScrollGeneration) return;
+        communityScrollGuardUntil = Date.now() + 400;
+        place();
+    });
+    return true;
 }
 
 function bindCommunityFeedPin() {
@@ -2151,6 +2205,7 @@ function bindCommunityFeedPin() {
     if (!scroller || scroller.dataset.pinBound === '1') return;
     scroller.dataset.pinBound = '1';
     scroller.addEventListener('scroll', () => {
+        if (Date.now() < communityScrollGuardUntil) return;
         const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
         communityFeedPinned = gap < 160;
     }, { passive: true });
@@ -2268,7 +2323,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${marksHtml}</div>`;
 
     return `
-      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}"${tombstone ? ' data-deleted="1"' : ''}>
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}"${tombstone ? ' data-deleted="1"' : ''}>
         <div class="community-swipe-hint" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
         </div>
@@ -2319,6 +2374,8 @@ function applyFeedFilter(routeId) {
     let html = '';
     let lastDate = '';
     let prevUid = '';
+    const scroller = listEl.closest('.community-feed-scroll');
+    const prevTop = scroller ? scroller.scrollTop : 0;
     posts.forEach((p) => {
         const dayKey = new Date(p.timestamp || 0).toDateString();
         if (dayKey && dayKey !== lastDate) {
@@ -2352,7 +2409,15 @@ function applyFeedFilter(routeId) {
     const heldRow = heldId ? listEl.querySelector(`[data-post-id="${String(heldId).replace(/"/g, '')}"]`) : null;
     if (focusing) void revealCommunityFocus(routeId);
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
-    else pinCommunityFeedToLatest();
+    else if (communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed && profileRepaintRoute !== routeId) {
+        placeCommunityOpen(routeId, listEl);
+    } else if (profileRepaintRoute === routeId || (communityOpenAnchor?.routeId === routeId && communityOpenAnchor.placed && !communityFeedPinned) || (feedSilentRepaint && !communityFeedPinned)) {
+        if (scroller) {
+            communityScrollGeneration += 1;
+            communityScrollGuardUntil = Date.now() + 400;
+            scroller.scrollTop = prevTop;
+        }
+    } else pinCommunityFeedToLatest();
     rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
     const uids = posts.map((p) => p.uid);
@@ -2827,6 +2892,7 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
 
     if (titleEl) titleEl.textContent = routeLabel(routeId);
     paintCategoryFilters();
+    if (!feedSilentRepaint) beginCommunityOpenAnchor(routeId);
 
     const forceRest = !!opts.forceRest;
     if (!feedSilentRepaint) {
@@ -3234,7 +3300,7 @@ async function suggestCommunityReply(focusPostId = '') {
         document.getElementById('community-guide-text')?.value || '',
         document.getElementById('community-suggest-context')?.value || '',
     ].map((part) => String(part || '').trim()).filter(Boolean).join('\n');
-    const roomNote = 'Answer only the single message in this thread. Do not answer any other message. One short reply an operator can post. No email sign-off.';
+    const roomNote = 'PRIORITY: the held message. Answer only the single message in this thread. Do not answer any other message. One short reply an operator can post. No email sign-off.';
     try {
         const res = await fetch(`${REPLY_WORKER_URL}/suggest`, {
             method: 'POST',

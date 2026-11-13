@@ -101,7 +101,11 @@ export function bindKeyboardThread() {
         if (!event.target?.closest?.('#community-composer, #messages-thread-input')) return;
         const feed = document.querySelector('#view-community .community-feed-scroll');
         if (feed && !document.documentElement.classList.contains('nt-keyboard')) {
-            const locked = Math.round(feed.clientWidth * 0.88);
+            const sample = feed.querySelector('.community-bubble-wrap');
+            const cap = sample ? parseFloat(getComputedStyle(sample).maxWidth) : 0;
+            const row = feed.querySelector('.community-post-row');
+            const basis = row ? row.clientWidth : feed.clientWidth;
+            const locked = cap > 80 ? Math.round(cap) : Math.round(basis * 0.88);
             if (locked > 80) document.documentElement.style.setProperty('--nt-bubble-lock', `${locked}px`);
         }
         rememberWallpaper();

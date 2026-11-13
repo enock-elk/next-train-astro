@@ -1297,6 +1297,8 @@ export async function submitAlertReaction(notice, emoji) {
         paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
         await writeAlertReactionPerson(path, emoji, token, removing);
         triggerHaptic();
+        hideAlertReactionPicker();
+        clearAlertSelection();
         return true;
     } catch (e) {
         console.warn('Alert reaction failed', e);

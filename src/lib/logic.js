@@ -408,10 +408,14 @@ let loadAllSchedulesInFlight = null;
 let loadAllSchedulesInFlightKey = '';
 /** Client-side overlay stamps — skip re-downloading exclusions/disruptions when fresh. */
 const OVERLAY_TTL_MS = 3 * 60 * 1000;
+const CONFIG_BURST_MS = 5 * 60 * 1000;
 let exclusionsOverlayAt = 0;
 let exclusionsOverlayBucket = '';
 let disruptionsOverlayAt = 0;
 let disruptionsOverlayBucket = '';
+const configBurstAtByRegion = new Map();
+let schedulePaintMs = 0;
+let scheduleLoadStartedAt = 0;
 
 /** Banner/toast only after this much of the current visible session. */
 const STRUGGLE_UI_MIN_MS = 15_000;
@@ -560,6 +564,13 @@ function shortHost(url) {
     try { return new URL(url).hostname; } catch { return String(url || '').slice(0, 40); }
 }
 
+function probeErrorText(err) {
+    const name = String(err?.name || 'error');
+    const message = String(err?.message || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!message || message === name) return name;
+    return `${name}: ${message}`;
+}
+
 /** Host + path for blackbox lines. Query strings stay off the log. */
 function netLabel(url) {
     try {
@@ -669,9 +680,9 @@ export async function probeReachability(timeoutMs = 3500) {
                 if (result.answered) {
                     waterfallLog(`probe ${host} HTTP ${result.res.status} html=${result.html}`);
                 } else if (!onLine) {
-                    waterfallWarn(`OS offline — ${host} failed: ${result.err?.name || result.err?.message || 'error'}`);
+                    waterfallWarn(`OS offline — ${host} failed: ${probeErrorText(result.err)}`);
                 } else {
-                    waterfallWarn(`probe ${host} failed: ${result.err?.name || result.err?.message || 'error'}`);
+                    waterfallWarn(`probe ${host} failed: ${probeErrorText(result.err)} (no HTTP response: DNS, certificate, or CORS)`);
                 }
                 const cachesDone = urls.every((url, i) => !isCacheProbeUrl(url) || settled[i]);
                 const cacheUsable = settled.some((row) => row?.httpOk && isCacheProbeUrl(row.url));
@@ -1014,6 +1025,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 
 const killswitchMutex = createAsyncMutex();
 let killswitchCheckPromise = null;
+let killswitchCheckedAt = 0;
 
 /** Nuclear safety valve: safely retire runtime caches when the remote timestamp advances. */
 async function runKillswitchCheck() {
@@ -1021,6 +1033,11 @@ async function runKillswitchCheck() {
     if (typeof navigator !== 'undefined' && (!navigator.onLine || isLieFi)) return false;
 
     return killswitchMutex.runExclusive(async () => {
+        if (Date.now() - killswitchCheckedAt < 55_000) {
+            waterfallLog('killswitch skipped, already checked this minute');
+            return false;
+        }
+        killswitchCheckedAt = Date.now();
         const pending = safeStorage.getItem(KILLSWITCH_PENDING_KEY);
         const applied = safeStorage.getItem(KILLSWITCH_APPLIED_KEY);
         let remoteTimestamp = 0;
@@ -1652,6 +1669,9 @@ async function loadBundledScheduleDump(signal = null) {
 
 /** Reveal + stabilize as soon as a route has usable times. Network may still refresh. */
 function markSchedulesCoreReady() {
+    if (!schedulePaintMs && scheduleLoadStartedAt) {
+        schedulePaintMs = Date.now() - scheduleLoadStartedAt;
+    }
     if (typeof window === 'undefined') return;
     if (typeof window.revealAppShell === 'function') window.revealAppShell();
     const welcomeModal = typeof document !== 'undefined' ? document.getElementById('welcome-modal') : null;
@@ -1668,6 +1688,8 @@ function markSchedulesCoreReady() {
 // --- GUARDIAN PHASE B: EAGER RENDERING PROTOCOL ---
 async function loadAllSchedulesInner(force = false) {
     const scheduleStartedAt = Date.now();
+    schedulePaintMs = 0;
+    scheduleLoadStartedAt = scheduleStartedAt;
     if (typeof window !== 'undefined' && window._suppressReloads && !force) {
         waterfallLog('schedule load skipped suppressReloads');
         return;
@@ -1767,7 +1789,7 @@ async function loadAllSchedulesInner(force = false) {
                 
                 usedCache = true;
                 paintedFrom = 'cache';
-                waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier}`);
+                waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier} paintMs=${Date.now() - scheduleStartedAt}`);
                 // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
                 // do not hold the shell for the background network waterfall.
                 markSchedulesCoreReady();
@@ -1790,7 +1812,7 @@ async function loadAllSchedulesInner(force = false) {
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                     usedCache = true;
                     paintedFrom = 'bundled';
-                    waterfallLog('painted from bundled same-origin dump');
+                    waterfallLog(`painted from bundled same-origin dump paintMs=${Date.now() - scheduleStartedAt}`);
                     markSchedulesCoreReady();
                     try { await saveToLocalCache(cacheKey, bundledDump, fetchSignal); } catch { /* ignore */ }
                 } catch (err) {
@@ -1852,20 +1874,33 @@ async function loadAllSchedulesInner(force = false) {
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
         waterfallLog(`preflight ok to continue (reach=${reach}) — overlays then CLOUDFLARE→FIREBASE→GITHUB`);
 
-        await fetchGridOrderConfig($userRegion.get(), fetchSignal);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+        const burstRegion = $userRegion.get() || '';
+        const burstAt = configBurstAtByRegion.get(burstRegion) || 0;
+        const burstFresh = !force && burstAt > 0 && (Date.now() - burstAt) < CONFIG_BURST_MS;
+        if (burstFresh) {
+            waterfallLog(`config burst skipped region=${burstRegion} ageMs=${Date.now() - burstAt}`);
+        } else {
+            configBurstAtByRegion.set(burstRegion, Date.now());
+            const dropBurstIfInterrupted = () => {
+                if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                    configBurstAtByRegion.delete(burstRegion);
+                    return true;
+                }
+                return false;
+            };
+            try {
+            await fetchGridOrderConfig($userRegion.get(), fetchSignal);
+            if (dropBurstIfInterrupted()) return;
 
-        const wasKilled = await checkKillswitch(force);
-        if (wasKilled || fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+            const wasKilled = await checkKillswitch(force);
+            if (wasKilled || dropBurstIfInterrupted()) return;
 
-        await fetchSpecialEventConfig(force);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
-
-        await fetchScheduleOverride(false);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
-
-        await fetchRouteSheets(false);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+            await Promise.all([
+                fetchSpecialEventConfig(force),
+                fetchScheduleOverride(false),
+                fetchRouteSheets(false),
+            ]);
+            if (dropBurstIfInterrupted()) return;
 
         // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.
         const edgeCacheBucket = Math.floor(Date.now() / 300000);
@@ -1927,6 +1962,11 @@ async function loadAllSchedulesInner(force = false) {
                 }
             } catch (e) {
                 console.warn('Disruptions fetch failed.');
+            }
+        }
+            } catch (err) {
+                configBurstAtByRegion.delete(burstRegion);
+                throw err;
             }
         }
         // Planner must know overlays finished loading (even empty/failed) so it
@@ -2159,10 +2199,10 @@ async function loadAllSchedulesInner(force = false) {
         waterfallLog(
             `session summary paintedFrom=${paintedFrom} tier=${cacheTier} networkWon=${networkWon || 'none'} `
             + `chain=${sourceChain} tried=CLOUDFLARE>FIREBASE>GITHUB region=${$userRegion.get()} route=${requestedRouteId} `
-            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'} ms=${scheduleMs}`
+            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'} ms=${scheduleMs} paintMs=${schedulePaintMs || 0}`
         );
         if (scheduleMs >= 8000) {
-            waterfallWarn(`slow schedule load ${scheduleMs}ms paintedFrom=${paintedFrom} chain=${sourceChain}`);
+            waterfallWarn(`slow schedule load ${scheduleMs}ms paintMs=${schedulePaintMs || 0} paintedFrom=${paintedFrom} chain=${sourceChain}`);
         }
         if (fetchSignal && fetchSignal.aborted) return;
 

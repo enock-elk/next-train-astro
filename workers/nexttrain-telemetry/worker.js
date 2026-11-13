@@ -395,10 +395,18 @@ export default {
         let cachedResponse = await cache.match(cacheKey);
 
         if (cachedResponse) {
-            return new Response(cachedResponse.body, {
-                status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' }
-            });
+            const cachedText = await cachedResponse.text();
+            let cachedGaFailed = false;
+            try {
+                const cachedJson = JSON.parse(cachedText);
+                cachedGaFailed = cachedJson?.todayUsers === 'ERR' || cachedJson?.active30m === 'ERR' || !!cachedJson?.gaErrorDetail;
+            } catch { cachedGaFailed = false; }
+            if (!cachedGaFailed) {
+                return new Response(cachedText, {
+                    status: 200,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' }
+                });
+            }
         }
 
         const telemetryTasks = [];
@@ -659,16 +667,22 @@ export default {
         const gaPeople = parseInt(telemetryData.todayUsers, 10);
         telemetryData.regionalBreakdown.gaPeopleToday = Number.isFinite(gaPeople) ? gaPeople : null;
 
+        if (telemetryData.gaErrorDetail) {
+            telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
+        }
+        const gaFailed = telemetryData.todayUsers === 'ERR' || telemetryData.active30m === 'ERR' || !!telemetryData.gaErrorDetail;
         const finalResponsePayload = JSON.stringify(telemetryData);
 
-        const responseToCache = new Response(finalResponsePayload, {
-            headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=120' }
-        });
-        await cache.put(cacheKey, responseToCache.clone());
+        if (!gaFailed) {
+            const responseToCache = new Response(finalResponsePayload, {
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=120' }
+            });
+            await cache.put(cacheKey, responseToCache.clone());
+        }
 
         return new Response(finalResponsePayload, {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'MISS' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': gaFailed ? 'BYPASS' : 'MISS' }
         });
     }
 };

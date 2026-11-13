@@ -434,6 +434,7 @@ function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, r
             held: routeHeld,
             latestActivity,
             latestAt: Math.max(Number(latestActivity?.timestamp || 0), latestHeldAt),
+            seenAt,
             unread: activities.filter((item) => Number(item.timestamp || 0) > seenAt && !ntAdminCommunityOwnActivity(item, viewerUid)).length,
         };
     }).sort((a, b) => (b.latestAt - a.latestAt)
@@ -4933,17 +4934,26 @@ const Admin = {
             if (res.ok) {
                 const data = await res.json();
                 if (telemetryGen !== Admin._telemetryGen) return;
-                try {
-                    sessionStorage.setItem('ntAdminTelemetrySnapshotV1', JSON.stringify({
-                        active5m: data.active5m,
-                        active30m: data.active30m,
-                        todayUsers: data.todayUsers,
-                        wauUsers: data.wauUsers,
-                        mauUsers: data.mauUsers,
-                        allTimeUsers: data.allTimeUsers,
-                        todayErrors: data.todayErrors,
-                    }));
-                } catch { /* storage quota */ }
+                const gaKeys = ['active5m', 'active30m', 'todayUsers', 'wauUsers', 'mauUsers', 'allTimeUsers'];
+                const gaErr = gaKeys.filter((key) => data[key] === 'ERR');
+                if (gaErr.length || data.gaErrorDetail) {
+                    const detail = String(data.gaErrorDetail || 'none').replace(/\s+/g, ' ').slice(0, 280);
+                    if (typeof window.ntTrace === 'function') {
+                        window.ntTrace('warn', `NT Waterfall: GA4 tiles ${gaErr.join(',') || 'detail'} detail=${detail}`);
+                    }
+                } else {
+                    try {
+                        sessionStorage.setItem('ntAdminTelemetrySnapshotV1', JSON.stringify({
+                            active5m: data.active5m,
+                            active30m: data.active30m,
+                            todayUsers: data.todayUsers,
+                            wauUsers: data.wauUsers,
+                            mauUsers: data.mauUsers,
+                            allTimeUsers: data.allTimeUsers,
+                            todayErrors: data.todayErrors,
+                        }));
+                    } catch { /* storage quota */ }
+                }
                 
                 if(stat5m) stat5m.textContent = data.active5m !== undefined ? Admin.formatNumber(data.active5m) : '--';
                 if(stat30m) stat30m.textContent = data.active30m !== undefined ? Admin.formatNumber(data.active30m) : '--';
@@ -5309,6 +5319,9 @@ const Admin = {
             }
         } catch(e) {
             const telMsg = String((e && e.message) || e || '');
+            if (typeof window.ntTrace === 'function') {
+                window.ntTrace('warn', `NT Waterfall: telemetry ${telMsg.replace(/\s+/g, ' ').slice(0, 180)}`);
+            }
             if (!/abort|offline|failed to fetch|timeout/i.test(telMsg)) {
                 console.warn("Telemetry Fetch Failed:", e.message);
                 Admin.currentSentry = {
@@ -12565,8 +12578,21 @@ const Admin = {
                             </button>
                             <p id="mq-thread-title" class="cm-thread-title"></p>
                         </div>
+                        <div class="nt-pack-wallpaper cm-thread-wallpaper" aria-hidden="true"></div>
                         <div id="mq-thread-held" class="px-2 pt-2 space-y-2"></div>
                         <div id="mq-thread-scroll" class="cm-thread-scroll"></div>
+                        <form id="mq-composer" class="cm-composer" autocomplete="off">
+                            <div id="mq-quote" class="cm-quote-bar hidden"></div>
+                            <p id="mq-suggest-note" class="cm-suggest-note hidden"></p>
+                            <textarea id="mq-guide" class="cm-guide hidden" rows="2" maxlength="500" placeholder="A fact Co-Pilot should use"></textarea>
+                            <textarea id="mq-composer-input" class="cm-composer-input" rows="1" maxlength="1300" placeholder="Message" aria-label="Reply in this room"></textarea>
+                            <input id="mq-composer-link" class="cm-composer-link" type="url" inputmode="url" placeholder="https link, optional" aria-label="Optional link" />
+                            <div class="cm-composer-actions">
+                                <button type="button" id="mq-guide-toggle" class="cm-suggest">Guide</button>
+                                <button type="button" id="mq-suggest" class="cm-suggest">Suggest</button>
+                                <button type="submit" id="mq-post" class="cm-post">Post</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
                 <div id="mq-reports-pane" class="hidden flex flex-col">
@@ -13367,7 +13393,7 @@ const Admin = {
                     const when = row.latestAt ? formatWhen(row.latestAt) : '';
                     const quiet = !row.latestAt && !row.held.length;
                     return `
-                    <button type="button" class="community-monitor-route admin-sheet-card${quiet ? ' is-quiet' : ''}" data-community-route="${esc(row.routeId)}" data-community-name="${esc(row.routeName)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${preview} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
+                    <button type="button" class="community-monitor-route admin-sheet-card${quiet ? ' is-quiet' : ''}" data-community-route="${esc(row.routeId)}" data-community-name="${esc(row.routeName)}" data-community-seen="${Number(row.seenAt) || 0}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${preview} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
                             <span class="admin-sheet-card-main">
                                 <span class="admin-sheet-card-title">${routeTitleHtml(row.routeName)}</span>
                                 <span class="admin-sheet-card-body" data-cm-preview>${esc(preview)}</span>
@@ -13423,7 +13449,10 @@ const Admin = {
                     const postId = message.postId || '';
                     const mine = Admin.currentUser?.uid && message.uid === Admin.currentUser.uid;
                     const replyAttr = isReply ? `data-reply="${esc(message.replyId || '')}"` : '';
-                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''} ${mine ? 'cm-row-own' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                    const letter = String(message.displayName || 'P').trim().charAt(0).toUpperCase() || 'P';
+                    const ts = Number(message.timestamp) || 0;
+                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''} ${mine ? 'cm-row-own' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                        ${mine ? '' : `<span class="cm-avatar" aria-hidden="true">${esc(letter)}</span>`}
                         <div class="cm-bubble ${mine ? 'cm-bubble-own' : ''} ${message.hidden ? 'is-hidden' : ''}">
                             <div class="cm-bubble-name">
                                 <span>${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
@@ -13431,8 +13460,11 @@ const Admin = {
                             <div class="cm-bubble-body">
                                 ${quote}<p class="cm-bubble-text${removed ? ' cm-msg-deleted' : ''}">${esc(shownBody)}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
                                 <div class="cm-options">
-                                    <button type="button" class="cm-options-toggle">Options</button>
+                                    <button type="button" class="cm-options-toggle" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
                                     <div class="cm-options-menu hidden">
+                                        <button type="button" class="cm-reply-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${replyAttr}>Reply</button>
+                                        <button type="button" class="cm-mark-unread" data-route="${esc(routeId)}" data-ts="${ts}">Mark unread</button>
+                                        <button type="button" class="cm-mark-read" data-route="${esc(routeId)}" data-ts="${ts}">Mark read</button>
                                         <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
                                         <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
                                         ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
@@ -13560,8 +13592,21 @@ const Admin = {
                     if (earlier) {
                         target.scrollTop = Math.max(0, target.scrollHeight - prevHeight + prevTop);
                     } else {
-                        target.scrollTop = target.scrollHeight;
-                        requestAnimationFrame(() => { target.scrollTop = target.scrollHeight; });
+                        const seenBefore = Number(details.dataset.scrollSeen || 0);
+                        const rows = [...target.querySelectorAll('[data-community-message]')];
+                        const firstNew = seenBefore > 0
+                            ? rows.find((el) => Number(el.dataset.ts || 0) > seenBefore)
+                            : null;
+                        const place = () => {
+                            if (!firstNew) {
+                                target.scrollTop = target.scrollHeight;
+                                return;
+                            }
+                            const top = firstNew.getBoundingClientRect().top - target.getBoundingClientRect().top + target.scrollTop;
+                            target.scrollTop = Math.max(0, top - 16);
+                        };
+                        place();
+                        requestAnimationFrame(place);
                     }
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
@@ -13608,8 +13653,18 @@ const Admin = {
                     const row = (Admin._communityMonitorRows || []).find((item) => item.routeId === routeId);
                     const threadTitle = document.getElementById('mq-thread-title');
                     const routeLabel = card.dataset.communityName || row?.routeName || routeId;
-                    if (threadTitle) threadTitle.textContent = routeLabel;
-                    setMonitorThread(true, routeLabel);
+                    const prettyRoute = String(routeLabel || '').replace(/\s*<->\s*/g, ' – ');
+                    card.dataset.scrollSeen = String(Number(card.dataset.communitySeen || 0) || 0);
+                    Admin._mqOpenCard = card;
+                    Admin._mqQuote = null;
+                    if (threadTitle) threadTitle.textContent = prettyRoute;
+                    setMonitorThread(true, prettyRoute);
+                    const suggestNote = document.getElementById('mq-suggest-note');
+                    if (suggestNote) {
+                        suggestNote.textContent = '';
+                        suggestNote.classList.add('hidden');
+                    }
+                    if (typeof Admin._mqPaintQuote === 'function') Admin._mqPaintQuote();
                     if (!Admin._mqThreadPushed) {
                         try {
                             history.pushState(
@@ -13633,19 +13688,37 @@ const Admin = {
                     }
                 };
 
-                const markRouteSeen = async (details) => {
-                    const routeId = details.dataset.communityRoute;
-                    const seenAt = Date.now();
+                const setRouteSeen = async (routeId, seenAt) => {
+                    if (!routeId || !Admin.currentUser?.uid) throw new Error('Sign in as an operator first.');
+                    const stamp = Number(seenAt);
+                    const seen = Number.isFinite(stamp) && stamp > 0 ? stamp : Date.now();
                     const seenAuthQ = await communityAuthSuffix();
                     const seenRes = await fetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/community_seen/${encodeURIComponent(routeId)}.json${seenAuthQ}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(seenAt),
+                        body: JSON.stringify(seen),
                     });
                     if (!seenRes.ok) throw new Error(`Seen update failed (${seenRes.status})`);
-                    const routeBadge = details.querySelector('.community-route-unread');
-                    routeBadge.textContent = '0';
-                    routeBadge.classList.add('hidden');
+                    const safeRoute = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(routeId) : routeId;
+                    const details = document.querySelector(`#mq-list [data-community-route="${safeRoute}"]`);
+                    if (details) details.dataset.communitySeen = String(seen);
+                    const me = Admin.currentUser.uid;
+                    const posts = Admin._mqThreadPosts?.[routeId] || [];
+                    const counts = (item) => {
+                        const ts = Number(item?.timestamp || 0);
+                        if (!(ts > seen) || (item?.uid && item.uid === me)) return 0;
+                        return (item?.body || item?.linkUrl) ? 1 : 0;
+                    };
+                    let unread = 0;
+                    posts.forEach((post) => {
+                        unread += counts(post);
+                        Object.values(post.replies || {}).forEach((reply) => { unread += counts(reply); });
+                    });
+                    const routeBadge = details?.querySelector('.community-route-unread');
+                    if (routeBadge) {
+                        routeBadge.textContent = String(unread);
+                        routeBadge.classList.toggle('hidden', unread < 1);
+                    }
                     const remaining = Array.from(list.querySelectorAll('.community-route-unread:not(.hidden)'))
                         .reduce((sum, el) => sum + Number(el.textContent || 0), 0);
                     if (badge) {
@@ -13653,6 +13726,7 @@ const Admin = {
                         badge.classList.toggle('hidden', remaining < 1);
                     }
                 };
+                const markRouteSeen = (details) => setRouteSeen(details?.dataset?.communityRoute, Date.now());
 
                 const runMonitorLookup = (raw) => {
                     const q = String(raw || '').trim();
@@ -13714,9 +13788,52 @@ const Admin = {
                         return;
                     }
                     document.querySelectorAll('.cm-options-menu').forEach((node) => node.classList.add('hidden'));
+                    const replyBtn = event.target.closest?.('.cm-reply-message');
+                    if (replyBtn) {
+                        event.preventDefault();
+                        const card = replyBtn.closest('[data-community-message]');
+                        const copy = card?.querySelector('.cm-bubble-text')?.cloneNode(true);
+                        copy?.querySelector('.cm-bubble-time')?.remove();
+                        const name = (card?.querySelector('.cm-bubble-name span')?.textContent || 'Passenger').trim();
+                        Admin._mqQuote = {
+                            postId: replyBtn.dataset.post || '',
+                            uid: replyBtn.dataset.uid || '',
+                            displayName: name,
+                            body: String(copy?.textContent || '').trim().slice(0, 180),
+                        };
+                        if (typeof Admin._mqPaintQuote === 'function') Admin._mqPaintQuote();
+                        document.getElementById('mq-composer-input')?.focus();
+                        return;
+                    }
+                    const unreadBtn = event.target.closest?.('.cm-mark-unread');
+                    if (unreadBtn) {
+                        event.preventDefault();
+                        try {
+                            const ts = Number(unreadBtn.dataset.ts || 0);
+                            await setRouteSeen(unreadBtn.dataset.route, ts > 0 ? ts - 1 : 0);
+                            if (typeof showToast === 'function') showToast('Marked unread', 'success');
+                        } catch (err) {
+                            if (typeof showToast === 'function') showToast(err?.message || 'Could not mark unread', 'error');
+                        }
+                        return;
+                    }
+                    const readBtn = event.target.closest?.('.cm-mark-read');
+                    if (readBtn) {
+                        event.preventDefault();
+                        try {
+                            const ts = Number(readBtn.dataset.ts || 0);
+                            await setRouteSeen(readBtn.dataset.route, ts > 0 ? ts : Date.now());
+                            if (typeof showToast === 'function') showToast('Marked read', 'success');
+                        } catch (err) {
+                            if (typeof showToast === 'function') showToast(err?.message || 'Could not mark read', 'error');
+                        }
+                        return;
+                    }
                     const hide = event.target.closest?.('.cm-hide-message');
                     if (hide) {
                         event.preventDefault();
+                        const ok = await Admin.secureConfirm('Hide message', 'Hide this message from the room? It stays in the log for operators.');
+                        if (!ok) return;
                         const routeId = hide.dataset.route;
                         const postId = hide.dataset.post;
                         const replyId = hide.dataset.reply;
@@ -13954,6 +14071,198 @@ const Admin = {
                 if (threadScroll) threadScroll.onclick = list.onclick;
                 const threadHeld = document.getElementById('mq-thread-held');
                 if (threadHeld) threadHeld.onclick = list.onclick;
+                Admin._mqPaintQuote = () => {
+                    const bar = document.getElementById('mq-quote');
+                    const quote = Admin._mqQuote;
+                    if (!bar) return;
+                    if (!quote || (!quote.body && !quote.displayName)) {
+                        bar.classList.add('hidden');
+                        bar.innerHTML = '';
+                        return;
+                    }
+                    bar.classList.remove('hidden');
+                    bar.innerHTML = `<b>${esc(quote.displayName || 'Passenger')}</b><br>${esc(String(quote.body || '').slice(0, 140))}<button type="button" id="mq-quote-clear">Clear</button>`;
+                };
+                document.getElementById('mq-quote')?.addEventListener('click', (event) => {
+                    if (!event.target.closest?.('#mq-quote-clear')) return;
+                    Admin._mqQuote = null;
+                    Admin._mqPaintQuote();
+                });
+                document.getElementById('mq-guide-toggle')?.addEventListener('click', () => {
+                    document.getElementById('mq-guide')?.classList.toggle('hidden');
+                });
+                document.getElementById('mq-suggest')?.addEventListener('click', async () => {
+                    const card = Admin._mqOpenCard;
+                    const routeId = card?.dataset?.communityRoute || '';
+                    const note = document.getElementById('mq-suggest-note');
+                    const guide = document.getElementById('mq-guide');
+                    const input = document.getElementById('mq-composer-input');
+                    const button = document.getElementById('mq-suggest');
+                    if (!routeId) return;
+                    const posts = Admin._mqThreadPosts?.[routeId] || [];
+                    const quote = Admin._mqQuote;
+                    const mine = Admin.currentUser?.uid || '';
+                    let target = null;
+                    if (quote?.body) {
+                        target = {
+                            displayName: quote.displayName || 'Passenger',
+                            body: quote.body,
+                            timestamp: Date.now(),
+                            uid: quote.uid || '',
+                        };
+                    } else {
+                        target = [...posts].reverse().find((post) => post && post.uid !== mine && (post.body || post.linkUrl) && post.body !== 'Deleted message' && post.body !== 'Deleted by an Admin') || null;
+                    }
+                    if (!target) {
+                        if (note) {
+                            note.textContent = 'Nothing in this room to answer yet.';
+                            note.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    if (button) {
+                        button.disabled = true;
+                        button.textContent = 'Suggesting...';
+                    }
+                    if (note) note.classList.add('hidden');
+                    try {
+                        const secret = await Admin.getAuthKey();
+                        if (!secret) throw new Error('Sign in as an operator first.');
+                        const guidance = String(guide?.value || '').trim();
+                        const roomNote = 'PRIORITY: the held message. Answer only the single message in this thread. Do not answer any other message. One short reply an operator can post. No email sign-off.';
+                        const region = window.ROUTES?.[routeId]?.region || 'GP';
+                        const res = await fetch(`${Admin.replyWorkerUrl()}/suggest`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${secret}`,
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                region,
+                                routeId,
+                                note: guidance ? `${roomNote}\n\nOperator guidance for this draft:\n${guidance}` : roomNote,
+                                thread: [{
+                                    from: 'commuter',
+                                    text: `${target.displayName || 'Passenger'}: ${target.body || target.linkUrl || ''}`,
+                                    at: Number(target.timestamp) || 0,
+                                }],
+                            }),
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data.error || 'Could not draft a reply.');
+                        if (data.action === 'halt') {
+                            if (note) {
+                                note.textContent = data.reason || 'Co-Pilot needs a fact before it can draft this.';
+                                note.classList.remove('hidden');
+                            }
+                            guide?.classList.remove('hidden');
+                            return;
+                        }
+                        const draft = String(data.reply || '').replace(/<[^>]+>/g, '').trim();
+                        if (!draft) throw new Error('Co-Pilot returned an empty draft.');
+                        if (input) {
+                            input.value = draft.slice(0, 1300);
+                            input.focus();
+                        }
+                        if (typeof showToast === 'function') showToast('Draft ready. Edit it, then post.', 'success');
+                    } catch (err) {
+                        if (note) {
+                            note.textContent = err?.message || 'Could not draft a reply.';
+                            note.classList.remove('hidden');
+                        }
+                    } finally {
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = 'Suggest';
+                        }
+                    }
+                });
+                document.getElementById('mq-composer')?.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const card = Admin._mqOpenCard;
+                    const routeId = card?.dataset?.communityRoute || '';
+                    const input = document.getElementById('mq-composer-input');
+                    const linkEl = document.getElementById('mq-composer-link');
+                    const note = document.getElementById('mq-suggest-note');
+                    const postBtn = document.getElementById('mq-post');
+                    const text = String(input?.value || '').trim();
+                    const linkUrl = String(linkEl?.value || '').trim();
+                    if (!routeId) return;
+                    if (linkUrl && !/^https:\/\//i.test(linkUrl)) {
+                        if (note) {
+                            note.textContent = 'Use a full https link.';
+                            note.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    if (text.length < 2 && !linkUrl) {
+                        if (note) {
+                            note.textContent = 'Write a short message.';
+                            note.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    const user = Admin.currentUser || {};
+                    const quote = Admin._mqQuote;
+                    if (postBtn) postBtn.disabled = true;
+                    try {
+                        const secret = await Admin.getAuthKey();
+                        if (!secret) throw new Error('Sign in as an operator first.');
+                        const base = String(window.COMMUNITY_WORKER_URL || 'https://nexttrain-community.enock.workers.dev').replace(/\/$/, '');
+                        const res = await fetch(`${base}/community/post`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${secret}`,
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                postId: `cp${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+                                routeId,
+                                region: window.ROUTES?.[routeId]?.region || 'GP',
+                                body: text,
+                                category: 'general',
+                                uid: user.uid,
+                                displayName: user.displayName || user.email || 'Next Train',
+                                email: user.email || null,
+                                deviceId: window.NEXT_TRAIN_DEVICE_ID || '',
+                                timestamp: Date.now(),
+                                hidden: false,
+                                replyCount: 0,
+                                appVersion: typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '',
+                                ...(linkUrl ? { linkUrl } : {}),
+                                ...(quote?.postId ? {
+                                    replyTo: {
+                                        postId: quote.postId,
+                                        ...(quote.uid ? { uid: quote.uid } : {}),
+                                        displayName: quote.displayName || 'Passenger',
+                                        body: quote.body || '',
+                                    },
+                                } : {}),
+                            }),
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || data.ok === false) throw new Error(data.error || 'Could not post that message.');
+                        if (input) input.value = '';
+                        if (linkEl) linkEl.value = '';
+                        Admin._mqQuote = null;
+                        Admin._mqPaintQuote?.();
+                        if (note) note.classList.add('hidden');
+                        if (card) {
+                            card.dataset.scrollSeen = '0';
+                            await Admin._communityLoadRoute(card);
+                        }
+                        if (typeof showToast === 'function') {
+                            showToast(data.held ? (data.message || 'We are checking this message.') : 'Posted', data.held ? 'info' : 'success');
+                        }
+                    } catch (err) {
+                        if (note) {
+                            note.textContent = err?.message || 'Could not post that message.';
+                            note.classList.remove('hidden');
+                        }
+                    } finally {
+                        if (postBtn) postBtn.disabled = false;
+                    }
+                });
             } catch (e) {
                 list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
             }

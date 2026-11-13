@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "be9c9c894ad92c2d912b4dedca243a3dc5568dea",
+  "frozenAt": "684ba80cd6b0c2f1c37adca78a44aafb6cbb0d63",
   "version": "V9_09.20.11",
   "note": "Gold snapshot: map pin labels say PRETORIA NORTH and PRETORIA WEST. Rail geometry, station pins, MapView, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {

@@ -1108,31 +1108,23 @@ import { withBase } from '../lib/config.js';
     align-items: flex-start;
     width: 100%;
   }
-  #messages-thread-modal .inbox-bubble-wrap {
-    width: 78%;
-    max-width: 78%;
-    flex: 0 0 78%;
-    min-width: 0;
-  }
+  #messages-thread-modal .inbox-bubble-wrap,
   #feedback-panel .inbox-bubble-wrap {
-    width: auto;
-    max-width: 85%;
+    position: relative;
+    width: fit-content;
+    max-width: min(88%, 32rem);
     flex: 0 1 auto;
     min-width: 0;
+    padding-bottom: 0.15rem;
   }
   #messages-thread-modal .inbox-bubble,
   #feedback-panel .inbox-bubble {
     position: relative;
     box-sizing: border-box;
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-  }
-  #messages-thread-modal .inbox-bubble {
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     overflow: hidden;
-  }
-  #feedback-panel .inbox-bubble {
-    width: auto;
-    overflow: visible;
   }
   #messages-thread-modal .inbox-bubble-own,
   #feedback-panel .inbox-bubble-own {
@@ -1252,31 +1244,6 @@ import { withBase } from '../lib/config.js';
     border-radius: 999px;
     overflow: hidden;
     margin-top: 0.15rem;
-  }
-  /* Tails sit at the top, beside the avatar. Commuter hub keeps overflow:hidden. */
-  #feedback-panel .inbox-bubble-own::after,
-  #feedback-panel .inbox-bubble-other::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    width: 8px;
-    height: 12px;
-  }
-  #feedback-panel .inbox-bubble-own::after {
-    right: -6px;
-    background: #d9fdd3;
-    clip-path: polygon(0 0, 100% 0, 0 100%);
-  }
-  html.dark #feedback-panel .inbox-bubble-own::after {
-    background: #005c4b;
-  }
-  #feedback-panel .inbox-bubble-other::after {
-    left: -6px;
-    background: #ffffff;
-    clip-path: polygon(0 0, 100% 0, 100% 100%);
-  }
-  html.dark #feedback-panel .inbox-bubble-other::after {
-    background: #1f2937;
   }
   #feedback-panel .feedback-thread-chat {
     position: relative;

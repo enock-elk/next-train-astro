@@ -1,33 +1,38 @@
 /**
- * Hand a picture to the phone's share sheet so the address bar never becomes a blob page.
- * A desktop browser that cannot share a file downloads it instead.
+ * Save a picture in the background. This does not open the share sheet,
+ * and it does not leave a blob address in the address bar.
  * @param {File} file
- * @returns {Promise<'sheet'|'download'|'cancelled'>}
+ * @returns {Promise<void>}
  */
-export async function offerSavedImage(file) {
-    const data = { files: [file], title: file.name };
-    if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' && navigator.canShare(data)) {
-        try {
-            await navigator.share(data);
-            return 'sheet';
-        } catch (err) {
-            if (err && err.name === 'AbortError') return 'cancelled';
-            throw err;
-        }
-    }
-
-    const url = URL.createObjectURL(file);
-    try {
+export async function downloadImageFile(file) {
+    const name = file?.name || 'next-train.jpg';
+    const mime = file?.type && String(file.type).startsWith('image/') ? file.type : 'image/jpeg';
+    const click = (href, revoke) => {
         const link = document.createElement('a');
-        link.href = url;
-        link.download = file.name;
+        link.href = href;
+        link.setAttribute('download', name);
         link.rel = 'noopener';
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-        link.remove();
-    } finally {
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        setTimeout(() => {
+            link.remove();
+            if (typeof revoke === 'function') revoke();
+        }, 1500);
+    };
+
+    // A data address downloads on this phone. A blob address is what opened as a page.
+    if (file && file.size > 0 && file.size < 2_500_000) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = '';
+        const step = 0x8000;
+        for (let i = 0; i < bytes.length; i += step) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + step, bytes.length)));
+        }
+        click(`data:${mime};base64,${btoa(binary)}`);
+        return;
     }
-    return 'download';
+
+    const url = URL.createObjectURL(file);
+    click(url, () => URL.revokeObjectURL(url));
 }

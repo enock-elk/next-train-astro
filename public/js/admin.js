@@ -2462,7 +2462,13 @@ const Admin = {
                 });
             }
         });
-        return { body: hoisted.body || '', media, urls: images };
+        if (media && images.length) {
+            media = media.replace(
+                /class="[^"]*"(\s+data-alert-media)/,
+                `class="community-msg-images${images.length === 1 ? ' is-single' : ''}"$1`
+            );
+        }
+        return { body: hoisted.body || '', media, urls: images, imageCount: images.length };
     },
 
     safeSourceHref: function(raw) {
@@ -24983,18 +24989,18 @@ const Admin = {
                             : '';
                         const unreadAttr = reactUnread ? ' data-fb-react-unread="1"' : '';
                         groupHTML += `
-                            <div class="inbox-row justify-end mb-1.5"${unreadAttr} id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
-                                <div class="inbox-bubble-wrap">
-                                    <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
-                                        <div class="inbox-bubble-name-row">
-                                            <span>${secureEscape(adminName)}</span>
+                            <div class="inbox-row community-post-row justify-end mb-1.5"${unreadAttr} id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
+                                <div class="inbox-bubble-wrap community-bubble-wrap">
+                                    <div class="inbox-bubble inbox-bubble-own community-bubble community-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
+                                        <div class="inbox-bubble-name-row community-bubble-name-row">
+                                            <span class="community-bubble-name truncate">${secureEscape(adminName)}</span>
                                             ${reactBadge}
                                             ${adminMeta}
                                         </div>
                                         ${userRouteHtml}
-                                        <div class="inbox-bubble-body">
-                                            <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
+                                        <div class="inbox-bubble-body community-bubble-body">
                                             ${adminAttachHtml}
+                                            <div class="inbox-msg-text community-msg-text">${parsedAdminText}<span class="inbox-msg-time community-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
                                         </div>
                                     </div>
                                     ${reactChips}
@@ -25283,8 +25289,8 @@ const Admin = {
                             ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" data-cl-route="${clRouteAttr}" data-cl-station="${clStationAttr}" data-cl-auto="${clAutoAttr}" data-cl-diag="${clDiagAttr}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl(this));">${verLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
                         const integratedHeaderHtml = `
-                            <div class="inbox-bubble-name-row">
-                                <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
+                            <div class="inbox-bubble-name-row community-bubble-name-row">
+                                <span class="community-bubble-name whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
                                 ${commuterVerBtn}
                             </div>
                             ${commuterRouteHtml}
@@ -25295,14 +25301,14 @@ const Admin = {
                             ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
                             : '<div class="nt-inbox-react-chips mt-1 min-h-0" data-inbox-react-chips></div>';
                         groupHTML += `
-                            <div class="inbox-row justify-start mb-1.5" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}">
-                                <div class="inbox-bubble-wrap">
-                                    <div class="inbox-bubble inbox-bubble-other"${inboxReactId ? ' data-inbox-react-host="1"' : ''}>
+                            <div class="inbox-row community-post-row justify-start mb-1.5" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}">
+                                <div class="inbox-bubble-wrap community-bubble-wrap">
+                                    <div class="inbox-bubble inbox-bubble-other community-bubble community-bubble-other"${inboxReactId ? ' data-inbox-react-host="1"' : ''}>
                                         ${integratedHeaderHtml}
-                                        <div class="inbox-bubble-body">
+                                        <div class="inbox-bubble-body community-bubble-body">
                                             ${quoteBlockHtml}
-                                            <div class="inbox-msg-text">${rawText}<span class="inbox-msg-time">${dateStr}</span></div>
                                             ${attachmentHtml}
+                                            <div class="inbox-msg-text community-msg-text">${rawText}<span class="inbox-msg-time community-msg-time">${dateStr}</span></div>
                                         </div>
                                     </div>
                                     ${reactChips}

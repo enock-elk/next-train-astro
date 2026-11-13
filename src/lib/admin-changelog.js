@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.10': [
+        'Download on an alert photo, a community photo, and a Feedback Hub photo saves the file in the background. It does not open the share sheet. The timetable save does the same, and Share on that toast is still the share. Feedback Hub bubbles use the community bubble: no pointer tail, the same width, and a photo sits in the picture row. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.9': [
         'Alert share links such as /og/a/ are served by the preview worker again, so WhatsApp can read the notice instead of the site 404. Saving a timetable or an alert photo hands the file to the phone share sheet instead of opening a blob address. Live Telemetry keeps a stored 7-day, 30-day, all-time, and graph result for ten minutes, asks a slow Google report once, and does not paint ERR over a number it already has. Publish the telemetry worker. The preview worker is already published. No commuter What\'s New. forceShow stays false.',
     ],

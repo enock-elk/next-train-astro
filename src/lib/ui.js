@@ -24,7 +24,7 @@ import { sanitizeAttachmentDisplayUrl } from './attachments.js';
 import { alertSharePath } from './share-links.js';
 import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
 import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
-import { offerSavedImage } from './save-image.js';
+import { downloadImageFile } from './save-image.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -1673,8 +1673,8 @@ async function downloadLightboxImage() {
         if (!blob) throw new Error('download');
         const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
         const file = new File([blob], `next-train.${lightboxImageExt(type, src)}`, { type });
-        const outcome = await offerSavedImage(file);
-        if (outcome === 'download') showToast('Download started', 'success');
+        await downloadImageFile(file);
+        showToast('Download started', 'success');
     } catch {
         showToast('Could not download this picture', 'error');
     }

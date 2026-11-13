@@ -1786,7 +1786,7 @@ function inboxMediaFromHtml(html, extraUrls = []) {
             fileLabel: `View file${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
         });
     });
-    return { body: hoisted.body || '', media };
+    return { body: hoisted.body || '', media, imageCount: images.length };
 }
 
 function stripAdminSignoff(html) {
@@ -2077,7 +2077,13 @@ function renderMessagesThread(list) {
         const body = mine
             ? renderTextWithShareChips(commuterFeedbackText(raw))
             : (laid.body || '');
-        const media = laid.media || '';
+        const imageCount = laid.imageCount || 0;
+        const media = laid.media
+            ? laid.media.replace(
+                /class="[^"]*"(\s+data-alert-media)/,
+                `class="community-msg-images${imageCount === 1 ? ' is-single' : ''}"$1`,
+            )
+            : '';
         const clock = inboxClock(m.timestamp);
         const photo = matched ? (ident.photo || '') : (m.fromPhoto || '');
         const seed = matched ? ident.uid : (m.fromUid || name);
@@ -2090,13 +2096,14 @@ function renderMessagesThread(list) {
             ? ''
             : `<div class="community-bubble-name-row" style="color:${mine ? 'inherit' : inboxNameColor(seed)}"><span class="community-bubble-name truncate">${escapeHTML(name)}</span></div>`;
         const bubbleCls = mine ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
-        html += `<div class="community-post-row inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
+        html += `<div class="community-post-row inbox-row ${mine ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
       ${avatar}
       <div class="community-bubble-wrap">
-        <div class="${bubbleCls} shadow-sm" data-inbox-react-host="1">
+        <div class="${bubbleCls}" data-inbox-react-host="1">
           ${nameHtml}
           <div class="community-bubble-body">
-            <div class="community-msg-text inbox-msg-text">${media}${body}<span class="community-msg-time inbox-msg-time">${clock}</span></div>
+            ${media}
+            <div class="community-msg-text">${body}<span class="community-msg-time">${clock}</span></div>
           </div>
         </div>
         ${renderInboxReactionChips(m, actor, mine)}

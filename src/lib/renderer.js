@@ -28,7 +28,7 @@ import {
     currentTime, currentDayType, currentDayIndex, getScheduleFromDb
 } from './logic.js';
 import { extraKempTrainIds, kempTrainIds, siblingSheetKey, withExtraTrainColumns } from './live-board.js';
-import { offerSavedImage } from './save-image.js';
+import { downloadImageFile } from './save-image.js';
 import { effectiveRouteSheetMode } from './route-sheets.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
@@ -1892,9 +1892,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             window._pendingShareFile = file;
             window._pendingShareText = `Commuter Notice: ${formatRouteLabelPlain(route.name)} (${selectedDay})`;
 
-            let outcome = 'download';
             try {
-                outcome = await offerSavedImage(file);
+                await downloadImageFile(file);
             } catch (err) {
                 console.error(err);
                 if (typeof showToast === 'function') showToast("Snapshot failed.", "error");
@@ -1902,12 +1901,13 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
                 return;
             }
 
-            const shareBtnHTML = (outcome === 'sheet' || outcome === 'cancelled')
+            const canShare = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+            const shareBtnHTML = canShare
                 ? `<button onclick="triggerNoticeShare()" class="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm hover:bg-gray-100 transition-colors whitespace-nowrap border border-gray-200"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4m0 0L8 8m4-4v12"></path></svg>Share</button>`
                 : '';
 
-            if (typeof showToast === 'function' && outcome !== 'cancelled') {
-                showToast(outcome === 'download' ? "Download started" : "Image ready", "success", 8000, shareBtnHTML);
+            if (typeof showToast === 'function') {
+                showToast("Saved to gallery", "success", 8000, shareBtnHTML);
             }
             
             if (typeof trackAnalyticsEvent === 'function') {

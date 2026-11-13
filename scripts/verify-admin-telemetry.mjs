@@ -97,6 +97,11 @@ ok(intraView.counts[37] === null, 'hours after latest available stay unplotted (
 
 ok(!workerJs.includes('lagBuffer'), 'worker no longer applies a 3h lagBuffer');
 ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4 bucket');
+ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
+ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
+ok(!workerJs.includes('int64Value'), 'the minutesAgo numeric filter is gone');
+ok(readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8').includes('telemetry-ga-detail'), 'Live Telemetry shows the GA4 error');
+ok(readFileSync(join(ROOT, 'src/components/HubModals.astro'), 'utf8').includes('id="telemetry-ga-detail"'), 'telemetry panel has a GA4 error line');
 ok(workerJs.includes("fillYearMonthSeries(rowMap, '202601'"), 'worker fills ALL months from Jan 2026');
 ok(workerJs.includes("{ name: \"sessions\" }"), 'worker fetches sessions alongside unique users');
 

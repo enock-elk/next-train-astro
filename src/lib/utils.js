@@ -821,9 +821,29 @@ export function resolveStationAlias(raw) {
     return STATION_ALIASES[norm] || '';
 }
 
-/** Strip “ STATION” for labels. Aliases are for matching only — keep board caps. */
+/**
+ * Dump keys commuters should not read. Lookup values stay PRETORIA-N / PRETORIA WES.
+ * Other names stay as stored (board caps). SEO title case is stationLabel.
+ */
+const COMMUTER_STATION_LABELS = Object.freeze({
+    'PRETORIA-N': 'Pretoria North',
+    'PRETORIA N': 'Pretoria North',
+    'PRETORIA NORTH': 'Pretoria North',
+    'PRETORIA WES': 'Pretoria West',
+    'PRETORIA WEST': 'Pretoria West',
+    WALTOO: 'Waltloo',
+    WALTLOO: 'Waltloo',
+});
+
+export function commuterStationName(raw) {
+    const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return '';
+    return COMMUTER_STATION_LABELS[cleaned.toUpperCase()] || cleaned;
+}
+
+/** Visible station text. Johannesburg recents stay in caps. North and West do not. */
 export function plannerStationDisplayName(canonical) {
-    return String(canonical || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
+    return commuterStationName(canonical);
 }
 
 /**

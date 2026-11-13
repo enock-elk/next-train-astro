@@ -13,6 +13,8 @@
  * V1.12: Regional cards come from D1. One reporting device, one selected region
  *        per Johannesburg day. GA stays the site-wide people total. Sentry
  *        status is separate from Firebase app diagnostics.
+ * V1.13: The last-5-minutes tile uses a realtime minute range. One rejected
+ *        GA4 query no longer blanks the other tiles.
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
@@ -464,69 +466,78 @@ export default {
                         trendStartDate = "2026-01-01";
                     }
 
-                    const responses = await Promise.all([
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runRealtimeReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({ metrics: [{ name: "activeUsers" }] })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runRealtimeReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dimensionFilter: {
-                                    filter: {
-                                        fieldName: "minutesAgo",
-                                        numericFilter: { operation: "LESS_THAN", value: { int64Value: "5" } }
-                                    }
-                                },
-                                metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
+                    const gaProperty = `https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}`;
+                    const gaCalls = [
+                        { name: '30m', url: `${gaProperty}:runRealtimeReport`, body: { metrics: [{ name: "activeUsers" }] } },
+                        {
+                            name: '5m',
+                            url: `${gaProperty}:runRealtimeReport`,
+                            body: {
+                                metrics: [{ name: "activeUsers" }],
+                                minuteRanges: [{ startMinutesAgo: 4, endMinutesAgo: 0 }],
+                            },
+                        },
+                        {
+                            name: 'today',
+                            url: `${gaProperty}:runReport`,
+                            body: {
                                 dateRanges: [{ startDate: "today", endDate: "today" }],
-                                metrics: [{ name: "activeUsers" }, { name: "sessions" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
+                                metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+                            },
+                        },
+                        { name: 'wau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'mau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'all', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        {
+                            name: 'trend',
+                            url: `${gaProperty}:runReport`,
+                            body: {
                                 dateRanges: [{ startDate: trendStartDate, endDate: trendEndDate }],
                                 dimensions: trendDimensions,
                                 metrics: [{ name: "activeUsers" }],
-                                orderBys: trendOrderBys
-                            })
-                        })
-                    ]);
+                                orderBys: trendOrderBys,
+                            },
+                        },
+                    ];
 
-                    for (let i = 0; i < responses.length; i++) {
-                        if (!responses[i].ok) throw new Error(`GA4 API Request [${i}] Failed: ${await responses[i].text()}`);
-                    }
+                    const gaParts = await Promise.all(gaCalls.map(async (call) => {
+                        try {
+                            const res = await fetch(call.url, {
+                                method: 'POST',
+                                headers: gaHeaders,
+                                body: JSON.stringify(call.body),
+                            });
+                            const text = await res.text();
+                            let json = null;
+                            try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+                            if (!res.ok) {
+                                const msg = json?.error?.message || text.replace(/\s+/g, ' ').slice(0, 180);
+                                return { name: call.name, ok: false, error: msg, json: null };
+                            }
+                            return { name: call.name, ok: true, error: '', json };
+                        } catch (err) {
+                            return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
+                        }
+                    }));
 
-                    const [
-                        realtime30Data, realtime5Data,
-                        dailyData, wauData, mauData, allTimeData,
-                        trendData
-                    ] = await Promise.all(responses.map(r => r.json()));
+                    const gaByName = Object.fromEntries(gaParts.map((part) => [part.name, part]));
+                    const metricAt = (part, index = 0) => {
+                        if (!part?.ok) return 'ERR';
+                        const n = parseInt(part.json?.rows?.[0]?.metricValues?.[index]?.value, 10);
+                        return String(Number.isFinite(n) ? n : 0);
+                    };
+                    const failures = gaParts.filter((part) => !part.ok).map((part) => `${part.name}: ${part.error}`);
 
-                    telemetryData.active30m = String(parseInt(realtime30Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.active5m = String(parseInt(realtime5Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.todayUsers = String(parseInt(dailyData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.todaySessions = String(parseInt(dailyData?.rows?.[0]?.metricValues?.[1]?.value) || 0);
-                    telemetryData.wauUsers = String(parseInt(wauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.mauUsers = String(parseInt(mauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.allTimeUsers = String(parseInt(allTimeData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
+                    telemetryData.active30m = metricAt(gaByName['30m']);
+                    telemetryData.active5m = metricAt(gaByName['5m']);
+                    telemetryData.todayUsers = metricAt(gaByName.today);
+                    telemetryData.todaySessions = gaByName.today?.ok ? metricAt(gaByName.today, 1) : 'ERR';
+                    telemetryData.wauUsers = metricAt(gaByName.wau);
+                    telemetryData.mauUsers = metricAt(gaByName.mau);
+                    telemetryData.allTimeUsers = metricAt(gaByName.all);
+                    if (failures.length) telemetryData.gaErrorDetail = failures.join(' | ');
+
+                    const trendData = gaByName.trend?.ok ? gaByName.trend.json : null;
 
                     let activeCountsArray = [];
                     let labelsArray = [];

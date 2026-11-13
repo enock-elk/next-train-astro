@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, isExpressSkip, isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, resolvePlannerStationInput } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, isExpressSkip, isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, resolvePlannerStationInput, commuterStationName } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -1295,7 +1295,10 @@ export function runHeuristicFailureProbe(origin, dest, dayType = null) {
 
 function titleCaseStation(s) {
     if (!s) return '';
-    return String(s).replace(/ STATION/gi, '').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+    const cleaned = String(s).replace(/ STATION/gi, '').trim();
+    const named = commuterStationName(cleaned);
+    if (named !== cleaned) return named;
+    return cleaned.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 }
 
 /** Resolve a display/index station name to a key present in the station index. */
@@ -1675,10 +1678,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
     let executionCounter = 0;
     const MAX_EXECUTION_LIMIT = 14;
 
-    const formatTitle = (s) => {
-        if (!s) return '';
-        return String(s).replace(/ STATION/gi, '').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-    };
+    const formatTitle = (s) => titleCaseStation(s);
 
     // Eager Partial Journey Evaluator — precompute backward station sequence once
     const getBackwardStationSequence = (dst, targetDay) => {

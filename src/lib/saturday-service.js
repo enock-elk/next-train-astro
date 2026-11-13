@@ -10,7 +10,7 @@
 import { ROUTES, REGIONS, SATURDAY_PLACEHOLDER_ROUTES, HERC_KOED_JUNCTIONS } from './config.js';
 import { $fullDatabase, $globalStationIndex } from '../store.js';
 import { getScheduleFromDb } from './logic.js';
-import { isRealTime, normalizeStationName, usesSaturdayScheduleSheet } from './utils.js';
+import { isRealTime, normalizeStationName, usesSaturdayScheduleSheet, commuterStationName } from './utils.js';
 
 /** Same occupancy rule as live-board scheduleHasService (avoid importing live-board). */
 export function sheetHasTimedService(schedule) {
@@ -177,7 +177,7 @@ export function saturdayNoServiceCopy(routeId, dayType = 'saturday', holidayName
 }
 
 export function stationDisplayName(raw) {
-    return String(raw || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
+    return commuterStationName(raw);
 }
 
 /**

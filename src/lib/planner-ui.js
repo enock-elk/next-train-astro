@@ -19,7 +19,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
-    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES,
+    resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, masterListHasStation, STATION_ALIASES,
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
@@ -168,7 +168,7 @@ const resolveTripDisruptions = (routeId, stops) => {
     return fn(routeId, stops, day) || [];
 };
 const stripStationSuffix = (name) => String(name || '').replace(/ STATION/gi, '').trim();
-const bareStationName = (name) => stripStationSuffix(name);
+const bareStationName = (name) => commuterStationName(stripStationSuffix(name));
 
 function plannerHistoryStationLabel(name) {
     const masterList = getMasterStationList();
@@ -3102,8 +3102,10 @@ export const PlannerRenderer = {
 
     applyUIIntercepts: (stationName) => {
         if (!stationName) return "";
-        let name = stationName.replace(' STATION', '').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-        return name;
+        const cleaned = String(stationName).replace(/ STATION/gi, '').trim();
+        const named = commuterStationName(cleaned);
+        if (named !== cleaned) return named;
+        return cleaned.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
     },
 
     buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, variant = 'transfer' }) => {
@@ -3233,7 +3235,7 @@ export const PlannerRenderer = {
                     <div class="absolute rounded-full ${depDotClass}"></div>
                     <div class="flex flex-col">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="font-bold ${depTextClass} text-sm">Depart ${subFrom.replace(' STATION', '')}</span>
+                            <span class="font-bold ${depTextClass} text-sm">Depart ${commuterStationName(subFrom)}</span>
                             <span class="font-mono font-bold ${depTextClass} text-sm">${formatTimeDisplay(stops[0].time)}</span>
                         </div>
                         <div class="text-xs ${depTrainClass} font-medium mb-2">
@@ -3260,7 +3262,7 @@ export const PlannerRenderer = {
                     innerHtml += `
                         <div class="flex justify-between text-xs py-1.5 relative pl-5">
                             <div class="absolute -left-[5px] top-2 w-3 h-3 rounded-full ${dotClass}"></div>
-                            <span class="${textClass}">${stop.station.replace(' STATION', '')}</span>
+                            <span class="${textClass}">${commuterStationName(stop.station)}</span>
                             <span class="font-mono ${textClass}">${formatTimeDisplay(stop.time)}</span>
                         </div>
                     `;
@@ -3295,9 +3297,9 @@ export const PlannerRenderer = {
             const arrTextClass = isSevered ? "text-gray-400 dark:text-gray-500 opacity-50 grayscale font-bold" : "text-gray-900 dark:text-white font-bold";
             const arrBorderClass = subIsFinalDest ? "border-l-2 border-transparent" : "border-l-2 border-gray-300 dark:border-gray-600";
             
-            let arrLabel = subIsFinalDest ? subTo.replace(' STATION', '') : 'Arrive ' + subTo.replace(' STATION', '');
+            let arrLabel = subIsFinalDest ? commuterStationName(subTo) : 'Arrive ' + commuterStationName(subTo);
             if (isSevered) {
-                arrLabel = `${subTo.replace(' STATION', '')}`;
+                arrLabel = `${commuterStationName(subTo)}`;
             }
 
             html += `
@@ -4569,7 +4571,7 @@ export function setupAutocomplete(inputId, selectId) {
             if (!select.querySelector(`option[value="${station}"]`)) {
                 const opt = document.createElement('option');
                 opt.value = station;
-                opt.textContent = station;
+                opt.textContent = commuterStationName(station);
                 select.appendChild(opt);
             }
             select.value = station;

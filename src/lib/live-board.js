@@ -16,6 +16,7 @@ import {
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
     simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute,
+    commuterStationName,
     schedulesBelongToRoute, provisionalMapFromSchedule
 } from './utils.js';
 import {
@@ -1985,7 +1986,7 @@ export function findNearestStation(isAuto = false) {
 
                 const searchInput = document.getElementById('station-search-input');
                 if (searchInput) {
-                    searchInput.value = selectedVal.replace(/ STATION/g, '');
+                    searchInput.value = commuterStationName(selectedVal);
                     searchInput.dataset.resolvedValue = selectedVal;
                 }
 
@@ -1993,7 +1994,7 @@ export function findNearestStation(isAuto = false) {
                 disarmStartupLocateOverwrite();
                 noteAutoLocateApplied();
                 // force: Locating toast (1.2s global gap) must not swallow Found on the board.
-                showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success", 2500, '', { force: true });
+                showToast(`Found: ${commuterStationName(stationName)} (${distStr}km)`, "success", 2500, '', { force: true });
 
                 try {
                     window.dispatchEvent(new CustomEvent('nt-locate-fix', {
@@ -2105,7 +2106,7 @@ export function populateStationList() {
         if (station && !station.toLowerCase().includes('last updated')) {
             const option = document.createElement('option');
             option.value = station;
-            option.textContent = station.replace(/ STATION/g, '');
+            option.textContent = commuterStationName(station);
             stationSelectEl() && stationSelectEl().appendChild(option);
         }
     });
@@ -2115,7 +2116,7 @@ export function populateStationList() {
     if (allStations.includes(currentSelectedStation)) {
         if (stationSelectEl()) stationSelectEl().value = currentSelectedStation; 
         if (searchInput) {
-            searchInput.value = currentSelectedStation.replace(/ STATION/g, '');
+            searchInput.value = commuterStationName(currentSelectedStation);
             searchInput.dataset.resolvedValue = currentSelectedStation;
         }
     } else { 

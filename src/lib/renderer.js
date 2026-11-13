@@ -21,7 +21,7 @@ import {
     isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel, lineSwatchClass,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
-    resolveOperatingDayType, simUsesSpecificDate
+    resolveOperatingDayType, simUsesSpecificDate, commuterStationName
 } from './utils.js';
 
 import { 
@@ -1219,6 +1219,7 @@ export const Renderer = {
             if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return;
             if (isVariantStationName(row.STATION)) return; 
             const cleanStation = row.STATION.replace(' STATION', '');
+            const shownStation = commuterStationName(cleanStation);
             let hasData = false;
             sortedCols.forEach(col => { if (row[col] && row[col] !== "-" && row[col] !== "") hasData = true; });
             if (!hasData) return;
@@ -1254,19 +1255,19 @@ export const Renderer = {
             if (isZebra && isExport) rowClass += ' export-zebra';
             if (shadeWholeRow && isExport) rowClass += ' export-disrupted-row';
             const disrRowAttrs = (!isExport && isDisruptedRow)
-                ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(cleanStation)}"`
+                ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(shownStation)}"`
                 : '';
 
             html += `
                 <tr class="${rowClass.trim()}"${isSelectedRow ? ' id="grid-selected-row"' : ''}${disrRowAttrs}>
-                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} ${isExport ? '' : 'nt-station-scroll-shade'} border-b text-left pl-3">${isExport ? cleanStation : `<div class="w-max max-w-[140px] truncate">${cleanStation}</div>`}</td>
+                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} ${isExport ? '' : 'nt-station-scroll-shade'} border-b text-left pl-3">${isExport ? shownStation : `<div class="w-max max-w-[140px] truncate">${shownStation}</div>`}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
                         const expressSkip = isExpressSkip(val);
                         if (expressSkip) {
                             val = isExport
                                 ? '<span class="nt-expr" style="color:#7f1d1d;">EXPR</span>'
-                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-[#7f1d1d] dark:text-red-400 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(cleanStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(cleanStation)}">EXPR</button>`;
+                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-[#7f1d1d] dark:text-red-400 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(shownStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(shownStation)}">EXPR</button>`;
                         } else if (val !== "-") {
                             if (isRealTime(val)) {
                                 val = formatTimeDisplay(val); 
@@ -1428,6 +1429,8 @@ export const Renderer = {
         let name = stationName.replace(/ STATION/gi, '').trim();
         const upperName = name.toUpperCase();
         if (upperName === 'DURBAN YARD') return 'Durban';
+        const pretty = commuterStationName(name);
+        if (pretty !== name) return pretty;
         return Renderer._toTitleCase(name);
     },
 

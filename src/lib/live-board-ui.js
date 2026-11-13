@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, fareMultiplierForListedTicket, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, warningTriangleSvg, schedulesBelongToRoute, commuterStationName } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, yieldToPaint } from './ui.js';
@@ -173,9 +173,9 @@ export function _renderNextTrainList() {
             matches.forEach(station => {
                 const li = document.createElement('li');
                 li.className = "p-3.5 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 transition-colors";
-                li.textContent = station.replace(' STATION', '');
+                li.textContent = commuterStationName(station);
                 li.onclick = () => {
-                    input.value = station.replace(' STATION', '');
+                    input.value = commuterStationName(station);
                     select.value = station;
                     select.dispatchEvent(new Event('change'));
                     list.classList.add('hidden');
@@ -261,11 +261,11 @@ export function syncPlannerFromMain(stationName) {
     if (!opt) {
         opt = document.createElement('option');
         opt.value = stationName;
-        opt.textContent = stationName;
+        opt.textContent = commuterStationName(stationName);
         plannerSelect.appendChild(opt);
     }
     plannerSelect.value = stationName;
-    plannerInput.value = stationName.replace(/ STATION/gi, '');
+    plannerInput.value = commuterStationName(stationName);
     plannerInput.dataset.resolvedValue = stationName;
 }
 
@@ -793,7 +793,10 @@ export function openScheduleModal(destination, dayOverride = null) {
 
     const toTitleCase = (str) => {
         if (!str) return '';
-        return String(str).replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+        const cleaned = String(str).replace(/ STATION/gi, '').trim();
+        const named = commuterStationName(cleaned);
+        if (named !== cleaned) return named;
+        return cleaned.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
     };
 
     modalList.innerHTML = '';
@@ -1106,7 +1109,7 @@ export function initLiveBoardUi() {
             const searchInput = document.getElementById('station-search-input');
             if (searchInput) {
                 if (stationSelect.value) {
-                    searchInput.value = stationSelect.value.replace(/ STATION/g, '');
+                    searchInput.value = commuterStationName(stationSelect.value);
                     searchInput.dataset.resolvedValue = stationSelect.value;
                 } else {
                     searchInput.value = '';

@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "e2d8d592e875029f40fbb7ca17a3abf7f98e6f97",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: a first visit to the network map sends Back to the app welcome screen. A saved route still returns to that region's timetable page. Rail geometry, station pins, MapView, map-tab, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: map pin labels say Pretoria North and Pretoria West. Rail geometry, station pins, MapView, and advert handling are unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "4baba3b7d507f1c3069f26126ddcd931fd94a5425edfb84ce42985a78741ba99"
     },
     "public/js/map-app.js": {
-      "md5": "1d5e8fe600a95e9c81b7aa4171c2a5a4",
-      "sha256": "fedc5ec686ef092bf25af3fa97e6b6a7b81cbe2354ffa8c6ff4245ab0fffe798"
+      "md5": "5f377f0cbbdf4c0b0d0495feea2daf94",
+      "sha256": "58b332f252f0b6f6e3fe39a39ef0cf7045ed534d97e5811310260073b131c667"
     },
     "src/pages/map.astro": {
       "md5": "97fc25e4b1d8bf7aa32e8a2234113ce5",
@@ -37,8 +37,8 @@
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "f006766c9a7e3254f5476316fcd1ae51",
-      "sha256": "f23684682a6f221421eafb1cf83fa1e2f1eb8b8bad6dd87a965fb36b24c9ad2b"
+      "md5": "0c55b79d571409fa60e1a7119993dfa5",
+      "sha256": "9a5b3371371662368b4ca43f6d354934b3519afd2e25b16f6da58716f4839ed3"
     },
     "src/lib/clever-ads.js": {
       "md5": "c048ebcc86be6be60709d1a56b899393",

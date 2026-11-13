@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.5': [
+        'Live Telemetry showed ERR on every GA4 card because one rejected Google query threw away the rest. The last 5 minutes card now asks for a minute range, a failed query leaves the other cards as numbers, and the error is written under the cards. Publish the telemetry worker for that to reach Live Telemetry. Station lists, the timetable, the planner, and the map say Pretoria North and Pretoria West instead of Pretoria-N and Pretoria Wes. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.4': [
         'Copy on an alert, a community message, and a Feedback Hub message is hidden when there is no caption. When there is text, Copy copies it, says Copied, and clears the highlight. Tapping a quoted community message scrolls to that message and flashes it. Community in System Controls opens collapsed, the same as the other sections. No commuter What\'s New. forceShow stays false.',
     ],

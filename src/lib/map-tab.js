@@ -11,7 +11,7 @@ import { $currentRouteId, $globalStationIndex, $schedules, $userRegion } from '.
 import {
     timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
     normalizeStationName, getDistanceFromLatLonInKm, safeStorage, scheduleCacheSlot,
-    expandJhbLabel, applyFittedLabel,
+    expandJhbLabel, applyFittedLabel, commuterStationName,
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
@@ -1347,7 +1347,7 @@ function clockHm(ts) {
 }
 
 function stationShortName(name) {
-    return String(name || '').replace(/ STATION$/i, '').trim();
+    return commuterStationName(name);
 }
 
 function nearbyRealtimeLine(trainId, extra = {}, pingMod = {}, delayMod = {}) {

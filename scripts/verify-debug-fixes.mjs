@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -219,6 +219,10 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(STATION_ALIASES.BOSMAN === 'PRETORIA', 'Bosman alias map');
     assert(STATION_ALIASES['PRETORIA NORTH'] === 'PRETORIA N', 'Pretoria North alias map');
     assert(STATION_ALIASES['PRETORIA WEST'] === 'PRETORIA WES', 'Pretoria West alias map');
+    assert(commuterStationName('PRETORIA-N') === 'Pretoria North', 'PRETORIA-N displays as Pretoria North');
+    assert(commuterStationName('PRETORIA WES') === 'Pretoria West', 'PRETORIA WES displays as Pretoria West');
+    assert(commuterStationName('Pretoria-N') === 'Pretoria North', 'Pretoria-N displays as Pretoria North');
+    assert(plannerStationDisplayName('PRETORIA-N') === 'Pretoria North', 'planner shows Pretoria North');
     assert(plannerStationDisplayName('JOHANNESBURG') === 'JOHANNESBURG', 'Johannesburg recents stay in caps');
     assert(!/Park Station/i.test(plannerStationDisplayName('JOHANNESBURG')), 'Park Station is not a display label');
     const stamp = new Date(2026, 7, 25, 7, 19, 0);

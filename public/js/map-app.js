@@ -1673,8 +1673,17 @@
                 }[c]));
             }
 
+            function commuterMapStationName(raw) {
+                const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
+                const key = cleaned.toUpperCase();
+                if (key === 'PRETORIA-N' || key === 'PRETORIA N' || key === 'PRETORIA NORTH') return 'Pretoria North';
+                if (key === 'PRETORIA WES' || key === 'PRETORIA WEST') return 'Pretoria West';
+                if (key === 'WALTOO' || key === 'WALTLOO') return 'Waltloo';
+                return cleaned;
+            }
+
             function stationPopupHtml(origName, routeSet, routes) {
-                const title = escapeMapHtml(String(origName || '').replace(/ STATION/gi, ''));
+                const title = escapeMapHtml(commuterMapStationName(origName));
                 const ids = routeSet instanceof Set ? [...routeSet] : [...(routeSet || [])];
                 const rows = [];
                 const seen = new Set();
@@ -2438,7 +2447,7 @@
                       () => stationPopupHtml(data.origName, data.routes, drawnRoutes),
                       { maxWidth: 280, className: 'map-station-popup' }
                   )
-                  .bindTooltip(data.origName.replace(/ STATION/gi, ''), { 
+                  .bindTooltip(commuterMapStationName(data.origName), { 
                       permanent: true, 
                       direction: 'top',
                       offset: [0, -5],

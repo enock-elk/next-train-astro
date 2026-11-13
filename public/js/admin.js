@@ -5092,6 +5092,12 @@ const Admin = {
                     } catch { /* storage quota */ }
                 }
                 
+                const gaDetail = document.getElementById('telemetry-ga-detail');
+                if (gaDetail) {
+                    const detail = String(data.gaErrorDetail || '').replace(/\s+/g, ' ').trim();
+                    gaDetail.textContent = detail;
+                    gaDetail.classList.toggle('hidden', !detail);
+                }
                 if(stat5m) stat5m.textContent = data.active5m !== undefined ? Admin.formatNumber(data.active5m) : '--';
                 if(stat30m) stat30m.textContent = data.active30m !== undefined ? Admin.formatNumber(data.active30m) : '--';
                 if(statToday) statToday.textContent = data.todayUsers !== undefined ? Admin.formatNumber(data.todayUsers) : '--';

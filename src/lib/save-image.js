@@ -1,3 +1,22 @@
+let lastDownloadStamp = 0;
+
+/**
+ * Put the epoch on the end of a download name so a second save is a new file.
+ * @param {string} name
+ * @returns {string}
+ */
+export function stampedDownloadName(name) {
+    const raw = String(name || 'next-train.jpg').split(/[\\/]/).pop() || 'next-train.jpg';
+    const dot = raw.lastIndexOf('.');
+    const base = dot > 0 ? raw.slice(0, dot) : raw;
+    const ext = dot > 0 ? raw.slice(dot) : '';
+    if (/_\d{13}$/.test(base)) return `${base}${ext}`;
+    let stamp = Date.now();
+    if (stamp <= lastDownloadStamp) stamp = lastDownloadStamp + 1;
+    lastDownloadStamp = stamp;
+    return `${base}_${stamp}${ext}`;
+}
+
 /**
  * Save a picture in the background. This does not open the share sheet,
  * and it does not leave a blob address in the address bar.
@@ -5,7 +24,7 @@
  * @returns {Promise<void>}
  */
 export async function downloadImageFile(file) {
-    const name = file?.name || 'next-train.jpg';
+    const name = stampedDownloadName(file?.name);
     const mime = file?.type && String(file.type).startsWith('image/') ? file.type : 'image/jpeg';
     const click = (href, revoke) => {
         const link = document.createElement('a');

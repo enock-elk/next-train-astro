@@ -314,6 +314,7 @@ assert(!renderer.includes('timeBit'), 'empty board headline no longer appends th
 assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First train … is at: removed');
 assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
 assert(renderer.includes('downloadImageFile'), 'timetable save downloads the file');
+assert(readFileSync(new URL('../src/lib/save-image.js', import.meta.url), 'utf8').includes('lastDownloadStamp'), 'download names end with the epoch');
 assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
 assert(!renderer.includes('offerSavedImage'), 'timetable save does not open the share sheet');
 assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');

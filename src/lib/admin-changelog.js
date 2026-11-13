@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.11': [
+        'Download names end with the epoch, so saving the same photo or export again is a new file and the phone does not ask Download file again. A photo saves as next-train_<epoch>.jpg. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.10': [
         'Download on an alert photo, a community photo, and a Feedback Hub photo saves the file in the background. It does not open the share sheet. The timetable save does the same, and Share on that toast is still the share. Feedback Hub bubbles use the community bubble: no pointer tail, the same width, and a photo sits in the picture row. No commuter What\'s New. forceShow stays false.',
     ],

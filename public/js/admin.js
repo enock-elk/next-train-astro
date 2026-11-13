@@ -1998,6 +1998,23 @@ const Admin = {
     },
 
     /**
+     * Epoch on the end of the name, so a second save is not "download again".
+     * @param {string} filename
+     * @returns {string}
+     */
+    stampDownloadName: function(filename) {
+        const raw = String(filename || 'download').split(/[\\/]/).pop() || 'download';
+        const dot = raw.lastIndexOf('.');
+        const base = dot > 0 ? raw.slice(0, dot) : raw;
+        const ext = dot > 0 ? raw.slice(dot) : '';
+        if (/_\d{13}$/.test(base)) return `${base}${ext}`;
+        let stamp = Date.now();
+        if (stamp <= (Admin._lastDownloadStamp || 0)) stamp = Admin._lastDownloadStamp + 1;
+        Admin._lastDownloadStamp = stamp;
+        return `${base}_${stamp}${ext}`;
+    },
+
+    /**
      * Force a file download (avoids navigating to blob: URLs in the PWA shell).
      * @param {string} filename
      * @param {string|Blob} content
@@ -2009,11 +2026,12 @@ const Admin = {
             const blob = content instanceof Blob
                 ? content
                 : new Blob([content], { type: mime });
+            const savedName = Admin.stampDownloadName(filename);
 
             const trigger = (href, revoke) => {
                 const a = document.createElement('a');
                 a.href = href;
-                a.setAttribute('download', filename);
+                a.setAttribute('download', savedName);
                 a.rel = 'noopener';
                 a.style.display = 'none';
                 document.body.appendChild(a);
@@ -4227,7 +4245,7 @@ const Admin = {
             });
             canvas.toBlob((blob) => {
                 if (!blob) return;
-                const fileName = `NextTrain_GraphStats_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12)}.png`;
+                const fileName = Admin.stampDownloadName(`NextTrain_GraphStats_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12)}.png`);
                 const link = document.createElement('a');
                 link.download = fileName;
                 link.href = URL.createObjectURL(blob);
@@ -5631,7 +5649,7 @@ const Admin = {
 
             canvas.toBlob(async (blob) => {
                 const timestampStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12); 
-                const fileName = `NextTrain_Telemetry_${timestampStr}.png`;
+                const fileName = Admin.stampDownloadName(`NextTrain_Telemetry_${timestampStr}.png`);
                 const file = new File([blob], fileName, { type: "image/png" });
                 const blobUrl = URL.createObjectURL(blob);
                 
@@ -6030,7 +6048,7 @@ const Admin = {
             
             canvas.toBlob(async (blob) => {
                 const timestampStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12); 
-                const fileName = `NextTrain_LineChart_${timestampStr}.png`;
+                const fileName = Admin.stampDownloadName(`NextTrain_LineChart_${timestampStr}.png`);
                 const file = new File([blob], fileName, { type: "image/png" });
                 const blobUrl = URL.createObjectURL(blob);
                 
@@ -27511,7 +27529,7 @@ const Admin = {
                 const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `schedule-qa-${lastReport.meta?.region || 'region'}-${Date.now()}.json`;
+                a.download = Admin.stampDownloadName(`schedule-qa-${lastReport.meta?.region || 'region'}.json`);
                 a.click();
                 URL.revokeObjectURL(a.href);
             };

@@ -529,6 +529,44 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        const openModalIds = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)')).map((modal) => modal.id);
+        const topModalId = (() => {
+            let highestZ = -1;
+            let topId = '';
+            document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)').forEach((modal) => {
+                let zIndex = 0;
+                const zMatch = modal.className.match(/z-\[?(\d+)\]?/);
+                if (zMatch?.[1]) zIndex = parseInt(zMatch[1], 10);
+                const inlineZ = parseInt(modal.style?.zIndex, 10);
+                if (Number.isFinite(inlineZ)) zIndex = Math.max(zIndex, inlineZ);
+                if (!zIndex) {
+                    const computedZ = window.getComputedStyle(modal).zIndex;
+                    if (computedZ !== 'auto') zIndex = parseInt(computedZ, 10) || 0;
+                }
+                if (zIndex >= highestZ) {
+                    highestZ = zIndex;
+                    topId = modal.id;
+                }
+            });
+            return topId;
+        })();
+        const restoreHash = (hash, state) => {
+            if ((location.hash || '') === hash) return;
+            try { history.pushState(state, '', hash); } catch { /* the highlight is already cleared */ }
+        };
+        if (typeof window.__ntInboxSelectionOpen === 'function' && window.__ntInboxSelectionOpen()
+            && (!topModalId || topModalId === 'messages-thread-modal')) {
+            window.__ntClearInboxSelection?.();
+            restoreHash('#messages', { modal: 'messages-thread-modal' });
+            return;
+        }
+        if (typeof window.__ntCommunitySelectionOpen === 'function' && window.__ntCommunitySelectionOpen()
+            && openModalIds.length === 0) {
+            window.__ntClearCommunitySelection?.();
+            restoreHash('#community', { tab: 'community' });
+            return;
+        }
+
         // Close the top overlay first (Account over Options, archived alert over Dev Mode).
         // Never close Dev Mode while a panel is drilled in — that was jumping users to home.
         // A pop that lands on this overlay's own hash must leave it up (profile over account).

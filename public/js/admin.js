@@ -1201,6 +1201,99 @@ const Admin = {
         return String(routeId);
     },
 
+    feedbackPlaceLine: (item) => {
+        if (!item) return '';
+        const route = Admin.inboxRouteLabel(item.routeId) || '';
+        const station = String(item.station || '').trim();
+        const auto = item.stationAutoLocated === true || item.stationAutoLocated === '1' || item.stationAutoLocated === 1;
+        const choice = station && typeof window.stationChoiceLabel === 'function'
+            ? window.stationChoiceLabel(station, auto)
+            : '';
+        return [route, choice].filter(Boolean).join(' | ');
+    },
+
+    communityAliasFromItems: (items) => {
+        const list = Array.isArray(items) ? items : [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const name = String(list[i]?.displayName || '').trim();
+            if (!name || name.length > 80 || /^(passenger|you|admin|anonymous)$/i.test(name)) continue;
+            const did = String(list[i]?.deviceId || list[i]?.device_id || '');
+            if (did && name === did) continue;
+            return name;
+        }
+        return '';
+    },
+
+    communityNameForAccount: async (uid) => {
+        const id = String(uid || '').trim();
+        if (!id) return '';
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        try {
+            const res = await fetch(`${base}public_profile/${encodeURIComponent(id)}.json`);
+            if (!res.ok) return '';
+            const row = await res.json();
+            const name = String(row?.displayName || '').trim();
+            if (!name || name.length > 80 || /^(passenger|you|admin)$/i.test(name)) return '';
+            return name;
+        } catch {
+            return '';
+        }
+    },
+
+    syncFeedbackAliases: async (items) => {
+        if (!Array.isArray(items) || !items.length) return;
+        if (!Admin.cachedAliases || typeof Admin.cachedAliases !== 'object') Admin.cachedAliases = {};
+        const byDevice = new Map();
+        items.forEach((item) => {
+            if (!item || item.isFromAdmin) return;
+            const did = item.device_id || item.deviceId;
+            if (!did || did === 'Anonymous / Legacy') return;
+            if (!byDevice.has(did)) byDevice.set(did, []);
+            byDevice.get(did).push(item);
+        });
+        const pending = [];
+        const lookups = [];
+        byDevice.forEach((group, did) => {
+            const named = Admin.communityAliasFromItems(group);
+            if (named) {
+                if (String(Admin.cachedAliases[did] || '') !== named) pending.push([did, named]);
+                return;
+            }
+            const uid = group.map((item) => item.accountUid).find((id) => id) || '';
+            lookups.push({ did, uid });
+        });
+        const secret = await Admin.getAuthKey();
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const queue = lookups.slice(0, 40);
+        let cursor = 0;
+        const pull = async () => {
+            while (cursor < queue.length) {
+                const job = queue[cursor];
+                cursor += 1;
+                let uid = job.uid;
+                if (!uid && secret) {
+                    try {
+                        const res = await fetch(`${base}devices/${encodeURIComponent(job.did)}.json?auth=${encodeURIComponent(secret)}`);
+                        if (res.ok) uid = (await res.json())?.uid || '';
+                    } catch { uid = ''; }
+                }
+                const name = await Admin.communityNameForAccount(uid);
+                if (name && String(Admin.cachedAliases[job.did] || '') !== name) pending.push([job.did, name]);
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(6, queue.length) }, () => pull()));
+        pending.forEach(([did, name]) => { Admin.cachedAliases[did] = name; });
+        if (!secret || !pending.length) return;
+        await Promise.all(pending.map(async ([did, name]) => {
+            try {
+                await fetch(`${base}admin_state/aliases/${encodeURIComponent(did)}.json?auth=${encodeURIComponent(secret)}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(name),
+                });
+            } catch { /* the name still shows for this visit */ }
+        }));
+    },
+
     threadCommuterRoute: (items) => {
         const list = Array.isArray(items) ? items : [];
         for (let i = list.length - 1; i >= 0; i--) {
@@ -2947,6 +3040,42 @@ const Admin = {
         return ms;
     },
 
+    accountJoinMs: ({ createdAt = 0, accountCreatedAt = 0, joinedAt = 0, deviceIds = null, deviceId = '', uid = '' } = {}) => {
+        const valid = (value) => {
+            const n = Number(value) || 0;
+            if (n < Date.UTC(2020, 0, 1) || n > Date.now() + 86400000) return 0;
+            return n;
+        };
+        const times = [];
+        const push = (value) => {
+            const n = valid(value);
+            if (n) times.push(n);
+        };
+        push(joinedAt);
+        push(accountCreatedAt);
+        push(createdAt);
+        const ids = [];
+        if (deviceIds && typeof deviceIds === 'object') {
+            Object.keys(deviceIds).forEach((id) => {
+                if (!id) return;
+                ids.push(id);
+                const linked = Number(deviceIds[id]);
+                if (Number.isFinite(linked) && linked > 1e9) push(linked < 1e12 ? linked * 1000 : linked);
+            });
+        }
+        if (deviceId) ids.push(deviceId);
+        if (uid) ids.push(uid);
+        ids.forEach((id) => push(Admin.parseJoinedAtFromUserId(id)));
+        if (!times.length) return 0;
+        return Math.min(...times);
+    },
+
+    accountCreatedMs: (user) => {
+        const n = Number(user?.accountCreatedAt) || Number(user?.createdAt) || 0;
+        if (n < Date.UTC(2020, 0, 1) || n > Date.now() + 86400000) return 0;
+        return n;
+    },
+
     formatJoinedLabel: (id) => {
         const ts = Admin.parseJoinedAtFromUserId(id);
         if (!ts) return null;
@@ -3113,7 +3242,13 @@ const Admin = {
         return {
             id: did,
             alias: Admin.commuterAlias(did),
-            joinedMs: Admin.parseJoinedAtFromUserId(did) || Number(userNode?.createdAt) || null,
+            joinedMs: Admin.accountJoinMs({
+                createdAt: userNode?.createdAt,
+                accountCreatedAt: userNode?.accountCreatedAt,
+                joinedAt: userNode?.joinedAt,
+                deviceIds: userNode?.deviceIds,
+                deviceId: did,
+            }) || null,
             displayName: userNode?.displayName || deviceNode?.displayName || '',
             email: userNode?.email || deviceNode?.email || '',
             linkedUid: deviceNode?.uid || '',
@@ -11180,6 +11315,11 @@ const Admin = {
                 // For thread actions, we target the latest commuter message
                 const commuterMsgs = groupItems.filter(i => !i.isFromAdmin);
                 const latestCommuterMsg = commuterMsgs.length > 0 ? commuterMsgs[commuterMsgs.length - 1] : groupItems[0];
+                const placeSource = [...commuterMsgs].reverse().find((item) => String(item?.station || '').trim()) || null;
+                const placeLine = placeSource ? Admin.feedbackPlaceLine(placeSource) : '';
+                const placeHtml = placeLine
+                    ? `<span class="block w-full text-[11px] leading-snug text-gray-600 dark:text-gray-300 mt-0.5">${String(placeLine).replace(/</g, '&lt;')}</span>`
+                    : '';
                 const feedbackId = latestCommuterMsg.id;
                 const unresolvedIds = commuterMsgs.filter(i => i.status !== 'resolved').map(i => i.id).join(',');
 
@@ -11318,6 +11458,7 @@ const Admin = {
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
                             <div class="text-xs font-bold text-gray-900 dark:text-white w-full min-w-0">${commuterTitle}</div>
                             <span class="text-[9px] text-gray-500 font-mono mt-1 inline-flex items-center flex-wrap gap-y-0.5">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''}${reactUnreadBadge}${contactScanBlock} <span class="opacity-40 mx-0.5">|</span> Last: ${latestDate}</span>
+                            ${placeHtml}
                         </div>
                         <div class="flex items-center justify-end shrink-0 self-center">
                             <button class="pointer-events-none focus:outline-none p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-transparent">
@@ -11587,6 +11728,7 @@ const Admin = {
                     if (!item.appVersion && hit.msg.appVersion) item.appVersion = hit.msg.appVersion;
                     if (Admin.isBlankInboxRoute(item.routeId) && hit.msg.routeId) item.routeId = hit.msg.routeId;
                     if (!String(item.station || '').trim() && hit.msg.station) item.station = hit.msg.station;
+                    if (!String(item.displayName || '').trim() && hit.msg.displayName) item.displayName = hit.msg.displayName;
                     if (item.stationAutoLocated == null && hit.msg.stationAutoLocated != null) item.stationAutoLocated = hit.msg.stationAutoLocated;
                     if (!item.diagnostics && hit.msg.diagnostics) item.diagnostics = hit.msg.diagnostics;
                     if (!item.attachmentUrl && hit.msg.attachmentUrl) item.attachmentUrl = hit.msg.attachmentUrl;
@@ -11635,6 +11777,7 @@ const Admin = {
                                 routeId: msg.routeId,
                                 station: msg.station,
                                 stationAutoLocated: msg.stationAutoLocated,
+                                displayName: msg.displayName,
                                 diagnostics: msg.diagnostics,
                                 attachmentUrl: msg.attachmentUrl,
                                 attachmentUrls: msg.attachmentUrls,
@@ -11662,6 +11805,7 @@ const Admin = {
                 } catch { /* the short name still paints until the next open */ }
                 Admin.cachedFeedbackData = mergedData;
                 Admin.cachedFeedbackData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                try { await Admin.syncFeedbackAliases(mergedData); } catch { /* the stored alias still shows */ }
 
                 Admin.renderFeedbackList();
 
@@ -13455,7 +13599,13 @@ const Admin = {
                         ${mine ? '' : `<span class="cm-avatar" aria-hidden="true">${esc(letter)}</span>`}
                         <div class="cm-bubble ${mine ? 'cm-bubble-own' : ''} ${message.hidden ? 'is-hidden' : ''}">
                             <div class="cm-bubble-name">
-                                <span>${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
+                                <span>${esc((() => {
+                                    const choice = typeof window.stationChoiceLabel === 'function'
+                                        ? window.stationChoiceLabel(message.station, message.stationAutoLocated)
+                                        : '';
+                                    const name = message.displayName || 'Passenger';
+                                    return choice ? `${name} - ${choice}` : name;
+                                })())} ${authorHint} ${category}</span>
                             </div>
                             <div class="cm-bubble-body">
                                 ${quote}<p class="cm-bubble-text${removed ? ' cm-msg-deleted' : ''}">${esc(shownBody)}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
@@ -14934,6 +15084,14 @@ const Admin = {
                             displayName,
                             email: pickText(row.email, 160) || pickText(user.email, 160),
                             createdAt: Number(row.createdAt) || Number(user.createdAt) || Number(row.updatedAt) || 0,
+                            joinedAt: Admin.accountJoinMs({
+                                createdAt: Number(row.createdAt) || Number(user.createdAt) || 0,
+                                accountCreatedAt: Number(row.accountCreatedAt) || Number(user.accountCreatedAt) || 0,
+                                joinedAt: Number(row.joinedAt) || Number(user.joinedAt) || 0,
+                                deviceIds: user.deviceIds,
+                                uid,
+                            }),
+                            accountCreatedAt: Number(user.accountCreatedAt) || Number(row.accountCreatedAt) || Number(row.createdAt) || Number(user.createdAt) || 0,
                             provider: row.provider || user.provider || '',
                             region: pickText(row.region, 8).toUpperCase() || pickText(user.region, 8).toUpperCase(),
                             lastRouteId: pickText(row.lastRouteId, 40) || pickText(user.lastRouteId, 40),
@@ -15047,7 +15205,7 @@ const Admin = {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'admin-sheet-card ut-account-card';
-                const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
+                const when = Number(row.joinedAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.joinedAt)) : '';
                 const known = (typeof ROUTES !== 'undefined' && row.lastRouteId && ROUTES[row.lastRouteId]) ? ROUTES[row.lastRouteId] : null;
                 const routeHtml = known ? Admin.formatRouteLabelHtml(known.name) : (row.lastRouteId ? esc(routeName(row.lastRouteId)) : '');
                 const region = regionLabel(row.region);
@@ -15269,9 +15427,15 @@ const Admin = {
                     : (via === 'alias' ? 'feedback alias'
                     : (via === 'device' ? 'device record'
                     : (via === 'device?uid' ? 'device → account' : 'user id')));
-                const joinedMs = Number(user.createdAt)
-                    || Admin.parseJoinedAtFromUserId(deviceId)
-                    || Admin.parseJoinedAtFromUserId(uid);
+                const joinedMs = Admin.accountJoinMs({
+                    createdAt: user.createdAt,
+                    accountCreatedAt: user.accountCreatedAt,
+                    joinedAt: user.joinedAt,
+                    deviceIds: user.deviceIds,
+                    deviceId,
+                    uid,
+                });
+                const accountCreatedMs = Admin.accountCreatedMs(user);
                 const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
                     ? Object.keys(user.deviceIds).filter(Boolean)
                     : (deviceId ? [deviceId] : []);
@@ -15397,6 +15561,7 @@ const Admin = {
                         </div>
                         <div class="ut-sheet-group">
                             ${infoRow('Joined', `<b>${joinedLabel}</b>`)}
+                            ${accountCreatedMs && joinedMs && Math.abs(accountCreatedMs - joinedMs) > 60000 ? infoRow('Account created', `<b>${Admin.formatDate(accountCreatedMs)}</b>`) : ''}
                             ${infoRow('Last activity', lastActivityHtml)}
                             ${infoRow('Found by', Admin.commuterEsc(viaLabel))}
                             ${deviceId && deviceId !== uid ? infoRow('Device', `<span class="break-all">${Admin.commuterEsc(deviceId)}</span>`) : ''}
@@ -25090,7 +25255,7 @@ const Admin = {
                         if (commuterRouteLabel) routeStationBits.push(commuterRouteLabel);
                         if (stationChoice) routeStationBits.push(stationChoice);
                         const commuterRouteHtml = routeStationBits.length
-                            ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' · '))}</div>`
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' | '))}</div>`
                             : '';
                         const diag = item.diagnostics && typeof item.diagnostics === 'object' ? item.diagnostics : null;
                         const diagLine = (typeof window.formatFeedbackDiagLine === 'function')
@@ -25516,7 +25681,7 @@ const Admin = {
             if (routeLabel) bits.push(routeLabel);
             if (choice) bits.push(choice);
             if (bits.length) {
-                meta.textContent = bits.join(' · ');
+                meta.textContent = bits.join(' | ');
                 meta.classList.remove('hidden');
             } else {
                 meta.textContent = '';

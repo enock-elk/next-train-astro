@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.3': [
+        'A device back press clears a highlighted community message, and a highlighted Feedback Hub message, before it leaves the room. A community message stores the closest station, and operators see it on the name, such as Asyria M - Pretoria (Auto). Commuter Feedback writes the route and that station as JHB ↔ Naledi | Pretoria (Auto), on the person and on the version card. The feedback alias follows the name they show on Community. Joined is the earlier of the first anonymous visit and the account, the account date is kept separately, and the older user id stays on the phone. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.2': [
         'Sending a community reply clears the quote above the box as soon as the message is staged, and puts the quote back if the send fails. A tap outside the reaction tray closes it. A tap on the who-reacted list keeps that list and closes the tray, and closing the list closes the tray too. Planner departure options keep the times on the left and the length and changes on the right, without the wait. The alerts bell starts as the idle disc, so it does not flash red before notices load. No commuter What\'s New. forceShow stays false.',
     ],

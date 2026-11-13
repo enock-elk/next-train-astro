@@ -214,8 +214,9 @@ ok(adminJs.includes('previous overlapping region report'), 'a legacy Worker payl
 ok(adminJs.includes("stationChoiceLabel") || adminJs.includes("(${autoFlag ? 'Auto' : 'man'})"), 'build notes name the station as (man) or (auto)');
 {
     const hubJs = readFileSync(join(ROOT, 'src/lib/hub.js'), 'utf8');
-    const stationSpreads = hubJs.split('...getBoardStationContext()').length - 1;
-    ok(stationSpreads >= 5, 'feedback form, Feedback Hub, and the inbox copy store the home-board station');
+    const stationSpreads = hubJs.split('...await messagePlaceFields()').length - 1;
+    ok(stationSpreads >= 5, 'feedback form, Feedback Hub, and the inbox copy store the closest station');
+    ok(hubJs.includes('captureSenderStation') && hubJs.includes('getBoardStationContext'), 'a missing GPS fix still stores the home-board station');
     ok(adminJs.includes('item.station = hit.msg.station'), 'an inbox copy can fill a feedback row that has no station');
     ok(adminJs.includes('station: msg.station'), 'an inbox-only message keeps the home-board station');
 }

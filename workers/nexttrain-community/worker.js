@@ -1894,6 +1894,12 @@ async function handlePost(request, env) {
         email: String(body.email || user.email || '').slice(0, 120) || null,
         deviceId: String(body.deviceId || 'unknown').slice(0, 120),
         timestamp: Date.now(),
+        ...(String(body.station || '').replace(/\s+STATION\s*$/i, '').trim()
+            ? {
+                station: String(body.station || '').replace(/\s+STATION\s*$/i, '').trim().slice(0, 80),
+                stationAutoLocated: body.stationAutoLocated === true || body.stationAutoLocated === '1' || body.stationAutoLocated === 1,
+            }
+            : {}),
         hidden: false,
         replyCount: 0,
         appVersion: String(body.appVersion || '').slice(0, 40) || null,

@@ -18,6 +18,8 @@ import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-s
 import { renderTextWithShareChips, shareChipHtml } from './share-chips.js';
 import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
+import { captureSenderStation } from './auto-locate.js';
+import { stationChoiceLabel } from './feedback-diag-line.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { haltPanelText } from './reply-suggest.js';
@@ -897,6 +899,10 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         if (!limit.ok) return limit;
     }
 
+    const place = await captureSenderStation();
+    const placeFields = place?.station
+        ? { station: place.station, stationAutoLocated: place.stationAutoLocated === true }
+        : {};
     const replyToPayload = replyDraft?.postId && !isCommunityTombstone(findCachedPost(replyDraft.postId)) ? {
         replyTo: {
             postId: replyDraft.postId,
@@ -935,6 +941,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
                     hidden: false,
                     replyCount: 0,
                     appVersion: APP_VERSION,
+                    ...placeFields,
                     ...replyToPayload,
                 },
             },
@@ -962,6 +969,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         replyCount: 0,
         appVersion: APP_VERSION,
         photoURL: null,
+        ...placeFields,
         ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
         ...(linkUrl ? { linkUrl } : {}),
         ...replyToPayload,
@@ -1112,6 +1120,10 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         if (!limit.ok) return limit;
     }
 
+    const place = await captureSenderStation();
+    const placeFields = place?.station
+        ? { station: place.station, stationAutoLocated: place.stationAutoLocated === true }
+        : {};
     const safety = checkContentSafety(text);
     if (safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };
     if (safety.verdict === 'review') {
@@ -1136,6 +1148,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
                     timestamp: Date.now(),
                     hidden: false,
                     appVersion: APP_VERSION,
+                    ...placeFields,
                 },
             },
         });
@@ -1157,6 +1170,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         timestamp: Date.now(),
         hidden: false,
         appVersion: APP_VERSION,
+        ...placeFields,
     };
 
     const banned = await isShadowBanned(acct.uid);
@@ -1870,6 +1884,20 @@ function clearCommunitySelection() {
     closeReactionSheet();
 }
 
+if (typeof window !== 'undefined') {
+    window.__ntClearCommunitySelection = () => clearCommunitySelection();
+    window.__ntCommunitySelectionOpen = () => {
+        const bar = document.getElementById('community-select-bar');
+        return !!(bar && !bar.classList.contains('hidden'));
+    };
+}
+
+function adminStationName(displayName, post, isOwn) {
+    if (isOwn || !isAdminAuthed()) return displayName;
+    const choice = stationChoiceLabel(post?.station, post?.stationAutoLocated);
+    return choice ? `${displayName} - ${choice}` : displayName;
+}
+
 function selectCommunityPost(postId, routeId) {
     const post = findCachedPost(postId);
     if (!post) return;
@@ -2303,6 +2331,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
     const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
+    const visibleName = adminStationName(displayName, post, isOwn);
     const nameColor = nameColorFor(authorColorKey(post.uid, displayName));
     const replyTo = !tombstone && post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
     const quoteShown = replyTo
@@ -2333,7 +2362,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
-        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${marksHtml}</div>`;
+        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(visibleName)}</span>${marksHtml}</div>`;
 
     return `
       <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}"${tombstone ? ' data-deleted="1"' : ''}>

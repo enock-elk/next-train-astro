@@ -117,7 +117,7 @@ import {
     unstickStaleServiceWorker,
 } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
-import { getBoardStationContext } from './auto-locate.js';
+import { captureSenderStation, getBoardStationContext } from './auto-locate.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
     sniffAttachmentFile,
@@ -1197,7 +1197,7 @@ async function submitFeedback(opts = {}) {
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         diagnostics: feedbackDiagnostics(),
-                        ...getBoardStationContext(),
+                        ...await messagePlaceFields(),
                         ...chatScopeFields(),
                     },
                 },
@@ -1280,7 +1280,7 @@ async function submitFeedback(opts = {}) {
             isPWA: isStandalone,
             quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
             diagnostics: feedbackDiagnostics(),
-            ...getBoardStationContext(),
+            ...await messagePlaceFields(),
             ...chatScopeFields(),
         };
 
@@ -1597,9 +1597,20 @@ function signedInUid() {
 
 function chatScopeFields() {
     if (accountNeedsEmailVerify()) return { chatScope: 'guest', sentSignedOut: true };
+    const acct = $account.get();
     const uid = signedInUid();
-    if (uid) return { accountUid: uid, chatScope: 'account' };
+    const name = String(acct?.displayName || '').trim().slice(0, 80);
+    const named = name && !/^(passenger|you|admin)$/i.test(name) ? { displayName: name } : {};
+    if (uid) return { accountUid: uid, chatScope: 'account', ...named };
     return { chatScope: 'guest', sentSignedOut: true };
+}
+
+async function messagePlaceFields() {
+    try {
+        const place = await captureSenderStation();
+        if (place?.station) return place;
+    } catch { /* the board station still rides along */ }
+    return getBoardStationContext();
 }
 
 /** Signed-out view is a new chat on the same device id. Never-signed-in guests still see history. */
@@ -1886,6 +1897,15 @@ function clearInboxSelection() {
     bar?.classList.add('hidden');
     bar?.classList.remove('flex');
     document.getElementById('inbox-reaction-tray')?.classList.add('hidden');
+}
+
+if (typeof window !== 'undefined') {
+    window.__ntClearInboxSelection = () => clearInboxSelection();
+    window.__ntInboxSelectionOpen = () => {
+        const modal = document.getElementById('messages-thread-modal');
+        const bar = document.getElementById('messages-select-bar');
+        return !!(modal && !modal.classList.contains('hidden') && bar && !bar.classList.contains('hidden'));
+    };
 }
 
 function selectedInboxEntry(host) {
@@ -2238,7 +2258,7 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmen
         appVersion: APP_VERSION,
         routeId: $currentRouteId.get() || 'none',
         diagnostics: feedbackDiagnostics(),
-        ...getBoardStationContext(),
+        ...await messagePlaceFields(),
         ...chatScopeFields(),
     };
     if (feedbackId) payload.feedbackId = String(feedbackId);
@@ -3488,7 +3508,7 @@ export function initHub() {
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         diagnostics: feedbackDiagnostics(),
-                        ...getBoardStationContext(),
+                        ...await messagePlaceFields(),
                         ...chatScopeFields(),
                     },
                 },
@@ -3535,7 +3555,7 @@ export function initHub() {
                 deviceId: getThreadDeviceId() || 'unknown',
                 isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
                 diagnostics: feedbackDiagnostics(),
-                ...getBoardStationContext(),
+                ...await messagePlaceFields(),
                 ...chatScopeFields(),
             };
             const authParam = authToken ? `?auth=${authToken}` : '';

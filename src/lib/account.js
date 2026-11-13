@@ -72,15 +72,27 @@ function adoptAccountUserId(canonical) {
     return id;
 }
 
+function stampMs(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 1e9) return 0;
+    return value < 1e12 ? value * 1000 : value;
+}
+
+/** Earlier of the link stamp and the epoch baked into usr_…_timestamp. */
 export function deviceIdAgeMs(id, linkedAt) {
-    if (typeof linkedAt === 'number' && Number.isFinite(linkedAt) && linkedAt > 1e9) {
-        return linkedAt < 1e12 ? linkedAt * 1000 : linkedAt;
-    }
+    const linked = stampMs(linkedAt);
     const m = String(id || '').match(/_(\d{10,13})$/);
-    if (!m) return Number.MAX_SAFE_INTEGER;
-    const raw = Number(m[1]);
-    if (!Number.isFinite(raw)) return Number.MAX_SAFE_INTEGER;
-    return raw < 1e12 ? raw * 1000 : raw;
+    const embedded = m ? stampMs(Number(m[1])) : 0;
+    if (embedded && linked) return Math.min(embedded, linked);
+    if (embedded) return embedded;
+    if (linked) return linked;
+    return Number.MAX_SAFE_INTEGER;
+}
+
+/** Keep the first-seen time when a later sign-in would stamp "now". */
+function earlierDeviceStamp(id, current, now) {
+    const age = deviceIdAgeMs(id, typeof current === 'number' ? current : null);
+    if (age !== Number.MAX_SAFE_INTEGER) return age;
+    return now;
 }
 
 /** Oldest linked device wins for admin inbox. Local mint is still recorded. */
@@ -490,17 +502,28 @@ export async function ensureUserProfile(user, opts = {}) {
         });
         const localPrefs = readLocalAccountPrefs();
         const priorIds = existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : null;
-        const canonical = (priorIds && Object.keys(priorIds).length)
-            ? pickCanonicalChatDeviceId(priorIds, '')
+        const mergedDeviceIds = { ...(priorIds || {}) };
+        Object.keys(mergedDeviceIds).forEach((id) => {
+            mergedDeviceIds[id] = earlierDeviceStamp(id, mergedDeviceIds[id], now);
+        });
+        if (deviceId && mergedDeviceIds[deviceId] == null) {
+            mergedDeviceIds[deviceId] = earlierDeviceStamp(deviceId, null, now);
+        }
+        const canonical = Object.keys(mergedDeviceIds).length
+            ? pickCanonicalChatDeviceId(mergedDeviceIds, '')
             : deviceId;
         const adopted = adoptAccountUserId(canonical) || deviceId;
-        const mergedDeviceIds = { ...(priorIds || {}) };
-        if (deviceId && mergedDeviceIds[deviceId] == null) {
-            mergedDeviceIds[deviceId] = now;
-        }
         if (adopted && mergedDeviceIds[adopted] == null) {
-            mergedDeviceIds[adopted] = priorIds?.[adopted] || now;
+            mergedDeviceIds[adopted] = earlierDeviceStamp(adopted, null, now);
         }
+        let presenceMs = 0;
+        Object.keys(mergedDeviceIds).forEach((id) => {
+            const age = deviceIdAgeMs(id, mergedDeviceIds[id]);
+            if (age === Number.MAX_SAFE_INTEGER) return;
+            if (!presenceMs || age < presenceMs) presenceMs = age;
+        });
+        const accountCreatedAt = stampMs(existing?.accountCreatedAt) || stampMs(existing?.createdAt) || now;
+        const joinedAt = Math.min(accountCreatedAt, presenceMs || accountCreatedAt);
         const chatDeviceId = adopted || pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
         const photoURL = (await adoptProviderPhoto(user)) || cleanPhotoUrl(existing?.photoURL) || null;
@@ -516,7 +539,9 @@ export async function ensureUserProfile(user, opts = {}) {
                 photoURL,
                 email: user.email || null,
                 createdAt: now,
-                deviceIds: deviceId ? { [deviceId]: now } : {},
+                accountCreatedAt: now,
+                joinedAt,
+                deviceIds: { ...mergedDeviceIds },
                 flags: {
                     shadowBanned: false,
                     shadowBannedUntil: 0,
@@ -538,9 +563,11 @@ export async function ensureUserProfile(user, opts = {}) {
             }
             if (legalName) patch.providerName = legalName;
             if (provider) patch.provider = provider;
-            if (deviceId && existing.deviceIds?.[deviceId] == null) {
-                patch[`deviceIds/${deviceId}`] = now;
-            }
+            Object.keys(mergedDeviceIds).forEach((id) => {
+                if (priorIds?.[id] !== mergedDeviceIds[id]) patch[`deviceIds/${id}`] = mergedDeviceIds[id];
+            });
+            if (existing.accountCreatedAt == null) patch.accountCreatedAt = accountCreatedAt;
+            if (existing.joinedAt == null || stampMs(existing.joinedAt) > joinedAt) patch.joinedAt = joinedAt;
             const flags = existing.flags;
             if (!flags) {
                 patch.flags = { shadowBanned: false, shadowBannedUntil: 0, role: 'user' };
@@ -572,7 +599,7 @@ export async function ensureUserProfile(user, opts = {}) {
             if (!id) return;
             await window.firebaseDbUpdate(
                 window.firebaseDbRef(window.firebaseDb, `devices/${id}`),
-                { uid: user.uid, linkedAt: typeof existing?.deviceIds?.[id] === 'number' ? existing.deviceIds[id] : now }
+                { uid: user.uid, linkedAt: typeof mergedDeviceIds[id] === 'number' ? mergedDeviceIds[id] : now }
             );
         };
         await linkDevice(adopted || deviceId);
@@ -588,6 +615,8 @@ export async function ensureUserProfile(user, opts = {}) {
                     ...(legalName ? { providerName: legalName } : {}),
                     email: user.email || existing?.email || null,
                     createdAt: existing?.createdAt || now,
+                    accountCreatedAt,
+                    joinedAt,
                     provider: String(provider || '').slice(0, 40) || null,
                     region: ops.region,
                     lastRouteId: ops.lastRouteId,

@@ -10,8 +10,9 @@
  * requires query=granted (or nt_geo_granted) and will not overwrite a station
  * the commuter set, except the one-shot installed startup refresh.
  */
-import { $currentRouteId } from '../store.js';
-import { welcomeSeenFromPinnedSession } from './utils.js';
+import { $currentRouteId, $globalStationIndex } from '../store.js';
+import { MAX_RADIUS_KM } from './config.js';
+import { getDistanceFromLatLonInKm, resolveStationLatLon, welcomeSeenFromPinnedSession } from './utils.js';
 
 export const AUTO_LOCATE_DEBOUNCE_MS = 120_000;
 export const AUTO_LOCATE_RETRY_MS = 4_000;
@@ -48,6 +49,94 @@ export function getBoardStationContext() {
         station: station || null,
         stationAutoLocated: boardStationSource === 'auto',
     };
+}
+
+let senderStationCache = null;
+
+function nearestIndexedStation(lat, lon) {
+    const index = $globalStationIndex.get() || {};
+    let bestName = '';
+    let bestDist = Infinity;
+    Object.entries(index).forEach(([name, entry]) => {
+        const ll = resolveStationLatLon(name, entry, []);
+        if (!ll) return;
+        const dist = getDistanceFromLatLonInKm(lat, lon, ll.lat, ll.lon);
+        if (!Number.isFinite(dist) || dist >= bestDist) return;
+        bestDist = dist;
+        bestName = name;
+    });
+    if (!bestName || bestDist > MAX_RADIUS_KM) return '';
+    return bestName;
+}
+
+function readGrantedPosition() {
+    return new Promise((resolve) => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation?.getCurrentPosition) {
+            resolve(null);
+            return;
+        }
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+        };
+        const timer = setTimeout(() => finish(null), 2200);
+        try {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    clearTimeout(timer);
+                    finish(pos);
+                },
+                () => {
+                    clearTimeout(timer);
+                    finish(null);
+                },
+                { enableHighAccuracy: false, maximumAge: 120000, timeout: 1800 },
+            );
+        } catch {
+            clearTimeout(timer);
+            finish(null);
+        }
+    });
+}
+
+function cleanSenderStation(place) {
+    const station = String(place?.station || '').replace(/\s+STATION\s*$/i, '').trim();
+    if (!station || /^select a station/i.test(station)) {
+        return { station: null, stationAutoLocated: false };
+    }
+    return {
+        station,
+        stationAutoLocated: place?.stationAutoLocated === true,
+    };
+}
+
+/**
+ * Closest station at send time. Uses a fix the phone already allowed, then the
+ * board station. Does not move the board or open a permission sheet.
+ */
+export async function captureSenderStation() {
+    const now = Date.now();
+    if (senderStationCache?.station && now - senderStationCache.at < 20000) {
+        return cleanSenderStation(senderStationCache);
+    }
+    try {
+        if (await geolocationAlreadyGranted()) {
+            const pos = await readGrantedPosition();
+            const lat = Number(pos?.coords?.latitude);
+            const lon = Number(pos?.coords?.longitude);
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+                rememberGeolocationGranted();
+                const station = nearestIndexedStation(lat, lon);
+                if (station) {
+                    senderStationCache = { at: now, station, stationAutoLocated: true };
+                    return cleanSenderStation(senderStationCache);
+                }
+            }
+        }
+    } catch { /* the board station still rides along */ }
+    return cleanSenderStation(getBoardStationContext());
 }
 
 let lastAutoLocateAt = 0;

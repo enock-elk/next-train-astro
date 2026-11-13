@@ -990,6 +990,7 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(marksSrc.includes("el.id === 'settings-account-points'"), 'marks sync does not unhide Options points for guests');
     assert(pickCanonicalChatDeviceId({ usr_new_2000000000000: 2000000000000, usr_old_1000000000000: 1000000000000 }, 'usr_new_2000000000000') === 'usr_old_1000000000000', 'oldest linked device wins for inbox');
     assert(pickCanonicalChatDeviceId({ usr_a_2000000000000: true, usr_b_1000000000000: true }, 'usr_a_2000000000000') === 'usr_b_1000000000000', 'boolean deviceIds fall back to the usr_ epoch suffix');
+    assert(pickCanonicalChatDeviceId({ usr_new_1700000000000: 1700000000000, usr_old_1600000000000: 1700000000000 }, 'usr_new_1700000000000') === 'usr_old_1600000000000', 'a later account-link stamp does not hide the older usr_ id');
     const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     assert(uiJs.includes('alert-image-lightbox'), 'alert image preview uses a dedicated overlay');
     assert(!/openLightbox[\s\S]*mapImg\.src\s*=/.test(uiJs), 'openLightbox must not assign #map-image');

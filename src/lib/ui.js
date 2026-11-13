@@ -24,6 +24,7 @@ import { sanitizeAttachmentDisplayUrl } from './attachments.js';
 import { alertSharePath } from './share-links.js';
 import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
 import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
+import { offerSavedImage } from './save-image.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -1670,16 +1671,10 @@ async function downloadLightboxImage() {
     try {
         const blob = await fetchLightboxBlob(src);
         if (!blob) throw new Error('download');
-        const type = blob.type || '';
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = `next-train.${lightboxImageExt(type, src)}`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
-        showToast('Download started', 'success');
+        const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+        const file = new File([blob], `next-train.${lightboxImageExt(type, src)}`, { type });
+        const outcome = await offerSavedImage(file);
+        if (outcome === 'download') showToast('Download started', 'success');
     } catch {
         showToast('Could not download this picture', 'error');
     }

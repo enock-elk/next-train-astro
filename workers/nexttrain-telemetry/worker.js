@@ -17,9 +17,9 @@
  *        GA4 query no longer blanks the other tiles.
  * V1.14: Each Google and Sentry call gives up after a few seconds, so one
  *        slow report cannot hold the whole Live Telemetry response.
- * V1.16: 7-day, 28-day, and all-time are one-row reports again, the same
- *        shape that used to fill the cards. A slow Google reply gets one
- *        more try. A reply with an ERR card is not kept.
+ * V1.17: Each slow card and each graph is stored on its own. A later refresh
+ *        uses that stored number instead of painting ERR, and a slow report
+ *        is asked once.
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
@@ -32,34 +32,78 @@ function gaGaveUp(err) {
     return /timeout|aborted|deadline/i.test(String(err?.message || err || ''));
 }
 
-/** One Google report. A timeout gets a second try, because the first call often warms Google and the next one is quick. */
+function keepStoredTile(current, next) {
+    const good = (value) => {
+        const text = String(value ?? '');
+        return text !== '' && text !== '--' && text !== 'ERR' && text !== 'null' && text !== 'undefined';
+    };
+    if (good(next)) return String(next);
+    if (good(current)) return String(current);
+    return '--';
+}
+
+const STORED_TILE_MS = {
+    '5m': 30 * 1000,
+    '30m': 30 * 1000,
+    today: 60 * 1000,
+    wau: 10 * 60 * 1000,
+    mau: 10 * 60 * 1000,
+    all: 10 * 60 * 1000,
+};
+
+function storedTileTtl(name) {
+    if (String(name).startsWith('trend-')) return 10 * 60 * 1000;
+    return STORED_TILE_MS[name] || (10 * 60 * 1000);
+}
+
+function storedTileRequest(name) {
+    return new Request(`https://nexttrain-internal-cache.local/telemetry-v17/tile/${name}`);
+}
+
+async function readStoredTile(cache, name) {
+    const hit = await cache.match(storedTileRequest(name));
+    if (!hit) return null;
+    const storedAt = Number(hit.headers.get('x-stored-at') || 0);
+    const ttl = Number(hit.headers.get('x-ttl-ms') || 0);
+    try {
+        const data = await hit.json();
+        if (!data || typeof data !== 'object') return null;
+        const fresh = !!(storedAt && ttl && (Date.now() - storedAt) <= ttl);
+        return { ...data, fresh };
+    } catch {
+        return null;
+    }
+}
+
+async function writeStoredTile(cache, name, data) {
+    const ttl = storedTileTtl(name);
+    const body = new Response(JSON.stringify(data), {
+        headers: {
+            'Content-Type': 'application/json',
+            'x-stored-at': String(Date.now()),
+            'x-ttl-ms': String(ttl),
+        },
+    });
+    await cache.put(storedTileRequest(name), body);
+}
+
+/** One Google report. No second try: a repeat is what exhausts the Analytics quota. */
 async function gaReport(call, headers) {
-    const attempt = async (ms) => {
+    try {
         const res = await fetch(call.url, {
             method: 'POST',
             headers,
             body: JSON.stringify(call.body),
-            signal: AbortSignal.timeout(ms),
+            signal: AbortSignal.timeout(call.ms),
         });
         const text = await res.text();
         let json = null;
         try { json = text ? JSON.parse(text) : null; } catch { json = null; }
         if (!res.ok) {
             const msg = json?.error?.message || text.replace(/\s+/g, ' ').slice(0, 180);
-            return { name: call.name, ok: false, error: msg, json: null, retry: gaGaveUp(msg) };
+            return { name: call.name, ok: false, error: msg, json: null };
         }
-        return { name: call.name, ok: true, error: '', json, retry: false };
-    };
-    try {
-        const first = await attempt(call.ms);
-        if (first.ok || !first.retry) return first;
-    } catch (err) {
-        if (!gaGaveUp(err)) {
-            return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
-        }
-    }
-    try {
-        return await attempt(6000);
+        return { name: call.name, ok: true, error: '', json };
     } catch (err) {
         return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
     }
@@ -437,24 +481,7 @@ export default {
         };
 
         const cache = caches.default;
-        const cacheKey = new Request(`https://nexttrain-internal-cache.local/telemetry-v16${url.search}`);
-        let cachedResponse = await cache.match(cacheKey);
-
-        if (cachedResponse) {
-            const cachedText = await cachedResponse.text();
-            let cachedGaFailed = false;
-            try {
-                const cachedJson = JSON.parse(cachedText);
-                const cachedHeadlines = [cachedJson?.active5m, cachedJson?.active30m, cachedJson?.todayUsers, cachedJson?.wauUsers, cachedJson?.mauUsers, cachedJson?.allTimeUsers];
-                cachedGaFailed = cachedHeadlines.some((value) => value === 'ERR' || value === '--' || value == null);
-            } catch { cachedGaFailed = false; }
-            if (!cachedGaFailed) {
-                return new Response(cachedText, {
-                    status: 200,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' }
-                });
-            }
-        }
+        let telemetryCacheStatus = 'MISS';
 
         const telemetryTasks = [];
 
@@ -480,10 +507,30 @@ export default {
         if (env.GA_PROPERTY_ID && env.GA_CLIENT_EMAIL && env.GA_PRIVATE_KEY) {
             telemetryTasks.push((async () => {
                 try {
-                    const token = await getGoogleAccessToken(env.GA_CLIENT_EMAIL, env.GA_PRIVATE_KEY);
-                    const gaHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
                     const range = url.searchParams.get('range') || 'DAU';
+                    const stored = {
+                        '5m': await readStoredTile(cache, '5m'),
+                        '30m': await readStoredTile(cache, '30m'),
+                        today: await readStoredTile(cache, 'today'),
+                        wau: await readStoredTile(cache, 'wau'),
+                        mau: await readStoredTile(cache, 'mau'),
+                        all: await readStoredTile(cache, 'all'),
+                        trend: await readStoredTile(cache, `trend-${range}`),
+                    };
+                    telemetryData.active5m = keepStoredTile(telemetryData.active5m, stored['5m']?.active5m);
+                    telemetryData.active30m = keepStoredTile(telemetryData.active30m, stored['30m']?.active30m);
+                    telemetryData.todayUsers = keepStoredTile(telemetryData.todayUsers, stored.today?.todayUsers);
+                    telemetryData.todaySessions = keepStoredTile(telemetryData.todaySessions, stored.today?.todaySessions);
+                    telemetryData.wauUsers = keepStoredTile(telemetryData.wauUsers, stored.wau?.wauUsers);
+                    telemetryData.mauUsers = keepStoredTile(telemetryData.mauUsers, stored.mau?.mauUsers);
+                    telemetryData.allTimeUsers = keepStoredTile(telemetryData.allTimeUsers, stored.all?.allTimeUsers);
+                    if (Array.isArray(stored.trend?.chartData) && stored.trend.chartData.length) {
+                        telemetryData.chartData = stored.trend.chartData;
+                        telemetryData.chartLabels = stored.trend.chartLabels || [];
+                        if (Array.isArray(stored.trend.sevenDayTrend)) telemetryData.sevenDayTrend = stored.trend.sevenDayTrend;
+                        if (stored.trend.intradayMode) telemetryData.intradayMode = stored.trend.intradayMode;
+                        if (stored.trend.intradayAsOf) telemetryData.intradayAsOf = stored.trend.intradayAsOf;
+                    }
                     let trendDimensions = [{ name: "date" }];
                     let trendOrderBys = [{ dimension: { dimensionName: "date" } }];
                     // 14daysAgo through today is 15 points: 14 finished days plus today.
@@ -536,12 +583,12 @@ export default {
                                 metrics: [{ name: "activeUsers" }, { name: "sessions" }],
                             },
                         },
-                        { name: 'wau', ms: 9000, url: runReport, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
-                        { name: 'mau', ms: 9000, url: runReport, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
-                        { name: 'all', ms: 9000, url: runReport, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'wau', ms: 12000, url: runReport, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'mau', ms: 12000, url: runReport, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'all', ms: 12000, url: runReport, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
                         {
                             name: 'trend',
-                            ms: 9000,
+                            ms: 12000,
                             url: runReport,
                             body: {
                                 dateRanges: [{ startDate: trendStartDate, endDate: trendEndDate }],
@@ -552,29 +599,72 @@ export default {
                         },
                     ];
 
-                    const gaParts = await Promise.all(gaCalls.map((call) => gaReport(call, gaHeaders)));
+                    const due = gaCalls.filter((call) => {
+                        if (call.name === 'trend') return !(stored.trend?.fresh && stored.trend?.chartData?.length);
+                        return !stored[call.name]?.fresh;
+                    });
+                    let gaParts = [];
+                    if (!due.length) {
+                        telemetryCacheStatus = 'TILE';
+                    } else {
+                        const token = await getGoogleAccessToken(env.GA_CLIENT_EMAIL, env.GA_PRIVATE_KEY);
+                        const gaHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+                        gaParts = await Promise.all(due.map((call) => gaReport(call, gaHeaders)));
+                    }
 
                     const gaByName = Object.fromEntries(gaParts.map((part) => [part.name, part]));
                     const metricAt = (part, index = 0) => {
-                        if (!part?.ok) return 'ERR';
+                        if (!part?.ok) return null;
                         const total = part.json?.totals?.[0]?.metricValues?.[index]?.value;
                         const raw = total != null ? total : part.json?.rows?.[0]?.metricValues?.[index]?.value;
                         const n = parseInt(raw, 10);
                         return String(Number.isFinite(n) ? n : 0);
                     };
-                    const failures = gaParts.filter((part) => !part.ok).map((part) => `${part.name}: ${part.error}`);
+                    const tileStillEmpty = (name) => {
+                        if (name === '5m') return telemetryData.active5m === '--';
+                        if (name === '30m') return telemetryData.active30m === '--';
+                        if (name === 'today') return telemetryData.todayUsers === '--';
+                        if (name === 'wau') return telemetryData.wauUsers === '--';
+                        if (name === 'mau') return telemetryData.mauUsers === '--';
+                        if (name === 'all') return telemetryData.allTimeUsers === '--';
+                        if (name === 'trend') return !telemetryData.chartData?.length;
+                        return false;
+                    };
 
-                    telemetryData.active30m = metricAt(gaByName['30m']);
-                    telemetryData.active5m = metricAt(gaByName['5m']);
-                    telemetryData.todayUsers = metricAt(gaByName.today);
-                    telemetryData.todaySessions = gaByName.today?.ok ? metricAt(gaByName.today, 1) : 'ERR';
-                    telemetryData.wauUsers = metricAt(gaByName.wau);
-                    telemetryData.mauUsers = metricAt(gaByName.mau);
-                    telemetryData.allTimeUsers = metricAt(gaByName.all);
+                    const fresh5 = metricAt(gaByName['5m']);
+                    telemetryData.active5m = keepStoredTile(telemetryData.active5m, fresh5);
+                    if (fresh5) await writeStoredTile(cache, '5m', { active5m: telemetryData.active5m });
+
+                    const fresh30 = metricAt(gaByName['30m']);
+                    telemetryData.active30m = keepStoredTile(telemetryData.active30m, fresh30);
+                    if (fresh30) await writeStoredTile(cache, '30m', { active30m: telemetryData.active30m });
+
+                    const freshToday = metricAt(gaByName.today);
+                    const freshSessions = metricAt(gaByName.today, 1);
+                    telemetryData.todayUsers = keepStoredTile(telemetryData.todayUsers, freshToday);
+                    telemetryData.todaySessions = keepStoredTile(telemetryData.todaySessions, freshSessions);
+                    if (freshToday) await writeStoredTile(cache, 'today', { todayUsers: telemetryData.todayUsers, todaySessions: telemetryData.todaySessions });
+
+                    const freshWau = metricAt(gaByName.wau);
+                    telemetryData.wauUsers = keepStoredTile(telemetryData.wauUsers, freshWau);
+                    if (freshWau) await writeStoredTile(cache, 'wau', { wauUsers: telemetryData.wauUsers });
+
+                    const freshMau = metricAt(gaByName.mau);
+                    telemetryData.mauUsers = keepStoredTile(telemetryData.mauUsers, freshMau);
+                    if (freshMau) await writeStoredTile(cache, 'mau', { mauUsers: telemetryData.mauUsers });
+
+                    const freshAll = metricAt(gaByName.all);
+                    telemetryData.allTimeUsers = keepStoredTile(telemetryData.allTimeUsers, freshAll);
+                    if (freshAll) await writeStoredTile(cache, 'all', { allTimeUsers: telemetryData.allTimeUsers });
+
+                    const failures = gaParts
+                        .filter((part) => !part.ok && !gaGaveUp(part.error) && tileStillEmpty(part.name))
+                        .map((part) => `${part.name}: ${part.error}`);
                     if (failures.length) telemetryData.gaErrorDetail = failures.join(' | ');
 
                     const trendData = gaByName.trend?.ok ? gaByName.trend.json : null;
 
+                    if (trendData) {
                     let activeCountsArray = [];
                     let labelsArray = [];
 
@@ -657,23 +747,32 @@ export default {
                         }
                     }
 
-                    if (range === 'DAU' || !url.searchParams.has('range')) {
+                    if ((range === 'DAU' || !url.searchParams.has('range')) && activeCountsArray.length) {
                         const recent7 = activeCountsArray.slice(-7);
                         telemetryData.sevenDayTrend = [...Array(7).fill(0), ...recent7].slice(-7);
                     }
 
-                    telemetryData.chartData = activeCountsArray;
-                    telemetryData.chartLabels = labelsArray;
+                    if (activeCountsArray.length) {
+                        telemetryData.chartData = activeCountsArray;
+                        telemetryData.chartLabels = labelsArray;
+                        await writeStoredTile(cache, `trend-${range}`, {
+                            chartData: telemetryData.chartData,
+                            chartLabels: telemetryData.chartLabels,
+                            sevenDayTrend: telemetryData.sevenDayTrend,
+                            intradayMode: telemetryData.intradayMode,
+                            intradayAsOf: telemetryData.intradayAsOf,
+                        });
+                    }
+                    }
 
                 } catch (e) {
                     console.error("GA4 Fetch Error:", e.message);
-                    telemetryData.active5m = "ERR";
-                    telemetryData.active30m = "ERR";
-                    telemetryData.todayUsers = "ERR";
-                    telemetryData.wauUsers = "ERR";
-                    telemetryData.mauUsers = "ERR";
-                    telemetryData.allTimeUsers = "ERR";
-                    telemetryData.gaErrorDetail = e.message;
+                    const message = String(e?.message || e);
+                    if (!gaGaveUp(message)) {
+                        const headlines = [telemetryData.active5m, telemetryData.active30m, telemetryData.todayUsers, telemetryData.wauUsers, telemetryData.mauUsers, telemetryData.allTimeUsers];
+                        const anyNumber = headlines.some((value) => value !== '--' && value !== 'ERR');
+                        if (!anyNumber) telemetryData.gaErrorDetail = message.slice(0, 180);
+                    }
                 }
             })());
         }
@@ -718,20 +817,11 @@ export default {
         if (telemetryData.gaErrorDetail) {
             telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
         }
-        const headlineValues = [telemetryData.active5m, telemetryData.active30m, telemetryData.todayUsers, telemetryData.wauUsers, telemetryData.mauUsers, telemetryData.allTimeUsers];
-        const gaFailed = headlineValues.some((value) => value === 'ERR' || value === '--');
         const finalResponsePayload = JSON.stringify(telemetryData);
-
-        if (!gaFailed) {
-            const responseToCache = new Response(finalResponsePayload, {
-                headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=120' }
-            });
-            await cache.put(cacheKey, responseToCache.clone());
-        }
 
         return new Response(finalResponsePayload, {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': gaFailed ? 'BYPASS' : 'MISS' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': telemetryCacheStatus }
         });
     }
 };

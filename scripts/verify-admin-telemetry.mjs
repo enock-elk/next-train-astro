@@ -97,8 +97,10 @@ ok(intraView.counts[37] === null, 'hours after latest available stay unplotted (
 
 ok(!workerJs.includes('lagBuffer'), 'worker no longer applies a 3h lagBuffer');
 ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4 bucket');
-ok(workerJs.includes('AbortSignal.timeout(ms)') && workerJs.includes('attempt(6000)'), 'a slow GA4 report cannot hold Live Telemetry');
-ok(workerJs.includes('async function gaReport'), 'a timed-out GA4 report gets one more try');
+ok(workerJs.includes('AbortSignal.timeout(call.ms)') && !workerJs.includes('attempt(6000)'), 'a slow GA4 report is asked once');
+ok(workerJs.includes('async function gaReport') && workerJs.includes('No second try'), 'a timed-out GA4 report is not sent again');
+ok(workerJs.includes('telemetry-v17/tile/'), '7-day, 30-day, all-time, and each graph are stored on their own');
+ok(workerJs.includes('function keepStoredTile'), 'a slow miss does not paint ERR over a stored number');
 ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
 ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
 ok(workerJs.includes('startDate: "7daysAgo"') && !workerJs.includes('metricAggregations'), '7-day card is the one-row report again');

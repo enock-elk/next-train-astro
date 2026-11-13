@@ -313,7 +313,9 @@ assert(renderer.includes('first ${dayBit}:'), 'empty board headline uses a trail
 assert(!renderer.includes('timeBit'), 'empty board headline no longer appends the time');
 assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First train … is at: removed');
 assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
-assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
+assert(renderer.includes('offerSavedImage'), 'timetable save hands the file to the share sheet');
+assert(renderer.includes('Image ready'), 'save toast has no emoji in the message');
+assert(!renderer.includes('URL.createObjectURL(blob)'), 'timetable save does not open a blob page');
 assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');

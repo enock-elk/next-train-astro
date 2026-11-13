@@ -17,9 +17,9 @@
  *        GA4 query no longer blanks the other tiles.
  * V1.14: Each Google and Sentry call gives up after a few seconds, so one
  *        slow report cannot hold the whole Live Telemetry response.
- * V1.15: 7-day, 28-day, and all-time totals ask for a date breakdown and
- *        read Google's deduplicated total. A bare activeUsers range was
- *        rejected as an incompatible report.
+ * V1.16: 7-day, 28-day, and all-time are one-row reports again, the same
+ *        shape that used to fill the cards. A slow Google reply gets one
+ *        more try. A reply with an ERR card is not kept.
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
@@ -27,6 +27,43 @@ import { isoTodayUtc, loadCleverRange } from './clever-ads.js';
 import { dispatchProductionDeploy, getDeployStatus } from './deploy-github.js';
 import { sentryStatusFromResult, safeSentryDetail } from './region-presence.js';
 import { handleRegionPresence, readRegionalSplit } from './region-store.js';
+
+function gaGaveUp(err) {
+    return /timeout|aborted|deadline/i.test(String(err?.message || err || ''));
+}
+
+/** One Google report. A timeout gets a second try, because the first call often warms Google and the next one is quick. */
+async function gaReport(call, headers) {
+    const attempt = async (ms) => {
+        const res = await fetch(call.url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(call.body),
+            signal: AbortSignal.timeout(ms),
+        });
+        const text = await res.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+        if (!res.ok) {
+            const msg = json?.error?.message || text.replace(/\s+/g, ' ').slice(0, 180);
+            return { name: call.name, ok: false, error: msg, json: null, retry: gaGaveUp(msg) };
+        }
+        return { name: call.name, ok: true, error: '', json, retry: false };
+    };
+    try {
+        const first = await attempt(call.ms);
+        if (first.ok || !first.retry) return first;
+    } catch (err) {
+        if (!gaGaveUp(err)) {
+            return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
+        }
+    }
+    try {
+        return await attempt(6000);
+    } catch (err) {
+        return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
+    }
+}
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
     const header = { alg: 'RS256', typ: 'JWT' };
@@ -114,6 +151,7 @@ async function requireAdmin(request, env, { requireConfiguredKey = false } = {})
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ idToken }),
+            signal: AbortSignal.timeout(3000),
         });
         const verifyData = await verifyRes.json();
         if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
@@ -399,7 +437,7 @@ export default {
         };
 
         const cache = caches.default;
-        const cacheKey = new Request(`https://nexttrain-internal-cache.local/telemetry${url.search}`);
+        const cacheKey = new Request(`https://nexttrain-internal-cache.local/telemetry-v16${url.search}`);
         let cachedResponse = await cache.match(cacheKey);
 
         if (cachedResponse) {
@@ -408,7 +446,7 @@ export default {
             try {
                 const cachedJson = JSON.parse(cachedText);
                 const cachedHeadlines = [cachedJson?.active5m, cachedJson?.active30m, cachedJson?.todayUsers, cachedJson?.wauUsers, cachedJson?.mauUsers, cachedJson?.allTimeUsers];
-                cachedGaFailed = cachedHeadlines.every((value) => value === 'ERR' || value === '--' || value == null);
+                cachedGaFailed = cachedHeadlines.some((value) => value === 'ERR' || value === '--' || value == null);
             } catch { cachedGaFailed = false; }
             if (!cachedGaFailed) {
                 return new Response(cachedText, {
@@ -477,10 +515,12 @@ export default {
                     }
 
                     const gaProperty = `https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}`;
+                    const runReport = `${gaProperty}:runReport`;
                     const gaCalls = [
-                        { name: '30m', url: `${gaProperty}:runRealtimeReport`, body: { metrics: [{ name: "activeUsers" }] } },
+                        { name: '30m', ms: 6000, url: `${gaProperty}:runRealtimeReport`, body: { metrics: [{ name: "activeUsers" }] } },
                         {
                             name: '5m',
+                            ms: 6000,
                             url: `${gaProperty}:runRealtimeReport`,
                             body: {
                                 metrics: [{ name: "activeUsers" }],
@@ -489,18 +529,20 @@ export default {
                         },
                         {
                             name: 'today',
-                            url: `${gaProperty}:runReport`,
+                            ms: 9000,
+                            url: runReport,
                             body: {
                                 dateRanges: [{ startDate: "today", endDate: "today" }],
                                 metrics: [{ name: "activeUsers" }, { name: "sessions" }],
                             },
                         },
-                        { name: 'wau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], metricAggregations: ["TOTAL"] } },
-                        { name: 'mau', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], metricAggregations: ["TOTAL"] } },
-                        { name: 'all', url: `${gaProperty}:runReport`, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], metricAggregations: ["TOTAL"] } },
+                        { name: 'wau', ms: 9000, url: runReport, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'mau', ms: 9000, url: runReport, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'all', ms: 9000, url: runReport, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
                         {
                             name: 'trend',
-                            url: `${gaProperty}:runReport`,
+                            ms: 9000,
+                            url: runReport,
                             body: {
                                 dateRanges: [{ startDate: trendStartDate, endDate: trendEndDate }],
                                 dimensions: trendDimensions,
@@ -510,26 +552,7 @@ export default {
                         },
                     ];
 
-                    const gaParts = await Promise.all(gaCalls.map(async (call) => {
-                        try {
-                            const res = await fetch(call.url, {
-                                method: 'POST',
-                                headers: gaHeaders,
-                                body: JSON.stringify(call.body),
-                                signal: AbortSignal.timeout(6000),
-                            });
-                            const text = await res.text();
-                            let json = null;
-                            try { json = text ? JSON.parse(text) : null; } catch { json = null; }
-                            if (!res.ok) {
-                                const msg = json?.error?.message || text.replace(/\s+/g, ' ').slice(0, 180);
-                                return { name: call.name, ok: false, error: msg, json: null };
-                            }
-                            return { name: call.name, ok: true, error: '', json };
-                        } catch (err) {
-                            return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
-                        }
-                    }));
+                    const gaParts = await Promise.all(gaCalls.map((call) => gaReport(call, gaHeaders)));
 
                     const gaByName = Object.fromEntries(gaParts.map((part) => [part.name, part]));
                     const metricAt = (part, index = 0) => {
@@ -696,7 +719,7 @@ export default {
             telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
         }
         const headlineValues = [telemetryData.active5m, telemetryData.active30m, telemetryData.todayUsers, telemetryData.wauUsers, telemetryData.mauUsers, telemetryData.allTimeUsers];
-        const gaFailed = headlineValues.every((value) => value === 'ERR' || value === '--');
+        const gaFailed = headlineValues.some((value) => value === 'ERR' || value === '--');
         const finalResponsePayload = JSON.stringify(telemetryData);
 
         if (!gaFailed) {

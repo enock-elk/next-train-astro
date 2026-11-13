@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.13.8': [
+        'Live Telemetry 7-day, 30-day, all-time, and the graph said ERR because a 6 second cutoff aborted the same Google reports that used to return numbers, and that failed reply was kept for two minutes. Those cards are one-row reports again, a slow report gets a second try, and an ERR reply is not kept. Publish the telemetry worker. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.7': [
         'Live Telemetry 7-day, 30-day, and all-time cards said ERR because Google rejected a users-only date range. Those three now ask for a daily breakdown and use Google\'s deduplicated total. Publish the telemetry worker for the cards to fill in. No commuter What\'s New. forceShow stays false.',
     ],

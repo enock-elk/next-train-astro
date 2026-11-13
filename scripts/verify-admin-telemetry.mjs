@@ -97,10 +97,11 @@ ok(intraView.counts[37] === null, 'hours after latest available stay unplotted (
 
 ok(!workerJs.includes('lagBuffer'), 'worker no longer applies a 3h lagBuffer');
 ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4 bucket');
-ok(workerJs.includes('AbortSignal.timeout(6000)'), 'a slow GA4 report cannot hold Live Telemetry');
+ok(workerJs.includes('AbortSignal.timeout(ms)') && workerJs.includes('attempt(6000)'), 'a slow GA4 report cannot hold Live Telemetry');
+ok(workerJs.includes('async function gaReport'), 'a timed-out GA4 report gets one more try');
 ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
 ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
-ok(workerJs.includes('metricAggregations: ["TOTAL"]'), '7-day, 30-day, and all-time read the deduplicated total');
+ok(workerJs.includes('startDate: "7daysAgo"') && !workerJs.includes('metricAggregations'), '7-day card is the one-row report again');
 ok(!workerJs.includes('int64Value'), 'the minutesAgo numeric filter is gone');
 ok(readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8').includes('telemetry-ga-detail'), 'Live Telemetry shows the GA4 error');
 ok(readFileSync(join(ROOT, 'src/components/HubModals.astro'), 'utf8').includes('id="telemetry-ga-detail"'), 'telemetry panel has a GA4 error line');

@@ -607,9 +607,25 @@ function plannerFareVoteInput(trip, { km, crowKm, zone, fare } = {}, extra = {})
     };
 }
 
+function releasePlannerFareTicketPreview() {
+    const wrap = document.getElementById('planner-fare-vote');
+    const url = wrap?.dataset.fareTicketPreview || '';
+    if (url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+    }
+}
+
 function showPlannerFareVoteThanks(wrap) {
     if (!wrap) return;
+    wrap.dataset.fareHold = '1';
+    const preview = wrap.dataset.fareTicketPreview || '';
     wrap.innerHTML = '<p class="text-sm font-semibold text-gray-700 dark:text-gray-200">Thanks. That helps us check the fare.</p>';
+    if (!preview) return;
+    const img = document.createElement('img');
+    img.src = preview;
+    img.alt = 'Ticket photo';
+    img.className = 'mt-3 w-full max-h-56 object-contain rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900';
+    wrap.appendChild(img);
 }
 
 async function uploadPlannerFareTicket(voteId, file) {
@@ -643,6 +659,7 @@ function showPlannerFareTicketPrompt(wrap, voteId) {
             <button type="button" id="planner-fare-ticket-add" class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Add photo</button>
             <button type="button" id="planner-fare-ticket-skip" class="inline-flex items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Skip</button>
         </div>
+        <img id="planner-fare-ticket-preview" alt="Ticket photo" class="mt-3 hidden w-full max-h-56 object-contain rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900" />
         <input id="planner-fare-ticket-file" type="file" accept="image/*" capture="environment" class="hidden" />
     `;
     const fileInput = document.getElementById('planner-fare-ticket-file');
@@ -661,15 +678,34 @@ function showPlannerFareTicketPrompt(wrap, voteId) {
     fileInput?.addEventListener('change', async () => {
         const file = fileInput.files && fileInput.files[0];
         if (!file) return;
+        wrap.dataset.fareHold = '1';
+        const preview = document.getElementById('planner-fare-ticket-preview');
+        const previous = wrap.dataset.fareTicketPreview || '';
+        if (previous.startsWith('blob:')) {
+            try { URL.revokeObjectURL(previous); } catch { /* ignore */ }
+        }
+        const objectUrl = URL.createObjectURL(file);
+        wrap.dataset.fareTicketPreview = objectUrl;
+        if (preview) {
+            preview.src = objectUrl;
+            preview.classList.remove('hidden');
+        }
+        const note = wrap.querySelector('p');
+        if (note) note.textContent = 'Adding photo…';
         addBtn.disabled = true;
         skipBtn.disabled = true;
         try {
             const ticketUrl = await uploadPlannerFareTicket(voteId, file);
             await putFareTicketPhoto(voteId, { ticketUrl });
+            showPlannerFareVoteThanks(wrap);
+            const thanks = wrap.querySelector('p');
+            if (thanks) thanks.textContent = 'Thanks. Photo added.';
         } catch (e) {
+            if (note) note.textContent = 'Thanks. Add a photo of your ticket? Optional.';
+            if (addBtn) addBtn.disabled = false;
+            if (skipBtn) skipBtn.disabled = false;
             if (typeof showToast === 'function') showToast(e.message || 'Could not attach photo.', 'info', 2500);
         }
-        showPlannerFareVoteThanks(wrap);
     });
 }
 
@@ -723,6 +759,7 @@ function bindPlannerFareVote(trip, detail) {
     noBtn?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        wrap.dataset.fareHold = '1';
         paintFareChoice('no');
         correct?.classList.remove('hidden');
         ticketTypeEl?.focus();
@@ -749,6 +786,7 @@ function bindPlannerFareVote(trip, detail) {
 function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
+    releasePlannerFareTicketPreview();
     fare = applyApprovedPlannerFare(fare, trip) || fare;
     lastPlannerFareContext = { trip, km, crowKm, zone, fare };
     const fareOdStation = (s) => String(s || '')
@@ -854,6 +892,11 @@ async function refreshOpenPlannerFare() {
     const fare = applyApprovedPlannerFare(computeZoneFareForTrip(zone, ctx.trip), ctx.trip);
     if (!fare) return;
     if (sheet && !sheet.classList.contains('hidden')) {
+        const vote = document.getElementById('planner-fare-vote');
+        if (vote?.dataset.fareHold === '1') {
+            hydratePlannerFareButton(ctx.trip);
+            return;
+        }
         fillPlannerFareBreakdown(ctx.trip, { ...ctx, zone, fare });
     }
     hydratePlannerFareButton(ctx.trip);
@@ -3993,7 +4036,10 @@ export function initPlanner() {
     const resetBtn = document.getElementById('planner-reset-btn');
     const locateBtn = document.getElementById('planner-locate-btn');
     const backBtn = document.getElementById('planner-back-btn');
-    const closeFareSheet = () => closeSmoothModal('planner-fare-breakdown-sheet');
+    const closeFareSheet = () => {
+        releasePlannerFareTicketPreview();
+        closeSmoothModal('planner-fare-breakdown-sheet');
+    };
     document.getElementById('planner-fare-breakdown-close')?.addEventListener('click', closeFareSheet);
     document.getElementById('planner-fare-breakdown-done')?.addEventListener('click', closeFareSheet);
     document.getElementById('planner-fare-breakdown-sheet')?.addEventListener('click', (ev) => {

@@ -255,8 +255,9 @@ function explainCommunityRoom() {
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5">
                 <h3 class="text-base font-black text-gray-900 dark:text-white mb-2">Disclaimer</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">People on this line can share a delay, a question, or what they see at a station.</p>
-                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">Next Train is an independent app. It is not part of PRASA or Metrorail.</p>
-                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">This chat is for commuters to update each other.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">Next Train is an independent app. It is not part of PRASA or Metrorail. This chat is for commuters to update each other. Messages here are from commuters. They are not the views of Next Train or its operators, and they are not a PRASA or Metrorail notice.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">Your name and photo are set in Options, then Account. Your photo stays off until you turn it on.</p>
+                <button type="button" id="community-room-privacy" class="w-full mb-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg transition-colors focus:outline-none">Privacy Policy</button>
                 <button type="button" id="community-room-about-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
             </div>`;
         document.body.appendChild(modal);
@@ -266,9 +267,14 @@ function explainCommunityRoom() {
                 else modal.classList.add('hidden');
             }
         });
-        modal.querySelector('#community-room-about-close')?.addEventListener('click', () => {
+        const closeAbout = () => {
             if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('community-room-about-modal');
             else modal.classList.add('hidden');
+        };
+        modal.querySelector('#community-room-about-close')?.addEventListener('click', closeAbout);
+        modal.querySelector('#community-room-privacy')?.addEventListener('click', () => {
+            closeAbout();
+            if (typeof window.openLegal === 'function') window.openLegal('privacy');
         });
     }
     if (typeof window.openSmoothModal === 'function') window.openSmoothModal('community-room-about-modal');

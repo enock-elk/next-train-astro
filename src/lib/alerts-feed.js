@@ -809,6 +809,60 @@ export function extractAlertVideoUrls(html) {
     return { urls, body };
 }
 
+function pushImageUrl(urls, raw) {
+    const clean = sanitizeInlineAlertImageUrl(String(raw || '').trim().replace(/&amp;/gi, '&'));
+    if (!clean || urls.includes(clean)) return;
+    if (sanitizeAlertVideoUrl(clean) || sanitizeAlertPdfUrl(clean)) return;
+    urls.push(clean);
+}
+
+/**
+ * Same lift as an alert card: photos (including GIFs), video files and watch pages, then PDFs.
+ * Ordinary https links stay in the body for a link card.
+ */
+export function layoutMessageMedia(text, extraUrls = []) {
+    const imageUrls = [];
+    const videoUrls = [];
+    const pdfUrls = [];
+    const take = (raw) => {
+        const value = String(raw || '').trim();
+        if (!value) return;
+        if (sanitizeAlertVideoUrl(value)) {
+            pushVideoUrl(videoUrls, value);
+            return;
+        }
+        if (sanitizeAlertPdfUrl(value)) {
+            pushPdfUrl(pdfUrls, value);
+            return;
+        }
+        pushImageUrl(imageUrls, value);
+    };
+    (Array.isArray(extraUrls) ? extraUrls : []).forEach(take);
+    const hoisted = hoistAlertImagesFromHtml(String(text || ''));
+    hoisted.urls.forEach((url) => pushImageUrl(imageUrls, url));
+    let body = hoisted.body;
+    const videos = extractAlertVideoUrls(body);
+    videos.urls.forEach((url) => pushVideoUrl(videoUrls, url));
+    body = videos.body;
+    const pdfs = extractAlertPdfUrls(body);
+    pdfs.urls.forEach((url) => pushPdfUrl(pdfUrls, url));
+    body = pdfs.body;
+    body = body.replace(/https:\/\/[^\s<>"']+/gi, (raw) => {
+        const trimmed = raw.replace(/[),.;]+$/, '');
+        const before = imageUrls.length;
+        pushImageUrl(imageUrls, trimmed);
+        if (imageUrls.length === before) return raw;
+        return raw.slice(trimmed.length);
+    });
+    body = body.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+/gi, '').replace(/(?:\s|&nbsp;|<br\s*\/?>)+$/gi, '');
+    return {
+        imageUrls: imageUrls.slice(0, 8),
+        videoUrls: videoUrls.slice(0, 2),
+        pdfUrls: pdfUrls.slice(0, 2),
+        body: body.trim(),
+    };
+}
+
 /** Pull lightbox/img tags out of the body so photos can sit above the text. */
 export function hoistAlertImagesFromHtml(html) {
     const urls = [];
@@ -978,6 +1032,9 @@ if (typeof window !== 'undefined') {
     window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
     window.legacyInstalledAlertImages = legacyInstalledAlertImages;
     window.noticeForInstalledPhones = noticeForInstalledPhones;
+    window.layoutMessageMedia = layoutMessageMedia;
+    window.renderAlertVideoMarkup = renderAlertVideoMarkup;
+    window.renderAlertPdfMarkup = renderAlertPdfMarkup;
 }
 
 export function isLegacySingleNotice(node) {

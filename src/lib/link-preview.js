@@ -384,6 +384,8 @@ export function hydrateLinkPreviews(root, workerBase) {
 }
 
 if (typeof window !== 'undefined') {
+    window.linkPreviewMarkup = linkPreviewMarkup;
+    window.hydrateLinkPreviews = hydrateLinkPreviews;
     window.addEventListener('ntdatasaver', () => {
         if (linkCardsOn()) return;
         document.querySelectorAll('.nt-link-preview, [data-link-preview-url]').forEach((el) => el.remove());

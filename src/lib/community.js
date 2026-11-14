@@ -14,9 +14,10 @@ import { APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, DYNAM
 import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel, applyFittedLabels, formatRouteLabelPlain, commuterStationName } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
-import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-saver.js';
-import { renderTextWithShareChips, shareChipHtml } from './share-chips.js';
-import { armGifPlayers } from './gif-play.js';
+import { profilePhotosOn, settleDeferredPictures } from './data-saver.js';
+import { renderTextWithShareChips } from './share-chips.js';
+import { hydrateAlertPosterImages, renderSharedMediaHtml } from './alerts-channel.js';
+import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { captureSenderStation } from './auto-locate.js';
 import { formatFeedbackDiagLine } from './feedback-diag-line.js';
@@ -2347,32 +2348,25 @@ function communityImageUrls(post) {
     return sanitizeCommunityAttachments(post?.attachments, { admin: true });
 }
 
-function communityPictureHtml(url) {
-    const inner = pictureMarkup(url);
-    // The data-saver hold is already a button. A shown photo gets its own,
-    // so a tap stays in the app instead of opening the image host.
-    if (inner.includes('data-nt-defer-src')) return inner;
-    return `<button type="button" class="community-msg-photo" aria-label="View photo">${inner}</button>`;
-}
-
-function renderCommunityMedia(post) {
-    if (isCommunityTombstone(post)) return '';
-    const images = communityImageUrls(post);
-    const imageHtml = images.length
-        ? `<div class="community-msg-images${images.length === 1 ? ' is-single' : ''}">${images.map((url) => communityPictureHtml(url)).join('')}</div>`
-        : '';
-    const link = sanitizeCommunityLinkUrl(post?.linkUrl);
-    const linkHtml = link
-        ? (shareChipHtml(link) || `<a class="community-msg-link" href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">${escapeHTML(link.replace(/^https:\/\//, ''))}</a>`)
-        : '';
-    return `${imageHtml}${linkHtml}`;
-}
-
-function communityBodyHtml(post, tombstone) {
-    if (tombstone) {
-        return escapeHTML(post.deletedBy === 'admin' || post.body === DELETED_BY_ADMIN ? DELETED_BY_ADMIN : DELETED_MESSAGE);
+function communityMediaParts(post) {
+    if (isCommunityTombstone(post)) {
+        const gone = post.deletedBy === 'admin' || post.body === DELETED_BY_ADMIN ? DELETED_BY_ADMIN : DELETED_MESSAGE;
+        return { media: '', body: gone };
     }
-    return String(post.body || '');
+    const extras = communityImageUrls(post);
+    const link = sanitizeCommunityLinkUrl(post?.linkUrl);
+    if (link) extras.push(link);
+    const laid = renderSharedMediaHtml(String(post?.body || ''), extras);
+    let media = laid.media || '';
+    if (laid.imageUrls.length && media) {
+        media = media.replace(
+            /class="[^"]*"(\s+data-alert-media)/,
+            `class="community-msg-images${laid.imageUrls.length === 1 ? ' is-single' : ''}"$1`,
+        );
+    }
+    const preview = linkPreviewMarkup({ message: laid.body || '' });
+    if (preview) media += preview;
+    return { media, body: laid.body || '' };
 }
 
 function communityBubbleTextHtml(body, clock, receipt, tombstone) {
@@ -2411,7 +2405,8 @@ function expandCommunitySeeMore(button) {
 
 function renderPostCard(post, routeId, { grouped = false } = {}) {
     const tombstone = isCommunityTombstone(post);
-    const body = communityBodyHtml(post, tombstone);
+    const parts = communityMediaParts(post);
+    const body = parts.body;
     const clock = formatClock24(post.timestamp);
     const postId = escapeHTML(post.postId || '');
     const uid = escapeHTML(post.uid || '');
@@ -2466,7 +2461,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
               ${nameHtml}
               <div class="community-bubble-body">
                 ${quoteHtml}
-                ${renderCommunityMedia(post)}
+                ${parts.media}
                 ${communityBubbleTextHtml(body, clock, isOwn && !tombstone ? receiptMarkHtml(!!post.pendingSend) : '', tombstone)}
               </div>
             </div>
@@ -2524,7 +2519,8 @@ function applyFeedFilter(routeId) {
     });
     listEl.innerHTML = html;
     settleDeferredPictures(listEl);
-    armGifPlayers(listEl);
+    hydrateAlertPosterImages(listEl);
+    hydrateLinkPreviews(listEl, REPLY_WORKER_URL);
     wireCommunityChatGestures(listEl);
     if (selectedCommunity && selectedCommunity.routeId === routeId) {
         const id = String(selectedCommunity.post?.postId || '').replace(/"/g, '');
@@ -2582,7 +2578,7 @@ function wireCommunityChatGestures(listEl) {
         longTimer = null;
     };
 
-    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, .community-quote-jump, [data-community-see-more], .fb-version-chip, [data-admin-changelog]');
+    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, .community-quote-jump, [data-community-see-more], .fb-version-chip, [data-admin-changelog], [data-alert-lightbox], [data-alert-video], [data-alert-pdf], [data-nt-gif-replay], .nt-link-preview');
 
     listEl.addEventListener('touchstart', (e) => {
         if (communityInlineControl(e.target)) return;
@@ -3791,11 +3787,15 @@ async function expandReplies(postId, routeId, container) {
     const replies = await fetchReplies(routeId, postId);
 
     let html = replies.length
-        ? replies.map((r) => `
+        ? replies.map((r) => {
+            const parts = communityMediaParts(r);
+            return `
             <div class="text-left">
               <p class="text-[10px] font-bold text-gray-600 dark:text-gray-300">${escapeHTML(r.displayName || 'Passenger')} · <span class="font-medium text-gray-400">${relativeTime(r.timestamp)}</span></p>
-              <p class="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">${escapeHTML(r.body || '')}</p>
-            </div>`).join('')
+              ${parts.media}
+              <p class="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">${renderTextWithShareChips(parts.body)}</p>
+            </div>`;
+        }).join('')
         : `<p class="text-[11px] text-gray-400">No replies yet.</p>`;
 
     html += `
@@ -3804,6 +3804,8 @@ async function expandReplies(postId, routeId, container) {
         <button type="button" class="community-reply-send shrink-0 px-2.5 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold disabled:opacity-50" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}">Reply</button>
       </div>`;
     container.innerHTML = html;
+    hydrateAlertPosterImages(container);
+    hydrateLinkPreviews(container, REPLY_WORKER_URL);
 }
 
 export function bindCommunityUi() {
@@ -4096,6 +4098,16 @@ export function bindCommunityUi() {
             e.preventDefault();
             e.stopPropagation();
             jumpToQuotedCommunityPost(quoteJump.getAttribute('data-quote-post'));
+            return;
+        }
+
+        const lightbox = t.closest?.('[data-alert-lightbox]');
+        if (lightbox) {
+            if (lightbox.dataset.ntPosterHeld === '1' || t.closest?.('[data-nt-gif-replay]')) return;
+            if (Date.now() < reactionGuardUntil) return;
+            e.preventDefault();
+            const src = lightbox.getAttribute('data-alert-lightbox') || '';
+            if (src) openLightbox(src, lightbox);
             return;
         }
 

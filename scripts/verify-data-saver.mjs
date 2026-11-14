@@ -119,11 +119,11 @@ assert(hub.includes('shouldHoldPicture(href)'), 'the notice keeps its picture wh
 assert(hub.includes('rememberPicture(href)'), 'a notice picture that loads is remembered');
 
 const community = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
-assert(community.includes('pictureMarkup(url)'), 'community pictures use the same hold');
+assert(community.includes('renderSharedMediaHtml'), 'community pictures use the alert poster, including the data-saver hold');
 assert(!community.includes('pictureMarkup(url, { link: true })'), 'a community picture does not open the image host');
 assert(community.includes('openLightbox(src, host)'), 'a community picture opens in the alert viewer');
 assert(community.includes("host.setAttribute('data-alert-ready', '1')"), 'a shown community picture is allowed into full view');
-assert(community.includes("images.length === 1 ? ' is-single'"), 'one picture fills the bubble');
+assert(community.includes("imageUrls.length === 1 ? ' is-single'"), 'one picture fills the bubble');
 assert(community.includes('profilePhotosOn()'), 'profile photos can stay off');
 assert(community.includes('settleDeferredPictures(listEl)'), 'community checks the cache before showing a download');
 

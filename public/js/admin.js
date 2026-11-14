@@ -2450,6 +2450,22 @@ const Admin = {
     /** Hoist unique image srcs out of admin/commuter HTML so one send cannot paint twice. */
     layoutInboxMedia: function(html, extraUrls) {
         const raw = String(html || '');
+        if (typeof window.layoutMessageMedia === 'function') {
+            const laid = window.layoutMessageMedia(raw, extraUrls);
+            let media = (laid.imageUrls.length && typeof window.renderLazyPosterHtml === 'function')
+                ? window.renderLazyPosterHtml(laid.imageUrls)
+                : '';
+            if (typeof window.renderAlertVideoMarkup === 'function') media += window.renderAlertVideoMarkup(laid.videoUrls);
+            if (typeof window.renderAlertPdfMarkup === 'function') media += window.renderAlertPdfMarkup(laid.pdfUrls);
+            if (typeof window.linkPreviewMarkup === 'function') media += window.linkPreviewMarkup({ message: laid.body || '' });
+            if (media && laid.imageUrls.length) {
+                media = media.replace(
+                    /class="[^"]*"(\s+data-alert-media)/,
+                    `class="community-msg-images${laid.imageUrls.length === 1 ? ' is-single' : ''}"$1`
+                );
+            }
+            return { body: laid.body || '', media, urls: laid.imageUrls, imageCount: laid.imageUrls.length };
+        }
         const hoisted = (typeof window.hoistAlertImagesFromHtml === 'function')
             ? window.hoistAlertImagesFromHtml(raw)
             : { urls: [], body: raw };
@@ -11522,6 +11538,9 @@ const Admin = {
             Admin.bindFeedbackInboxReactions(listContainer);
             if (typeof window.hydrateAlertPosterImages === 'function') {
                 window.hydrateAlertPosterImages(listContainer);
+            }
+            if (typeof window.hydrateLinkPreviews === 'function') {
+                window.hydrateLinkPreviews(listContainer);
             }
             if (Admin._pendingFeedbackOpen) {
                 setTimeout(() => Admin.consumePendingFeedbackOpen(), 40);
@@ -24868,6 +24887,7 @@ const Admin = {
         body.innerHTML = Admin.buildFeedbackThreadInnerHtml(payload);
         delete body.dataset.fbLazy;
         if (typeof window.hydrateAlertPosterImages === 'function') window.hydrateAlertPosterImages(body);
+        if (typeof window.hydrateLinkPreviews === 'function') window.hydrateLinkPreviews(body);
     },
 
     buildFeedbackThreadInnerHtml: (payload) => {

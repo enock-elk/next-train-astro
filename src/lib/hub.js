@@ -77,13 +77,14 @@ import {
 } from './alerts-channel.js';
 import {
     layoutAlertPost,
-    hoistAlertImagesFromHtml,
+    layoutMessageMedia,
     ALERT_PIN_SVG,
     isNoticePinned,
     alertCopyNeedsSeeMore,
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
     renderAlertVideoMarkup,
+    renderAlertPdfMarkup,
     sanitizeAlertVideoUrl,
 } from './alerts-feed.js';
 import {
@@ -125,9 +126,6 @@ import {
     ATTACHMENT_MAX_FILES,
     lightboxOnclickJs,
     attachmentRejectMessage,
-    sanitizeAttachmentDisplayUrl,
-    classifyAttachmentUrl,
-    attachmentPreviewHtml,
 } from './attachments.js';
 
 const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
@@ -1764,29 +1762,17 @@ function bindChatAccountListener() {
 }
 
 function inboxMediaFromHtml(html, extraUrls = []) {
-    const hoisted = hoistAlertImagesFromHtml(html || '');
-    const images = [];
-    const files = [];
-    const add = (u) => {
-        const safe = sanitizeAttachmentDisplayUrl(u);
-        if (!safe) return;
-        const kind = classifyAttachmentUrl(safe);
-        if (kind === 'image') {
-            if (!images.includes(safe)) images.push(safe);
-        } else if (!files.includes(safe)) {
-            files.push(safe);
-        }
-    };
-    (hoisted.urls || []).forEach(add);
-    extraUrls.forEach(add);
-    let media = renderLazyPosterHtml(images);
-    files.forEach((url, idx) => {
-        media += attachmentPreviewHtml(url, {
-            pdfLabel: `View attached PDF${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
-            fileLabel: `View file${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
-        });
-    });
-    return { body: hoisted.body || '', media, imageCount: images.length };
+    const laid = layoutMessageMedia(html || '', extraUrls);
+    let media = `${laid.imageUrls.length ? renderLazyPosterHtml(laid.imageUrls) : ''}${renderAlertVideoMarkup(laid.videoUrls)}${renderAlertPdfMarkup(laid.pdfUrls)}`;
+    const preview = linkPreviewMarkup({ message: laid.body || '' });
+    if (preview) media += preview;
+    if (media && laid.imageUrls.length) {
+        media = media.replace(
+            /class="[^"]*"(\s+data-alert-media)/,
+            `class="community-msg-images${laid.imageUrls.length === 1 ? ' is-single' : ''}"$1`,
+        );
+    }
+    return { body: laid.body || '', media, imageCount: laid.imageUrls.length };
 }
 
 function stripAdminSignoff(html) {
@@ -2072,10 +2058,10 @@ function renderMessagesThread(list) {
         if (m.attachmentUrl) extraUrls.push(m.attachmentUrl);
         if (Array.isArray(m.attachmentUrls)) extraUrls.push(...m.attachmentUrls.filter(Boolean));
         const laid = mine
-            ? inboxMediaFromHtml('', extraUrls)
+            ? inboxMediaFromHtml(commuterFeedbackText(raw), extraUrls)
             : inboxMediaFromHtml(sanitizeHTML(stripAdminSignoff(raw)), extraUrls);
         const body = mine
-            ? renderTextWithShareChips(commuterFeedbackText(raw))
+            ? renderTextWithShareChips(laid.body)
             : (laid.body || '');
         const imageCount = laid.imageCount || 0;
         const media = laid.media
@@ -2114,6 +2100,7 @@ function renderMessagesThread(list) {
     host._ntInboxList = list;
     bindInboxThreadReactions(host);
     hydrateAlertPosterImages(host);
+    hydrateLinkPreviews(host, REPLY_WORKER_URL);
     host.scrollTop = host.scrollHeight;
 }
 
@@ -2198,7 +2185,7 @@ function bindInboxThreadReactions(host) {
     host.addEventListener('pointerdown', (e) => {
         if (e.button) return;
         const bubble = e.target.closest?.('[data-inbox-react-host]');
-        if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
+        if (!bubble || e.target.closest?.('[data-inbox-react], [data-alert-lightbox], [data-alert-video], [data-alert-pdf], [data-nt-gif-replay], .nt-link-preview')) return;
         const row = bubble.closest('[data-inbox-msg-id]');
         if (!row) return;
         holdFired = false;
@@ -2231,6 +2218,12 @@ function bindInboxThreadReactions(host) {
             e.preventDefault();
             const src = poster.getAttribute('data-alert-lightbox');
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
+            return;
+        }
+        const pdfBtn = e.target.closest?.('[data-alert-pdf]');
+        if (pdfBtn && host.contains(pdfBtn)) {
+            e.preventDefault();
+            if (typeof window.openAlertPdf === 'function') window.openAlertPdf(pdfBtn.getAttribute('data-alert-pdf'));
             return;
         }
         const chip = e.target.closest?.('[data-inbox-react]');

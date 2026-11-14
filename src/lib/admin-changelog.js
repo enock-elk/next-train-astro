@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.14.2': [
+        'Community disclaimer names the room, says messages are from commuters and are not Next Train or PRASA notices, and points to Options then Account for the name and photo. Privacy Policy opens from that card. Community and Feedback Hub show the same photos, GIFs, video previews, and PDFs as Alerts. A fare correction keeps the ticket photo on the sheet while it uploads and after it is saved. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.14.1': [
         'PRETORIA WEST and PRETORIA NORTH can be picked on the home board, the trip planner, and the other station lists. The timetable key is unchanged. Remove completely no longer stops on the worker permission error. It deletes the message with the operator sign-in. A community name shows the build, such as Johannes T and V10_11.14.1, only for an operator. The build opens the same card as Feedback Hub, with the default route, the station, and the handset. Commuters do not see that. No commuter What\'s New. forceShow stays false.',
     ],

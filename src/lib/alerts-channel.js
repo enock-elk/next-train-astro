@@ -46,6 +46,7 @@ import {
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
+    layoutMessageMedia,
     messageWithLegacyAlertImages,
     noticeForInstalledPhones,
     alertCopyNeedsSeeMore,
@@ -408,10 +409,28 @@ function releaseHeldPosters(root) {
     });
 }
 
+export function renderSharedMediaHtml(text, extraUrls = []) {
+    const laid = layoutMessageMedia(text, extraUrls);
+    const posters = laid.imageUrls.length ? renderLazyPosterHtml(laid.imageUrls) : '';
+    return {
+        ...laid,
+        media: `${posters}${renderAlertVideoMarkup(laid.videoUrls)}${renderAlertPdfMarkup(laid.pdfUrls)}`,
+    };
+}
+
 export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
     if (!root?.querySelectorAll) return;
     watchAlertPosterHydration(root);
     bindAlertVideoPlayers(root);
+    root.querySelectorAll('[data-alert-pdf]').forEach((btn) => {
+        if (btn.dataset.ntPdfBound === '1') return;
+        btn.dataset.ntPdfBound = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openAlertPdf(btn.getAttribute('data-alert-pdf'));
+        });
+    });
     root.querySelectorAll('[data-alert-lightbox] img.nt-alert-poster-img').forEach((img) => {
         if (img.dataset.ntPosterBound === '1') return;
         img.dataset.ntPosterBound = '1';
@@ -2028,6 +2047,8 @@ export function initAlertsChannel() {
     window.closeAlertsChannel = closeAlertsChannel;
     window.renderAlertsChannel = renderAlertsChannel;
     window.renderLazyPosterHtml = renderLazyPosterHtml;
+    window.renderSharedMediaHtml = renderSharedMediaHtml;
+    window.openAlertPdf = openAlertPdf;
     window.hydrateAlertPosterImages = hydrateAlertPosterImages;
     window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
     window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
@@ -2079,5 +2100,7 @@ if (typeof window !== 'undefined') {
     window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
     window.noticeForInstalledPhones = noticeForInstalledPhones;
     window.renderLazyPosterHtml = renderLazyPosterHtml;
+    window.renderSharedMediaHtml = renderSharedMediaHtml;
+    window.openAlertPdf = openAlertPdf;
     window.hydrateAlertPosterImages = hydrateAlertPosterImages;
 }

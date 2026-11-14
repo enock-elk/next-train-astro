@@ -1803,6 +1803,31 @@ async function handleCommunityPoints(request, env) {
     }
 }
 
+function isOwnTrainHost(value) {
+    const href = sanitizeCommunityLinkUrl(value);
+    if (!href) return false;
+    try {
+        const host = new URL(href).hostname.toLowerCase().replace(/\.$/, '');
+        return /^(?:www\.|lab\.)?nexttrain\.co\.za$/.test(host)
+            || host === 'enock-elk.github.io'
+            || host.endsWith('.next-train-lab.pages.dev');
+    } catch {
+        return false;
+    }
+}
+
+function communityLinkPreview(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const url = sanitizeCommunityLinkUrl(raw.url);
+    if (!url || isOwnTrainHost(url)) return null;
+    const title = String(raw.title || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    const description = String(raw.description || '').replace(/\s+/g, ' ').trim().slice(0, 220);
+    const image = sanitizeCommunityLinkUrl(raw.image) || '';
+    const site = String(raw.site || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!title && !description && !image) return null;
+    return { url, title, description, image, site };
+}
+
 async function handlePost(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -1937,6 +1962,10 @@ async function handlePost(request, env) {
         payload.attachments = attachments.map((url) => ({ kind: 'image', url }));
     }
     if (linkUrl) payload.linkUrl = linkUrl;
+    if (isAdminPoster) {
+        const card = communityLinkPreview(body.linkPreview);
+        if (card) payload.linkPreview = card;
+    }
     if (body.replyTo && typeof body.replyTo === 'object') {
         const quoteUid = String(body.replyTo.uid || '').slice(0, 80);
         payload.replyTo = {

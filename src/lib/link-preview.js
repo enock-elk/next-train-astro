@@ -26,6 +26,17 @@ function decodeEntities(value) {
         .trim();
 }
 
+export function isOwnSiteUrl(value) {
+    const href = cleanHttpUrl(value);
+    if (!href) return false;
+    let host = '';
+    try { host = new URL(href).hostname.toLowerCase().replace(/\.$/, ''); } catch { return false; }
+    if (/^(?:www\.|lab\.)?nexttrain\.co\.za$/i.test(host)) return true;
+    if (host === 'enock-elk.github.io') return true;
+    if (host.endsWith('.next-train-lab.pages.dev')) return true;
+    return false;
+}
+
 export function cleanHttpUrl(value) {
     let raw = String(value || '').trim();
     if (!raw) return '';
@@ -280,6 +291,14 @@ function loadingMarkup(url) {
     </a>`;
 }
 
+/** A card the author kept. Next Train addresses stay links, not cards. */
+export function storedLinkPreviewMarkup(preview) {
+    if (!linkCardsOn()) return '';
+    const card = normalizeLinkPreview(preview);
+    if (!card || isOwnSiteUrl(card.url) || isLiftedVideoUrl(card.url)) return '';
+    return readyMarkup(card);
+}
+
 export function linkPreviewMarkup(notice) {
     if (!linkCardsOn()) return '';
     if (notice?.suppressLinkPreview) return '';
@@ -385,6 +404,8 @@ export function hydrateLinkPreviews(root, workerBase) {
 
 if (typeof window !== 'undefined') {
     window.linkPreviewMarkup = linkPreviewMarkup;
+    window.storedLinkPreviewMarkup = storedLinkPreviewMarkup;
+    window.isOwnSiteUrl = isOwnSiteUrl;
     window.hydrateLinkPreviews = hydrateLinkPreviews;
     window.addEventListener('ntdatasaver', () => {
         if (linkCardsOn()) return;

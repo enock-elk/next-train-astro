@@ -1715,6 +1715,43 @@ html.dark .dark\:text-gray-200 {
   color: var(--nt-text) !important;
 }
 
+/* Station labels sit on a white Leaflet card, or as halo text on the tiles.
+   Pack remaps must not turn that name white on a bright card. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+.leaflet-popup-content,
+.leaflet-popup-content .text-gray-900,
+.leaflet-popup-content .text-gray-800,
+.leaflet-popup-content .text-gray-700,
+.leaflet-popup-content .text-black,
+html.dark .leaflet-popup-content .dark\:text-white,
+html.dark .leaflet-popup-content .dark\:text-gray-100,
+html.dark .leaflet-popup-content .dark\:text-gray-200 {
+  color: #111827 !important;
+}
+.leaflet-popup-content .text-gray-400,
+.leaflet-popup-content .text-gray-500,
+.leaflet-popup-content .text-gray-600,
+html.dark .leaflet-popup-content .dark\:text-gray-300,
+html.dark .leaflet-popup-content .dark\:text-gray-400,
+html.dark .leaflet-popup-content .dark\:text-gray-500 {
+  color: #4b5563 !important;
+}
+.leaflet-popup-close-button {
+  color: #111827 !important;
+}
+.leaflet-tooltip.tooltip-halo {
+  color: #1f2937 !important;
+  text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff !important;
+}
+html.dark .leaflet-tooltip.tooltip-halo {
+  color: #ffffff !important;
+  text-shadow: -1px -1px 0 rgba(0, 0, 0, 0.8), 1px -1px 0 rgba(0, 0, 0, 0.8), -1px 1px 0 rgba(0, 0, 0, 0.8), 1px 1px 0 rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.9) !important;
+}
+
 .hover\:bg-blue-50:hover {
   background-color: color-mix(in srgb, var(--nt-accent, var(--nt-primary)) 14%, var(--nt-surface)) !important;
 }

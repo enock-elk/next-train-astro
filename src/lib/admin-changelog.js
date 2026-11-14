@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.14.3': [
+        'Community and Feedback Hub leave Next Train links as links. An external address shows its preview in the composer, and the author can remove that card before sending. A station name on the trip map stays dark on the white label in every colour pack. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.14.2': [
         'Community disclaimer names the room, says messages are from commuters and are not Next Train or PRASA notices, and points to Options then Account for the name and photo. Privacy Policy opens from that card. Community and Feedback Hub show the same photos, GIFs, video previews, and PDFs as Alerts. A fare correction keeps the ticket photo on the sheet while it uploads and after it is saved. No commuter What\'s New. forceShow stays false.',
     ],

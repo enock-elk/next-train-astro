@@ -17,7 +17,7 @@ import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { profilePhotosOn, settleDeferredPictures } from './data-saver.js';
 import { renderTextWithShareChips } from './share-chips.js';
 import { hydrateAlertPosterImages, renderSharedMediaHtml } from './alerts-channel.js';
-import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
+import { fetchLinkPreview, hydrateLinkPreviews, isOwnSiteUrl, storedLinkPreviewMarkup } from './link-preview.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { captureSenderStation } from './auto-locate.js';
 import { formatFeedbackDiagLine } from './feedback-diag-line.js';
@@ -149,6 +149,9 @@ const localOverlayByRoute = {};
 /** Operator-only composer extras. Image addresses, not file bytes. */
 const adminImages = [];
 let adminLinkUrl = '';
+let adminComposerPreview = null;
+let adminPreviewClearedUrl = '';
+let adminPreviewTimer = null;
 
 function communityWorkerBase() {
     return COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
@@ -979,6 +982,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         ...communitySenderContext(routeId),
         ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
         ...(linkUrl ? { linkUrl } : {}),
+        ...(operator && adminComposerPreview ? { linkPreview: adminComposerPreview } : {}),
         ...replyToPayload,
     };
 
@@ -2364,8 +2368,8 @@ function communityMediaParts(post) {
             `class="community-msg-images${laid.imageUrls.length === 1 ? ' is-single' : ''}"$1`,
         );
     }
-    const preview = linkPreviewMarkup({ message: laid.body || '' });
-    if (preview) media += preview;
+    const kept = storedLinkPreviewMarkup(post?.linkPreview);
+    if (kept) media += kept;
     return { media, body: laid.body || '' };
 }
 
@@ -3363,6 +3367,61 @@ async function addAdminAddress(raw) {
     }
     adminLinkUrl = link;
     paintAdminAttachPreview();
+    scheduleCommunityLinkPreview();
+}
+
+function clearCommunityComposerPreview() {
+    adminComposerPreview = null;
+    adminPreviewClearedUrl = '';
+    const slot = document.getElementById('community-link-preview');
+    if (slot) slot.innerHTML = '';
+}
+
+function communityPreviewUrl() {
+    const composer = document.getElementById('community-composer');
+    const blob = `${composer?.value || ''}\n${adminLinkUrl || ''}`;
+    const found = blob.match(/https?:\/\/[^\s<>"']+/gi) || [];
+    for (const raw of found) {
+        const url = raw.replace(/[),.;]+$/, '');
+        if (!/^https:\/\//i.test(url) || isOwnSiteUrl(url)) continue;
+        return url;
+    }
+    return '';
+}
+
+function paintCommunityComposerPreview(preview) {
+    const slot = document.getElementById('community-link-preview');
+    if (!slot) return;
+    const card = preview ? storedLinkPreviewMarkup(preview) : '';
+    slot.innerHTML = card
+        ? `<div class="nt-composer-preview">${card}<button type="button" class="nt-composer-x" data-community-preview-clear aria-label="Remove link preview">×</button></div>`
+        : '';
+}
+
+function scheduleCommunityLinkPreview() {
+    if (!isAdminAuthed()) return;
+    clearTimeout(adminPreviewTimer);
+    adminPreviewTimer = setTimeout(() => { void refreshCommunityLinkPreview(); }, 280);
+}
+
+async function refreshCommunityLinkPreview() {
+    if (!isAdminAuthed()) return;
+    const url = communityPreviewUrl();
+    const slot = document.getElementById('community-link-preview');
+    if (!slot) return;
+    if (!url || url === adminPreviewClearedUrl) {
+        adminComposerPreview = null;
+        slot.innerHTML = '';
+        return;
+    }
+    if (adminComposerPreview?.url === url && slot.querySelector('.nt-link-preview')) return;
+    try {
+        const preview = await fetchLinkPreview(url, REPLY_WORKER_URL);
+        if (!preview?.url || preview.url !== communityPreviewUrl() || preview.url === adminPreviewClearedUrl) return;
+        if (isOwnSiteUrl(preview.url)) return;
+        adminComposerPreview = preview;
+        paintCommunityComposerPreview(preview);
+    } catch { /* the address stays in the message */ }
 }
 
 async function communityPostsSince(routeId, since) {
@@ -3758,6 +3817,7 @@ async function handlePostSubmit() {
     clearReplyDraft();
     adminImages.splice(0, adminImages.length);
     adminLinkUrl = '';
+    clearCommunityComposerPreview();
     paintAdminAttachPreview();
     signalCommunityTyping(routeId, false);
     if (result.held) {
@@ -3947,7 +4007,15 @@ export function bindCommunityUi() {
         if (e.target.closest?.('[data-remove-link]')) {
             adminLinkUrl = '';
             paintAdminAttachPreview();
+            scheduleCommunityLinkPreview();
         }
+    });
+    document.getElementById('community-link-preview')?.addEventListener('click', (e) => {
+        if (!e.target.closest?.('[data-community-preview-clear]')) return;
+        e.preventDefault();
+        adminPreviewClearedUrl = adminComposerPreview?.url || communityPreviewUrl();
+        adminComposerPreview = null;
+        paintCommunityComposerPreview(null);
     });
     document.getElementById('community-route-select')?.addEventListener('change', (e) => {
         const rid = resolveCommunityRoute(e.target.value);
@@ -4036,6 +4104,7 @@ export function bindCommunityUi() {
         fitCommunityComposer(composerEl);
         liveModerateComposer();
         paintCommunityQuotaHint();
+        scheduleCommunityLinkPreview();
 
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         signalCommunityTyping(rid, true);

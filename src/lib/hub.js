@@ -53,7 +53,7 @@ import { showPhotoInAlerts } from './rider-marks.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref, linkedPlainHtml } from './rich-text.js';
-import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
+import { hydrateLinkPreviews, linkPreviewMarkup, storedLinkPreviewMarkup } from './link-preview.js';
 import {
     showCopyToast, showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
@@ -1764,8 +1764,6 @@ function bindChatAccountListener() {
 function inboxMediaFromHtml(html, extraUrls = []) {
     const laid = layoutMessageMedia(html || '', extraUrls);
     let media = `${laid.imageUrls.length ? renderLazyPosterHtml(laid.imageUrls) : ''}${renderAlertVideoMarkup(laid.videoUrls)}${renderAlertPdfMarkup(laid.pdfUrls)}`;
-    const preview = linkPreviewMarkup({ message: laid.body || '' });
-    if (preview) media += preview;
     if (media && laid.imageUrls.length) {
         media = media.replace(
             /class="[^"]*"(\s+data-alert-media)/,
@@ -2064,12 +2062,12 @@ function renderMessagesThread(list) {
             ? renderTextWithShareChips(laid.body)
             : (laid.body || '');
         const imageCount = laid.imageCount || 0;
-        const media = laid.media
+        const media = `${laid.media
             ? laid.media.replace(
                 /class="[^"]*"(\s+data-alert-media)/,
                 `class="community-msg-images${imageCount === 1 ? ' is-single' : ''}"$1`,
             )
-            : '';
+            : ''}${m.suppressLinkPreview ? '' : storedLinkPreviewMarkup(m.linkPreview)}`;
         const clock = inboxClock(m.timestamp);
         const photo = matched ? (ident.photo || '') : (m.fromPhoto || '');
         const seed = matched ? ident.uid : (m.fromUid || name);

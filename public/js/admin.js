@@ -2457,7 +2457,6 @@ const Admin = {
                 : '';
             if (typeof window.renderAlertVideoMarkup === 'function') media += window.renderAlertVideoMarkup(laid.videoUrls);
             if (typeof window.renderAlertPdfMarkup === 'function') media += window.renderAlertPdfMarkup(laid.pdfUrls);
-            if (typeof window.linkPreviewMarkup === 'function') media += window.linkPreviewMarkup({ message: laid.body || '' });
             if (media && laid.imageUrls.length) {
                 media = media.replace(
                     /class="[^"]*"(\s+data-alert-media)/,
@@ -2506,6 +2505,12 @@ const Admin = {
             );
         }
         return { body: hoisted.body || '', media, urls: images, imageCount: images.length };
+    },
+
+    keptLinkCard: (item) => {
+        if (!item || item.suppressLinkPreview) return '';
+        if (typeof window.storedLinkPreviewMarkup !== 'function') return '';
+        return window.storedLinkPreviewMarkup(item.linkPreview) || '';
     },
 
     safeSourceHref: function(raw) {
@@ -16462,6 +16467,7 @@ const Admin = {
             Admin.writeLocalReplyDraft(id, remoteHtml, remoteAt);
         }
         Admin.syncReplyGuide();
+        if (box) Admin.scheduleAlertPreview(box);
         return box?.innerHTML || local?.html || '';
     },
 
@@ -16813,6 +16819,7 @@ const Admin = {
             if (editor) {
                 editor.innerHTML = html;
                 delete editor.dataset.draftTouched;
+                Admin.scheduleAlertPreview(editor);
             }
             Admin.persistReplyDraft();
             Admin.showSuggestHalt(null);
@@ -17329,6 +17336,7 @@ const Admin = {
         if (clearNoteBtn) clearNoteBtn.onclick = () => Admin.saveReplySuggestNote({ clear: true });
         Admin.closeCopilotSettings();
         if (!editKey) Admin.loadReplySuggestNote(modal);
+        Admin.bindReplyComposePreview();
         document.getElementById('reply-send').onclick = async () => {
             let text = Admin.composerOutgoingHtml(document.getElementById('admin-reply-text')).trim();
             if (!text || text === '<br>') {
@@ -17378,6 +17386,12 @@ const Admin = {
                 
                 // Push to inbox array via POST
                 const url = `${dynamicEndpoint}inbox/${replyDeviceId}.json?auth=${secret}`;
+                const replyEditor = document.getElementById('admin-reply-text');
+                const previewSlot = replyEditor?.parentElement?.querySelector('[data-nt-preview-slot]');
+                let keptPreview = null;
+                try { keptPreview = previewSlot?.dataset.previewJson ? JSON.parse(previewSlot.dataset.previewJson) : null; } catch { keptPreview = null; }
+                if (previewSlot?.dataset.cleared === '1') keptPreview = null;
+                if (keptPreview && typeof window.isOwnSiteUrl === 'function' && window.isOwnSiteUrl(keptPreview.url)) keptPreview = null;
                 const payload = {
                     from: 'admin',
                     message: text,
@@ -17387,7 +17401,9 @@ const Admin = {
                     fromName: adminName,
                     fromUid: ident?.uid || Admin.currentUser?.uid || '',
                     fromPhoto: ident?.photo || '',
-                    appVersion: (typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '')
+                    appVersion: (typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : ''),
+                    ...(keptPreview ? { linkPreview: keptPreview } : {}),
+                    ...(previewSlot?.dataset.cleared === '1' ? { suppressLinkPreview: true } : {}),
                 };
 
                 const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
@@ -17654,7 +17670,7 @@ const Admin = {
             const preview = window.ntLinkPreview?.fetchLinkPreview
                 ? await window.ntLinkPreview.fetchLinkPreview(videoUrl, Admin.replyWorkerUrl())
                 : null;
-            if (preview?.url) Admin.paintComposerPreview(preview);
+            if (preview?.url) Admin.paintComposerPreview(preview, editor);
             else Admin.scheduleAlertPreview();
         } catch {
             Admin.scheduleAlertPreview();
@@ -17884,7 +17900,7 @@ const Admin = {
     mediaSlotFor: (editor) => Admin.slotBeforeEditor(editor, 'data-nt-media-slot', 'hidden px-2.5 pt-2 space-y-2'),
 
     previewSlotFor: (editor) => {
-        if (!editor || editor.id !== 'alert-msg') return null;
+        if (!editor || (editor.id !== 'alert-msg' && editor.id !== 'admin-reply-text')) return null;
         return Admin.slotBeforeEditor(editor, 'data-nt-preview-slot', 'hidden px-2.5 pt-2');
     },
 
@@ -18043,8 +18059,8 @@ const Admin = {
         });
     },
 
-    paintComposerPreview: (preview) => {
-        const editor = document.getElementById('alert-msg');
+    paintComposerPreview: (preview, editorArg) => {
+        const editor = editorArg && editorArg.id ? editorArg : (Admin._previewEditor || document.getElementById('alert-msg'));
         const slot = Admin.previewSlotFor(editor);
         if (!slot || !preview?.url) return;
         const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
@@ -18058,13 +18074,15 @@ const Admin = {
         slot.innerHTML = `<div class="nt-composer-preview"><a class="nt-link-preview" href="${esc(preview.url)}" target="_blank" rel="noopener noreferrer">${image}<div class="nt-link-preview-copy"><div class="nt-link-preview-title">${esc(preview.title || preview.url)}</div><div class="nt-link-preview-site">${esc(preview.site || '')}</div></div></a>${Admin.composerXButton('preview')}</div>`;
     },
 
-    scheduleAlertPreview: () => {
+    scheduleAlertPreview: (editor) => {
+        const target = editor && editor.id ? editor : document.getElementById('alert-msg');
+        Admin._previewEditor = target;
         clearTimeout(Admin._previewTimer);
-        Admin._previewTimer = setTimeout(() => Admin.refreshAlertLinkPreview(), 280);
+        Admin._previewTimer = setTimeout(() => Admin.refreshAlertLinkPreview(target), 280);
     },
 
-    refreshAlertLinkPreview: async () => {
-        const editor = document.getElementById('alert-msg');
+    refreshAlertLinkPreview: async (editorArg) => {
+        const editor = editorArg && editorArg.id ? editorArg : document.getElementById('alert-msg');
         const slot = Admin.previewSlotFor(editor);
         if (!editor || !slot || !window.ntLinkPreview?.fetchLinkPreview) return;
         const titleEl = editor.parentElement?.querySelector('[data-nt-title]');
@@ -18079,6 +18097,22 @@ const Admin = {
         const found = text.match(/https?:\/\/[^\s<>"']+/i) || text.match(/\bwww\.[^\s<>"']+/i);
         let url = fromAnchor || (found ? found[0].replace(/[.,;:!?)]+$/, '') : '');
         if (/^www\./i.test(url)) url = `https://${url}`;
+        if (editor.id === 'admin-reply-text') {
+            const bag = [
+                ...anchors.map((a) => a.getAttribute('href') || ''),
+                ...(text.match(/https?:\/\/[^\s<>"']+/gi) || []),
+            ];
+            url = '';
+            for (const raw of bag) {
+                let href = String(raw || '').trim().replace(/[.,;:!?)]+$/, '');
+                if (/^www\./i.test(href)) href = `https://${href}`;
+                if (!/^https:\/\//i.test(href)) continue;
+                if (typeof window.isOwnSiteUrl === 'function' && window.isOwnSiteUrl(href)) continue;
+                if (typeof window.sanitizeAlertVideoUrl === 'function' && window.sanitizeAlertVideoUrl(href)) continue;
+                url = href;
+                break;
+            }
+        }
         if (!url) {
             if (slot.dataset.cleared !== '1') {
                 slot.innerHTML = '';
@@ -18093,7 +18127,8 @@ const Admin = {
             const preview = await window.ntLinkPreview.fetchLinkPreview(url, Admin.replyWorkerUrl());
             if (!preview?.url) return;
             if (slot.dataset.cleared === '1' && slot.dataset.clearedUrl === preview.url) return;
-            Admin.paintComposerPreview(preview);
+            if (editor.id === 'admin-reply-text' && typeof window.isOwnSiteUrl === 'function' && window.isOwnSiteUrl(preview.url)) return;
+            Admin.paintComposerPreview(preview, editor);
         } catch { /* the words stay a link even when the card cannot load */ }
     },
 
@@ -18176,10 +18211,24 @@ const Admin = {
             } else {
                 previewSlot.dataset.cleared = '';
                 previewSlot.dataset.clearedUrl = '';
-                if (item.linkPreview?.url) Admin.paintComposerPreview(item.linkPreview);
+                if (item.linkPreview?.url) Admin.paintComposerPreview(item.linkPreview, editor);
                 else Admin.scheduleAlertPreview();
             }
         }
+    },
+
+    bindReplyComposePreview: () => {
+        const editor = document.getElementById('admin-reply-text');
+        if (!editor || editor.dataset.ntReplyPreview === '1') return;
+        editor.dataset.ntReplyPreview = '1';
+        Admin.previewSlotFor(editor);
+        const onEdit = () => {
+            Admin.linkifyEditable(editor);
+            Admin.scheduleAlertPreview(editor);
+        };
+        editor.addEventListener('input', onEdit);
+        editor.addEventListener('blur', onEdit);
+        editor.addEventListener('paste', () => setTimeout(onEdit, 0));
     },
 
     bindComposerChrome: () => {
@@ -25003,7 +25052,7 @@ const Admin = {
 
                         const adminExtra = Admin.feedbackAttachmentList(item);
                         const adminMedia = Admin.layoutInboxMedia(parsedAdminText, adminExtra);
-                        const adminAttachHtml = adminMedia.media || '';
+                        const adminAttachHtml = `${adminMedia.media || ''}${Admin.keptLinkCard(item)}`;
                         parsedAdminText = adminMedia.body || '';
 
                         // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
@@ -25289,7 +25338,7 @@ const Admin = {
                         rawText = rawText.replace(/^(?:<br>|\s)+/, '');
 
                         const commuterMedia = Admin.layoutInboxMedia(rawText, uniqueAttach);
-                        const attachmentHtml = commuterMedia.media || '';
+                        const attachmentHtml = `${commuterMedia.media || ''}${Admin.keptLinkCard(item)}`;
                         rawText = commuterMedia.body || '';
 
                         // METADATA: Integrated Bubble Header

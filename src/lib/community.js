@@ -12,14 +12,15 @@
  */
 import { APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES } from './config.js';
 import { formatAccountDisplayName } from './display-name.js';
-import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel, applyFittedLabels } from './utils.js';
+import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel, applyFittedLabels, formatRouteLabelPlain, commuterStationName } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-saver.js';
 import { renderTextWithShareChips, shareChipHtml } from './share-chips.js';
 import { armGifPlayers } from './gif-play.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { captureSenderStation } from './auto-locate.js';
-import { stationChoiceLabel } from './feedback-diag-line.js';
+import { formatFeedbackDiagLine } from './feedback-diag-line.js';
+import { feedbackDiagnostics } from './hub.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { haltPanelText } from './reply-suggest.js';
@@ -836,7 +837,10 @@ export async function deleteCommunityMessage({ routeId, postId, replyId = '', mo
         }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 404 && isAdminAuthed()) {
+    const workerError = String(data.error || '');
+    const workerDenied = /permission denied|RTDB update failed/i.test(workerError);
+    const workerFailed = !res.ok || data.ok === false;
+    if (isAdminAuthed() && (res.status === 404 || (workerFailed && (res.status >= 500 || workerDenied)))) {
         const { ensureAdminLoaded } = await import('./admin-bridge.js');
         const Admin = await ensureAdminLoaded();
         if (mode === 'purge') {
@@ -942,6 +946,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
                     replyCount: 0,
                     appVersion: APP_VERSION,
                     ...placeFields,
+                    ...communitySenderContext(routeId),
                     ...replyToPayload,
                 },
             },
@@ -970,6 +975,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         appVersion: APP_VERSION,
         photoURL: null,
         ...placeFields,
+        ...communitySenderContext(routeId),
         ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
         ...(linkUrl ? { linkUrl } : {}),
         ...replyToPayload,
@@ -1149,6 +1155,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
                     hidden: false,
                     appVersion: APP_VERSION,
                     ...placeFields,
+                    ...communitySenderContext(routeId),
                 },
             },
         });
@@ -1171,6 +1178,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         hidden: false,
         appVersion: APP_VERSION,
         ...placeFields,
+        ...communitySenderContext(routeId),
     };
 
     const banned = await isShadowBanned(acct.uid);
@@ -1947,10 +1955,36 @@ if (typeof window !== 'undefined') {
     };
 }
 
-function adminStationName(displayName, post, isOwn) {
-    if (isOwn || !isAdminAuthed()) return displayName;
-    const choice = stationChoiceLabel(post?.station, post?.stationAutoLocated);
-    return choice ? `${displayName} - ${choice}` : displayName;
+function communityDefaultRouteId(roomRouteId) {
+    const region = $userRegion.get() || 'GP';
+    const pinned = String(safeStorage.getItem(`defaultRoute_${region}`) || safeStorage.getItem('defaultRoute') || '').trim();
+    const room = String(roomRouteId || $currentRouteId.get() || '').trim();
+    if (pinned && ROUTES[pinned]) return pinned;
+    if (room && ROUTES[room]) return room;
+    return '';
+}
+
+function communitySenderContext(roomRouteId) {
+    const defaultRouteId = communityDefaultRouteId(roomRouteId);
+    return {
+        ...(defaultRouteId ? { defaultRouteId } : {}),
+        diagnostics: feedbackDiagnostics(),
+    };
+}
+
+/** Operators only. Commuters keep the name, with no route, station, or handset. */
+function communityVersionChip(post, routeId) {
+    if (!isAdminAuthed()) return '';
+    const version = String(post?.appVersion || '').split(' - ')[0].split(' · ')[0].trim();
+    if (!/^V\d+_/i.test(version)) return '';
+    const routeKey = String(post?.defaultRouteId || routeId || '').trim();
+    const routeName = ROUTES[routeKey]?.name || '';
+    const routeLabel = routeName ? formatRouteLabelPlain(routeName) : '';
+    const storedStation = String(post?.station || '').replace(/\s+STATION\s*$/i, '').trim();
+    const station = storedStation ? commuterStationName(storedStation) : '';
+    const auto = post?.stationAutoLocated === true || post?.stationAutoLocated === '1' || post?.stationAutoLocated === 1;
+    const diag = formatFeedbackDiagLine(post?.diagnostics);
+    return `<button type="button" class="fb-version-chip relative z-[2] cursor-pointer font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${escapeHTML(version)}" data-cl-route="${escapeHTML(routeLabel)}" data-cl-station="${escapeHTML(station)}" data-cl-auto="${auto ? '1' : '0'}" data-cl-diag="${escapeHTML(diag)}">${escapeHTML(version)}</button>`;
 }
 
 function selectCommunityPost(postId, routeId) {
@@ -2387,7 +2421,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
     const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
-    const visibleName = adminStationName(displayName, post, isOwn);
+    const versionChip = grouped ? '' : communityVersionChip(post, routeId);
     const nameColor = nameColorFor(authorColorKey(post.uid, displayName));
     const replyTo = !tombstone && post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
     const quoteShown = replyTo
@@ -2418,7 +2452,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
-        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(visibleName)}</span>${marksHtml}</div>`;
+        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="inline-flex items-center min-w-0"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${versionChip}</span>${marksHtml}</div>`;
 
     return `
       <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}"${tombstone ? ' data-deleted="1"' : ''}>
@@ -2548,7 +2582,7 @@ function wireCommunityChatGestures(listEl) {
         longTimer = null;
     };
 
-    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, .community-quote-jump, [data-community-see-more]');
+    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, .community-quote-jump, [data-community-see-more], .fb-version-chip, [data-admin-changelog]');
 
     listEl.addEventListener('touchstart', (e) => {
         if (communityInlineControl(e.target)) return;
@@ -4038,6 +4072,16 @@ export function bindCommunityUi() {
     document.addEventListener('click', async (e) => {
         const t = e.target;
         if (t.closest?.('#community-delete-modal')) return;
+        const versionChip = t.closest?.('.fb-version-chip, [data-admin-changelog]');
+        if (versionChip) {
+            e.preventDefault();
+            e.stopPropagation();
+            const { ensureAdminLoaded } = await import('./admin-bridge.js');
+            const Admin = await ensureAdminLoaded();
+            const version = versionChip.getAttribute('data-admin-changelog') || versionChip.textContent || '';
+            Admin?.openAdminChangelogLookup?.(version, Admin.changelogContextFromEl?.(versionChip));
+            return;
+        }
 
         const seeMore = t.closest?.('[data-community-see-more]');
         if (seeMore) {

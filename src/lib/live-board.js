@@ -16,7 +16,7 @@ import {
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
     simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute,
-    commuterStationName,
+    commuterStationName, stationLabelsMatch,
     schedulesBelongToRoute, provisionalMapFromSchedule
 } from './utils.js';
 import {
@@ -1207,8 +1207,7 @@ export function selectedBoardStation() {
     const inputVisible = !!(input && !input.classList.contains('hidden'));
     if (!inputVisible) return value;
     const shown = String(input.value || '').trim();
-    const expected = value.replace(/ STATION/gi, '').trim();
-    if (value && shown && normalizeStationName(shown) === normalizeStationName(expected)) return value;
+    if (value && shown && stationLabelsMatch(shown, value)) return value;
     if (select && value) select.value = '';
     if (shown) input.value = '';
     delete input.dataset.resolvedValue;

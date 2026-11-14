@@ -242,6 +242,30 @@ export function hasFirebaseAdminEnv(env) {
     );
 }
 
+function communityDiagnostics(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const phone = String(raw.phone || '').trim().slice(0, 60);
+    const network = String(raw.network || '').trim().slice(0, 24);
+    const signal = String(raw.signal || '').trim().slice(0, 24);
+    const viewport = String(raw.viewport || '').trim().slice(0, 24);
+    const out = {};
+    if (phone) out.phone = phone;
+    if (network) out.network = network;
+    if (signal) out.signal = signal;
+    if (/^\d{2,5}x\d{2,5}$/i.test(viewport)) out.viewport = viewport.toLowerCase();
+    if (raw.captive === true) out.captive = true;
+    return Object.keys(out).length ? out : null;
+}
+
+async function rtdbUserRequest(env, path, idToken, init) {
+    const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
+    if (!base) throw new Error('FIREBASE_DATABASE_URL missing');
+    if (!idToken) throw new Error('Missing auth token');
+    const clean = String(path || '').replace(/^\//, '');
+    const url = `${base}/${clean}.json?auth=${encodeURIComponent(idToken)}`;
+    return fetch(url, init);
+}
+
 async function rtdbWriteWithUserToken(env, path, value, idToken) {
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!base) throw new Error('FIREBASE_DATABASE_URL missing');
@@ -1905,6 +1929,10 @@ async function handlePost(request, env) {
         appVersion: String(body.appVersion || '').slice(0, 40) || null,
         via: 'community_worker',
     };
+    const defaultRouteId = String(body.defaultRouteId || '').trim().slice(0, 40);
+    if (defaultRouteId && isSafeRtdbKey(defaultRouteId)) payload.defaultRouteId = defaultRouteId;
+    const diagnostics = communityDiagnostics(body.diagnostics);
+    if (diagnostics) payload.diagnostics = diagnostics;
     if (attachments.length) {
         payload.attachments = attachments.map((url) => ({ kind: 'image', url }));
     }
@@ -2094,19 +2122,37 @@ async function handleCommunityDelete(request, env) {
     }
     const actor = !isAdmin || body.as === 'author' ? 'author' : 'admin';
     try {
-        if (mode === 'purge') {
-            const updates = { [path]: null };
-            if (replyId) {
-                updates[`community_activity/${routeId}/${replyId}`] = null;
-            } else {
-                updates[`route_community/${routeId}/post_reactions/${postId}`] = null;
-                updates[`community_activity/${routeId}/${postId}`] = null;
-                Object.keys(current.replies || {}).forEach((id) => {
-                    if (isSafeRtdbKey(id)) updates[`community_activity/${routeId}/${id}`] = null;
-                });
+        if (isAdmin) {
+            if (mode === 'purge') {
+                const removed = await rtdbUserRequest(env, path, idToken, { method: 'DELETE' });
+                if (!removed.ok && removed.status !== 404) {
+                    const t = await removed.text();
+                    throw new Error(`RTDB delete failed (${removed.status}): ${t.slice(0, 200)}`);
+                }
+                const extras = replyId
+                    ? [`community_activity/${routeId}/${replyId}`]
+                    : [
+                        `route_community/${routeId}/post_reactions/${postId}`,
+                        `community_activity/${routeId}/${postId}`,
+                        ...Object.keys(current.replies || {}).filter((id) => isSafeRtdbKey(id)).map((id) => `community_activity/${routeId}/${id}`),
+                    ];
+                await Promise.all(extras.map((extra) => rtdbUserRequest(env, extra, idToken, { method: 'DELETE' }).catch(() => {})));
+                return json(env, request, 200, { ok: true, mode: 'purge' });
             }
-            await rtdbUpdate(env, updates);
-            return json(env, request, 200, { ok: true, mode: 'purge' });
+            const patch = communityTombstonePatch(actor);
+            const patched = await rtdbUserRequest(env, path, idToken, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!patched.ok) {
+                const t = await patched.text();
+                throw new Error(`RTDB update failed (${patched.status}): ${t.slice(0, 200)}`);
+            }
+            return json(env, request, 200, { ok: true, mode: 'tombstone', deletedBy: actor, body: patch.body });
+        }
+        if (mode === 'purge') {
+            return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
         }
         const patch = communityTombstonePatch(actor);
         const updates = {};

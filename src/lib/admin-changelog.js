@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.14.1': [
+        'PRETORIA WEST and PRETORIA NORTH can be picked on the home board, the trip planner, and the other station lists. The timetable key is unchanged. Remove completely no longer stops on the worker permission error. It deletes the message with the operator sign-in. A community name shows the build, such as Johannes T and V10_11.14.1, only for an operator. The build opens the same card as Feedback Hub, with the default route, the station, and the handset. Commuters do not see that. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.13.11': [
         'Download names end with the epoch, so saving the same photo or export again is a new file and the phone does not ask Download file again. A photo saves as next-train_<epoch>.jpg. No commuter What\'s New. forceShow stays false.',
     ],

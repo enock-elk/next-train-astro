@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, stationLabelsMatch, stationQueryHits, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -224,6 +224,17 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(commuterStationName('Pretoria-N') === 'PRETORIA NORTH', 'Pretoria-N displays as PRETORIA NORTH');
     assert(plannerStationDisplayName('PRETORIA-N') === 'PRETORIA NORTH', 'planner shows PRETORIA NORTH');
     assert(plannerStationDisplayName('PRETORIA WEST') === 'PRETORIA WEST', 'PRETORIA WEST stays fully capitalised');
+    assert(stationLabelsMatch('PRETORIA WEST', 'PRETORIA WES'), 'the West label matches the timetable key');
+    assert(stationLabelsMatch('PRETORIA NORTH', 'PRETORIA-N'), 'the North label matches the timetable key');
+    assert(stationLabelsMatch('Waltloo', 'WALTOO'), 'Waltloo matches its timetable key');
+    assert(resolvePlannerStationInput('Waltloo', ['WALTOO', 'PRETORIA']) === 'WALTOO', 'typing Waltloo finds the timetable key');
+    assert(stationQueryHits('PRETORIA WES', 'PRETORIA WEST'), 'typing PRETORIA WEST finds the West stop');
+    assert(stationQueryHits('PRETORIA-N', 'north'), 'typing north finds Pretoria North');
+    assert(!stationQueryHits('KEMPTON PARK', 'PRETORIA WEST'), 'West does not match Kempton Park');
+    const board = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
+    assert(board.includes('stationLabelsMatch(shown, value)'), 'the home board accepts the displayed station name');
+    const planner = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+    assert(planner.includes('stationQueryHits'), 'the planner search uses the displayed station name');
     assert(plannerStationDisplayName('JOHANNESBURG') === 'JOHANNESBURG', 'Johannesburg recents stay in caps');
     assert(!/Park Station/i.test(plannerStationDisplayName('JOHANNESBURG')), 'Park Station is not a display label');
     const stamp = new Date(2026, 7, 25, 7, 19, 0);

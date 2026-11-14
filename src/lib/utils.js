@@ -813,6 +813,7 @@ export const STATION_ALIASES = Object.freeze({
     'PTA NORTH': 'PRETORIA N',
     'PRETORIA WEST': 'PRETORIA WES',
     'PTA WEST': 'PRETORIA WES',
+    'WALTLOO': 'WALTOO',
 });
 
 export function resolveStationAlias(raw) {
@@ -844,6 +845,44 @@ export function commuterStationName(raw) {
 /** Visible station text. Same capitals as the rest of the board list. */
 export function plannerStationDisplayName(canonical) {
     return commuterStationName(canonical);
+}
+
+/**
+ * The board shows PRETORIA WEST while the timetable key stays PRETORIA WES.
+ * A pick is the same station when either form matches.
+ */
+export function stationLabelsMatch(shown, stored) {
+    const a = normalizeStationName(shown);
+    const b = normalizeStationName(String(stored || '').replace(/ STATION/gi, ''));
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const canon = (name) => {
+        const alias = STATION_ALIASES[name];
+        return alias ? normalizeStationName(alias) : name;
+    };
+    const ca = canon(a);
+    const cb = canon(b);
+    if (ca === cb || ca === b || a === cb) return true;
+    const da = normalizeStationName(commuterStationName(shown));
+    const db = normalizeStationName(commuterStationName(stored));
+    return !!(da && db && (da === db || da === b || a === db || da === cb || ca === db));
+}
+
+/** True when a typed or tapped label finds this timetable station. */
+export function stationQueryHits(storedName, rawFilter) {
+    const val = String(rawFilter || '').trim().toUpperCase();
+    if (!val) return true;
+    const valNorm = normalizeStationName(rawFilter);
+    if (String(storedName || '').toUpperCase().includes(val)) return true;
+    const display = normalizeStationName(commuterStationName(storedName));
+    if (display && (display.includes(val) || (valNorm && display.includes(valNorm)))) return true;
+    if (valNorm && stationLabelsMatch(rawFilter, storedName)) return true;
+    if (valNorm.length >= 5) {
+        return Object.entries(STATION_ALIASES).some(([key, canon]) =>
+            (key === valNorm || key.startsWith(valNorm)) && stationLabelsMatch(canon, storedName)
+        );
+    }
+    return false;
 }
 
 /**

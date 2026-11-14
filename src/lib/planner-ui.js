@@ -19,7 +19,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
-    resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, masterListHasStation, STATION_ALIASES,
+    resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, masterListHasStation, stationQueryHits,
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
@@ -173,7 +173,7 @@ const bareStationName = (name) => commuterStationName(stripStationSuffix(name));
 function plannerHistoryStationLabel(name) {
     const masterList = getMasterStationList();
     const resolved = resolvePlannerStationInput(name, masterList) || name;
-    return stripStationSuffix(resolved).toUpperCase();
+    return commuterStationName(stripStationSuffix(resolved));
 }
 
 /** Reject sheet header / "Last Updated" rows that leaked into station lists. */
@@ -4172,7 +4172,7 @@ export function initPlanner() {
                         fromSelect.value = nearest.stationName;
                         const fromInputSearch = document.getElementById('planner-from-search');
                         if (fromInputSearch) {
-                            fromInputSearch.value = nearest.stationName.replace(' STATION', '');
+                            fromInputSearch.value = plannerStationDisplayName(nearest.stationName);
                             fromInputSearch.dataset.resolvedValue = nearest.stationName;
                         }
                         
@@ -4604,25 +4604,15 @@ export function setupAutocomplete(inputId, selectId) {
             oppositeValue = (fromInput && fromInput.dataset.resolvedValue) ? fromInput.dataset.resolvedValue : "";
         }
 
-        const valNorm = normalizeStationName(rawFilter);
-        const aliasCanon = new Set();
-        if (valNorm) {
-            if (STATION_ALIASES[valNorm]) aliasCanon.add(STATION_ALIASES[valNorm]);
-            if (valNorm.length >= 5) {
-                Object.entries(STATION_ALIASES).forEach(([k, v]) => {
-                    if (k === valNorm || k.startsWith(valNorm)) aliasCanon.add(v);
-                });
-            }
-        }
         let matches = val.length === 0
             ? masterList
-            : masterList.filter((s) => s.includes(val) || aliasCanon.has(normalizeStationName(s)));
+            : masterList.filter((s) => stationQueryHits(s, rawFilter));
         if (oppositeValue) matches = matches.filter((s) => s !== oppositeValue);
 
         // Ghosts only when the user is typing a name (not in the full browse list)
         let ghostMatches = [];
         if (val.length > 0) {
-            ghostMatches = ghostList.filter((s) => s.includes(val) && s !== oppositeValue);
+            ghostMatches = ghostList.filter((s) => stationQueryHits(s, rawFilter) && s !== oppositeValue);
             // Prefer prefix hits (QUEE → Queenswood) over weaker contains-only ghosts
             ghostMatches.sort((a, b) => {
                 const ba = bareStationName(a).toUpperCase();
@@ -5346,11 +5336,11 @@ export function planFromAlternateOrigin(newOrigin, dest) {
     if (fromSelect) fromSelect.value = fullFrom;
     if (toSelect) toSelect.value = fullTo;
     if (fromInput) {
-        fromInput.value = fullFrom.replace(/ STATION/gi, '');
+        fromInput.value = plannerStationDisplayName(fullFrom);
         fromInput.dataset.resolvedValue = fullFrom;
     }
     if (toInput) {
-        toInput.value = fullTo.replace(/ STATION/gi, '');
+        toInput.value = plannerStationDisplayName(fullTo);
         toInput.dataset.resolvedValue = fullTo;
     }
     executeTripPlan(fullFrom, fullTo);

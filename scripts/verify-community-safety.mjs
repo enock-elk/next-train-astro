@@ -157,6 +157,12 @@ assert.match(community, /communityInlineControl\(e\.target\)/, 'a share chip tou
 assert.match(readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8'), /data-delete-as="author"/, 'the poster can delete their own message');
 assert.match(community, /as === 'author'[\s\S]{0,280}if \(!ownMessage\) return/, 'a rider can delete only their own message');
 assert.match(community, /Remove completely/, 'an operator can still remove a message with no bubble left');
+assert.match(community, /function communityVersionChip/, 'an operator sees the build on a community name');
+assert.match(community, /openAdminChangelogLookup/, 'the community build opens the feedback version card');
+assert.match(community, /if \(!isAdminAuthed\(\)\) return ''/, 'commuters do not see the community version chip');
+assert.match(community, /defaultRouteId/, 'a community message stores the default route');
+assert.match(community, /workerDenied/, 'a denied worker delete falls back to the operator write');
+assert.doesNotMatch(community, /adminStationName/, 'the station is not written on the community name');
 assert.match(admin, /ntAdminDeletePublishedCommunityMessage/, 'community tab delete uses the same RTDB delete as Community Monitor');
 assert.match(handlePostSrc, /applyCommunityPublicPoints/, 'an accepted post writes the public points total');
 assert.match(workerSource, /pathname === '\/community\/points'/, 'replies can ask for the same public points write');

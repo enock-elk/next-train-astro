@@ -912,7 +912,10 @@ async function ntAdminTombstoneCommunityMessage(routeId, postId, replyId) {
     if (res.ok) return;
     if (res.status !== 404) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Delete failed (${res.status})`);
+        const err = String(data.error || '');
+        if (res.status < 500 && !/permission denied|RTDB update failed/i.test(err)) {
+            throw new Error(err || `Delete failed (${res.status})`);
+        }
     }
     const path = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}${replyId ? `/replies/${encodeURIComponent(replyId)}` : ''}`;
     const patch = await fetch(`${dynamicEndpoint}${path}.json?auth=${encodeURIComponent(token)}`, {

@@ -374,6 +374,7 @@
           ".read": true,
           "$postId": {
             ".read": true,
+            ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
             "$uid": {
               ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous'",
               ".validate": "!newData.exists() || (newData.hasChildren(['emoji', 'at']) && newData.child('emoji').isString() && (newData.child('emoji').val() === 'thumb' || newData.child('emoji').val() === 'heart' || newData.child('emoji').val() === 'laugh' || newData.child('emoji').val() === 'wow' || newData.child('emoji').val() === 'sad' || newData.child('emoji').val() === 'pray') && newData.child('at').isNumber())"

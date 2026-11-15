@@ -1642,6 +1642,7 @@ function syncCommunitySelectActions(post) {
     const acct = $account.get();
     const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const tombstone = isCommunityTombstone(post);
+    document.getElementById('community-select-speak')?.classList.toggle('hidden', !isAdminAuthed() || !post);
     document.getElementById('community-select-report')?.classList.toggle('hidden', !post || mine || tombstone);
     document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone);
     syncCommunityCopyButton(post);
@@ -1727,28 +1728,7 @@ function openReactionSheet(postId, routeId, anchorEl) {
             <button type="button" class="community-react-btn h-10 w-10 text-xl rounded-full ${myEmoji === r.id ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
     }
-    let play = sheet.querySelector('[data-community-speak]');
-    if (!isAdminAuthed()) {
-        play?.remove();
-    } else {
-        if (!play) {
-            play = document.createElement('button');
-            play.type = 'button';
-            play.setAttribute('data-community-speak', '1');
-            play.className = 'mt-1 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-gray-950/95 px-3 py-2 text-sm font-semibold text-white shadow-2xl focus:outline-none';
-            play.innerHTML = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 6a8.5 8.5 0 010 12"/></svg><span>Play</span>`;
-            sheet.querySelector('#community-reaction-tray')?.appendChild(play);
-        }
-        play.onclick = (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const words = communityCaptionText(findCachedPost(postId));
-            speakOperatorCopy(words).then((result) => {
-                if (result?.hidden) return;
-                if (!result?.ok && result?.message) showToast(result.message, 'error');
-            });
-        };
-    }
+    sheet.querySelector('[data-community-speak]')?.remove();
     sheet.classList.remove('hidden');
     placeReactionTray();
     triggerHaptic();
@@ -2089,6 +2069,7 @@ function clearCommunitySelection() {
     bar?.classList.remove('flex');
     setCommunitySelecting(false);
     document.getElementById('community-select-menu')?.classList.add('hidden');
+    document.getElementById('community-select-speak')?.classList.add('hidden');
     document.getElementById('community-select-report')?.classList.add('hidden');
     document.getElementById('community-select-delete')?.classList.add('hidden');
     document.getElementById('community-select-menu-btn')?.classList.add('hidden');
@@ -4102,6 +4083,17 @@ export function bindCommunityUi() {
     document.getElementById('community-select-back')?.addEventListener('click', (e) => {
         e.preventDefault();
         clearCommunitySelection();
+    });
+    document.getElementById('community-select-speak')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isAdminAuthed()) return;
+        const post = selectedCommunity?.post;
+        if (!post) return;
+        speakOperatorCopy(communityCaptionText(post)).then((result) => {
+            if (result?.hidden) return;
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+        });
     });
     document.getElementById('community-select-copy')?.addEventListener('click', async (e) => {
         e.preventDefault();

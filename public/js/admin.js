@@ -2660,6 +2660,7 @@ const Admin = {
 
     /** Close Developer Mode reliably (no history.back() race that can no-op the X button). */
     closeDevModal: (opts = {}) => {
+        Admin.hideInboxReactionPicker();
         if (!Admin.confirmGridOrderLeave(null)) return;
         const force = !!opts.force;
         // Grid X / forced exit: close Dev Mode. Drilled X (no force): step back to grid only.
@@ -3096,9 +3097,12 @@ const Admin = {
             if (!row) return;
             Admin.applyFeedbackInboxReaction(row, chip.getAttribute('data-inbox-react'));
         });
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest?.('#inbox-reaction-picker')) Admin.hideInboxReactionPicker();
-        });
+        const hidePickerOutside = (e) => {
+            if (e.target.closest?.('#inbox-reaction-picker')) return;
+            Admin.hideInboxReactionPicker();
+        };
+        document.addEventListener('pointerdown', hidePickerOutside);
+        document.addEventListener('click', hidePickerOutside);
     },
 
     /** usr_{rand}_{Date.now()} — trailing epoch is first-install / join time. */

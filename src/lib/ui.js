@@ -2460,6 +2460,7 @@ function dismissCommunityTabSheets() {
 
 export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
+    try { window.Admin?.hideInboxReactionPicker?.(); } catch { /* feedback tray is optional */ }
 
     if (tab === 'map' && !canOpenTrackingMap()) tab = 'next-train';
     if (tab !== 'next-train') cancelPendingGridOpenFromUi();

@@ -463,6 +463,31 @@ const now = 1_700_000_000_000;
         message: 'See https://nexttrain.co.za/guide.html and https://www.prasa.com/ today.',
     });
     assert((many.match(/data-link-preview-url=/g) || []).length === 2, 'every url in an alert is crawled');
+    const whatsapp = linkPreviewMarkup({
+        linkPreview: {
+            url: 'https://www.whatsapp.com/channel/0029VaExample',
+            title: 'Metrorail Region Updates',
+            description: 'Our commuter safety is important.',
+            site: 'whatsapp.com',
+        },
+        sourceUrl: 'https://whatsapp.com/channel/0029VaExample',
+        message: 'Update https://whatsapp.com/channel/0029VaExample/',
+    });
+    assert((whatsapp.match(/data-link-preview-state=/g) || []).length === 1, 'www and bare host are one preview');
+    const keptOther = linkPreviewMarkup({
+        suppressedPreviewUrls: ['https://whatsapp.com/channel/0029VaExample'],
+        linkPreview: {
+            url: 'https://www.whatsapp.com/channel/0029VaExample',
+            title: 'Metrorail Region Updates',
+            description: 'Our commuter safety is important.',
+            site: 'whatsapp.com',
+        },
+        message: 'Also https://example.com/service-update',
+    });
+    assert(!/whatsapp\.com\/channel/i.test(keptOther), 'a dismissed url stays off the preview');
+    assert((keptOther.match(/data-link-preview-url=/g) || []).length === 1, 'removing one url leaves the other');
+    const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(adminJs.includes('armPreviewLinkDismiss'), 'admin preview puts an X on each link card');
     const tiktok = 'https://www.tiktok.com/@metrorail/video/1234567890123456789';
     assert(sanitizeAlertVideoUrl(tiktok) === tiktok, 'a TikTok video is a video, not only YouTube');
     const fb = 'https://www.facebook.com/watch/?v=123456789012345';
@@ -533,7 +558,7 @@ const now = 1_700_000_000_000;
     assert(appearance.includes('.nt-poll-row.is-mine'), 'your-vote row is a padded highlight, not a ring');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
     assert(/#alerts-channel header\s*\{[\s\S]*?background-color:\s*var\(--nt-chrome-header\)/.test(appearance), 'alerts header uses the chrome colour, not the card surface');
-    assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
+    assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn,[\s\S]*?\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
     assert(/#planner-train-sheet-fare\s*\{[\s\S]*?background-color:\s*#ffffff/.test(appearance), 'train-sheet fare chip stays white on the blue header');
     assert(/\.nt-planner-map-btn\s*\{[\s\S]*?color:\s*var\(--nt-text\)/.test(appearance), 'View trip plan on map uses body ink');
     assert(/\.nt-alert-reply\s*\{[\s\S]*?color:\s*var\(--nt-primary\) !important/.test(appearance), 'Reply uses primary outline ink');

@@ -48,7 +48,7 @@ import {
     seriesTrend,
     viewabilityTrend,
 } from '../../workers/nexttrain-telemetry/chart-math.js';
-import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
+import { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl } from './link-preview.js';
 import {
     alertDraftFromBriefCard,
     briefDismissed,
@@ -168,7 +168,8 @@ export function exposeAdminGlobals() {
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
     window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, equivalentPeriodTrend, equivalentViewability, seriesTrend, viewabilityTrend };
-    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
+    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl };
+    window.samePreviewUrl = samePreviewUrl;
     window.ntOperatorBrief = {
         alertDraftFromBriefCard,
         briefDismissed,

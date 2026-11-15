@@ -50,6 +50,34 @@ export function cleanHttpUrl(value) {
     return url.href;
 }
 
+/** Host without www/m, plus path and query. Scheme and a trailing slash do not make a second card. */
+export function previewUrlKey(value) {
+    const href = cleanHttpUrl(value);
+    if (!href) return '';
+    try {
+        const url = new URL(href);
+        const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www|m)\./, '');
+        let path = url.pathname || '/';
+        if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+        return `${host}${path}${url.search}`.toLowerCase();
+    } catch {
+        return '';
+    }
+}
+
+export function samePreviewUrl(a, b) {
+    const left = previewUrlKey(a);
+    const right = previewUrlKey(b);
+    return !!(left && right && left === right);
+}
+
+function pinPreviewUrl(preview, requested) {
+    if (!preview || typeof preview !== 'object') return preview;
+    const req = cleanHttpUrl(requested);
+    if (req && samePreviewUrl(preview.url, req)) return { ...preview, url: req };
+    return preview;
+}
+
 /** https pages a preview worker may open. Blocks local and private hosts. */
 export function isPublicPreviewUrl(value) {
     const href = cleanHttpUrl(value);
@@ -100,7 +128,7 @@ export function listHttpUrls(notice) {
     for (const item of list) {
         const raw = String(item || '').trim();
         const url = cleanHttpUrl(/^www\./i.test(raw) ? `https://${raw}` : raw);
-        if (!url || !isPublicPreviewUrl(url) || out.includes(url)) continue;
+        if (!url || !isPublicPreviewUrl(url) || out.some((have) => samePreviewUrl(have, url))) continue;
         out.push(url);
         if (out.length >= 8) break;
     }
@@ -299,19 +327,26 @@ export function storedLinkPreviewMarkup(preview) {
     return readyMarkup(card);
 }
 
+function suppressedPreview(notice, url) {
+    const list = Array.isArray(notice?.suppressedPreviewUrls) ? notice.suppressedPreviewUrls : [];
+    return list.some((item) => samePreviewUrl(item, url));
+}
+
 export function linkPreviewMarkup(notice) {
     if (!linkCardsOn()) return '';
     if (notice?.suppressLinkPreview) return '';
     const stored = normalizeLinkPreview(notice?.linkPreview);
     const urls = [];
-    if (stored?.url && !isLiftedVideoUrl(stored.url)) urls.push(stored.url);
-    listHttpUrls(notice).forEach((url) => {
-        if (isLiftedVideoUrl(url) || urls.includes(url)) return;
+    const push = (url) => {
+        if (!url || isLiftedVideoUrl(url) || suppressedPreview(notice, url)) return;
+        if (urls.some((have) => samePreviewUrl(have, url))) return;
         urls.push(url);
-    });
+    };
+    if (stored?.url) push(stored.url);
+    listHttpUrls(notice).forEach(push);
     if (!urls.length) return '';
     return urls.map((url) => {
-        if (stored && stored.url === url) return readyMarkup(stored);
+        if (stored && samePreviewUrl(stored.url, url)) return readyMarkup(stored);
         const peeked = peekLinkPreview(url);
         if (peeked) return readyMarkup(peeked);
         return loadingMarkup(url);
@@ -357,7 +392,7 @@ export async function fetchLinkPreview(url, workerBase) {
     const base = String(workerBase || '').replace(/\/$/, '');
     if (base) {
         const worker = await readPreviewJson(`${base}/unfurl?url=${encodeURIComponent(clean)}`, 8000);
-        const stored = worker.ok ? rememberLinkPreview(worker.data) : null;
+        const stored = worker.ok ? rememberLinkPreview(pinPreviewUrl(worker.data, clean)) : null;
         if (stored) return stored;
     }
     const micro = await readPreviewJson(`${PREVIEW_FALLBACK}/?url=${encodeURIComponent(clean)}`, 8000);

@@ -5,7 +5,7 @@
  * upcoming-trains modal, but static full-day lists for crawlers.
  */
 import { ROUTES, getCorridorLabel } from './config.js';
-import { timeToSeconds } from './utils.js';
+import { shortSharedSourceLabel, timeToSeconds } from './utils.js';
 import {
   displayRouteName,
   gridStationLabel,
@@ -463,6 +463,7 @@ export function buildStationCorridorTimetables(station) {
       : [];
     if (listed && !stopOrder.some((n) => normalizeKey(n) === normalizeKey(name))) continue;
 
+    const stamp = (list) => list.map((train) => ({ ...train, sourceRouteId: routeId }));
     cards.push({
       routeId,
       routeSlug: routeSeedSlug(routeId),
@@ -481,32 +482,157 @@ export function buildStationCorridorTimetables(station) {
         towardA: {
           title: `${name} → ${origin}`,
           toward: origin,
-          trains: weekdayTowardA,
+          trains: stamp(weekdayTowardA),
         },
         towardB: {
           title: `${name} → ${dest}`,
           toward: dest,
-          trains: weekdayTowardB,
+          trains: stamp(weekdayTowardB),
         },
       },
       saturday: {
         towardA: {
           title: `${name} → ${origin}`,
           toward: origin,
-          trains: saturdayTowardA,
+          trains: stamp(saturdayTowardA),
         },
         towardB: {
           title: `${name} → ${dest}`,
           toward: dest,
-          trains: saturdayTowardB,
+          trains: stamp(saturdayTowardB),
         },
       },
       hasSaturday: !!(saturdayTowardA.length || saturdayTowardB.length),
     });
   }
 
+  mergeSharedCorridorCards(cards, db, station);
   cards.sort((a, b) => a.routeName.localeCompare(b.routeName));
   return cards;
+}
+
+function sheetStopKeys(db, route) {
+  const names = new Set();
+  const keys = route?.sheetKeys || {};
+  for (const key of [keys.weekday_to_a, keys.weekday_to_b, keys.saturday_to_a, keys.saturday_to_b]) {
+    if (!key) continue;
+    for (const stop of orderedNamedStops(db, key)) {
+      const name = normalizeKey(stop.name);
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
+
+function sharedStopCount(db, routeA, routeB, cache) {
+  if (!routeA || !routeB || routeA.id === routeB.id) return 0;
+  const stops = (route) => {
+    if (!cache.has(route.id)) cache.set(route.id, sheetStopKeys(db, route));
+    return cache.get(route.id);
+  };
+  const left = stops(routeA);
+  const right = stops(routeB);
+  let count = 0;
+  for (const name of left) if (right.has(name)) count += 1;
+  return count;
+}
+
+function tagSharedTrain(train, otherRoute, boardDest, towardHub) {
+  const fromLabel = `From ${shortSharedSourceLabel(otherRoute?.name || '')}`;
+  if (towardHub) {
+    return { ...train, badge: 'from', badgeLabel: fromLabel, sourceRouteId: otherRoute?.id || train.sourceRouteId };
+  }
+  const actualKey = normalizeKey(train.actualDestination);
+  const boardKey = normalizeKey(boardDest);
+  if (actualKey && boardKey && actualKey !== boardKey) {
+    return {
+      ...train,
+      badge: 'divergent',
+      badgeLabel: `To ${train.actualDestination}`,
+      sourceRouteId: otherRoute?.id || train.sourceRouteId,
+    };
+  }
+  return { ...train, badge: 'from', badgeLabel: fromLabel, sourceRouteId: otherRoute?.id || train.sourceRouteId };
+}
+
+/**
+ * Routes that share this station and more than one stop collapse toward the
+ * same hub. Outbound lists stay separate when the far ends differ.
+ */
+function mergeSharedCorridorCards(cards, db, station) {
+  if (!cards || cards.length < 2) return;
+  const cache = new Map();
+  const absorb = (dayName, side) => {
+    const hubOf = (card) => normalizeKey(side === 'towardA' ? card.origin : card.dest);
+    const buckets = new Map();
+    for (const card of cards) {
+      const hub = hubOf(card);
+      if (!hub) continue;
+      const list = buckets.get(hub) || [];
+      list.push(card);
+      buckets.set(hub, list);
+    }
+    for (const group of buckets.values()) {
+      if (group.length < 2) continue;
+      const parent = new Map(group.map((card) => [card.routeId, card.routeId]));
+      const find = (id) => {
+        let cur = id;
+        while (parent.get(cur) !== cur) {
+          parent.set(cur, parent.get(parent.get(cur)));
+          cur = parent.get(cur);
+        }
+        return cur;
+      };
+      const unite = (a, b) => {
+        const left = find(a);
+        const right = find(b);
+        if (left !== right) parent.set(right, left);
+      };
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const overlap = sharedStopCount(db, ROUTES[group[i].routeId], ROUTES[group[j].routeId], cache);
+          if (overlap > 1) unite(group[i].routeId, group[j].routeId);
+        }
+      }
+      const components = new Map();
+      for (const card of group) {
+        const root = find(card.routeId);
+        const list = components.get(root) || [];
+        list.push(card);
+        components.set(root, list);
+      }
+      for (const members of components.values()) {
+        if (members.length < 2) continue;
+        members.sort((a, b) => a.routeId.localeCompare(b.routeId));
+        const primary = members[0];
+        const boardDest = side === 'towardA' ? primary.origin : primary.dest;
+        const slot = primary[dayName][side];
+        const byTrain = new Map();
+        for (const train of slot.trains) byTrain.set(String(train.trainId), train);
+        for (const other of members.slice(1)) {
+          const otherRoute = ROUTES[other.routeId];
+          for (const train of other[dayName][side].trains || []) {
+            byTrain.set(String(train.trainId), tagSharedTrain(train, otherRoute, boardDest, side === 'towardA'));
+          }
+          other[dayName][side] = { ...other[dayName][side], trains: [] };
+        }
+        slot.trains = [...byTrain.values()].sort((a, b) => (
+          (a.departureSec || 0) - (b.departureSec || 0) || String(a.trainId).localeCompare(String(b.trainId))
+        ));
+      }
+    }
+  };
+  absorb('weekday', 'towardA');
+  absorb('weekday', 'towardB');
+  absorb('saturday', 'towardA');
+  absorb('saturday', 'towardB');
+  for (let i = cards.length - 1; i >= 0; i--) {
+    const card = cards[i];
+    card.hasSaturday = !!(card.saturday.towardA.trains.length || card.saturday.towardB.trains.length);
+    const listed = card.weekday.towardA.trains.length + card.weekday.towardB.trains.length
+      + card.saturday.towardA.trains.length + card.saturday.towardB.trains.length;
+    if (!listed && !station?.listedWithoutTimes) cards.splice(i, 1);
+  }
 }
 
 export function buildStationBoardAppPath(station) {

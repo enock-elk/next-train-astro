@@ -27,7 +27,7 @@ import { noticeQuotePlain } from './feedback-quote.js';
 import { describeTrainSheetDayNote, paintAdvisoryFrame, trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot, adoptTripHomeIfNew } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import {
@@ -4923,7 +4923,6 @@ export async function applyPlannerDeepLink() {
 
             slowToast.cancel();
             executeTripPlan(fromId, toId, timeParam);
-            adoptTripHomeIfNew(fromId, toId, targetRegion).catch(() => {});
             showToast('Loaded shared trip plan', 'success');
             if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
                 window.trackAnalyticsEvent('deep_link_open', {

@@ -46,9 +46,8 @@ const {
     hasInboundShareIntent,
     isInAppBrowser,
     adoptShareHome,
-    adoptTripHomeIfNew,
-    firstActiveRouteId,
-    homeRouteForNoticeSource,
+    inboundShareKind,
+    welcomeBeforeShare,
     readSavedDefaults,
 } = await import('../src/lib/deeplink.js');
 
@@ -254,28 +253,42 @@ ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email'
 ok(deletePage.includes('Delete account'), 'deletion page tells commuters to use Account');
 ok(!/operator/i.test(deletePage), 'deletion page does not mention operator accounts');
 
-ok(firstActiveRouteId('GP') === 'pta-pien', 'a region-wide link can land on Pretoria to Pienaarspoort');
-ok(homeRouteForNoticeSource('pta-pien') === 'pta-pien', 'a route alert keeps that route');
-ok(homeRouteForNoticeSource('all_WC') && homeRouteForNoticeSource('all_WC') !== 'pta-pien', 'a Western Cape alert stays in that region');
-ok(homeRouteForNoticeSource('all') === 'pta-pien', 'a network alert still gives a new visitor a home line');
 ok(adoptShareHome('pta-pien') === true, 'a timetable link can be saved as home');
 ok(readSavedDefaults()?.routeId === 'pta-pien', 'the saved home is the timetable route');
 ok(memoryStorage.getItem('welcomeSeen') === 'true', 'saving a link home finishes Welcome');
-const kept = await adoptTripHomeIfNew('PRETORIA', 'GERMISTON', 'GP');
-ok(kept === false, 'a trip link does not replace a saved home');
-memoryStorage.removeItem('userRegion');
-memoryStorage.removeItem('defaultRoute_GP');
+ok(welcomeBeforeShare() === false, 'a saved home does not go back to Welcome');
+consumeShareDeeplinkSnapshot();
 memoryStorage.removeItem('welcomeSeen');
-ok(await adoptTripHomeIfNew('PRETORIA', 'GERMISTON', 'GP') === true, 'a first trip link saves a home line');
-ok(readSavedDefaults()?.region === 'GP', 'the first trip home is in the linked region');
+loc = new URL('https://nexttrain.co.za/?plan=PRETORIA~GERMISTON&r=GP');
+globalThis.location = loc;
+ok(inboundShareKind() === 'planner', 'a trip URL is a planner share');
+ok(welcomeBeforeShare() === true, 'a first trip link opens Welcome');
+loc = new URL('https://nexttrain.co.za/?alert=notice1&src=all');
+globalThis.location = loc;
+ok(inboundShareKind() === 'alert', 'a network notice is an alert share');
+ok(welcomeBeforeShare() === true, 'a first alert link opens Welcome');
+loc = new URL('https://nexttrain.co.za/?room=pta-pien&post=samplepost');
+globalThis.location = loc;
+ok(inboundShareKind() === 'community', 'a community URL is a community share');
+ok(welcomeBeforeShare() === true, 'a first community link opens Welcome');
+loc = new URL('https://nexttrain.co.za/?rt=pta-pien&v=g&d=su');
+globalThis.location = loc;
+ok(inboundShareKind() === 'route', 'a timetable URL is a route share');
+ok(welcomeBeforeShare() === false, 'a timetable link does not stop for Welcome');
 const timetable = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
 ok(timetable.includes('adoptShareHome(link.routeId)'), 'a shared timetable writes the default route');
 ok(timetable.includes('persistRegion: false'), 'SEO Open in Next Train still does not write userRegion');
 ok(timetable.includes('A new visitor is not pinned by the link'), 'SEO handoff still does not pin a new visitor');
 const planner = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
-ok(planner.includes('adoptTripHomeIfNew(fromId, toId, targetRegion)'), 'a trip link can save a home for a first visit');
-ok(deeplink.includes('homeRouteForNoticeSource(link.source'), 'an alert link can save the notice line');
-ok(deeplink.includes('if (!readSavedDefaults() && link.routeId) adoptShareHome(link.routeId)'), 'a community link saves that room only for a first visit');
+ok(!planner.includes('adoptTripHomeIfNew'), 'a trip link does not pin a route');
+ok(!deeplink.includes('homeRouteForNoticeSource'), 'an alert link does not invent a home route');
+ok(!deeplink.includes('adoptShareHome(link.routeId)'), 'a community link does not pin the room');
+const welcome = readFileSync(join(ROOT, 'src/components/WelcomeModal.astro'), 'utf8');
+ok(welcome.includes('welcomeBeforeShare()'), 'Welcome shows for a non-timetable link');
+ok(welcome.includes('nt_welcome_then_share'), 'picking a route continues the link');
+const indexPage = readFileSync(join(ROOT, 'src/pages/index.astro'), 'utf8');
+ok(indexPage.includes('welcomeBeforeShare()'), 'boot waits for Welcome before opening a non-timetable link');
+ok(indexPage.includes('nt_welcome_then_share'), 'boot remembers that the link is waiting');
 
 if (failures.length) {
     console.error('verify-deeplink-launch FAILED:\n - ' + failures.join('\n - '));

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.9': [
+        'A shared timetable still becomes the saved route. A first visit from a trip, a community message, an alert, or any other link opens the welcome screen so the commuter picks a region and route, then the link opens. A return visit keeps the saved route and opens the link. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.8': [
         'Facebook, Instagram, Messenger, and Line keep the bottom nav in the visible area. A host toolbar no longer counts as the keyboard, and the nav fade cannot stay invisible. A shared timetable becomes the saved route. A first visit from a trip, a community message, or an alert saves that line and skips Welcome. A return visit keeps the saved route and opens the link. SEO Open in Next Train still does not replace a saved route. No commuter What\'s New. forceShow stays false.',
     ],

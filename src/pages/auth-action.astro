@@ -29,7 +29,8 @@ const home = withBase('');
         <p id="auth-action-copy" class="text-[15px] leading-relaxed text-gray-600 dark:text-gray-300">Finishing this step, then opening Next Train.</p>
         <form id="auth-reset-form" class="hidden space-y-3">
           <label class="block text-[13px] text-gray-500" for="auth-reset-password">New password</label>
-          <input id="auth-reset-password" type="password" minlength="6" autocomplete="new-password" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[15px] focus:outline-none">
+          <input id="auth-reset-password" type="password" minlength="8" autocomplete="new-password" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[15px] focus:outline-none">
+          <p class="text-[12px] leading-snug text-gray-500">At least 8 characters, with a letter and a number.</p>
           <button type="submit" class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold">Save password</button>
         </form>
         <a id="auth-action-home" href={home} class="hidden inline-flex w-full justify-center py-3 rounded-xl bg-blue-600 text-white font-bold">Open Next Train</a>

@@ -721,6 +721,7 @@ export async function initAccount() {
             m.watchOperatorMessageBadge();
             return m.syncOperatorMessageBadge();
         }).catch(() => {});
+        if (openedFromVerifyLink && user?.emailVerified) emailVerifiedToastShown = true;
         if (openedFromVerifyLink && typeof window.showToast === 'function') {
             window.showToast(user?.emailVerified ? 'Email verified' : 'Open the link in your email, then come back.', user?.emailVerified ? 'success' : 'info');
         }
@@ -737,12 +738,44 @@ export async function initAccount() {
         }
         window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     });
+    watchEmailVerifyOnFocus();
+}
+
+const AUTH_WAIT_MESSAGE = 'Too many attempts. Wait a moment and try again.';
+let emailVerifiedToastShown = false;
+
+function watchEmailVerifyOnFocus() {
+    if (typeof document === 'undefined' || window.__ntEmailVerifyWatch) return;
+    window.__ntEmailVerifyWatch = true;
+    const check = async () => {
+        if (document.visibilityState === 'hidden') return;
+        if (emailVerifiedToastShown || !accountNeedsEmailVerify()) return;
+        const card = document.getElementById('account-verify-card');
+        if (!card || card.classList.contains('hidden')) return;
+        try {
+            const ok = await refreshVerifiedSession();
+            if (!ok || emailVerifiedToastShown) return;
+            emailVerifiedToastShown = true;
+            if (typeof window.showToast === 'function') window.showToast('Email verified', 'success');
+        } catch { /* the verify card stays until the inbox confirms it */ }
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+}
+
+function passwordMeetsNewAccountRule(password) {
+    const value = String(password || '');
+    return value.length >= 8 && /[A-Za-z]/.test(value) && /\d/.test(value);
 }
 
 async function guardAuthAttempt(kind = 'signIn') {
     const { rtdbWriteGuard } = await import('./rtdb-rate.js');
     const message = rtdbWriteGuard(kind === 'signUp' ? 'signUp' : 'signIn');
-    if (message) throw new Error(message);
+    if (message) {
+        const err = new Error(AUTH_WAIT_MESSAGE);
+        err.code = 'auth/too-many-requests';
+        throw err;
+    }
 }
 
 export async function signInWithGoogle() {
@@ -860,8 +893,8 @@ export async function signUpWithEmail(email, password, displayName) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
     await guardAuthAttempt('signUp');
-    if (password.length < 6) {
-        throw new Error('Password must be at least 6 characters.');
+    if (!passwordMeetsNewAccountRule(password)) {
+        throw new Error('Use at least 8 characters, with a letter and a number.');
     }
     if (displayName?.trim()) {
         const check = refuseDisplayName(displayName);
@@ -2020,8 +2053,8 @@ export function bindAccountUi() {
             showErr('Enter email and password.');
             return;
         }
-        if (password.length < 6) {
-            showErr('Password must be at least 6 characters.');
+        if (!passwordMeetsNewAccountRule(password)) {
+            showErr('Use at least 8 characters, with a letter and a number.');
             return;
         }
         setBusy(true);
@@ -2265,6 +2298,9 @@ function friendlyAuthError(e) {
     }
     if (code === 'auth/email-already-in-use') return 'Email already registered. Try Sign in. If you forgot your password, please tap Forgot password.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
+    if (code === 'auth/too-many-requests' || /too many/i.test(String(e?.message || ''))) {
+        return AUTH_WAIT_MESSAGE;
+    }
     if (code === 'auth/network-request-failed') return 'Network error - try again.';
     if (code === 'auth/unauthorized-domain') return 'This site cannot sign in. Open nexttrain.co.za.';
     if (code === 'auth/popup-blocked') return 'Popup blocked. Allow popups and try again.';

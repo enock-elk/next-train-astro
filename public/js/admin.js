@@ -435,7 +435,9 @@ function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, r
             latestActivity,
             latestAt: Math.max(Number(latestActivity?.timestamp || 0), latestHeldAt),
             seenAt,
-            unread: activities.filter((item) => Number(item.timestamp || 0) > seenAt && !ntAdminCommunityOwnActivity(item, viewerUid)).length,
+            unread: ntAdminCommunityOwnActivity(latestActivity, viewerUid)
+                ? 0
+                : activities.filter((item) => Number(item.timestamp || 0) > seenAt && !ntAdminCommunityOwnActivity(item, viewerUid)).length,
         };
     }).sort((a, b) => (b.latestAt - a.latestAt)
         || String(a.routeName).localeCompare(String(b.routeName)));
@@ -3321,7 +3323,25 @@ const Admin = {
             ticketCount: ticketStatus === 'unavailable' && !ticketCount ? null : ticketCount,
             crashKnown,
             lastActivity,
+            appVersion: Admin.pickRecordedAppVersion(versionOf(accountNode) || versionOf(userNode), '', activity),
         };
+    },
+
+    /** users.appVersion, then the directory copy, then the newest version on an activity row. */
+    pickRecordedAppVersion: (accountVersion, directoryVersion, rows) => {
+        const clean = (value) => String(value || '').split(' - ')[0].trim();
+        const account = clean(accountVersion);
+        if (account) return account;
+        const directory = clean(directoryVersion);
+        if (directory) return directory;
+        const newest = (Array.isArray(rows) ? rows : [])
+            .map((row) => ({
+                ms: Number(row?.ms || row?.timestamp || row?.at || row?.time) || 0,
+                version: clean(row?.appVersion),
+            }))
+            .filter((row) => row.version)
+            .sort((a, b) => b.ms - a.ms)[0];
+        return newest?.version || '';
     },
 
     openCommuterPeek: async (id) => {
@@ -3395,6 +3415,7 @@ const Admin = {
                     : '<p class="text-[11px] text-gray-400">No activity on file.</p>'}
                 ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
                 <div class="ut-sheet-group mt-2">
+                    ${tile('App version', esc(peek.appVersion || 'Not recorded'), !peek.appVersion)}
                     ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
                     ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
                     ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, 'commuter-peek-feedback')}
@@ -3678,7 +3699,7 @@ const Admin = {
                     if (!a) return;
                     const aUid = String(a.uid || '').trim();
                     if (!ids.has(aUid)) return;
-                    community.push({ routeId, kind: a.kind || 'post', postId: a.postId, timestamp: a.timestamp });
+                    community.push({ routeId, kind: a.kind || 'post', postId: a.postId, timestamp: a.timestamp, appVersion: a.appVersion || '' });
                 });
             });
         }
@@ -3745,6 +3766,22 @@ const Admin = {
             if (Number(item.timestamp || 0) > lastChecked) unread += 1;
         });
         return unread;
+    },
+
+    /** Clear when this admin wrote the newest line, even if earlier notes are still past the cursor. */
+    _communityRouteUnread: (data, seenAt, viewerUid) => {
+        if (!data || typeof data !== 'object') return 0;
+        let newest = null;
+        const rows = [];
+        Object.values(data).forEach((item) => {
+            if (!item) return;
+            const ts = Number(item.timestamp || 0);
+            if (!(ts > seenAt)) return;
+            rows.push(item);
+            if (!newest || ts >= Number(newest.timestamp || 0)) newest = item;
+        });
+        if (ntAdminCommunityOwnActivity(newest, viewerUid)) return 0;
+        return rows.filter((item) => !ntAdminCommunityOwnActivity(item, viewerUid)).length;
     },
 
     /** Wait out a schedule stamp check or download already on the radio. Does not start one. */
@@ -3947,7 +3984,7 @@ const Admin = {
                             {},
                             6000,
                         ));
-                        return data ? Admin._countBadgeRows(data, seenAt, (item) => !ntAdminCommunityOwnActivity(item, Admin.currentUser?.uid)) : null;
+                        return data ? Admin._communityRouteUnread(data, seenAt, Admin.currentUser?.uid) : null;
                     });
                     if (routeResults.every((n) => n != null)) {
                         let chatUnread = routeResults.reduce((sum, n) => sum + n, 0);
@@ -4692,7 +4729,8 @@ const Admin = {
                                     <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">devices</span>
                                 </div>
                             </div>
-                            <p id="region-note" class="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 mb-4">Each reporting device is counted once, under the region selected most recently today, Johannesburg time. The four cards add up to the reporting-device total.</p>
+                            <p id="region-note" class="hidden text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 mb-2"></p>
+                            <div class="flex justify-end mb-4">${Admin.infoButton('region-note')}</div>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
                             <button id="region-view-graph-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center">
@@ -12307,7 +12345,7 @@ const Admin = {
                 <svg id="ls-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ls-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Live GPS shares and expandable sessions. Start and stop for the same rider sit in one entry.</p>
+                <div class="flex justify-end px-1 mb-2">${Admin.infoButton('live-share')}</div>
                 <div class="grid-hidden-actions admin-sheet-tabs" id="ls-region-tabs"></div>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="ls-refresh-btn" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
@@ -12766,7 +12804,7 @@ const Admin = {
                 </div>
                 <div id="mq-chats-pane" class="flex flex-col min-h-0">
                     <div id="mq-chats-home">
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
+                    <div class="flex justify-end px-1 mb-2">${Admin.infoButton('mq-chats')}</div>
                     <label class="px-1 mb-2">
                         <span class="sr-only">Search community routes and messages</span>
                         <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
@@ -12794,7 +12832,7 @@ const Admin = {
                             <div id="mq-quote" class="cm-quote-bar hidden"></div>
                             <p id="mq-suggest-note" class="cm-suggest-note hidden"></p>
                             <textarea id="mq-guide" class="cm-guide hidden" rows="2" maxlength="500" placeholder="A fact Co-Pilot should use"></textarea>
-                            <textarea id="mq-composer-input" class="cm-composer-input" rows="1" maxlength="1300" placeholder="Message" aria-label="Reply in this room"></textarea>
+                            <textarea id="mq-composer-input" class="cm-composer-input" rows="2" maxlength="1300" placeholder="Message" aria-label="Reply in this room"></textarea>
                             <input id="mq-composer-link" class="cm-composer-link" type="url" inputmode="url" placeholder="https link, optional" aria-label="Optional link" />
                             <div class="cm-composer-actions">
                                 <button type="button" id="mq-guide-toggle" class="cm-suggest">Guide</button>
@@ -12805,7 +12843,7 @@ const Admin = {
                     </div>
                 </div>
                 <div id="mq-reports-pane" class="hidden flex flex-col">
-                    <p class="text-[13px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Messages a passenger reported. Safe leaves the message up and clears the report.</p>
+                    <div class="flex justify-end px-1 mb-2">${Admin.infoButton('mq-reports')}</div>
                     <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80" role="tablist" aria-label="Report status">
                         <button type="button" id="mq-reports-open" class="flex-1 min-h-[36px] rounded-lg text-[13px] font-semibold bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Open</button>
                         <button type="button" id="mq-reports-dismissed" class="flex-1 min-h-[36px] rounded-lg text-[13px] font-semibold text-gray-500 dark:text-gray-400">Dismissed</button>
@@ -12813,7 +12851,7 @@ const Admin = {
                     <div id="mq-reports-list" class="space-y-3 pr-1"></div>
                 </div>
                 <div id="mq-reviews-pane" class="hidden flex flex-col">
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Station SEO reviews land here as pending. Approve to publish on the station page, or reject to keep them private. Contact stays operator-only.</p>
+                    <div class="flex justify-end px-1 mb-2">${Admin.infoButton('mq-reviews')}</div>
                     <div class="flex gap-2 px-1 mb-3">
                         <select id="mq-reviews-filter" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white">
                             <option value="pending">Pending</option>
@@ -14306,6 +14344,18 @@ const Admin = {
                 document.getElementById('mq-guide-toggle')?.addEventListener('click', () => {
                     document.getElementById('mq-guide')?.classList.toggle('hidden');
                 });
+                const fitMqComposer = (el) => {
+                    if (!el) return;
+                    const cap = 160;
+                    el.style.height = 'auto';
+                    const next = Math.min(Math.max(el.scrollHeight, 60), cap);
+                    el.style.height = `${next}px`;
+                    el.style.overflowY = el.scrollHeight > cap + 2 ? 'auto' : 'hidden';
+                };
+                const mqComposerInput = document.getElementById('mq-composer-input');
+                mqComposerInput?.addEventListener('input', () => fitMqComposer(mqComposerInput));
+                fitMqComposer(mqComposerInput);
+                Admin._fitMqComposer = fitMqComposer;
                 document.getElementById('mq-suggest')?.addEventListener('click', async () => {
                     const card = Admin._mqOpenCard;
                     const routeId = card?.dataset?.communityRoute || '';
@@ -14377,6 +14427,7 @@ const Admin = {
                         if (!draft) throw new Error('Co-Pilot returned an empty draft.');
                         if (input) {
                             input.value = draft.slice(0, 1300);
+                            Admin._fitMqComposer?.(input);
                             input.focus();
                         }
                         if (typeof showToast === 'function') showToast('Draft ready. Edit it, then post.', 'success');
@@ -14457,6 +14508,9 @@ const Admin = {
                         });
                         const data = await res.json().catch(() => ({}));
                         if (!res.ok || data.ok === false) throw new Error(data.error || 'Could not post that message.');
+                        if (!data.held && card?.dataset?.communityRoute) {
+                            try { await setRouteSeen(card.dataset.communityRoute, Date.now()); } catch { /* the list still clears when this admin is last */ }
+                        }
                         if (input) input.value = '';
                         if (linkEl) linkEl.value = '';
                         Admin._mqQuote = null;
@@ -14810,6 +14864,113 @@ const Admin = {
         return Admin.purgeAccountDeletion(uid);
     },
 
+    adminInfoCopy: {
+        'grid-order': {
+            title: 'Grid column order',
+            body: 'Choose a route, service day, and direction. The sheet matches the in-app timetable. Hold a train column and drag it. The first station sets the column: later stops follow the other trains. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Monte Vista and Maitland are Western Cape only. Blank leaves the sheet via map, VARIANT row, or legacy cell prose in charge. Set the first station and the rest of that train is calculated from the other trains. Clear removes one stop. Add train asks for a number and that same first time. Save via marks copies the Via choices onto every weekday, Saturday, and public-holiday sheet for this route, both directions. Column order on those sheets is left as-is.',
+        },
+        'holiday-approvals': {
+            title: 'Holiday notices',
+            body: 'Approve each region separately before commuters see the notice. Tick approves. Cross defers that region until info is available.',
+        },
+        'sched-override': {
+            title: 'Force schedule type',
+            body: 'Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active. Optional dates limit the force to those calendar days only. Leave dates empty to keep it on until you deactivate. Dates that have already passed are dropped, and a force whose dates are all in the past turns off.',
+        },
+        'mq-chats': {
+            title: 'Group chats',
+            body: 'Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.',
+        },
+        'mq-reports': {
+            title: 'Reports',
+            body: 'Messages a passenger reported. Safe leaves the message up and clears the report.',
+        },
+        'mq-reviews': {
+            title: 'Station reviews',
+            body: 'Station SEO reviews land here as pending. Approve to publish on the station page, or reject to keep them private. Contact stays operator-only.',
+        },
+        'user-trust': {
+            title: 'User accounts and bans',
+            body: 'Accounts, bans, lookup, and deletion requests are in this panel.',
+        },
+        'account-deletions': {
+            title: 'Deletion requests',
+            body: 'Requests sent from Account. Delete data removes the profile from the database.',
+        },
+        'live-share': {
+            title: 'Live sharing',
+            body: 'Live GPS shares and expandable sessions. Start and stop for the same rider sit in one entry.',
+        },
+        'route-sheets': {
+            title: 'Route sheets',
+            body: 'Sunday and Special run only on the lines you turn on. Other lines keep their normal day. Add the spreadsheet tabs named under each line, then sync. Leave Sunday dates empty for every Sunday. Leave Special dates empty for every day until you turn it off. A line with no times in that tab stays on its normal sheet.',
+        },
+        'push-notifications': {
+            title: 'Notifications',
+            body: 'Sends an FCM system notification to enabled devices. This does not post an Alerts card.',
+        },
+        'cache-matrix': {
+            title: 'Cache propagation',
+            body: 'Interrogates global edge caches (Cloudflare, GitHub, Firebase) to verify version sync status. Bypasses the local browser cache.',
+        },
+        'deep-scan': {
+            title: 'Deep network scan',
+            body: 'Scans the database to verify if all configured routes have successfully downloaded their timetables and checks for structural anomalies.',
+        },
+        'region-note': {
+            title: 'Reporting devices',
+            body: 'Each reporting device is counted once, under the region selected most recently today, Johannesburg time. The four cards add up to the reporting-device total.',
+        },
+        'grid-banner': {
+            title: 'Timetable grid banner',
+            body: 'Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.',
+        },
+    },
+
+    infoButton: (id) => {
+        Admin.ensureAdminInfo();
+        return `<button type="button" class="admin-info-btn" data-admin-info="${id}" aria-label="About this panel">i</button>`;
+    },
+
+    ensureAdminInfo: () => {
+        if (window.__ntAdminInfoBound) return;
+        window.__ntAdminInfoBound = true;
+        document.addEventListener('click', (event) => {
+            const btn = event.target?.closest?.('[data-admin-info]');
+            if (!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            Admin.openAdminInfo(btn.getAttribute('data-admin-info'));
+        });
+    },
+
+    openAdminInfo: (id) => {
+        const copy = Admin.adminInfoCopy?.[id];
+        if (!copy) return;
+        let modal = document.getElementById('admin-info-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'admin-info-modal';
+            modal.className = 'fixed inset-0 z-[260] hidden bg-black/40 flex items-end sm:items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl p-4" role="dialog" aria-modal="true" aria-labelledby="admin-info-title">
+                    <div class="flex items-start justify-between gap-3">
+                        <h3 id="admin-info-title" class="text-base font-bold text-gray-900 dark:text-white"></h3>
+                        <button type="button" id="admin-info-close" class="text-gray-400 text-2xl leading-none" aria-label="Close">×</button>
+                    </div>
+                    <p id="admin-info-body" class="mt-2 text-sm leading-snug text-gray-600 dark:text-gray-300"></p>
+                </div>`;
+            document.body.appendChild(modal);
+            const hide = () => modal.classList.add('hidden');
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal || event.target?.id === 'admin-info-close') hide();
+            });
+        }
+        modal.querySelector('#admin-info-title').textContent = copy.title;
+        modal.querySelector('#admin-info-body').textContent = copy.body;
+        modal.classList.remove('hidden');
+    },
+
     bindPremiumSelect: (select) => {
         if (!select) return;
         const paint = () => {
@@ -14901,7 +15062,7 @@ const Admin = {
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[13px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Accounts, bans, lookup, and deletion requests are in this panel.</p>
+                <div class="flex justify-end px-1 mb-2">${Admin.infoButton('user-trust')}</div>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
                     <button type="button" id="ut-tab-accounts" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Account</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
@@ -14969,7 +15130,7 @@ const Admin = {
                 </div>
                 <div id="ut-pane-deletions" role="tabpanel" class="ut-pane hidden">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Delete data removes the profile from the database.</p>
+                        <span class="inline-flex items-center">${Admin.infoButton('account-deletions')}</span>
                         <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
                     <div id="ad-list" class="admin-sheet-list"><p class="text-xs text-gray-400 text-center py-3">Open this tab to load requests.</p></div>
@@ -15275,7 +15436,7 @@ const Admin = {
                 const routeHtml = known ? Admin.formatRouteLabelHtml(known.name) : (row.lastRouteId ? esc(routeName(row.lastRouteId)) : '');
                 const region = regionLabel(row.region);
                 const routeRow = routeHtml ? `<span class="admin-sheet-card-meta ut-account-route">${routeHtml}</span>` : '';
-                const whenBits = [when ? `Joined ${esc(when)}` : '', region].filter(Boolean).join(' · ');
+                const whenBits = [when ? `Joined ${esc(when)}` : '', region, esc(row.appVersion || 'Not recorded')].filter(Boolean).join(' · ');
                 const whenRow = whenBits ? `<span class="admin-sheet-card-meta">${whenBits}</span>` : '';
                 btn.innerHTML = `${providerMark(row.provider)}<span class="admin-sheet-card-title">${esc(row.displayName || 'Passenger')}</span><span class="admin-sheet-card-body">${esc(row.email || 'No email')}</span>${routeRow}${whenRow}`;
                 btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
@@ -15526,6 +15687,23 @@ const Admin = {
                 const lastActivityHtml = lastActivity
                     ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="block text-[10px] text-gray-500 mt-0.5">${Admin.commuterEsc(lastActivity.label)}</span>`
                     : '<span class="text-gray-400">No activity on file</span>';
+                let directoryVersion = '';
+                if (!String(user.appVersion || '').trim() && uid && !user._isDeviceStub) {
+                    try {
+                        const secret = await Admin.getAuthKey();
+                        const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                        if (secret) {
+                            const verRes = await fetch(`${endpoint}account_directory/${encodeURIComponent(uid)}/appVersion.json?auth=${encodeURIComponent(secret)}`);
+                            if (verRes.ok) directoryVersion = await verRes.json();
+                        }
+                    } catch { directoryVersion = ''; }
+                }
+                const recordedVersion = Admin.pickRecordedAppVersion(user.appVersion, directoryVersion, [
+                    ...(profile.community || []),
+                    ...(profile.fareVotes || []),
+                    ...(profile.fails || []),
+                    ...(profile.crashes || []),
+                ]) || 'Not recorded';
                 let authAccount = null;
                 try {
                     const secret = await Admin.getAuthKey();
@@ -15626,6 +15804,7 @@ const Admin = {
                         </div>
                         <div class="ut-sheet-group">
                             ${infoRow('Joined', `<b>${joinedLabel}</b>`)}
+                            ${infoRow('App version', `<b>${Admin.commuterEsc(recordedVersion)}</b>`)}
                             ${accountCreatedMs && joinedMs && Math.abs(accountCreatedMs - joinedMs) > 60000 ? infoRow('Account created', `<b>${Admin.formatDate(accountCreatedMs)}</b>`) : ''}
                             ${infoRow('Last activity', lastActivityHtml)}
                             ${infoRow('Found by', Admin.commuterEsc(viaLabel))}
@@ -18158,10 +18337,16 @@ const Admin = {
         const keptPreview = suppressLinkPreview
             ? (linkPreview || (clearedUrl ? { url: clearedUrl } : null))
             : linkPreview;
+        let suppressedPreviewUrls = [];
+        try {
+            const parsed = JSON.parse(previewSlot?.dataset.suppressedUrls || '[]');
+            if (Array.isArray(parsed)) suppressedPreviewUrls = parsed.map((item) => String(item || '')).filter(Boolean);
+        } catch { suppressedPreviewUrls = []; }
         return {
             title,
             message: `${imgHtml}${body}`.trim(),
             suppressLinkPreview,
+            suppressedPreviewUrls,
             linkPreview: keptPreview,
             hasImage: imgs.length > 0,
         };
@@ -18205,6 +18390,11 @@ const Admin = {
             previewSlot.innerHTML = '';
             previewSlot.classList.add('hidden');
             delete previewSlot.dataset.previewJson;
+            if (Array.isArray(item.suppressedPreviewUrls) && item.suppressedPreviewUrls.length) {
+                previewSlot.dataset.suppressedUrls = JSON.stringify(item.suppressedPreviewUrls);
+            } else {
+                delete previewSlot.dataset.suppressedUrls;
+            }
             if (item.suppressLinkPreview) {
                 previewSlot.dataset.cleared = '1';
                 previewSlot.dataset.clearedUrl = item.linkPreview?.url || '';
@@ -18299,6 +18489,7 @@ const Admin = {
             title: composed.title || null,
             message,
             suppressLinkPreview: !!composed.suppressLinkPreview,
+            suppressedPreviewUrls: Array.isArray(composed.suppressedPreviewUrls) ? composed.suppressedPreviewUrls : [],
             linkPreview: composed.linkPreview || null,
             hasContent: hasText || !!composed.title || composed.hasImage,
         };
@@ -18325,6 +18516,7 @@ const Admin = {
             preview.dataset.clearedUrl = '';
             delete preview.dataset.previewJson;
             delete preview.dataset.previewUrl;
+            delete preview.dataset.suppressedUrls;
         }
     },
 
@@ -19163,11 +19355,64 @@ const Admin = {
         }
     },
 
+    armPreviewLinkDismiss: (payload) => {
+        const content = document.getElementById('notice-content');
+        if (!content || !payload) return;
+        const same = typeof window.samePreviewUrl === 'function'
+            ? window.samePreviewUrl
+            : (a, b) => String(a || '') === String(b || '');
+        content.querySelectorAll('.nt-link-preview').forEach((card) => {
+            if (card.closest('.nt-preview-link')) return;
+            const href = card.getAttribute('href') || card.getAttribute('data-link-preview-url') || '';
+            const wrap = document.createElement('div');
+            wrap.className = 'nt-composer-preview nt-preview-link mb-2';
+            card.replaceWith(wrap);
+            wrap.appendChild(card);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nt-composer-x';
+            btn.setAttribute('aria-label', 'Remove link preview');
+            btn.textContent = '×';
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const list = Array.isArray(payload.suppressedPreviewUrls) ? payload.suppressedPreviewUrls.slice() : [];
+                if (href && !list.some((item) => same(item, href))) list.push(href);
+                payload.suppressedPreviewUrls = list;
+                if (payload.linkPreview?.url && same(payload.linkPreview.url, href)) payload.linkPreview = null;
+                wrap.remove();
+                const editor = document.getElementById('alert-msg');
+                const slot = editor?.parentElement?.querySelector('[data-nt-preview-slot]');
+                if (slot) slot.dataset.suppressedUrls = JSON.stringify(list);
+                if (!content.querySelector('.nt-link-preview')) {
+                    payload.suppressLinkPreview = true;
+                    if (slot) {
+                        slot.dataset.cleared = '1';
+                        slot.dataset.clearedUrl = href;
+                        slot.innerHTML = '';
+                        delete slot.dataset.previewJson;
+                        slot.classList.add('hidden');
+                    }
+                } else if (slot?.dataset.previewUrl && same(slot.dataset.previewUrl, href)) {
+                    slot.innerHTML = '';
+                    delete slot.dataset.previewJson;
+                    delete slot.dataset.previewUrl;
+                    slot.dataset.cleared = '';
+                    slot.classList.add('hidden');
+                }
+            });
+            wrap.appendChild(btn);
+        });
+    },
+
     attachLinkPreview: async (payload) => {
         if (!payload || payload.suppressLinkPreview || payload.linkPreview?.url) return payload;
         const api = window.ntLinkPreview;
-        if (!api?.firstHttpUrl || !api.fetchLinkPreview) return payload;
-        const url = api.firstHttpUrl(payload);
+        if (!api?.fetchLinkPreview) return payload;
+        const skipped = Array.isArray(payload.suppressedPreviewUrls) ? payload.suppressedPreviewUrls : [];
+        const same = typeof window.samePreviewUrl === 'function' ? window.samePreviewUrl : () => false;
+        const urls = typeof api.listHttpUrls === 'function' ? api.listHttpUrls(payload) : [api.firstHttpUrl?.(payload)].filter(Boolean);
+        const url = urls.find((item) => item && !skipped.some((gone) => same(gone, item)));
         if (!url) return payload;
         try {
             const preview = await api.fetchLinkPreview(url, Admin.replyWorkerUrl());
@@ -21360,6 +21605,7 @@ const Admin = {
                 title: draft.title,
                 message: draft.message,
                 suppressLinkPreview: draft.suppressLinkPreview,
+                suppressedPreviewUrls: draft.suppressedPreviewUrls,
                 linkPreview: draft.linkPreview,
                 authorName: signoff,
                 forcePopup: isForcePopup,
@@ -21444,6 +21690,7 @@ const Admin = {
                         await publishAssembled();
                     },
                 });
+                Admin.armPreviewLinkDismiss(payload);
                 openSmoothModal('notice-modal', null, { skipHash: true });
                 return;
             }
@@ -22812,11 +23059,11 @@ const Admin = {
                   #grid-order-list { overflow: auto; max-height: min(68vh, 34rem); border: 1px solid #e5e7eb; border-radius: 0.75rem; background: #fff; }
                   html.dark #grid-order-list { border-color: #374151; background: #111827; }
                   #grid-order-list table { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
-                  #grid-order-list th, #grid-order-list td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 0.35rem 0.4rem; text-align: center; white-space: nowrap; min-width: 4.6rem; background: #fff; color: #111827; }
+                  #grid-order-list th, #grid-order-list td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 0.35rem 0.4rem; text-align: center; white-space: nowrap; min-width: 3.4rem; background: #fff; color: #111827; }
                   html.dark #grid-order-list th, html.dark #grid-order-list td { border-color: #374151; background: #111827; color: #f3f4f6; }
                   #grid-order-list tbody tr:nth-child(even) td { background: #eff6ff; }
                   html.dark #grid-order-list tbody tr:nth-child(even) td { background: #1e293b; }
-                  #grid-order-list .nt-station-col { position: sticky; left: 0; z-index: 2; text-align: left; font-weight: 700; background: #f3f4f6; min-width: 7.2rem; max-width: 9.5rem; }
+                  #grid-order-list .nt-station-col { position: sticky; left: 0; z-index: 2; text-align: left; font-weight: 600; background: #f3f4f6; width: 38vw; min-width: 5.5rem; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; }
                   html.dark #grid-order-list .nt-station-col { background: #1f2937; }
                   #grid-order-list thead th { position: sticky; top: 0; z-index: 3; background: #e5e7eb; font-size: 11px; }
                   html.dark #grid-order-list thead th { background: #374151; }
@@ -22828,7 +23075,7 @@ const Admin = {
                   #grid-order-list .grid-order-move { height: 1.6rem; min-width: 1.6rem; padding: 0 0.3rem; border-radius: 0.4rem; border: 1px solid #d1d5db; background: #fff; font-size: 10px; font-weight: 700; }
                   #grid-order-list select[data-grid-via] { max-width: 6.5rem; height: 1.7rem; font-size: 10px; }
                 </style>
-                <p class="text-sm leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. The sheet matches the in-app timetable. Hold a train column and drag it. The first station sets the column: later stops follow the other trains. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Monte Vista and Maitland are Western Cape only. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
+                <div class="flex justify-end">${Admin.infoButton('grid-order')}</div>
                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Route
                     <select id="grid-order-route" class="mt-1 w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white"></select>
                 </label>
@@ -22851,12 +23098,11 @@ const Admin = {
                 <div id="grid-order-meta" class="hidden rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-500 dark:text-gray-400" aria-live="polite"></div>
                 <div id="grid-order-time" class="hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 space-y-2">
                     <p id="grid-order-time-label" class="text-sm font-semibold text-gray-800 dark:text-gray-100"></p>
-                    <div class="flex gap-2">
-                        <input id="grid-order-time-input" type="time" class="min-w-0 flex-1 h-11 px-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white" />
-                        <button id="grid-order-time-apply" type="button" class="h-11 px-3 rounded-xl bg-blue-600 text-white text-sm font-semibold focus:outline-none">Set time</button>
-                        <button id="grid-order-time-clear" type="button" class="h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-semibold text-gray-800 dark:text-gray-100 focus:outline-none">Clear</button>
+                    <div class="flex items-center gap-2">
+                        <input id="grid-order-time-input" type="time" class="min-w-0 flex-1 h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white" />
+                        <button id="grid-order-time-apply" type="button" class="h-8 px-2.5 rounded-lg bg-blue-600 text-white text-xs font-semibold focus:outline-none">Set time</button>
+                        <button id="grid-order-time-clear" type="button" class="h-8 px-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-800 dark:text-gray-100 focus:outline-none">Clear</button>
                     </div>
-                    <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Set the first station and the rest of that train is calculated from the other trains. Clear removes one stop. Add train asks for a number and that same first time.</p>
                 </div>
                 <div id="grid-order-list" aria-label="Train column order"></div>
                 <div id="grid-order-actions" class="hidden space-y-2">
@@ -22870,7 +23116,6 @@ const Admin = {
                     </div>
                     <button id="grid-order-save-times" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save times to Firebase</button>
                     <button id="grid-order-via-all-days" type="button" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-semibold py-3 rounded-xl text-sm focus:outline-none">Save via marks to all days</button>
-                    <p id="grid-order-via-note" class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
                 </div>
             </div>
         `;
@@ -22917,6 +23162,9 @@ const Admin = {
             if (optB) optB.textContent = `To ${b}`;
         };
         paintDirectionEnds();
+        Admin.bindPremiumSelect(routeEl);
+        Admin.bindPremiumSelect(dayEl);
+        Admin.bindPremiumSelect(directionEl);
 
         const routeSheetKey = () => {
             const route = ROUTES?.[routeEl.value];
@@ -23536,6 +23784,9 @@ const Admin = {
                     load();
                 }
                 paintDirectionEnds();
+                Admin.bindPremiumSelect(routeEl);
+                Admin.bindPremiumSelect(dayEl);
+                Admin.bindPremiumSelect(directionEl);
             });
         });
         if (!window._gridOrderBeforeUnloadBound) {
@@ -23590,7 +23841,7 @@ const Admin = {
 
                 <details class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
                     <summary class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 cursor-pointer">2. Timetable grid banner</summary>
-                    <p class="text-[10px] text-blue-700 dark:text-blue-400 leading-snug">Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.</p>
+                    <div class="flex justify-end">${Admin.infoButton('grid-banner')}</div>
                     <div class="flex items-center justify-between mb-1">
                         <label class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase" for="excl-grid-notice">Banner text</label>
                         ${Admin.writeAssistButtonHtml('excl-grid-notice')}
@@ -24621,7 +24872,7 @@ const Admin = {
                     </button>
                 </div>
                 <div id="event-pane-sheets" class="hidden space-y-3">
-                    <p class="text-sm leading-snug text-gray-600 dark:text-gray-300">Sunday and Special run only on the lines you turn on. Other lines keep their normal day. Add the spreadsheet tabs named under each line, then sync. Leave Sunday dates empty for every Sunday. Leave Special dates empty for every day until you turn it off. A line with no times in that tab stays on its normal sheet.</p>
+                    <div class="flex justify-end">${Admin.infoButton('route-sheets')}</div>
                     <div id="route-sheet-regions" class="flex gap-2"></div>
                     <div id="route-sheet-list" class="space-y-2"></div>
                     <button id="route-sheet-save" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md transition-colors text-sm">Save route sheets</button>
@@ -25790,6 +26041,7 @@ const Admin = {
             const bits = [];
             if (routeLabel) bits.push(routeLabel);
             if (choice) bits.push(choice);
+            else if (routeLabel) bits.push('No station selected');
             if (bits.length) {
                 meta.textContent = bits.join(' | ');
                 meta.classList.remove('hidden');
@@ -25937,9 +26189,7 @@ const Admin = {
                 </span>
             </button>
             <div id="push-notifications-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">
-                    Sends an FCM system notification to enabled devices. This does not post an Alerts card.
-                </p>
+                <div class="flex justify-end">${Admin.infoButton('push-notifications')}</div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-environment">Environment</label>
@@ -26248,7 +26498,7 @@ const Admin = {
                     </button>
                     
                     <div id="matrix-body" class="p-3 hidden">
-                        <p class="text-[9px] text-indigo-700 dark:text-indigo-400 font-medium leading-snug mb-3">Interrogates global Edge Caches (Cloudflare, GitHub, Firebase) to verify version sync status. Bypasses local browser cache.</p>
+                        <div class="flex justify-end mb-3">${Admin.infoButton('cache-matrix')}</div>
                         
                         <button id="ping-diagnostics-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors text-[10px] uppercase tracking-wide focus:outline-none flex justify-center items-center">
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.906 14.142 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
@@ -26284,7 +26534,7 @@ const Admin = {
                     </button>
                     
                     <div id="deepscan-body" class="p-3 hidden">
-                        <p class="text-[9px] text-blue-700 dark:text-blue-400 font-medium leading-snug mb-3">Scans the database to verify if all configured routes have successfully downloaded their timetables and checks for structural anomalies.</p>
+                        <div class="flex justify-end mb-3">${Admin.infoButton('deep-scan')}</div>
 
                         <div class="mb-3">
                             <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Data Source</label>
@@ -27633,7 +27883,7 @@ const Admin = {
                 <svg id="holiday-approvals-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="holiday-approvals-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">Approve each region separately before commuters see the notice. Tick approves; cross defers that region until info is available.</p>
+                <div class="flex justify-end">${Admin.infoButton('holiday-approvals')}</div>
                 <p id="holiday-approvals-enforce-note" class="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-2 leading-snug"></p>
                 <div class="flex gap-2 items-center">
                     <button type="button" id="holiday-tab-pending" class="holiday-tab-btn flex-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider">Pending</button>
@@ -27647,7 +27897,7 @@ const Admin = {
                         <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="sched-override-body" class="hidden px-3 pb-3 space-y-3">
-                        <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active. Optional dates limit the force to those calendar days only; leave dates empty to keep it on until you deactivate.</p>
+                        <div class="flex justify-end">${Admin.infoButton('sched-override')}</div>
                         <div id="sched-override-regions" class="space-y-3"></div>
                         <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm focus:outline-none">Save schedule overrides</button>
                     </div>
@@ -29028,7 +29278,25 @@ const Admin = {
                     const resSched = await fetch(`${dynamicEndpoint}config/schedule_override.json`);
                     if (resSched.ok) {
                         const schedCfg = await resSched.json();
-                        const regionsCfg = schedCfg?.regions || {};
+                        const pruned = (typeof window.pruneScheduleOverrideConfig === 'function')
+                            ? window.pruneScheduleOverrideConfig(schedCfg)
+                            : { config: schedCfg, changed: false };
+                        const regionsCfg = pruned.config?.regions || schedCfg?.regions || {};
+                        if (pruned.changed) {
+                            try {
+                                const pruneSecret = await Admin.getAuthKey();
+                                if (pruneSecret) {
+                                    await window.guardianFetch(`${dynamicEndpoint}config/schedule_override.json?auth=${pruneSecret}`, {
+                                        method: 'PUT',
+                                        body: JSON.stringify({
+                                            ...pruned.config,
+                                            updatedAt: Date.now(),
+                                            updatedBy: Admin.currentUser?.email || 'Admin',
+                                        }),
+                                    }, 10000);
+                                }
+                            } catch { /* the form still shows the dates that are left */ }
+                        }
                         const normalizeDates = (typeof window.normalizeScheduleOverrideDates === 'function')
                             ? window.normalizeScheduleOverrideDates
                             : (raw) => (Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/))
@@ -29369,12 +29637,19 @@ const Admin = {
                             .map((s) => String(s || '').trim().slice(0, 10))
                             .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
                     SCHED_OVERRIDE_REGIONS.forEach((code) => {
-                        const active = !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked;
+                        const activeEl = schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`);
+                        const datesEl = schedOverrideRegions.querySelector(`.sched-override-dates[data-region="${code}"]`);
+                        let active = !!activeEl?.checked;
                         const body = (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim();
+                        const rawDates = normalizeDates(datesEl?.value || '');
+                        const pruned = (typeof window.pruneScheduleOverrideRegion === 'function')
+                            ? window.pruneScheduleOverrideRegion({ active, dates: rawDates })
+                            : { active, dates: rawDates };
+                        active = !!pruned.active;
+                        const dates = normalizeDates(pruned.dates);
+                        if (activeEl) activeEl.checked = active;
+                        if (datesEl) datesEl.value = dates.join('\n');
                         if (active && !body) missingMessage.push(code);
-                        const dates = normalizeDates(
-                            schedOverrideRegions.querySelector(`.sched-override-dates[data-region="${code}"]`)?.value || ''
-                        );
                         const row = {
                             active,
                             dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value

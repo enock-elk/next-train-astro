@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.6': [
+        'The read-aloud bar closes when Developer Mode returns to its home, when the clip ends, and from its own close control. Voice and pause use the same menus as the other operator lists. Test voice plays the choices on screen before they are saved. Additional prompt, knowledge, feedback style, and community style open in a full editor that stays above the keyboard and scrolls. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.5': [
         'System Controls has Admin preferences, collapsed until opened. It holds the shared Co-Pilot note, a shared knowledge base, a feedback reply style, and a community reply style. Community drafts do not summarise the message and do not close with Thank you for using Next Train. Each operator can save their own Chirp 3 HD voice, speed, volume, and pause. Play shows a bar with pause, play, and restart, and a toast while the voice is preparing. Co-Pilot, Community, and Community Monitor can read a draft aloud. No commuter What\'s New. forceShow stays false.',
     ],

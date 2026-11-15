@@ -24,7 +24,7 @@ import {
     stationRowIndexes,
 } from './grid-column-edit.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
-import { speakOperatorCopy } from './operator-speech.js';
+import { speakOperatorCopy, stopOperatorSpeech } from './operator-speech.js';
 import { extraSheetKey, suggestedSheetTab, normalizeRouteSheetDates } from './route-sheets.js';
 import {
     applyDraftGuard,
@@ -217,6 +217,7 @@ export function exposeAdminGlobals() {
     window.formatThreadDateLabel = formatThreadDateLabel;
     window.parseFeedbackAlertQuote = parseFeedbackAlertQuote;
     window.ntSpeakOperatorCopy = speakOperatorCopy;
+    window.ntStopOperatorSpeech = stopOperatorSpeech;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;

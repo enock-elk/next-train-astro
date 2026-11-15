@@ -466,6 +466,11 @@ const communityDraft = applyDraftGuard({
 ok(!communityDraft.reply.includes('Thank you for using Next Train.'), 'a community draft drops the feedback closing');
 ok(!communityDraft.reply.includes("Thank you for your message where you're asking about"), 'a community draft drops the summary opening');
 ok(adminJs.includes('id="admin-prefs-body"'), 'Admin preferences starts as its own System Controls section');
+ok(adminJs.includes('id="admin-voice-test"'), 'a voice can be tried before it is saved');
+ok(adminJs.includes('bindPremiumSelect'), 'voice choices use the premium menu');
+ok(adminJs.includes('admin-prompt-editor'), 'prompts open in a full editor');
+ok(adminJs.includes('ntStopOperatorSpeech'), 'read-aloud clears when Developer Mode returns home');
+ok(worker.includes('body.preview'), 'a voice test can use the choices on screen');
 ok(adminJs.includes('Listen to this draft'), 'Co-Pilot can read the draft aloud');
 ok(worker.includes('requireOperator'), 'read-aloud checks the operator token');
 ok(worker.includes('SPEAK_HOUR_CHARS'), 'read-aloud has a character cap');

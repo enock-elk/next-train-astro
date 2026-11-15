@@ -29,12 +29,14 @@ function speechBar() {
         <button type="button" data-speech="pause" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Pause"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg></button>
         <button type="button" data-speech="play" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Play"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
         <button type="button" data-speech="restart" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Restart"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/></svg></button>
-        <span data-speech-status class="min-w-[7.5rem] px-1 text-xs font-semibold text-gray-700 dark:text-gray-200">Preparing voice</span>`;
+        <span data-speech-status class="min-w-[7.5rem] px-1 text-xs font-semibold text-gray-700 dark:text-gray-200">Preparing voice</span>
+        <button type="button" data-speech="close" class="h-9 w-9 rounded-full text-gray-500 focus:outline-none" aria-label="Close"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
     bar.addEventListener('click', (event) => {
         const act = event.target.closest?.('[data-speech]')?.getAttribute('data-speech');
         if (act === 'pause') pauseOperatorSpeech();
         if (act === 'play') resumeOperatorSpeech();
         if (act === 'restart') restartOperatorSpeech();
+        if (act === 'close') stopOperatorSpeech();
     });
     document.body.appendChild(bar);
     return bar;
@@ -118,19 +120,32 @@ export function restartOperatorSpeech() {
     return { ok: true };
 }
 
+/** Stop and remove the bar. Used when Dev Mode returns to its home. */
+export function stopOperatorSpeech() {
+    generation += 1;
+    pending = false;
+    stopSpeech();
+    return { ok: true, stopped: true };
+}
+
 /**
  * Read one message. A second call stops the one that is playing.
  * Returns { ok:false } for anyone who is not an allowlisted operator.
  */
-export async function speakOperatorCopy(value) {
+export async function speakOperatorCopy(value, options = {}) {
     if (!isAdminAuthed()) return { ok: false, hidden: true };
     const text = plainSpeech(value);
     if (text.length < 2) return { ok: false, message: 'Nothing to read.' };
-    if (playing || pending) {
+    if ((playing || pending) && !options.fresh) {
         generation += 1;
         pending = false;
         stopSpeech();
         return { ok: true, stopped: true };
+    }
+    if (playing || pending) {
+        generation += 1;
+        pending = false;
+        stopSpeech();
     }
     const gen = generation + 1;
     generation = gen;
@@ -157,7 +172,7 @@ export async function speakOperatorCopy(value) {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify(options.preview ? { text, preview: options.preview } : { text }),
         });
     } catch {
         pending = false;
@@ -190,12 +205,7 @@ export async function speakOperatorCopy(value) {
     playing = audio;
     playingUrl = url;
     audio.addEventListener('ended', () => {
-        paintClock();
-        setSpeechStatus('Finished');
-        if (clockTimer) {
-            clearInterval(clockTimer);
-            clockTimer = 0;
-        }
+        if (playing === audio) stopSpeech();
     }, { once: true });
     audio.addEventListener('timeupdate', paintClock);
     clockTimer = window.setInterval(paintClock, 500);
@@ -214,4 +224,5 @@ export async function speakOperatorCopy(value) {
 
 if (typeof window !== 'undefined') {
     window.ntSpeakOperatorCopy = speakOperatorCopy;
+    window.ntStopOperatorSpeech = stopOperatorSpeech;
 }

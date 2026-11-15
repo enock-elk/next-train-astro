@@ -357,7 +357,8 @@ async function speakText(request, env, user) {
     if (text.length < 2) return json(env, request, 400, { error: 'Nothing to read.' });
     const key = env.GOOGLE_TTS_API_KEY || env.GEMINI_API_KEY;
     if (!key) return json(env, request, 503, { error: 'Voice is not configured.' });
-    const prefs = await readVoicePrefs(env, user);
+    const saved = await readVoicePrefs(env, user);
+    const prefs = body.preview && typeof body.preview === 'object' ? normalizeVoicePrefs(body.preview) : saved;
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chirp3:${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${text}`));
     const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
     const cacheKey = `tts:audio:${hex}`;

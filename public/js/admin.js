@@ -2579,6 +2579,7 @@ const Admin = {
             return true;
         }
         if (Admin.isGridMode) return false;
+        if (typeof window.ntStopOperatorSpeech === 'function') window.ntStopOperatorSpeech();
         Admin._drillStack = [];
 
         const container = document.getElementById('admin-modules-container');
@@ -2668,6 +2669,7 @@ const Admin = {
             Admin.exitDrillToGrid();
             return;
         }
+        if (typeof window.ntStopOperatorSpeech === 'function') window.ntStopOperatorSpeech();
         // Never arm _adminDrillBackLock BEFORE closeSmoothModal — that guard
         // early-returns and leaves #dev-modal open (X turns grey, modal stays).
         window._adminDrillBackLock = false;
@@ -15074,6 +15076,27 @@ const Admin = {
         paint();
     },
 
+    /** Keep a premium list on the screen when a parent clips overflow. */
+    liftPremiumSelect: (select) => {
+        const wrap = select?.closest?.('.nt-premium-select');
+        const trigger = wrap?.querySelector('.nt-premium-trigger');
+        const list = wrap?.querySelector('.nt-premium-list');
+        if (!trigger || !list || trigger.dataset.liftBound === '1') return;
+        trigger.dataset.liftBound = '1';
+        const place = () => {
+            if (list.classList.contains('hidden')) return;
+            const rect = trigger.getBoundingClientRect();
+            const below = Math.max(160, Math.min(320, window.innerHeight - rect.bottom - 24));
+            list.style.position = 'fixed';
+            list.style.left = `${Math.max(8, rect.left)}px`;
+            list.style.width = `${Math.min(rect.width, window.innerWidth - 16)}px`;
+            list.style.top = `${rect.bottom + 4}px`;
+            list.style.maxHeight = `${below}px`;
+            list.style.zIndex = '260';
+        };
+        trigger.addEventListener('click', () => requestAnimationFrame(place));
+    },
+
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
     setupUserTrustManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -16672,6 +16695,155 @@ const Admin = {
         } finally {
             if (btn) btn.disabled = false;
         }
+    },
+
+    voicePreviewPrefs: () => ({
+        voice: document.getElementById('admin-voice-name')?.value,
+        speakingRate: Number(document.getElementById('admin-voice-rate')?.value),
+        volumeGainDb: Number(document.getElementById('admin-voice-gain')?.value),
+        pause: document.getElementById('admin-voice-pause')?.value,
+    }),
+
+    testVoicePrefs: () => {
+        const speak = window.ntSpeakOperatorCopy;
+        if (typeof speak !== 'function') return;
+        const sample = 'Next Train. The next train from Saulsville leaves on time. This is a short voice test.';
+        speak(sample, { fresh: true, preview: Admin.voicePreviewPrefs() }).then((result) => {
+            if (result?.hidden) return;
+            if (!result?.ok && result?.message && typeof showToast === 'function') showToast(result.message, 'error');
+        });
+    },
+
+    promptEditorSpec: (field) => ({
+        note: { id: 'admin-reply-suggest-note', title: 'Additional prompt', max: 4000, reset: false },
+        knowledge: { id: 'admin-prefs-knowledge', title: 'Knowledge base', max: 12000, reset: false },
+        feedbackPrompt: { id: 'admin-prefs-feedback', title: 'Feedback replies', max: 12000, reset: true },
+        communityPrompt: { id: 'admin-prefs-community', title: 'Community replies', max: 12000, reset: true },
+    })[field] || null,
+
+    keepPromptCaret: (ta) => {
+        if (!ta) return;
+        const before = ta.value.slice(0, ta.selectionStart || 0);
+        const line = before.split('\n').length;
+        const lh = parseFloat(getComputedStyle(ta).lineHeight) || 24;
+        const target = Math.max(0, (line - 1) * lh);
+        const view = ta.clientHeight || 0;
+        if (target < ta.scrollTop + 16) ta.scrollTop = Math.max(0, target - 16);
+        else if (view && target > ta.scrollTop + view - 48) ta.scrollTop = target - view + 48;
+    },
+
+    fitPromptEditor: () => {
+        const sheet = document.getElementById('admin-prompt-editor');
+        if (!sheet || sheet.classList.contains('hidden')) return;
+        const vv = window.visualViewport;
+        const top = Math.max(0, Math.round(vv?.offsetTop || 0));
+        const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
+        sheet.style.top = `${top}px`;
+        sheet.style.height = `${height}px`;
+        sheet.style.bottom = 'auto';
+        const ta = document.getElementById('admin-prompt-editor-text');
+        if (ta && document.activeElement === ta) Admin.keepPromptCaret(ta);
+        const root = document.scrollingElement || document.documentElement;
+        if (root && root.scrollTop) root.scrollTop = 0;
+    },
+
+    ensurePromptEditor: () => {
+        let sheet = document.getElementById('admin-prompt-editor');
+        if (sheet) return sheet;
+        sheet = document.createElement('div');
+        sheet.id = 'admin-prompt-editor';
+        sheet.className = 'hidden fixed top-0 left-0 right-0 z-[230] flex flex-col bg-white dark:bg-gray-900';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.innerHTML = `
+            <div class="shrink-0 flex items-center justify-between gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 border-b border-gray-200 dark:border-gray-700">
+                <h3 id="admin-prompt-editor-title" class="text-base font-black text-gray-900 dark:text-white"></h3>
+                <button type="button" id="admin-prompt-editor-close" class="p-2 rounded-full text-gray-500 focus:outline-none" aria-label="Close">${Admin.icon('x', 'w-5 h-5')}</button>
+            </div>
+            <textarea id="admin-prompt-editor-text" class="flex-1 min-h-0 w-full resize-none overflow-y-auto px-3 py-3 text-base leading-relaxed text-gray-900 dark:text-white bg-white dark:bg-gray-900 focus:outline-none" style="font-size:16px" enterkeyhint="enter"></textarea>
+            <div class="shrink-0 flex gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-gray-200 dark:border-gray-700">
+                <button type="button" id="admin-prompt-editor-save" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl text-sm focus:outline-none">Save</button>
+                <button type="button" id="admin-prompt-editor-reset" class="hidden px-4 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-bold py-3 rounded-xl text-sm focus:outline-none">Reset</button>
+            </div>`;
+        document.body.appendChild(sheet);
+        const ta = sheet.querySelector('#admin-prompt-editor-text');
+        const refit = () => Admin.fitPromptEditor();
+        ta.addEventListener('input', () => Admin.keepPromptCaret(ta));
+        ta.addEventListener('focus', refit);
+        ta.addEventListener('keyup', () => Admin.keepPromptCaret(ta));
+        sheet.querySelector('#admin-prompt-editor-close').addEventListener('click', () => Admin.closePromptEditor(true));
+        sheet.querySelector('#admin-prompt-editor-save').addEventListener('click', () => Admin.savePromptEditor());
+        sheet.querySelector('#admin-prompt-editor-reset').addEventListener('click', () => Admin.resetPromptEditor());
+        if (!window.__ntPromptEditorFit) {
+            window.__ntPromptEditorFit = true;
+            window.visualViewport?.addEventListener('resize', refit);
+            window.visualViewport?.addEventListener('scroll', refit);
+        }
+        return sheet;
+    },
+
+    openPromptEditor: (field) => {
+        const spec = Admin.promptEditorSpec(field);
+        const source = spec && document.getElementById(spec.id);
+        if (!source) return;
+        const sheet = Admin.ensurePromptEditor();
+        sheet.dataset.field = field;
+        sheet.querySelector('#admin-prompt-editor-title').textContent = spec.title;
+        const ta = sheet.querySelector('#admin-prompt-editor-text');
+        ta.maxLength = spec.max;
+        ta.value = source.value || '';
+        sheet.querySelector('#admin-prompt-editor-reset').classList.toggle('hidden', !spec.reset);
+        sheet.classList.remove('hidden');
+        Admin.fitPromptEditor();
+        ta.focus();
+        const end = ta.value.length;
+        try { ta.setSelectionRange(end, end); } catch { /* ignore */ }
+        Admin.keepPromptCaret(ta);
+    },
+
+    closePromptEditor: (keepDraft) => {
+        const sheet = document.getElementById('admin-prompt-editor');
+        if (!sheet) return;
+        if (keepDraft) {
+            const spec = Admin.promptEditorSpec(sheet.dataset.field);
+            const source = spec && document.getElementById(spec.id);
+            const ta = document.getElementById('admin-prompt-editor-text');
+            if (source && ta) source.value = ta.value;
+        }
+        sheet.classList.add('hidden');
+        sheet.style.top = '';
+        sheet.style.height = '';
+    },
+
+    savePromptEditor: async () => {
+        const sheet = document.getElementById('admin-prompt-editor');
+        const field = sheet?.dataset.field || '';
+        const spec = Admin.promptEditorSpec(field);
+        const source = spec && document.getElementById(spec.id);
+        const ta = document.getElementById('admin-prompt-editor-text');
+        if (!source || !ta) return;
+        source.value = ta.value;
+        if (field === 'note') {
+            if (!String(ta.value || '').trim()) {
+                if (typeof showToast === 'function') showToast('Type a note before saving. A blank note is not saved.', 'error');
+                return;
+            }
+            await Admin.saveReplySuggestNote();
+        } else {
+            await Admin.saveOperatorPrompt(field);
+        }
+        Admin.closePromptEditor(false);
+    },
+
+    resetPromptEditor: async () => {
+        const sheet = document.getElementById('admin-prompt-editor');
+        const field = sheet?.dataset.field || '';
+        const spec = Admin.promptEditorSpec(field);
+        if (!spec?.reset) return;
+        await Admin.saveOperatorPrompt(field, { clear: true });
+        const source = document.getElementById(spec.id);
+        const ta = document.getElementById('admin-prompt-editor-text');
+        if (source && ta) ta.value = source.value || '';
     },
 
     saveOperatorPrompt: async (field, options = {}) => {
@@ -28565,8 +28737,9 @@ const Admin = {
                     <div id="admin-prefs-body" class="hidden p-4 space-y-4">
                         <section class="space-y-2">
                             <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">My voice</p>
-                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Chirp 3 HD for this sign-in only. The other operator keeps their own voice, speed, volume, and pauses.</p>
-                            <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Voice
+                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Chirp 3 HD for this sign-in only. The other operator keeps their own voice, speed, volume, and pauses. Try a voice before you save it.</p>
+                            <p class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Voice</p>
+                            <div>
                                 <select id="admin-voice-name" class="mt-1 w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 text-xs text-gray-900 dark:text-white focus:outline-none">
                                     <option value="en-US-Chirp3-HD-Achernar">Achernar, US</option>
                                     <option value="en-US-Chirp3-HD-Aoede">Aoede, US</option>
@@ -28584,27 +28757,32 @@ const Admin = {
                                     <option value="en-GB-Chirp3-HD-Leda">Leda, UK</option>
                                     <option value="en-GB-Chirp3-HD-Puck">Puck, UK</option>
                                 </select>
-                            </label>
+                            </div>
                             <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Speed <span id="admin-voice-rate-label">1.0</span>
                                 <input id="admin-voice-rate" type="range" min="0.25" max="2" step="0.05" value="1" class="mt-1 w-full">
                             </label>
                             <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Volume <span id="admin-voice-gain-label">0 dB</span>
                                 <input id="admin-voice-gain" type="range" min="-6" max="6" step="1" value="0" class="mt-1 w-full">
                             </label>
-                            <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Pause between sentences
+                            <p class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Pause between sentences</p>
+                            <div>
                                 <select id="admin-voice-pause" class="mt-1 w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 text-xs text-gray-900 dark:text-white focus:outline-none">
                                     <option value="off">None</option>
                                     <option value="short">Short</option>
                                     <option value="medium">Medium</option>
                                     <option value="long">Long</option>
                                 </select>
-                            </label>
-                            <button type="button" id="admin-voice-save" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save my voice</button>
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button" id="admin-voice-test" class="flex-1 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Test voice</button>
+                                <button type="button" id="admin-voice-save" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save my voice</button>
+                            </div>
                         </section>
                         <section class="space-y-2">
                             <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Additional prompt</p>
                             <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Saved for both operators. Sent with every Suggest reply. It does not invent a missing fact.</p>
-                            <textarea id="admin-reply-suggest-note" rows="4" maxlength="4000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Standing context for all future drafts."></textarea>
+                            <textarea id="admin-reply-suggest-note" data-prompt-field="note" rows="4" maxlength="4000" readonly class="w-full max-h-32 overflow-y-auto rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Standing context for all future drafts."></textarea>
+                            <button type="button" data-prompt-open="note" class="w-full border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Edit in full view</button>
                             <div class="flex gap-2">
                                 <button type="button" id="reply-suggest-save-note" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save for all future replies</button>
                                 <button type="button" id="reply-suggest-clear-note" class="px-3 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Clear</button>
@@ -28614,13 +28792,15 @@ const Admin = {
                         <section class="space-y-2">
                             <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Knowledge base</p>
                             <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Facts both reply styles can use, on top of the built-in notes. Shared by both operators.</p>
-                            <textarea id="admin-prefs-knowledge" rows="4" maxlength="12000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Extra facts Co-Pilot may use."></textarea>
+                            <textarea id="admin-prefs-knowledge" data-prompt-field="knowledge" rows="4" maxlength="12000" readonly class="w-full max-h-32 overflow-y-auto rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Extra facts Co-Pilot may use."></textarea>
+                            <button type="button" data-prompt-open="knowledge" class="w-full border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Edit in full view</button>
                             <button type="button" id="admin-prefs-knowledge-save" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save knowledge</button>
                         </section>
                         <section class="space-y-2">
                             <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Feedback replies</p>
                             <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">How Co-Pilot writes an inbox reply. Region phone numbers and the knowledge base are added after this. Clear and save to use the built-in style.</p>
-                            <textarea id="admin-prefs-feedback" rows="6" maxlength="12000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none"></textarea>
+                            <textarea id="admin-prefs-feedback" data-prompt-field="feedbackPrompt" rows="6" maxlength="12000" readonly class="w-full max-h-32 overflow-y-auto rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none"></textarea>
+                            <button type="button" data-prompt-open="feedbackPrompt" class="w-full border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Edit in full view</button>
                             <div class="flex gap-2">
                                 <button type="button" id="admin-prefs-feedback-save" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save feedback style</button>
                                 <button type="button" id="admin-prefs-feedback-reset" class="px-3 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Reset</button>
@@ -28629,7 +28809,8 @@ const Admin = {
                         <section class="space-y-2">
                             <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Community replies</p>
                             <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">How Co-Pilot writes in a community room. It does not summarise the message and it does not close with Thank you for using Next Train.</p>
-                            <textarea id="admin-prefs-community" rows="6" maxlength="12000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none"></textarea>
+                            <textarea id="admin-prefs-community" data-prompt-field="communityPrompt" rows="6" maxlength="12000" readonly class="w-full max-h-32 overflow-y-auto rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none"></textarea>
+                            <button type="button" data-prompt-open="communityPrompt" class="w-full border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Edit in full view</button>
                             <div class="flex gap-2">
                                 <button type="button" id="admin-prefs-community-save" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save community style</button>
                                 <button type="button" id="admin-prefs-community-reset" class="px-3 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Reset</button>
@@ -29263,6 +29444,19 @@ const Admin = {
         voiceRate?.addEventListener('input', paintVoiceLabels);
         voiceGain?.addEventListener('input', paintVoiceLabels);
         document.getElementById('admin-voice-save')?.addEventListener('click', () => Admin.saveVoicePrefs());
+        document.getElementById('admin-voice-test')?.addEventListener('click', () => Admin.testVoicePrefs());
+        const bindVoiceMenus = () => {
+            ['admin-voice-name', 'admin-voice-pause'].forEach((id) => {
+                const select = document.getElementById(id);
+                Admin.bindPremiumSelect(select);
+                Admin.liftPremiumSelect(select);
+            });
+        };
+        bindVoiceMenus();
+        Admin.loadVoicePrefs().then(bindVoiceMenus);
+        adminPrefsBody?.querySelectorAll('[data-prompt-open]').forEach((btn) => {
+            btn.addEventListener('click', () => Admin.openPromptEditor(btn.getAttribute('data-prompt-open')));
+        });
         document.getElementById('admin-prefs-knowledge-save')?.addEventListener('click', () => Admin.saveOperatorPrompt('knowledge'));
         document.getElementById('admin-prefs-feedback-save')?.addEventListener('click', () => Admin.saveOperatorPrompt('feedbackPrompt'));
         document.getElementById('admin-prefs-community-save')?.addEventListener('click', () => Admin.saveOperatorPrompt('communityPrompt'));

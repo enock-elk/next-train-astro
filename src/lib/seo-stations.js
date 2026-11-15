@@ -503,6 +503,7 @@ export function buildStationCorridorTimetables(station) {
         },
       },
       hasSaturday: !!(saturdayTowardA.length || saturdayTowardB.length),
+      mergedDirections: false,
     });
   }
 

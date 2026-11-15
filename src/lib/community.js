@@ -305,13 +305,96 @@ function formatDayDivider(ts) {
     return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const NAME_COLORS = ['#02a698', '#53bdeb', '#06cf9c', '#e742a4', '#a281f7', '#ff7b72', '#25d366', '#d97706'];
+/** Ten hues, 36° apart, so one step always leaves the neighbour above. */
+const NAME_COLORS = ['#ca2121', '#ca8621', '#a8ca21', '#43ca21', '#21ca64', '#21caca', '#2164ca', '#4321ca', '#a821ca', '#ca2186'];
+const NAME_HUE_GAP = 32;
+let feedNameColors = new Map();
 
-function nameColorFor(seed) {
+function hashColorIndex(seed) {
     const s = String(seed || 'x');
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
-    return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
+    return Math.abs(h) % NAME_COLORS.length;
+}
+
+function colorHue(hex) {
+    const n = String(hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(n)) return 0;
+    const r = parseInt(n.slice(0, 2), 16) / 255;
+    const g = parseInt(n.slice(2, 4), 16) / 255;
+    const b = parseInt(n.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    if (d < 0.001) return 0;
+    let h = 0;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+    return h;
+}
+
+function huesClose(a, b) {
+    if (!a || !b || a === b) return a === b && !!a;
+    const d = Math.abs(colorHue(a) - colorHue(b));
+    return Math.min(d, 360 - d) < NAME_HUE_GAP;
+}
+
+function colorFarFrom(startIdx, neighbor) {
+    const n = NAME_COLORS.length;
+    const start = ((Number(startIdx) || 0) % n + n) % n;
+    for (let step = 0; step < n; step++) {
+        const color = NAME_COLORS[(start + step) % n];
+        if (!huesClose(color, neighbor)) return color;
+    }
+    return NAME_COLORS[start];
+}
+
+function nameColorFor(seed) {
+    const key = String(seed || 'x');
+    if (feedNameColors.has(key)) return feedNameColors.get(key);
+    return NAME_COLORS[hashColorIndex(key)];
+}
+
+/**
+ * One colour per person for this paint. A later author moves when their hue
+ * sits too close to the other person just above them.
+ */
+function assignFeedNameColors(posts) {
+    const acct = $account.get();
+    const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
+    const rows = (posts || []).map((post) => {
+        const isOwn = !!(myUid && post?.uid && post.uid === myUid);
+        const shown = authorPresentation(post, isOwn);
+        const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
+        return { key: authorColorKey(post?.uid, displayName), isOwn };
+    });
+    const assigned = new Map();
+    rows.forEach((row) => {
+        if (row.isOwn || !row.key || assigned.has(row.key)) return;
+        assigned.set(row.key, NAME_COLORS[hashColorIndex(row.key)]);
+    });
+    for (let pass = 0; pass < NAME_COLORS.length; pass++) {
+        let prevKey = '';
+        let changed = false;
+        rows.forEach((row) => {
+            if (row.isOwn || !row.key) return;
+            const neighbor = prevKey && prevKey !== row.key ? assigned.get(prevKey) : '';
+            if (neighbor && huesClose(assigned.get(row.key), neighbor)) {
+                const current = NAME_COLORS.indexOf(assigned.get(row.key));
+                const next = colorFarFrom((current < 0 ? 0 : current) + 1, neighbor);
+                if (next !== assigned.get(row.key)) {
+                    assigned.set(row.key, next);
+                    changed = true;
+                }
+            }
+            prevKey = row.key;
+        });
+        if (!changed) break;
+    }
+    feedNameColors = assigned;
 }
 
 /** One colour per person for this reading of the log, including quotes. */
@@ -1052,6 +1135,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
                 if (!Number.isFinite(Number(data.publicPoints))) {
                     await publishAcceptedCommunityPoints(postId);
                 }
+                if (isAdminAuthed()) markCommunityRouteSeen(routeId);
                 return { ok: true, post: data.post || payload };
             }
             if (data.shadowSilenced) {
@@ -1101,6 +1185,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         rememberBody(text);
         await publishAcceptedCommunityPoints(postId);
         import('./account.js').then((m) => m.recordAccountActivity?.('community_post', { routeId })).catch(() => {});
+        if (isAdminAuthed()) markCommunityRouteSeen(routeId);
         return { ok: true, post: payload };
     } catch (e) {
         return { ok: false, postId, message: safeCommunityWriteError(e?.message) };
@@ -1227,6 +1312,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         rememberBody(text);
         await publishAcceptedCommunityPoints(replyId);
         import('./account.js').then((m) => m.recordAccountActivity?.('community_reply', { routeId, postId })).catch(() => {});
+        if (isAdminAuthed()) markCommunityRouteSeen(routeId);
         return { ok: true, reply: payload };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not reply.' };
@@ -2485,6 +2571,7 @@ function applyFeedFilter(routeId) {
     if (!listEl) return;
     const posts = dedupeFeedPosts(cachedFeedPosts);
     feedAuthorMeta = latestAuthorMeta(posts);
+    assignFeedNameColors(posts);
     bindCommunityFeedPin();
 
     if (!posts.length) {
@@ -2846,8 +2933,7 @@ function paintUnreadFromCache() {
     const rooms = Object.entries(cachedUnreadByRoute)
         .filter(([, n]) => n > 0)
         .map(([id, n]) => ({ id, n, label: routeLabel(id) }));
-    const total = rooms.reduce((sum, r) => sum + r.n, 0);
-    paintCommunityUnreadBadge(total, rooms);
+    paintCommunityUnreadBadge(rooms.length, rooms);
     const rid = document.getElementById('community-route-select')?.value;
     if (rid || document.getElementById('community-route-list')) {
         syncCommunityRoutePicker(rid);
@@ -2859,10 +2945,9 @@ function paintCommunityUnreadBadge(count, rooms = []) {
     const n = Math.max(0, Number(count) || 0);
     const text = n > 99 ? '99+' : String(n);
     const roomNames = rooms.map((r) => r.label).filter(Boolean);
-    const hint = roomNames.length
-        ? (roomNames.length === 1
-            ? `${n} unread on ${roomNames[0]}`
-            : `${n} unread: ${roomNames.join(', ')}`)
+    const hintBase = n === 1 ? '1 chat with new messages' : `${n} chats with new messages`;
+    const hint = n > 0
+        ? (roomNames.length ? `${hintBase}: ${roomNames.join(', ')}` : hintBase)
         : '';
     labels.forEach((el) => {
         if (!el) return;

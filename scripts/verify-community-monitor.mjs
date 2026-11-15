@@ -50,6 +50,20 @@ const ownReply = helpers.rows(activity, { routeA: 150 }, held, routes, 'u2');
 assert.equal(ownReply.find((row) => row.routeId === 'routeA').unread, 0, 'the viewing operator does not get a badge for their own reply');
 const otherOperator = helpers.rows(activity, { routeA: 150 }, held, routes, 'u1');
 assert.equal(otherOperator.find((row) => row.routeId === 'routeA').unread, 1, 'another operator still raises the badge');
+const answered = helpers.rows({
+    routeA: {
+        post1: { kind: 'post', postId: 'post1', uid: 'commuter', timestamp: 200 },
+        reply1: { kind: 'reply', postId: 'post1', replyId: 'reply1', uid: 'admin', timestamp: 400 },
+    },
+}, { routeA: 100 }, [], routes, 'admin');
+assert.equal(answered.find((row) => row.routeId === 'routeA').unread, 0, 'a chat is clear when this admin posted last');
+const stillOpen = helpers.rows({
+    routeA: {
+        post1: { kind: 'post', postId: 'post1', uid: 'admin', timestamp: 200 },
+        reply1: { kind: 'reply', postId: 'post1', replyId: 'reply1', uid: 'commuter', timestamp: 400 },
+    },
+}, { routeA: 100 }, [], routes, 'admin');
+assert.equal(stillOpen.find((row) => row.routeId === 'routeA').unread, 1, 'a later commuter message stays unread for this admin');
 assert.equal(operatorOne.find((row) => row.routeId === 'routeC').held.length, 1);
 assert.ok(operatorOne.some((row) => row.routeId === 'routeD'), 'routes without activity remain accessible');
 
@@ -113,7 +127,10 @@ assert.match(admin, /windowFloor > 0 && \(Number\(ts\) \|\| 0\) < windowFloor/, 
 assert.match(admin, /moderation_queue\.json/);
 assert.match(admin, /\['closed', 'resolved', 'approved', 'rejected', 'dismissed'\]/, 'resolved holds do not count as unread');
 assert.match(admin, /admin_state\/\$\{encodeURIComponent\(Admin\.currentUser\.uid\)\}\/community_seen/);
-assert.match(admin, /ntAdminCommunityOwnActivity\(item, Admin\.currentUser\?\.uid\)/, 'the Dev Hub badge skips the signed-in operator');
+assert.match(admin, /_communityRouteUnread\(data, seenAt, Admin\.currentUser\?\.uid\)/, 'the Dev Hub badge uses this admin as the viewer');
+assert.match(admin, /ntAdminCommunityOwnActivity\(newest, viewerUid\)/, 'a route is clear when this admin posted last');
+assert.match(admin, /await setRouteSeen\(card\.dataset\.communityRoute, Date\.now\(\)\)/, 'a monitor send marks that route seen for this admin');
+assert.match(community, /if \(isAdminAuthed\(\)\) markCommunityRouteSeen\(routeId\)/, 'an in-app admin send marks that route seen');
 assert.match(admin, /ntAdminCommunityOwnActivity\(preview\.activity, viewerUid\)/, 'a peeked own message does not count as unread');
 assert.match(admin, /Admin\._communityLoadRoute/, 'route messages load on demand');
 assert.match(admin, /const missingActivity = \{\}/, 'lazy route load derives missing index entries from stored messages');
@@ -225,7 +242,7 @@ assert.match(community, /syncVisibleReactionListeners/, 'reactions listen per vi
 assert.match(community, /applyFittedLabel\(/, 'community route names expand only when the line fits');
 assert.match(communityView, /id="community-route-display" class="min-w-0 flex-1/, 'route name is measured against the pill width');
 assert.match(community, /community-room-unread/, 'route list marks which room has unread');
-assert.match(community, /unread on \$\{roomNames/, 'Community badge names the unread room');
+assert.match(community, /chats with new messages/, 'Community badge counts chats, not messages');
 assert.match(community, /paintCommunityQuotaHint/, 'remaining send quota is painted above the composer');
 assert.match(community, /uid === prevUid/, 'consecutive community messages from the same person are grouped');
 assert.match(community, /community-avatar-spacer/, 'grouped messages keep the avatar column');

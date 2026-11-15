@@ -95,7 +95,9 @@ export function buildOgShareLink(intent, site) {
 function withImageCacheBust(imgUrl) {
   const img = new URL(imgUrl);
   img.searchParams.set('v', OG_IMAGE_CACHE_BUST);
-  return img.toString();
+  // URLSearchParams writes spaces as '+'. Facebook's image fetch splits on that
+  // plus, so a trip between two-word stations gets a blank thumbnail.
+  return img.toString().replace(/\+/g, '%20');
 }
 
 export function buildRouteOgMeta(route, intent, site, grid = null) {

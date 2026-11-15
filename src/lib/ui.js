@@ -25,6 +25,7 @@ import { alertSharePath } from './share-links.js';
 import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
 import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
 import { downloadImageFile } from './save-image.js';
+import { holdLeaveForWelcome } from './deeplink.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -2472,6 +2473,9 @@ export function switchTab(tab, opts = null) {
         window.closeAppHub(true);
     }
 
+    // A shared trip, message, or alert stays up until they leave it.
+    if (holdLeaveForWelcome(tab)) return;
+
     const prev = safeStorage.getItem('activeTab') || 'next-train';
     if (tab !== 'community' && prev === 'community') dismissCommunityTabSheets();
 
@@ -2753,7 +2757,9 @@ export function setupSwipeNavigation() {
         if (edgeForward && dx < -50 && !horizontal) {
             edgeForward = false;
             tracking = false;
-            import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
+            if (!holdLeaveForWelcome('options')) {
+                import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
+            }
             return;
         }
         if (!tracking || swipeIgnore) {

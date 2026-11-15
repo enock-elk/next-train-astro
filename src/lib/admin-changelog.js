@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.16.1': [
+        'A shared timetable still becomes the saved route. A first visit from a trip, a community message, or an alert opens that link immediately. Welcome appears when they leave that tab, and the tab they chose opens after they pick a region and route. A return visit keeps the saved route. Trip preview pictures encode spaces so Facebook can load the thumbnail. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.9': [
         'A shared timetable still becomes the saved route. A first visit from a trip, a community message, an alert, or any other link opens the welcome screen so the commuter picks a region and route, then the link opens. A return visit keeps the saved route and opens the link. No commuter What\'s New. forceShow stays false.',
     ],

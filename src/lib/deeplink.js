@@ -123,8 +123,8 @@ async function applySavedDefaultsToStore(saved = readSavedDefaults()) {
 
 /**
  * Save a corridor as this phone's home and finish Welcome.
- * Only a shared timetable does this. A trip, community message, or alert
- * asks on the welcome screen first.
+ * Only a shared timetable does this. Any other link opens as-is.
+ * Welcome waits until they leave that tab.
  */
 export function adoptShareHome(routeId) {
     const route = ROUTES[String(routeId || '')];
@@ -161,15 +161,40 @@ export function inboundShareKind() {
     return content?.kind || '';
 }
 
+function surfaceHomeTab(surface) {
+    if (surface === 'planner') return 'trip-planner';
+    if (surface === 'community') return 'community';
+    if (surface === 'map') return 'map';
+    if (surface === 'home') return 'next-train';
+    return '';
+}
+
 /**
- * A first visit from anything except a timetable asks on the welcome screen.
- * A timetable pins that route. A return visit already has a saved route.
+ * A new visitor may look at the shared trip, message, or alert.
+ * Leaving that tab opens Welcome instead, and remembers where they were going.
+ * Returns true when the navigation should wait.
  */
-export function welcomeBeforeShare() {
-    if (typeof window === 'undefined') return false;
+export function holdLeaveForWelcome(destination) {
+    if (typeof window === 'undefined' || !destination) return false;
     if (safeStorage.getItem('welcomeSeen') === 'true') return false;
-    const kind = inboundShareKind();
-    if (!kind || kind === 'route') return false;
+    let surface = '';
+    let needsWelcome = false;
+    try {
+        surface = sessionStorage.getItem(DEEPLINK_SURFACE_KEY) || '';
+        needsWelcome = sessionStorage.getItem(DEEPLINK_WELCOME_KEY) === '1';
+    } catch { return false; }
+    if (!surface || !needsWelcome) return false;
+    if (surface === 'alerts') {
+        if (destination === 'next-train') return false;
+    } else if (destination === surfaceHomeTab(surface)) {
+        return false;
+    }
+    try { sessionStorage.setItem('nt_welcome_then_tab', destination); } catch { /* ignore */ }
+    if (surface === 'alerts') {
+        import('./alerts-channel.js').then((m) => m.closeAlertsChannel?.()).catch(() => {});
+        return true;
+    }
+    finishDeeplinkVisit();
     return true;
 }
 

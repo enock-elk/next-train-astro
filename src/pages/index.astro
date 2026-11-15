@@ -342,7 +342,7 @@ const faqLd = {
         applyLiveTrainDeepLink,
         applyAlertDeepLink,
         applyCommunityDeepLink,
-        welcomeBeforeShare,
+        holdLeaveForWelcome,
         bindLaunchQueueDeeplinks,
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
@@ -452,6 +452,7 @@ const faqLd = {
             window.closeAppHub?.();
             return;
         }
+        if (holdLeaveForWelcome('options')) return;
         window.openAppHub?.();
     });
     // Map tab wiring is idle-deferred — keeps home INP free of map-tab parse/bind.
@@ -539,12 +540,6 @@ const faqLd = {
         // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.
         try {
             bindKillswitchWatch();
-            if (welcomeBeforeShare()) {
-                try { sessionStorage.setItem('nt_welcome_then_share', '1'); } catch (e) {}
-                revealWhenBoardReady();
-                return;
-            }
-            try { sessionStorage.removeItem('nt_welcome_then_share'); } catch (e) {}
             if (await applyAlertDeepLink()) {
                 await flushPendingDeeplinkIntents();
                 return;

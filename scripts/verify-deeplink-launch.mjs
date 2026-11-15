@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseShareIntent, isSocialCrawler, parseLiveTrainImagePath } from '../workers/nexttrain-og/src/parse.js';
-import { buildAppDeepLink, buildOgShareLink } from '../workers/nexttrain-og/src/og-html.js';
+import { buildAppDeepLink, buildOgShareLink, buildPlannerOgMeta } from '../workers/nexttrain-og/src/og-html.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -47,7 +47,7 @@ const {
     isInAppBrowser,
     adoptShareHome,
     inboundShareKind,
-    welcomeBeforeShare,
+    holdLeaveForWelcome,
     readSavedDefaults,
 } = await import('../src/lib/deeplink.js');
 
@@ -256,25 +256,27 @@ ok(!/operator/i.test(deletePage), 'deletion page does not mention operator accou
 ok(adoptShareHome('pta-pien') === true, 'a timetable link can be saved as home');
 ok(readSavedDefaults()?.routeId === 'pta-pien', 'the saved home is the timetable route');
 ok(memoryStorage.getItem('welcomeSeen') === 'true', 'saving a link home finishes Welcome');
-ok(welcomeBeforeShare() === false, 'a saved home does not go back to Welcome');
+ok(holdLeaveForWelcome('next-train') === false, 'a saved home is not asked again');
 consumeShareDeeplinkSnapshot();
 memoryStorage.removeItem('welcomeSeen');
+memoryStorage.setItem('nt_deeplink_surface', 'planner');
+memoryStorage.setItem('nt_deeplink_welcome', '1');
 loc = new URL('https://nexttrain.co.za/?plan=PRETORIA~GERMISTON&r=GP');
 globalThis.location = loc;
 ok(inboundShareKind() === 'planner', 'a trip URL is a planner share');
-ok(welcomeBeforeShare() === true, 'a first trip link opens Welcome');
+ok(holdLeaveForWelcome('trip-planner') === false, 'staying on the shared trip does not open Welcome');
+ok(holdLeaveForWelcome('next-train') === true, 'leaving the shared trip opens Welcome');
+ok(memoryStorage.getItem('nt_welcome_then_tab') === 'next-train', 'Welcome remembers the tab they wanted');
+ok(!memoryStorage.getItem('nt_deeplink_surface'), 'Welcome can show once the shared tab is released');
 loc = new URL('https://nexttrain.co.za/?alert=notice1&src=all');
 globalThis.location = loc;
 ok(inboundShareKind() === 'alert', 'a network notice is an alert share');
-ok(welcomeBeforeShare() === true, 'a first alert link opens Welcome');
 loc = new URL('https://nexttrain.co.za/?room=pta-pien&post=samplepost');
 globalThis.location = loc;
 ok(inboundShareKind() === 'community', 'a community URL is a community share');
-ok(welcomeBeforeShare() === true, 'a first community link opens Welcome');
 loc = new URL('https://nexttrain.co.za/?rt=pta-pien&v=g&d=su');
 globalThis.location = loc;
 ok(inboundShareKind() === 'route', 'a timetable URL is a route share');
-ok(welcomeBeforeShare() === false, 'a timetable link does not stop for Welcome');
 const timetable = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
 ok(timetable.includes('adoptShareHome(link.routeId)'), 'a shared timetable writes the default route');
 ok(timetable.includes('persistRegion: false'), 'SEO Open in Next Train still does not write userRegion');
@@ -283,12 +285,18 @@ const planner = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 ok(!planner.includes('adoptTripHomeIfNew'), 'a trip link does not pin a route');
 ok(!deeplink.includes('homeRouteForNoticeSource'), 'an alert link does not invent a home route');
 ok(!deeplink.includes('adoptShareHome(link.routeId)'), 'a community link does not pin the room');
+ok(!deeplink.includes('welcomeBeforeShare'), 'boot does not stop a link on Welcome');
 const welcome = readFileSync(join(ROOT, 'src/components/WelcomeModal.astro'), 'utf8');
-ok(welcome.includes('welcomeBeforeShare()'), 'Welcome shows for a non-timetable link');
-ok(welcome.includes('nt_welcome_then_share'), 'picking a route continues the link');
+ok(welcome.includes('!hasInboundShare'), 'an inbound link does not open Welcome first');
+ok(welcome.includes('nt_welcome_then_tab'), 'picking a route continues to the tab they wanted');
 const indexPage = readFileSync(join(ROOT, 'src/pages/index.astro'), 'utf8');
-ok(indexPage.includes('welcomeBeforeShare()'), 'boot waits for Welcome before opening a non-timetable link');
-ok(indexPage.includes('nt_welcome_then_share'), 'boot remembers that the link is waiting');
+ok(!indexPage.includes('welcomeBeforeShare'), 'boot opens the link before Welcome');
+ok(indexPage.includes("holdLeaveForWelcome('options')"), 'Options waits for Welcome when they leave a shared tab');
+ok(ui.includes('holdLeaveForWelcome(tab)'), 'another tab waits for Welcome when they leave a shared tab');
+const planMeta = buildPlannerOgMeta({
+    kind: 'planner', from: 'MOUNTAIN VIEW', to: 'MAMELODI GARDENS', time: '4:32', day: 'weekday', region: 'GP',
+}, 'https://nexttrain.co.za');
+ok(planMeta.image.includes('from=MOUNTAIN%20VIEW') && !planMeta.image.includes('+'), 'a two-word trip preview does not use plus signs Facebook drops');
 
 if (failures.length) {
     console.error('verify-deeplink-launch FAILED:\n - ' + failures.join('\n - '));

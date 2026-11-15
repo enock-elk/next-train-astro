@@ -52,7 +52,7 @@ import { withBase } from '../lib/config.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
     import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession, lineSwatchClass } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
-    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent, welcomeBeforeShare } from '../lib/deeplink.js';
+    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
     import { parseContentDeepLink } from '../lib/share-links.js';
     import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
 
@@ -150,12 +150,17 @@ import { withBase } from '../lib/config.js';
                     await loadAllSchedules(true);
 
                     // 5. Apply deferred cold-link intents (privacy / terms / fares),
-                    // then open a trip, community message, or alert that waited for this pick.
+                    // then continue to the tab they were opening when Welcome appeared.
                     await flushPendingDeeplinkIntents();
-                    let resumeShare = false;
-                    try { resumeShare = sessionStorage.getItem('nt_welcome_then_share') === '1'; } catch (e) {}
-                    if (resumeShare && typeof window.__ntIgniteDataEngine === 'function') {
-                        await window.__ntIgniteDataEngine();
+                    let nextPlace = '';
+                    try {
+                        nextPlace = sessionStorage.getItem('nt_welcome_then_tab') || '';
+                        sessionStorage.removeItem('nt_welcome_then_tab');
+                    } catch (e) {}
+                    if (nextPlace === 'options') {
+                        window.openAppHub?.();
+                    } else if (nextPlace && typeof window.switchTab === 'function') {
+                        window.switchTab(nextPlace);
                     }
 
                     // 6. Allow CleverAds once welcome is done
@@ -276,9 +281,9 @@ import { withBase } from '../lib/config.js';
         });
 
         // Brand-new users + legacy map onboarding deep-links.
-        // A timetable link pins that route and skips this screen.
-        // A trip, community message, alert, or other link asks here first.
-        if (isOnboardMap || (!welcomeSeen && (welcomeBeforeShare() || !hasInboundShare))) {
+        // A shared timetable pins that route and skips this screen.
+        // Any other link opens first. Welcome waits until they leave that tab.
+        if (isOnboardMap || (!welcomeSeen && !hasInboundShare)) {
             if (isOnboardMap) {
                 try {
                     const urlObj = new URL(window.location.href);

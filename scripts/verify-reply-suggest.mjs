@@ -19,6 +19,8 @@ import {
     htmlAttrUrl,
     isThreadFileUrl,
     liaisonRules,
+    communityStyleRules,
+    normalizeVoicePrefs,
     knowledgeBase,
     noticeQuotePlain,
     withQuotedNoticeText,
@@ -450,6 +452,21 @@ ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 
 ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
 ok(worker.includes("pathname === '/speak'"), 'read-aloud has its own operator route');
 ok(worker.includes('en-US-Chirp3-HD-Achernar'), 'read-aloud uses Chirp 3 HD Achernar');
+ok(worker.includes("pathname === '/voice'"), 'each operator can save a Chirp voice');
+ok(worker.includes('normalizeVoicePrefs'), 'an unknown voice falls back on the worker');
+ok(communityStyleRules().includes('Do not end with "Thank you for using Next Train."'), 'community drafts are told not to close with the feedback line');
+ok(!communityStyleRules().includes('End every draft'), 'community style does not require the feedback closing');
+ok(liaisonRules('GP').includes('Thank you for using Next Train.'), 'feedback drafts still close with the feedback line');
+ok(normalizeVoicePrefs({ voice: 'nope', speakingRate: 9, volumeGainDb: 40 }).voice === 'en-US-Chirp3-HD-Achernar', 'an unknown Chirp name stays on Achernar');
+ok(normalizeVoicePrefs({ speakingRate: 1.53 }).speakingRate === 1.55, 'speed stays on a Chirp step');
+const communityDraft = applyDraftGuard({
+    action: 'draft',
+    reply: "Thank you for your message where you're asking about Saulsville.\n\nThe desk is 011 013 0306.\n\nThank you for using Next Train.",
+}, 'GP', [], { surface: 'community' });
+ok(!communityDraft.reply.includes('Thank you for using Next Train.'), 'a community draft drops the feedback closing');
+ok(!communityDraft.reply.includes("Thank you for your message where you're asking about"), 'a community draft drops the summary opening');
+ok(adminJs.includes('id="admin-prefs-body"'), 'Admin preferences starts as its own System Controls section');
+ok(adminJs.includes('Listen to this draft'), 'Co-Pilot can read the draft aloud');
 ok(worker.includes('requireOperator'), 'read-aloud checks the operator token');
 ok(worker.includes('SPEAK_HOUR_CHARS'), 'read-aloud has a character cap');
 ok(!worker.includes('texttospeech.googleapis.com') || worker.includes('X-Goog-Api-Key'), 'the speech key stays on the worker');

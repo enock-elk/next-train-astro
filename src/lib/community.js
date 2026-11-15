@@ -3367,6 +3367,7 @@ function syncComposerChrome() {
     const operator = isAdminAuthed();
     composer.maxLength = COMPOSER_HOLD_MAX;
     document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
+    document.getElementById('community-composer-speak')?.classList.toggle('hidden', !operator);
     composer.classList.toggle('community-composer-with-clip', operator);
     syncCommunityCopilot();
     restoreComposerDraft(composer);
@@ -3622,6 +3623,7 @@ async function suggestCommunityReply(focusPostId = '') {
             body: JSON.stringify({
                 region: $userRegion.get() || 'GP',
                 routeId,
+                surface: 'community',
                 note: guidance ? `${roomNote}\n\nOperator guidance for this draft:\n${guidance}` : roomNote,
                 thread,
             }),
@@ -4083,6 +4085,16 @@ export function bindCommunityUi() {
     document.getElementById('community-select-back')?.addEventListener('click', (e) => {
         e.preventDefault();
         clearCommunitySelection();
+    });
+    document.getElementById('community-composer-speak')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isAdminAuthed()) return;
+        const words = document.getElementById('community-composer')?.value || '';
+        speakOperatorCopy(words).then((result) => {
+            if (result?.hidden) return;
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+        });
     });
     document.getElementById('community-select-speak')?.addEventListener('click', (e) => {
         e.preventDefault();

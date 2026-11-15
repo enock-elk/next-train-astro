@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.5': [
+        'System Controls has Admin preferences, collapsed until opened. It holds the shared Co-Pilot note, a shared knowledge base, a feedback reply style, and a community reply style. Community drafts do not summarise the message and do not close with Thank you for using Next Train. Each operator can save their own Chirp 3 HD voice, speed, volume, and pause. Play shows a bar with pause, play, and restart, and a toast while the voice is preparing. Co-Pilot, Community, and Community Monitor can read a draft aloud. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.4': [
         'Community read-aloud is a speaker icon in the selection header, and only for an operator. The Feedback Hub reaction tray closes when Dev Mode closes, when the tab changes, and when the press is outside the tray. No commuter What\'s New. forceShow stays false.',
     ],

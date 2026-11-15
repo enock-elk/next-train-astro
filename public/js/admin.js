@@ -2749,6 +2749,7 @@ const Admin = {
             'cf-purge-body',
             'nuke-body',
             'community-body',
+            'admin-prefs-body',
         ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
         [
             'sched-override-chevron',
@@ -2758,6 +2759,7 @@ const Admin = {
             'cf-purge-chevron',
             'nuke-chevron',
             'community-chevron',
+            'admin-prefs-chevron',
         ].forEach((id) => document.getElementById(id)?.classList.add('-rotate-90'));
     },
 
@@ -12863,6 +12865,7 @@ const Admin = {
                             <div class="cm-composer-actions">
                                 <button type="button" id="mq-guide-toggle" class="cm-suggest">Guide</button>
                                 <button type="button" id="mq-suggest" class="cm-suggest">Suggest</button>
+                                <button type="button" id="mq-listen" class="cm-suggest" aria-label="Listen to this draft">Listen</button>
                                 <button type="submit" id="mq-post" class="cm-post">Post</button>
                             </div>
                         </form>
@@ -14382,6 +14385,15 @@ const Admin = {
                 mqComposerInput?.addEventListener('input', () => fitMqComposer(mqComposerInput));
                 fitMqComposer(mqComposerInput);
                 Admin._fitMqComposer = fitMqComposer;
+                document.getElementById('mq-listen')?.addEventListener('click', () => {
+                    const words = document.getElementById('mq-composer-input')?.value || '';
+                    const speak = window.ntSpeakOperatorCopy;
+                    if (typeof speak !== 'function') return;
+                    speak(words).then((result) => {
+                        if (result?.hidden) return;
+                        if (!result?.ok && result?.message && typeof showToast === 'function') showToast(result.message, 'error');
+                    });
+                });
                 document.getElementById('mq-suggest')?.addEventListener('click', async () => {
                     const card = Admin._mqOpenCard;
                     const routeId = card?.dataset?.communityRoute || '';
@@ -14429,6 +14441,7 @@ const Admin = {
                                 'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({
+                                surface: 'community',
                                 region,
                                 routeId,
                                 note: guidance ? `${roomNote}\n\nOperator guidance for this draft:\n${guidance}` : roomNote,
@@ -16443,13 +16456,7 @@ const Admin = {
                         <div class="flex-1 min-h-0 overflow-y-auto space-y-5 custom-scrollbar">
                             <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
                                 <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Future replies</h4>
-                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Saved online for both operators. Sent with every Suggest reply until you clear it.</p>
-                                <textarea id="admin-reply-suggest-note" rows="5" maxlength="4000" class="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none" placeholder="Standing context for all future drafts. Does not invent a missing fact."></textarea>
-                                <div class="mt-2 flex flex-wrap gap-2">
-                                    <button type="button" id="reply-suggest-save-note" class="min-h-[2.5rem] px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs focus:outline-none">Save for all future replies</button>
-                                    <button type="button" id="reply-suggest-clear-note" class="min-h-[2.5rem] px-3 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold text-xs focus:outline-none">Clear saved note</button>
-                                </div>
-                                <p id="admin-reply-suggest-note-meta" class="mt-2 text-[10px] text-gray-500 dark:text-gray-400"></p>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">The standing note, the knowledge base, and the feedback and community styles are in System Controls, Admin preferences.</p>
                             </section>
                             <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
                                 <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">This reply only</h4>
@@ -16529,33 +16536,42 @@ const Admin = {
 
     loadReplySuggestNote: async (modal) => {
         const ta = document.getElementById('admin-reply-suggest-note');
-        if (!ta || !modal) return;
+        const host = modal || document.getElementById('admin-prefs-body');
+        if (!host) return;
         const gen = String(Date.now());
-        modal.dataset.noteGen = gen;
-        modal.dataset.noteReady = '0';
+        host.dataset.noteGen = gen;
+        host.dataset.noteReady = '0';
         Admin.paintReplySuggestNoteMeta('');
         try {
             const secret = await Admin.getAuthKey();
             if (!secret) {
-                modal.dataset.noteReady = '1';
+                host.dataset.noteReady = '1';
                 return;
             }
             const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
                 headers: { Authorization: `Bearer ${secret}` },
             });
-            if (modal.dataset.noteGen !== gen) return;
+            if (host.dataset.noteGen !== gen) return;
             if (!res.ok) {
-                modal.dataset.noteReady = 'error';
+                host.dataset.noteReady = 'error';
                 return;
             }
             const data = await res.json().catch(() => ({}));
-            if (modal.dataset.noteGen !== gen) return;
+            if (host.dataset.noteGen !== gen) return;
             const note = String(data.note || '');
-            if (document.activeElement !== ta) ta.value = note;
+            if (ta && document.activeElement !== ta) ta.value = note;
+            const knowledge = document.getElementById('admin-prefs-knowledge');
+            const feedback = document.getElementById('admin-prefs-feedback');
+            const community = document.getElementById('admin-prefs-community');
+            if (knowledge && document.activeElement !== knowledge) knowledge.value = String(data.knowledge || '');
+            if (feedback && document.activeElement !== feedback) feedback.value = String(data.feedbackPrompt || data.defaults?.feedbackPrompt || '');
+            if (community && document.activeElement !== community) community.value = String(data.communityPrompt || data.defaults?.communityPrompt || '');
+            host.dataset.feedbackDefault = String(data.defaults?.feedbackPrompt || '');
+            host.dataset.communityDefault = String(data.defaults?.communityPrompt || '');
             Admin.paintReplySuggestNoteMeta(note);
-            modal.dataset.noteReady = '1';
+            host.dataset.noteReady = '1';
         } catch {
-            if (modal.dataset.noteGen === gen) modal.dataset.noteReady = 'error';
+            if (host.dataset.noteGen === gen) host.dataset.noteReady = 'error';
         }
     },
 
@@ -16563,7 +16579,7 @@ const Admin = {
         const ta = document.getElementById('admin-reply-suggest-note');
         const btn = document.getElementById('reply-suggest-save-note');
         const clearBtn = document.getElementById('reply-suggest-clear-note');
-        const modal = document.getElementById('admin-reply-modal');
+        const modal = document.getElementById('admin-prefs-body') || document.getElementById('admin-reply-modal');
         if (!ta && !clear) return;
         const note = clear ? '' : String(ta?.value || '').trim();
         if (!clear && !note) {
@@ -16603,6 +16619,102 @@ const Admin = {
         } finally {
             if (btn) btn.disabled = false;
             if (clearBtn) clearBtn.disabled = false;
+        }
+    },
+
+    loadVoicePrefs: async () => {
+        const name = document.getElementById('admin-voice-name');
+        if (!name) return;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) return;
+            const res = await fetch(`${Admin.replyWorkerUrl()}/voice`, {
+                headers: { Authorization: `Bearer ${secret}` },
+            });
+            if (!res.ok) return;
+            const data = await res.json().catch(() => ({}));
+            if (data.voice) name.value = data.voice;
+            const rate = document.getElementById('admin-voice-rate');
+            const gain = document.getElementById('admin-voice-gain');
+            const pause = document.getElementById('admin-voice-pause');
+            if (rate && data.speakingRate) rate.value = String(data.speakingRate);
+            if (gain && Number.isFinite(Number(data.volumeGainDb))) gain.value = String(data.volumeGainDb);
+            if (pause && data.pause) pause.value = data.pause;
+            document.getElementById('admin-voice-rate-label').textContent = Number(rate?.value || 1).toFixed(2);
+            document.getElementById('admin-voice-gain-label').textContent = `${gain?.value || 0} dB`;
+        } catch { /* the built-in voice still plays */ }
+    },
+
+    saveVoicePrefs: async () => {
+        const btn = document.getElementById('admin-voice-save');
+        if (btn) btn.disabled = true;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const res = await fetch(`${Admin.replyWorkerUrl()}/voice`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    voice: document.getElementById('admin-voice-name')?.value,
+                    speakingRate: Number(document.getElementById('admin-voice-rate')?.value),
+                    volumeGainDb: Number(document.getElementById('admin-voice-gain')?.value),
+                    pause: document.getElementById('admin-voice-pause')?.value,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not save that voice.');
+            if (typeof showToast === 'function') showToast('Voice saved for this sign-in.', 'success');
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not save that voice.', 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    saveOperatorPrompt: async (field, options = {}) => {
+        let clear = options.clear === true;
+        const ids = {
+            knowledge: 'admin-prefs-knowledge',
+            feedbackPrompt: 'admin-prefs-feedback',
+            communityPrompt: 'admin-prefs-community',
+        };
+        const clearKey = {
+            knowledge: 'clearKnowledge',
+            feedbackPrompt: 'clearFeedback',
+            communityPrompt: 'clearCommunity',
+        }[field];
+        const ta = document.getElementById(ids[field] || '');
+        if (!ta || !clearKey) return;
+        const host = document.getElementById('admin-prefs-body');
+        const fallback = field === 'feedbackPrompt'
+            ? host?.dataset.feedbackDefault
+            : field === 'communityPrompt'
+                ? host?.dataset.communityDefault
+                : '';
+        if (!clear && field !== 'knowledge' && String(ta.value || '').trim() === String(fallback || '').trim()) {
+            clear = true;
+        }
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const body = clear ? { [clearKey]: true, [field]: '' } : { [field]: ta.value };
+            const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not save that.');
+            if (clear) ta.value = fallback || '';
+            if (typeof showToast === 'function') showToast(clear ? 'Built-in style restored.' : 'Saved for both operators.', 'success');
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not save that.', 'error');
         }
     },
 
@@ -17307,6 +17419,7 @@ const Admin = {
                             <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[12rem] overflow-visible p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
                         </div>
                         ${Admin.replySuggestMarkup()}
+                        <button type="button" id="admin-reply-listen" class="mt-3 w-full min-h-[2.75rem] rounded-2xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Listen to this draft</button>
                         <div class="grid grid-cols-2 gap-2 mt-3 pt-3 pb-1 border-t border-gray-100 dark:border-gray-700">
                             <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
                             <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
@@ -17539,6 +17652,17 @@ const Admin = {
         if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();
         const clearNoteBtn = document.getElementById('reply-suggest-clear-note');
         if (clearNoteBtn) clearNoteBtn.onclick = () => Admin.saveReplySuggestNote({ clear: true });
+        const listenBtn = document.getElementById('admin-reply-listen');
+        if (listenBtn) listenBtn.onclick = () => {
+            const rich = document.getElementById('admin-reply-text');
+            const words = String(rich?.innerText || rich?.textContent || '').trim();
+            const speak = window.ntSpeakOperatorCopy;
+            if (typeof speak !== 'function') return;
+            speak(words).then((result) => {
+                if (result?.hidden) return;
+                if (!result?.ok && result?.message && typeof showToast === 'function') showToast(result.message, 'error');
+            });
+        };
         Admin.closeCopilotSettings();
         if (!editKey) Admin.loadReplySuggestNote(modal);
         Admin.bindReplyComposePreview();
@@ -28430,6 +28554,90 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Admin preferences. Collapsed until an operator opens it. -->
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="admin-prefs-header" class="w-full px-3 py-3 bg-indigo-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-indigo-200/50 dark:hover:bg-indigo-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-indigo-700 dark:text-indigo-300">${Admin.icon('settings', 'w-4 h-4')}</span> Admin preferences
+                        </span>
+                        <svg id="admin-prefs-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="admin-prefs-body" class="hidden p-4 space-y-4">
+                        <section class="space-y-2">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">My voice</p>
+                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Chirp 3 HD for this sign-in only. The other operator keeps their own voice, speed, volume, and pauses.</p>
+                            <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Voice
+                                <select id="admin-voice-name" class="mt-1 w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 text-xs text-gray-900 dark:text-white focus:outline-none">
+                                    <option value="en-US-Chirp3-HD-Achernar">Achernar, US</option>
+                                    <option value="en-US-Chirp3-HD-Aoede">Aoede, US</option>
+                                    <option value="en-US-Chirp3-HD-Charon">Charon, US</option>
+                                    <option value="en-US-Chirp3-HD-Fenrir">Fenrir, US</option>
+                                    <option value="en-US-Chirp3-HD-Kore">Kore, US</option>
+                                    <option value="en-US-Chirp3-HD-Leda">Leda, US</option>
+                                    <option value="en-US-Chirp3-HD-Orus">Orus, US</option>
+                                    <option value="en-US-Chirp3-HD-Puck">Puck, US</option>
+                                    <option value="en-US-Chirp3-HD-Zephyr">Zephyr, US</option>
+                                    <option value="en-GB-Chirp3-HD-Aoede">Aoede, UK</option>
+                                    <option value="en-GB-Chirp3-HD-Charon">Charon, UK</option>
+                                    <option value="en-GB-Chirp3-HD-Fenrir">Fenrir, UK</option>
+                                    <option value="en-GB-Chirp3-HD-Kore">Kore, UK</option>
+                                    <option value="en-GB-Chirp3-HD-Leda">Leda, UK</option>
+                                    <option value="en-GB-Chirp3-HD-Puck">Puck, UK</option>
+                                </select>
+                            </label>
+                            <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Speed <span id="admin-voice-rate-label">1.0</span>
+                                <input id="admin-voice-rate" type="range" min="0.25" max="2" step="0.05" value="1" class="mt-1 w-full">
+                            </label>
+                            <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Volume <span id="admin-voice-gain-label">0 dB</span>
+                                <input id="admin-voice-gain" type="range" min="-6" max="6" step="1" value="0" class="mt-1 w-full">
+                            </label>
+                            <label class="block text-[10px] font-bold text-indigo-900 dark:text-indigo-100">Pause between sentences
+                                <select id="admin-voice-pause" class="mt-1 w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 text-xs text-gray-900 dark:text-white focus:outline-none">
+                                    <option value="off">None</option>
+                                    <option value="short">Short</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="long">Long</option>
+                                </select>
+                            </label>
+                            <button type="button" id="admin-voice-save" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save my voice</button>
+                        </section>
+                        <section class="space-y-2">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Additional prompt</p>
+                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Saved for both operators. Sent with every Suggest reply. It does not invent a missing fact.</p>
+                            <textarea id="admin-reply-suggest-note" rows="4" maxlength="4000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Standing context for all future drafts."></textarea>
+                            <div class="flex gap-2">
+                                <button type="button" id="reply-suggest-save-note" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save for all future replies</button>
+                                <button type="button" id="reply-suggest-clear-note" class="px-3 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Clear</button>
+                            </div>
+                            <p id="admin-reply-suggest-note-meta" class="text-[10px] text-indigo-700/80 dark:text-indigo-300/80"></p>
+                        </section>
+                        <section class="space-y-2">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Knowledge base</p>
+                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">Facts both reply styles can use, on top of the built-in notes. Shared by both operators.</p>
+                            <textarea id="admin-prefs-knowledge" rows="4" maxlength="12000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Extra facts Co-Pilot may use."></textarea>
+                            <button type="button" id="admin-prefs-knowledge-save" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save knowledge</button>
+                        </section>
+                        <section class="space-y-2">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Feedback replies</p>
+                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">How Co-Pilot writes an inbox reply. Region phone numbers and the knowledge base are added after this. Clear and save to use the built-in style.</p>
+                            <textarea id="admin-prefs-feedback" rows="6" maxlength="12000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none"></textarea>
+                            <div class="flex gap-2">
+                                <button type="button" id="admin-prefs-feedback-save" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save feedback style</button>
+                                <button type="button" id="admin-prefs-feedback-reset" class="px-3 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Reset</button>
+                            </div>
+                        </section>
+                        <section class="space-y-2">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Community replies</p>
+                            <p class="text-[10px] text-indigo-800/90 dark:text-indigo-300/90 leading-snug">How Co-Pilot writes in a community room. It does not summarise the message and it does not close with Thank you for using Next Train.</p>
+                            <textarea id="admin-prefs-community" rows="6" maxlength="12000" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none"></textarea>
+                            <div class="flex gap-2">
+                                <button type="button" id="admin-prefs-community-save" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Save community style</button>
+                                <button type="button" id="admin-prefs-community-reset" class="px-3 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Reset</button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
                 <!-- Community tab. On everywhere until this switch, a region, or a route is blocked. -->
                 <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
                     <button type="button" id="community-header" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
@@ -29033,6 +29241,34 @@ const Admin = {
                 else communityChevron?.classList.remove('-rotate-90');
             };
         }
+        const adminPrefsHeader = document.getElementById('admin-prefs-header');
+        const adminPrefsBody = document.getElementById('admin-prefs-body');
+        const adminPrefsChevron = document.getElementById('admin-prefs-chevron');
+        if (adminPrefsHeader && adminPrefsBody) {
+            adminPrefsHeader.onclick = () => {
+                adminPrefsBody.classList.toggle('hidden');
+                const open = !adminPrefsBody.classList.contains('hidden');
+                adminPrefsChevron?.classList.toggle('-rotate-90', !open);
+                if (open) Admin.loadReplySuggestNote(adminPrefsBody);
+            };
+        }
+        const voiceRate = document.getElementById('admin-voice-rate');
+        const voiceGain = document.getElementById('admin-voice-gain');
+        const paintVoiceLabels = () => {
+            const rateLabel = document.getElementById('admin-voice-rate-label');
+            const gainLabel = document.getElementById('admin-voice-gain-label');
+            if (rateLabel && voiceRate) rateLabel.textContent = Number(voiceRate.value).toFixed(2);
+            if (gainLabel && voiceGain) gainLabel.textContent = `${voiceGain.value} dB`;
+        };
+        voiceRate?.addEventListener('input', paintVoiceLabels);
+        voiceGain?.addEventListener('input', paintVoiceLabels);
+        document.getElementById('admin-voice-save')?.addEventListener('click', () => Admin.saveVoicePrefs());
+        document.getElementById('admin-prefs-knowledge-save')?.addEventListener('click', () => Admin.saveOperatorPrompt('knowledge'));
+        document.getElementById('admin-prefs-feedback-save')?.addEventListener('click', () => Admin.saveOperatorPrompt('feedbackPrompt'));
+        document.getElementById('admin-prefs-community-save')?.addEventListener('click', () => Admin.saveOperatorPrompt('communityPrompt'));
+        document.getElementById('admin-prefs-feedback-reset')?.addEventListener('click', () => Admin.saveOperatorPrompt('feedbackPrompt', { clear: true }));
+        document.getElementById('admin-prefs-community-reset')?.addEventListener('click', () => Admin.saveOperatorPrompt('communityPrompt', { clear: true }));
+        Admin.loadVoicePrefs();
         const SCHED_DAY_TYPES_WC = [
             { value: 'public_holiday', label: 'Public Holiday sheets' },
             { value: 'saturday', label: 'Saturday sheets' },

@@ -37,8 +37,11 @@
 import {
     applyDraftGuard,
     buildGeminiRequest,
+    communityStyleRules,
+    feedbackStyleRules,
     geminiText,
     loadSuggestFiles,
+    normalizeVoicePrefs,
     parseSuggestResult,
     sanitizeSuggestPayload,
     SUGGEST_NOTE_MAX,
@@ -61,6 +64,11 @@ const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com
 /** New API keys cannot call 2.5 Flash-Lite. 3.5 Flash-Lite is the current low-cost fit. */
 const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const NOTE_KEY = 'shared-note';
+const KNOWLEDGE_KEY = 'prompt-knowledge';
+const FEEDBACK_KEY = 'prompt-feedback';
+const COMMUNITY_KEY = 'prompt-community';
+const PROMPT_MAX = 12000;
+const DEFAULT_VOICE = 'en-US-Chirp3-HD-Achernar';
 
 /** @type {Map<string, number[]>} */
 const rateBuckets = new Map();
@@ -171,6 +179,61 @@ async function writeSharedNote(env, note, { clear = false } = {}) {
     return true;
 }
 
+async function readPrompt(env, key) {
+    if (!env?.REPLY_CONTEXT) return '';
+    return String(await env.REPLY_CONTEXT.get(key) || '').slice(0, PROMPT_MAX);
+}
+
+async function writePrompt(env, key, value, clear) {
+    if (!env?.REPLY_CONTEXT) return false;
+    if (clear) {
+        await env.REPLY_CONTEXT.delete(key);
+        return true;
+    }
+    const text = String(value || '').trim().slice(0, PROMPT_MAX);
+    if (!text) {
+        await env.REPLY_CONTEXT.delete(key);
+        return true;
+    }
+    await env.REPLY_CONTEXT.put(key, text);
+    return true;
+}
+
+async function readOperatorContext(env) {
+    return {
+        note: await readSharedNote(env),
+        knowledge: await readPrompt(env, KNOWLEDGE_KEY),
+        feedbackPrompt: await readPrompt(env, FEEDBACK_KEY),
+        communityPrompt: await readPrompt(env, COMMUNITY_KEY),
+        defaults: {
+            feedbackPrompt: feedbackStyleRules(),
+            communityPrompt: communityStyleRules(),
+        },
+    };
+}
+
+function voiceKey(user) {
+    const uid = String(user?.uid || 'operator').replace(/[^\w.-]/g, '').slice(0, 80);
+    return `tts:prefs:${uid || 'operator'}`;
+}
+
+async function readVoicePrefs(env, user) {
+    let raw = {};
+    if (env?.REPLY_CONTEXT) {
+        try { raw = JSON.parse(await env.REPLY_CONTEXT.get(voiceKey(user)) || '{}'); } catch { raw = {}; }
+    }
+    return normalizeVoicePrefs(raw);
+}
+
+async function writeVoicePrefs(env, request, user) {
+    if (!env?.REPLY_CONTEXT) return json(env, request, 503, { error: 'Voice storage is not configured.' });
+    let body = {};
+    try { body = await request.json(); } catch { body = {}; }
+    const prefs = normalizeVoicePrefs(body);
+    await env.REPLY_CONTEXT.put(voiceKey(user), JSON.stringify(prefs));
+    return json(env, request, 200, { ok: true, ...prefs, defaultVoice: DEFAULT_VOICE });
+}
+
 export async function handleRequest(request, env) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') {
@@ -182,7 +245,7 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/unfurl' && request.method === 'GET') {
         return unfurlLink(request, env, url);
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft' && url.pathname !== '/speak') {
+    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft' && url.pathname !== '/speak' && url.pathname !== '/voice') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -190,19 +253,47 @@ export async function handleRequest(request, env) {
     if (auth.error) return json(env, request, auth.status, { error: auth.error });
 
     if (url.pathname === '/context' && request.method === 'GET') {
-        return json(env, request, 200, { note: await readSharedNote(env) });
+        return json(env, request, 200, await readOperatorContext(env));
+    }
+    if (url.pathname === '/voice' && request.method === 'GET') {
+        return json(env, request, 200, await readVoicePrefs(env, auth.user));
+    }
+    if (url.pathname === '/voice' && request.method === 'PUT') {
+        return writeVoicePrefs(env, request, auth.user);
     }
     if (url.pathname === '/context' && request.method === 'PUT') {
         let body = {};
         try { body = await request.json(); } catch { body = {}; }
         const clear = body?.clear === true;
         const text = String(body?.note || '').trim();
-        if (!clear && !text) {
+        const touchesNote = clear || Object.prototype.hasOwnProperty.call(body, 'note');
+        const touchesPrompt = ['knowledge', 'feedbackPrompt', 'communityPrompt'].some((key) => Object.prototype.hasOwnProperty.call(body, key))
+            || body?.clearKnowledge === true
+            || body?.clearFeedback === true
+            || body?.clearCommunity === true;
+        if (touchesNote && !clear && !text && !touchesPrompt) {
             return json(env, request, 400, { error: 'Type a note before saving. A blank note is not saved.' });
         }
-        const saved = await writeSharedNote(env, text, { clear });
-        if (!saved) {
+        if (!touchesNote && !touchesPrompt) {
+            return json(env, request, 400, { error: 'Type a note before saving. A blank note is not saved.' });
+        }
+        if (!env?.REPLY_CONTEXT) {
             return json(env, request, 503, { error: 'Shared note storage is not configured.' });
+        }
+        if (touchesNote && (clear || text)) {
+            const saved = await writeSharedNote(env, text, { clear });
+            if (!saved) return json(env, request, 503, { error: 'Shared note storage is not configured.' });
+        }
+        if (touchesPrompt) {
+            if (Object.prototype.hasOwnProperty.call(body, 'knowledge') || body?.clearKnowledge === true) {
+                await writePrompt(env, KNOWLEDGE_KEY, body.knowledge, body?.clearKnowledge === true);
+            }
+            if (Object.prototype.hasOwnProperty.call(body, 'feedbackPrompt') || body?.clearFeedback === true) {
+                await writePrompt(env, FEEDBACK_KEY, body.feedbackPrompt, body?.clearFeedback === true);
+            }
+            if (Object.prototype.hasOwnProperty.call(body, 'communityPrompt') || body?.clearCommunity === true) {
+                await writePrompt(env, COMMUNITY_KEY, body.communityPrompt, body?.clearCommunity === true);
+            }
         }
         return json(env, request, 200, { ok: true, cleared: clear });
     }
@@ -210,7 +301,7 @@ export async function handleRequest(request, env) {
         return suggestReply(request, env);
     }
     if (url.pathname === '/speak' && request.method === 'POST') {
-        return speakText(request, env);
+        return speakText(request, env, auth.user);
     }
     if (url.pathname === '/edit' && request.method === 'POST') {
         return editText(request, env);
@@ -252,15 +343,22 @@ function audioResponse(env, request, b64) {
     });
 }
 
+function speechInput(text, pause) {
+    if (pause === 'off') return { text };
+    const tag = pause === 'short' ? '[pause short]' : pause === 'long' ? '[pause long]' : '[pause]';
+    return { markup: text.replace(/([.!?])\s+/g, `$1 ${tag} `) };
+}
+
 /** Chirp 3 HD. Operator token already checked. The key stays on the worker. */
-async function speakText(request, env) {
+async function speakText(request, env, user) {
     let body = {};
     try { body = await request.json(); } catch { body = {}; }
     const text = plainSpeech(body.text);
     if (text.length < 2) return json(env, request, 400, { error: 'Nothing to read.' });
     const key = env.GOOGLE_TTS_API_KEY || env.GEMINI_API_KEY;
     if (!key) return json(env, request, 503, { error: 'Voice is not configured.' });
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chirp3:${text}`));
+    const prefs = await readVoicePrefs(env, user);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chirp3:${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${text}`));
     const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
     const cacheKey = `tts:audio:${hex}`;
     if (env.REPLY_CONTEXT) {
@@ -283,9 +381,13 @@ async function speakText(request, env) {
                 'X-Goog-Api-Key': key,
             },
             body: JSON.stringify({
-                input: { text },
-                voice: { languageCode: 'en-US', name: 'en-US-Chirp3-HD-Achernar' },
-                audioConfig: { audioEncoding: 'MP3' },
+                input: speechInput(text, prefs.pause),
+                voice: { languageCode: prefs.languageCode, name: prefs.voice || DEFAULT_VOICE },
+                audioConfig: {
+                    audioEncoding: 'MP3',
+                    speakingRate: prefs.speakingRate,
+                    volumeGainDb: prefs.volumeGainDb,
+                },
             }),
         });
     } catch {
@@ -484,19 +586,22 @@ async function suggestReply(request, env) {
     }
     let geminiBody;
     try {
+        const operatorContext = await readOperatorContext(env);
         geminiBody = buildGeminiRequest({
             payload,
-            sharedNote: await readSharedNote(env),
+            sharedNote: operatorContext.note,
             images: body?.images,
             threadFiles: loaded.files,
             filesMissed: loaded.missed,
+            stylePrompt: payload.surface === 'community' ? operatorContext.communityPrompt : operatorContext.feedbackPrompt,
+            extraKnowledge: operatorContext.knowledge,
         });
     } catch (err) {
         return json(env, request, 400, { error: err.message || 'Could not read those images.' });
     }
     const gemini = await callGemini(env, geminiBody);
     if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
-    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread);
+    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread, { surface: payload.surface });
     return json(env, request, 200, {
         action: parsed.action,
         reply: parsed.action === 'draft' ? parsed.reply : '',

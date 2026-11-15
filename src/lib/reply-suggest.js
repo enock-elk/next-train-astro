@@ -466,6 +466,7 @@ export function sanitizeSuggestPayload(input) {
     const thread = Array.isArray(source.thread) ? source.thread : [];
     const similar = Array.isArray(source.similar) ? source.similar : [];
     return {
+        surface: source.surface === 'community' ? 'community' : 'feedback',
         deviceId: clip(source.deviceId, 80),
         alias: clip(redactEmails(source.alias), 80),
         region: normalizeSuggestRegion(source.region),
@@ -715,6 +716,80 @@ export function knowledgeBase() {
     ].join('\n');
 }
 
+/** Community room. No inbox summary and no "Thank you for using Next Train." */
+export function communityStyleRules() {
+    return [
+        'You draft a short reply an operator can post in a Next Train community room.',
+        'Answer only the one message in the thread.',
+        'Write like a person in that room. Short paragraphs. No email greeting. Do not open with Hi there, or Dear.',
+        'Do not summarise their message. Do not open with "Thank you for your message where you\'re asking about".',
+        'Do not end with "Thank you for using Next Train."',
+        'Do not add a sign-off or the operator\'s name.',
+        'Do not write a long independence speech. If they want Next Train to fix a train, a delay, or a station, one short sentence is enough, then the useful part.',
+        'Use station names. Do not show a route key.',
+        'Do not invent a departure time, a fare, a ticket rule, or a date.',
+        'If the answer is not in the knowledge base, the message, the shared note, or the operator note, action is halt.',
+        'Return JSON only. action is "draft" or "halt". draft.reply is only the words to post.',
+    ].join('\n');
+}
+
+/** Style lines only. Region phones and the knowledge base are added after this. */
+export function feedbackStyleRules() {
+    const full = liaisonRules('GP');
+    const at = full.indexOf('\nKnowledge base.');
+    return (at > 0 ? full.slice(0, at) : full).trim();
+}
+
+export function systemInstructionFor({ region, surface = 'feedback', stylePrompt = '', extraKnowledge = '' } = {}) {
+    const custom = String(stylePrompt || '').trim();
+    const extra = String(extraKnowledge || '').trim();
+    const knowledge = extra ? `${knowledgeBase()}\n${extra}` : knowledgeBase();
+    const contacts = contactBlockForRegion(region);
+    if (surface === 'community') {
+        return [custom || communityStyleRules(), knowledge, contacts].join('\n\n');
+    }
+    if (custom) return [custom, knowledge, contacts].join('\n\n');
+    return extra ? `${liaisonRules(region)}\n${extra}` : liaisonRules(region);
+}
+
+export const CHIRP_VOICES = [
+    ['en-US-Chirp3-HD-Achernar', 'Achernar, US'],
+    ['en-US-Chirp3-HD-Aoede', 'Aoede, US'],
+    ['en-US-Chirp3-HD-Charon', 'Charon, US'],
+    ['en-US-Chirp3-HD-Fenrir', 'Fenrir, US'],
+    ['en-US-Chirp3-HD-Kore', 'Kore, US'],
+    ['en-US-Chirp3-HD-Leda', 'Leda, US'],
+    ['en-US-Chirp3-HD-Orus', 'Orus, US'],
+    ['en-US-Chirp3-HD-Puck', 'Puck, US'],
+    ['en-US-Chirp3-HD-Zephyr', 'Zephyr, US'],
+    ['en-GB-Chirp3-HD-Aoede', 'Aoede, UK'],
+    ['en-GB-Chirp3-HD-Charon', 'Charon, UK'],
+    ['en-GB-Chirp3-HD-Fenrir', 'Fenrir, UK'],
+    ['en-GB-Chirp3-HD-Kore', 'Kore, UK'],
+    ['en-GB-Chirp3-HD-Leda', 'Leda, UK'],
+    ['en-GB-Chirp3-HD-Puck', 'Puck, UK'],
+];
+
+export function normalizeVoicePrefs(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const known = CHIRP_VOICES.some((row) => row[0] === src.voice);
+    const voice = known ? src.voice : 'en-US-Chirp3-HD-Achernar';
+    let speakingRate = Number(src.speakingRate);
+    if (!Number.isFinite(speakingRate)) speakingRate = 1;
+    speakingRate = Math.min(2, Math.max(0.25, Math.round(speakingRate * 20) / 20));
+    let volumeGainDb = Number(src.volumeGainDb);
+    if (!Number.isFinite(volumeGainDb)) volumeGainDb = 0;
+    volumeGainDb = Math.min(6, Math.max(-6, Math.round(volumeGainDb)));
+    const pause = src.pause === 'short' || src.pause === 'medium' || src.pause === 'long' ? src.pause : 'off';
+    return {
+        voice,
+        languageCode: voice.slice(0, 5),
+        speakingRate,
+        volumeGainDb,
+        pause,
+    };
+}
+
 export function liaisonRules(region) {
     return [
         'You are Melmoth, the communications assistant for Metrorail Next Train (nexttrain.co.za). You draft replies in Enock\'s voice, as the person who looks after the app.',
@@ -870,7 +945,7 @@ export function normalizeSuggestImages(images) {
     return kept;
 }
 
-export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, filesMissed = 0 } = {}) {
+export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, filesMissed = 0, stylePrompt = '', extraKnowledge = '' } = {}) {
     const clean = sanitizeSuggestPayload(payload);
     const parts = [{ text: buildSuggestUserText(clean, sharedNote) }];
     const attached = Array.isArray(threadFiles) ? threadFiles : [];
@@ -894,7 +969,12 @@ export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, f
         parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
     }
     return {
-        systemInstruction: { parts: [{ text: liaisonRules(clean.region) }] },
+        systemInstruction: { parts: [{ text: systemInstructionFor({
+            region: clean.region,
+            surface: clean.surface,
+            stylePrompt,
+            extraKnowledge,
+        }) }] },
         contents: [{ role: 'user', parts }],
         generationConfig: {
             maxOutputTokens: 2048,
@@ -1014,7 +1094,7 @@ export function ensurePollThanks(reply) {
 }
 
 /** Write the region's desk into a handoff draft instead of asking the operator for it. */
-export function ensureRegionalDesk(reply, region) {
+export function ensureRegionalDesk(reply, region, closing = 'Thank you for using Next Train.') {
     const text = String(reply || '').trim();
     const lines = primaryDeskLines(region);
     const desks = deskDigitsForRegion(normalizeSuggestRegion(region));
@@ -1023,8 +1103,7 @@ export function ensureRegionalDesk(reply, region) {
     const digits = phoneDigits(text);
     if (desks.some((phone) => phone && digits.includes(phone))) return text;
     const block = `${lines.join('\n')}\nPlease ask for a reference number.`;
-    const closing = 'Thank you for using Next Train.';
-    if (text.includes(closing)) {
+    if (closing && text.includes(closing)) {
         return text.replace(closing, `${block}\n\n${closing}`);
     }
     return `${text}\n\n${block}`;
@@ -1081,21 +1160,29 @@ export function guardDraft(reply, region) {
     return { ok: true };
 }
 
-export function applyDraftGuard(result, region, thread) {
+export function applyDraftGuard(result, region, thread, options = {}) {
+    const surface = options.surface === 'community' ? 'community' : 'feedback';
     const base = result && result.action ? result : parseSuggestResult(result);
     if (base.action !== 'draft') return { ...base, reply: '' };
     let reply = commuterFacingReply(base.reply || '');
     if (!reply) {
         return { action: 'halt', reply: '', reason: 'The model returned an empty draft.', questions: [] };
     }
-    reply = rewriteAskingThanks(reply);
-    if (threadAnswersPoll(thread)) reply = ensurePollThanks(reply);
+    if (surface === 'community') {
+        reply = reply
+            .replace(/\n*Thank you for using Next Train\.\s*$/i, '')
+            .replace(/^Thank you for your message where you're asking about[^\n]*\n+/i, '')
+            .trim();
+    } else {
+        reply = rewriteAskingThanks(reply);
+        if (threadAnswersPoll(thread)) reply = ensurePollThanks(reply);
+    }
     const early = guardDraft(reply, region);
     // A wrong-region number still halts. A missing desk is filled from the contact block.
     if (!early.ok && !/desk number/.test(early.reason || '')) {
         return { action: 'halt', reply: '', reason: early.reason, questions: early.questions };
     }
-    reply = ensureRegionalDesk(reply, region);
+    reply = ensureRegionalDesk(reply, region, surface === 'community' ? '' : 'Thank you for using Next Train.');
     const guard = guardDraft(reply, region);
     if (!guard.ok) {
         return { action: 'halt', reply: '', reason: guard.reason, questions: guard.questions };

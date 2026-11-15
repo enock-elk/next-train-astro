@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.2': [
+        'Station pages label every shared-corridor train. Toward one terminus each row says From its outer end, including the first corridor. A short working still says To its real last stop. Trains leaving toward different ends share one list, headed with two names and & more when a third end exists. About this station is one sentence per paragraph. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.1': [
         'Community names next to each other use distant colours. The Community tab badge counts chats with new messages. Community Monitor clears a room for the operator who answered last, from the app or from the monitor. Alert previews treat a www address and the same address as one card, and each remaining card in the operator preview has its own remove button. User lookup and the accounts list show the recorded app version. Grid Column Order uses the premium menus, a shorter station column, and compact time buttons. Long Dev Hub introductions sit behind an i. Force schedule type drops dates that have passed and turns off a force whose dates are all past. Community Monitor bubbles and the reply box match the Community tab. A build card with a route and no station says No station selected. A verified email shows Email verified and hides the verify card. New passwords need 8 characters, a letter, and a number. Too many sign-in attempts says to wait and try again. Station pages merge shared-corridor trains toward the same hub, with To and From pills, and keep separate lists toward different outer ends. No commuter What\'s New. forceShow stays false.',
     ],

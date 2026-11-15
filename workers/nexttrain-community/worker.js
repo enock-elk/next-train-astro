@@ -2102,6 +2102,47 @@ async function trimRouteBuckets(env) {
     return { deleted };
 }
 
+/** Rewrite an operator's own post. Body only. No edited flag. */
+async function handleCommunityEdit(env, request, user, idToken, body) {
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return json(env, request, 403, { ok: false, error: 'Operators only.' });
+    }
+    if (!checkRate(`edit:${user.uid}`, 60_000, 20)) {
+        return json(env, request, 429, { ok: false, error: 'Please wait a moment.' });
+    }
+    const routeId = String(body.routeId || '').trim();
+    const postId = String(body.postId || '').trim();
+    if (!isSafeRtdbKey(routeId) || !isSafeRtdbKey(postId)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid message.' });
+    }
+    const clean = sanitizeAdminBody(body.body);
+    if (!clean.ok) return json(env, request, 400, { ok: false, error: clean.error || 'Could not save that message.' });
+    if (clean.text.length < 2) return json(env, request, 400, { ok: false, error: 'Write a short message.' });
+    const path = `route_community/${routeId}/posts/${postId}`;
+    let current;
+    try {
+        current = await rtdbGet(env, path);
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not read that message.' });
+    }
+    if (!current || typeof current !== 'object') {
+        return json(env, request, 404, { ok: false, error: 'That message is gone.' });
+    }
+    if (String(current.uid || '') !== user.uid) {
+        return json(env, request, 403, { ok: false, error: 'You can only edit your own message.' });
+    }
+    const patched = await rtdbUserRequest(env, path, idToken, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: clean.text }),
+    });
+    if (!patched.ok) {
+        const t = await patched.text();
+        return json(env, request, 500, { ok: false, error: `Could not save that message (${patched.status}): ${t.slice(0, 160)}` });
+    }
+    return json(env, request, 200, { ok: true, body: clean.text });
+}
+
 async function handleCommunityDelete(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -2120,6 +2161,7 @@ async function handleCommunityDelete(request, env) {
     } catch {
         return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
     }
+    if (body.op === 'edit') return handleCommunityEdit(env, request, user, idToken, body);
     const routeId = String(body.routeId || '').trim();
     const postId = String(body.postId || '').trim();
     const replyId = String(body.replyId || '').trim();

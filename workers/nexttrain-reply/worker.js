@@ -12,6 +12,11 @@
  * GET  /context   shared operator note
  * PUT  /context   { note }  (both allowlisted operators)
  *
+ * POST /speak     same operator token
+ *   Body: { text }  max 900 characters
+ *   Returns audio/mpeg from Chirp 3 HD. The Cloud key stays on the worker.
+ *   Secret: GOOGLE_TTS_API_KEY, or GEMINI_API_KEY if that key can call Text-to-Speech.
+ *
  * Secret: GEMINI_API_KEY
  * Var: FIREBASE_WEB_API_KEY
  * KV: REPLY_CONTEXT (optional until the namespace id is set)
@@ -177,7 +182,7 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/unfurl' && request.method === 'GET') {
         return unfurlLink(request, env, url);
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft') {
+    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft' && url.pathname !== '/speak') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -204,6 +209,9 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/suggest' && request.method === 'POST') {
         return suggestReply(request, env);
     }
+    if (url.pathname === '/speak' && request.method === 'POST') {
+        return speakText(request, env);
+    }
     if (url.pathname === '/edit' && request.method === 'POST') {
         return editText(request, env);
     }
@@ -217,6 +225,86 @@ export async function handleRequest(request, env) {
         return writeDraft(env, request, auth.user);
     }
     return json(env, request, 405, { error: 'Method not allowed' });
+}
+
+const SPEAK_MAX = 900;
+const SPEAK_HOUR_CHARS = 8000;
+const SPEAK_DAY_CHARS = 40000;
+
+function plainSpeech(value) {
+    return String(value || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&(?:#x[0-9a-f]+|#\d+|[a-z]+);/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, SPEAK_MAX);
+}
+
+function audioResponse(env, request, b64) {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return new Response(bytes, {
+        status: 200,
+        headers: {
+            ...corsHeaders(env, request),
+            'Content-Type': 'audio/mpeg',
+            'Cache-Control': 'private, max-age=3600',
+        },
+    });
+}
+
+/** Chirp 3 HD. Operator token already checked. The key stays on the worker. */
+async function speakText(request, env) {
+    let body = {};
+    try { body = await request.json(); } catch { body = {}; }
+    const text = plainSpeech(body.text);
+    if (text.length < 2) return json(env, request, 400, { error: 'Nothing to read.' });
+    const key = env.GOOGLE_TTS_API_KEY || env.GEMINI_API_KEY;
+    if (!key) return json(env, request, 503, { error: 'Voice is not configured.' });
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chirp3:${text}`));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const cacheKey = `tts:audio:${hex}`;
+    if (env.REPLY_CONTEXT) {
+        const hit = await env.REPLY_CONTEXT.get(cacheKey);
+        if (hit) return audioResponse(env, request, hit);
+        const hour = new Date().toISOString().slice(0, 13);
+        const day = hour.slice(0, 10);
+        const usedHour = Number(await env.REPLY_CONTEXT.get(`tts:hour:${hour}`)) || 0;
+        const usedDay = Number(await env.REPLY_CONTEXT.get(`tts:day:${day}`)) || 0;
+        if (usedHour + text.length > SPEAK_HOUR_CHARS || usedDay + text.length > SPEAK_DAY_CHARS) {
+            return json(env, request, 429, { error: 'Voice is paused for this hour.' });
+        }
+    }
+    let res;
+    try {
+        res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': key,
+            },
+            body: JSON.stringify({
+                input: { text },
+                voice: { languageCode: 'en-US', name: 'en-US-Chirp3-HD-Achernar' },
+                audioConfig: { audioEncoding: 'MP3' },
+            }),
+        });
+    } catch {
+        return json(env, request, 502, { error: 'Could not reach voice.' });
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.audioContent) {
+        return json(env, request, 502, { error: 'Could not play that.' });
+    }
+    if (env.REPLY_CONTEXT) {
+        const hour = new Date().toISOString().slice(0, 13);
+        const day = hour.slice(0, 10);
+        const usedHour = Number(await env.REPLY_CONTEXT.get(`tts:hour:${hour}`)) || 0;
+        const usedDay = Number(await env.REPLY_CONTEXT.get(`tts:day:${day}`)) || 0;
+        await env.REPLY_CONTEXT.put(`tts:hour:${hour}`, String(usedHour + text.length), { expirationTtl: 60 * 60 * 3 });
+        await env.REPLY_CONTEXT.put(`tts:day:${day}`, String(usedDay + text.length), { expirationTtl: 60 * 60 * 48 });
+        await env.REPLY_CONTEXT.put(cacheKey, data.audioContent, { expirationTtl: 60 * 60 * 24 * 14 });
+    }
+    return audioResponse(env, request, data.audioContent);
 }
 
 function draftIdOk(value) {

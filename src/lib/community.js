@@ -24,6 +24,7 @@ import { formatFeedbackDiagLine } from './feedback-diag-line.js';
 import { feedbackDiagnostics } from './hub.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { speakOperatorCopy } from './operator-speech.js';
 import { haltPanelText } from './reply-suggest.js';
 import { closeSmoothModal, openLightbox, openSmoothModal, showCopyToast, showToast, triggerHaptic } from './ui.js';
 import { bindKeyboardThread } from './keyboard-thread.js';
@@ -960,6 +961,38 @@ export async function deleteCommunityMessage({ routeId, postId, replyId = '', mo
     return data;
 }
 
+/** Operator rewrite of their own community message. The bubble stays as written, with no edited label. */
+export async function editCommunityMessage({ routeId, postId, body } = {}) {
+    if (!isAdminAuthed()) return { ok: false, message: 'Operators only.' };
+    const text = String(body || '').trim();
+    if (!routeId || !postId) return { ok: false, message: 'That message is gone.' };
+    if (text.length < 2) return { ok: false, message: 'Write a short message.' };
+    if (text.length > COMMUNITY_ADMIN_BODY_MAX) return { ok: false, message: communityTooLongMessage() };
+    const token = await ensureAuthToken();
+    if (!token) return { ok: false, needsAuth: true };
+    const res = await fetch(`${communityWorkerBase()}/community/message`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ op: 'edit', routeId, postId, body: text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) return { ok: false, message: data.error || 'Could not save that message.' };
+    const next = String(data.body || text);
+    cachedFeedPosts = cachedFeedPosts.map((p) => (
+        String(p.postId) === String(postId) ? { ...p, body: next } : p
+    ));
+    if (localOverlayByRoute[routeId]) {
+        localOverlayByRoute[routeId] = localOverlayByRoute[routeId].map((p) => (
+            String(p.postId) === String(postId) ? { ...p, body: next } : p
+        ));
+    }
+    applyFeedFilter(routeId);
+    return { ok: true, body: next };
+}
+
 export async function submitCommunityPost(body, routeId = $currentRouteId.get(), options = {}) {
     const text = (body || '').trim();
     const acct = $account.get();
@@ -1571,8 +1604,11 @@ function paintCommunityAdminMenu(post) {
         return;
     }
     const tombstone = isCommunityTombstone(post);
+    const acct = $account.get();
+    const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const item = (cls, label, icon, extra = '') => `<button type="button" class="${cls} flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none dark:text-gray-100 dark:hover:bg-gray-700" ${extra} role="menuitem">${icon}<span>${label}</span></button>`;
     menu.innerHTML = [
+        mine && !tombstone ? item('community-sheet-edit', 'Edit', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')) : '',
         tombstone ? '' : item('community-sheet-suggest', 'Suggest reply', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')),
         item('community-sheet-lookup', 'Look up rider', communityMenuIcon('<circle cx="11" cy="8" r="3"/><path d="M5 19a6 6 0 0112 0"/><circle cx="18" cy="18" r="3"/><path d="M20.2 20.2L22 22"/>')),
         item('community-sheet-delete', 'Remove completely', communityMenuIcon('<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/>'), 'data-delete-mode="purge" data-delete-as="admin"'),
@@ -1690,6 +1726,28 @@ function openReactionSheet(postId, routeId, anchorEl) {
         row.innerHTML = WA_REACTIONS.map((r) => `
             <button type="button" class="community-react-btn h-10 w-10 text-xl rounded-full ${myEmoji === r.id ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
+    }
+    let play = sheet.querySelector('[data-community-speak]');
+    if (!isAdminAuthed()) {
+        play?.remove();
+    } else {
+        if (!play) {
+            play = document.createElement('button');
+            play.type = 'button';
+            play.setAttribute('data-community-speak', '1');
+            play.className = 'mt-1 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-gray-950/95 px-3 py-2 text-sm font-semibold text-white shadow-2xl focus:outline-none';
+            play.innerHTML = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 6a8.5 8.5 0 010 12"/></svg><span>Play</span>`;
+            sheet.querySelector('#community-reaction-tray')?.appendChild(play);
+        }
+        play.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const words = communityCaptionText(findCachedPost(postId));
+            speakOperatorCopy(words).then((result) => {
+                if (result?.hidden) return;
+                if (!result?.ok && result?.message) showToast(result.message, 'error');
+            });
+        };
     }
     sheet.classList.remove('hidden');
     placeReactionTray();
@@ -3802,6 +3860,31 @@ function liveModerateComposer() {
 }
 
 let communityPostBusy = false;
+let communityEditTarget = null;
+
+function clearCommunityEdit() {
+    communityEditTarget = null;
+    const btn = document.getElementById('community-post-btn');
+    if (btn && btn.textContent !== 'Post') btn.textContent = 'Post';
+    const errEl = document.getElementById('community-error');
+    if (errEl && errEl.textContent === 'Editing your message') errEl.textContent = '';
+}
+
+function armCommunityEdit(post) {
+    const composer = document.getElementById('community-composer');
+    const btn = document.getElementById('community-post-btn');
+    const errEl = document.getElementById('community-error');
+    if (!composer || !post?.postId || !isAdminAuthed()) return;
+    const acct = $account.get();
+    if (acct?.uid !== post.uid) return;
+    communityEditTarget = { routeId: post.routeId || document.getElementById('community-route-select')?.value || $currentRouteId.get(), postId: post.postId };
+    composer.value = communityCaptionText(post);
+    fitCommunityComposer(composer);
+    rememberComposerDraft(composer.value);
+    if (btn) btn.textContent = 'Save';
+    if (errEl) errEl.textContent = 'Editing your message';
+    composer.focus();
+}
 
 async function handlePostSubmit() {
     if (communityPostBusy) return;
@@ -3823,6 +3906,44 @@ async function handlePostSubmit() {
         return;
     }
     if (btn) btn.disabled = true;
+
+    if (communityEditTarget && !isAdminAuthed()) clearCommunityEdit();
+    if (communityEditTarget && isAdminAuthed()) {
+        const editing = communityEditTarget;
+        const text = String(body || '').trim();
+        if (text.length < 2) {
+            clearCommunityEdit();
+            if (composer) {
+                composer.value = '';
+                composer.style.height = '';
+            }
+            rememberComposerDraft('');
+            if (btn) {
+                btn.textContent = 'Post';
+                btn.disabled = false;
+            }
+            return;
+        }
+        const saved = await editCommunityMessage({ ...editing, body: text });
+        if (!saved.ok) {
+            if (errEl) errEl.textContent = saved.message || 'Could not save that message.';
+            if (btn) btn.disabled = false;
+            return;
+        }
+        clearCommunityEdit();
+        if (composer) {
+            composer.value = '';
+            composer.style.height = '';
+        }
+        rememberComposerDraft('');
+        if (btn) {
+            btn.textContent = 'Post';
+            btn.disabled = false;
+        }
+        showToast('Message saved.', 'success');
+        triggerHaptic();
+        return;
+    }
 
     const draft = body;
     const savedQuote = replyDraft;
@@ -4368,6 +4489,18 @@ export function bindCommunityUi() {
             } catch (err) {
                 showToast(err?.message || 'Could not delete this message.', 'error');
             }
+            return;
+        }
+
+        const sheetEdit = t.closest?.('.community-sheet-edit');
+        if (sheetEdit) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const focusId = communityActionTarget().postId || '';
+            const post = findCachedPost(focusId);
+            closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
+            if (post) armCommunityEdit(post);
             return;
         }
 

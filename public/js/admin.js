@@ -2769,12 +2769,13 @@ const Admin = {
         if (!picker) {
             picker = document.createElement('div');
             picker.id = 'inbox-reaction-picker';
-            picker.className = 'hidden fixed z-[160] px-2 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl flex items-center gap-0.5';
-            picker.innerHTML = typeof window.renderInboxReactionPickerHtml === 'function'
-                ? window.renderInboxReactionPickerHtml()
-                : '';
             document.body.appendChild(picker);
         }
+        picker.className = 'fixed z-[160] flex flex-col items-stretch gap-1';
+        const reactions = typeof window.renderInboxReactionPickerHtml === 'function'
+            ? window.renderInboxReactionPickerHtml()
+            : '';
+        picker.innerHTML = `<div class="px-2 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl flex items-center gap-0.5">${reactions}</div><button type="button" data-inbox-speak class="flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-xl focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 6a8.5 8.5 0 010 12"/></svg><span>Play</span></button>`;
         picker.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
             btn.onclick = (e) => {
                 e.preventDefault();
@@ -2783,9 +2784,30 @@ const Admin = {
                 onPick(btn.getAttribute('data-inbox-react-pick'));
             };
         });
+        const play = picker.querySelector('[data-inbox-speak]');
+        if (play) {
+            play.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const textEl = anchor?.querySelector?.('.inbox-msg-text');
+                let words = '';
+                if (textEl) {
+                    const clone = textEl.cloneNode(true);
+                    clone.querySelectorAll('.inbox-msg-time, .fb-version-chip').forEach((node) => node.remove());
+                    words = clone.textContent || '';
+                }
+                const speak = window.ntSpeakOperatorCopy;
+                if (typeof speak !== 'function') return;
+                speak(words).then((result) => {
+                    if (result?.hidden) return;
+                    if (!result?.ok && result?.message && typeof showToast === 'function') showToast(result.message, 'error');
+                });
+            };
+        }
         const rect = anchor.getBoundingClientRect();
         picker.classList.remove('hidden');
-        picker.style.top = `${Math.max(12, rect.top - 52)}px`;
+        const height = picker.offsetHeight || 88;
+        picker.style.top = `${Math.max(12, rect.top - height - 8)}px`;
         picker.style.left = `${Math.max(12, Math.min(window.innerWidth - picker.offsetWidth - 12, rect.left))}px`;
     },
 
@@ -18243,6 +18265,7 @@ const Admin = {
         const slot = Admin.previewSlotFor(editor);
         if (!slot || !preview?.url) return;
         const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        if (preview.image && typeof window.rememberPicture === 'function') window.rememberPicture(preview.image);
         const image = preview.image
             ? `<img class="nt-link-preview-media" alt="" src="${esc(preview.image)}" referrerpolicy="no-referrer">`
             : '';

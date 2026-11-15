@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.3': [
+        'The station list fills from the line already on the phone before the region index and map pins. A painted timetable stays when lastUpdated or the cache edge does not answer, and an open phone waits 20 minutes before the next killswitch, exclusion, disruption, and timetable stamp read. The 60 second NUKE watch is unchanged. An operator can rewrite their own community message. The bubble is not marked edited. Alert link cards keep the large picture, including a tap-to-load frame when pictures wait, and hex characters in the description decode. Hold a Feedback Hub message or a community message to play it. Play is operator-only. Chirp 3 HD runs on the reply worker after the allowlisted sign-in, with an hourly and daily character cap and a saved copy so a replay is not billed again. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.2': [
         'Station pages label every shared-corridor train. Toward one terminus each row says From its outer end, including the first corridor. A short working still says To its real last stop. Trains leaving toward different ends share one list, headed with two names and & more when a third end exists. About this station is one sentence per paragraph. No commuter What\'s New. forceShow stays false.',
     ],

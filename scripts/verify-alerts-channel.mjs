@@ -474,6 +474,17 @@ const now = 1_700_000_000_000;
         message: 'Update https://whatsapp.com/channel/0029VaExample/',
     });
     assert((whatsapp.match(/data-link-preview-state=/g) || []).length === 1, 'www and bare host are one preview');
+    const decoded = linkPreviewMarkup({
+        linkPreview: {
+            url: 'https://whatsapp.com/channel/0029VaExample',
+            title: 'Tshwane Metro Train Commuters',
+            description: 'Channel &#x2022; 277 followers',
+            image: 'https://example.com/logo.png',
+            site: 'whatsapp.com',
+        },
+    });
+    assert(decoded.includes('Channel • 277 followers'), 'hex entities in a link card decode');
+    assert(decoded.includes('nt-link-preview-media'), 'a ready link card keeps the picture frame');
     const keptOther = linkPreviewMarkup({
         suppressedPreviewUrls: ['https://whatsapp.com/channel/0029VaExample'],
         linkPreview: {

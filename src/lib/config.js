@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_11.15.2";
+export const APP_VERSION = "V10_11.15.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -894,7 +894,7 @@ export const ROUTES = {
 };
 
 // 4. Refresh Settings
-export const REFRESH_CONFIG = { standardInterval: 5 * 60 * 1000, activeInterval: 60 * 1000, nightModeStart: 21, nightModeEnd: 4 };
+export const REFRESH_CONFIG = { standardInterval: 20 * 60 * 1000, activeInterval: 60 * 1000, nightModeStart: 21, nightModeEnd: 4 };
 
 // 5. Smart Pricing — PRASA Metrorail (Aug 2025 fare adjustment + TravelOffPeak)
 // Zone km bands and ticket prices from PRASA 2025 Fare Adjustment (effective 1 Aug 2025).

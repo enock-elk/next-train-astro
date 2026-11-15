@@ -48,7 +48,7 @@ import {
     effectiveRouteSheetMode,
     routeSheetNote,
 } from './route-sheets.js';
-import { applyMapStationOverrides, fetchMapStationOverrides } from './map-overrides.js';
+import { applyMapStationOverrides, fetchMapStationOverrides, readSavedMapStations } from './map-overrides.js';
 import { canonicalStationPin } from './station-pins.js';
 
 setRouteSheetDatabaseReader(() => $fullDatabase.get());
@@ -407,8 +407,9 @@ const CACHE_EDGE_PROBE_MS = 1200;
 let loadAllSchedulesInFlight = null;
 let loadAllSchedulesInFlightKey = '';
 /** Client-side overlay stamps — skip re-downloading exclusions/disruptions when fresh. */
-const OVERLAY_TTL_MS = 3 * 60 * 1000;
-const CONFIG_BURST_MS = 5 * 60 * 1000;
+/** Match the 20-minute board refresh. An open phone must not re-read these all day. */
+const OVERLAY_TTL_MS = 20 * 60 * 1000;
+const CONFIG_BURST_MS = 20 * 60 * 1000;
 let exclusionsOverlayAt = 0;
 let exclusionsOverlayBucket = '';
 let disruptionsOverlayAt = 0;
@@ -1603,11 +1604,20 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         window.GHOST_STATION_INDEX = ghostIndex;
     }
 
-    try {
-        const stationOverrides = await fetchMapStationOverrides();
-        applyMapStationOverrides(tempIndex, stationOverrides);
-        applyMapStationOverrides(ghostIndex, stationOverrides);
-    } catch { /* timetable coords still stand */ }
+    applyMapStationOverrides(tempIndex, readSavedMapStations());
+    applyMapStationOverrides(ghostIndex, readSavedMapStations());
+    const indexForRefresh = tempIndex;
+    const ghostsForRefresh = ghostIndex;
+    const refreshGen = regionSwapGeneration;
+    fetchMapStationOverrides().then((fresh) => {
+        if (refreshGen !== regionSwapGeneration) return;
+        if (!fresh || !Object.keys(fresh).length) return;
+        applyMapStationOverrides(indexForRefresh, fresh);
+        applyMapStationOverrides(ghostsForRefresh, fresh);
+        if ($globalStationIndex.get() === indexForRefresh) {
+            $globalStationIndex.set({ ...indexForRefresh });
+        }
+    }).catch(() => { /* saved pins and timetable coords still stand */ });
 
     return tempIndex;
 }
@@ -1774,25 +1784,25 @@ async function loadAllSchedulesInner(force = false) {
             try {
                 const proposedDB = unwrapDatabase(cachedDB.data, $userRegion.get());
                 const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, proposedDB);
-                const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
-                
+
                 if (currentGen !== regionSwapGeneration) return;
 
                 $fullDatabase.set(proposedDB);
                 $schedules.set(proposedSchedules);
-                $globalStationIndex.set(proposedStationIndex);
                 rememberRouteRevision(proposedDB, false);
-                
-                const mList = Object.keys(proposedStationIndex).sort();
-                $masterStationList.set(mList);
-                if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
-                
+
                 usedCache = true;
                 paintedFrom = 'cache';
                 waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier} paintMs=${Date.now() - scheduleStartedAt}`);
-                // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
-                // do not hold the shell for the background network waterfall.
+                // The station list comes from this line's sheets. The region index
+                // and map pins follow, so the dropdown is not waiting on them.
                 markSchedulesCoreReady();
+                const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
+                if (currentGen !== regionSwapGeneration) return;
+                $globalStationIndex.set(proposedStationIndex);
+                const mList = Object.keys(proposedStationIndex).sort();
+                $masterStationList.set(mList);
+                if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
             } catch(err) { console.error("🛡️ Guardian: Cached DB shadow-clone parsing failed.", err); }
         } else {
             const bundledDump = await loadBundledScheduleDump(fetchSignal);
@@ -1801,19 +1811,20 @@ async function loadAllSchedulesInner(force = false) {
                 try {
                     const proposedDB = unwrapDatabase(bundledDump, $userRegion.get());
                     const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, proposedDB);
-                    const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
                     if (currentGen !== regionSwapGeneration) return;
                     $fullDatabase.set(proposedDB);
                     $schedules.set(proposedSchedules);
-                    $globalStationIndex.set(proposedStationIndex);
                     rememberRouteRevision(proposedDB, false);
-                    const mList = Object.keys(proposedStationIndex).sort();
-                    $masterStationList.set(mList);
-                    if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                     usedCache = true;
                     paintedFrom = 'bundled';
                     waterfallLog(`painted from bundled same-origin dump paintMs=${Date.now() - scheduleStartedAt}`);
                     markSchedulesCoreReady();
+                    const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
+                    if (currentGen !== regionSwapGeneration) return;
+                    $globalStationIndex.set(proposedStationIndex);
+                    const mList = Object.keys(proposedStationIndex).sort();
+                    $masterStationList.set(mList);
+                    if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                     try { await saveToLocalCache(cacheKey, bundledDump, fetchSignal); } catch { /* ignore */ }
                 } catch (err) {
                     console.error("🛡️ Guardian: Bundled schedule dump parse failed.", err);
@@ -1877,6 +1888,7 @@ async function loadAllSchedulesInner(force = false) {
         const burstRegion = $userRegion.get() || '';
         const burstAt = configBurstAtByRegion.get(burstRegion) || 0;
         const burstFresh = !force && burstAt > 0 && (Date.now() - burstAt) < CONFIG_BURST_MS;
+        const edgeCacheBucket = Math.floor(Date.now() / 300000);
         if (burstFresh) {
             waterfallLog(`config burst skipped region=${burstRegion} ageMs=${Date.now() - burstAt}`);
         } else {
@@ -1903,7 +1915,6 @@ async function loadAllSchedulesInner(force = false) {
             if (dropBurstIfInterrupted()) return;
 
         // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.
-        const edgeCacheBucket = Math.floor(Date.now() / 300000);
         const overlayNow = Date.now();
         const exclFresh = !force
             && exclusionsOverlayBucket === String(edgeCacheBucket)
@@ -2019,10 +2030,18 @@ async function loadAllSchedulesInner(force = false) {
                                 needsDownload = false;
                             }
                         }
+                    } else if (usedCache) {
+                        needsDownload = false;
+                        waterfallLog('lastUpdated did not answer — keeping the timetable already painted');
                     }
                 }
             } catch (e) {
-                console.warn('Smart Sync Ping failed, proceeding with full data fetch.', e);
+                if (usedCache) {
+                    needsDownload = false;
+                    waterfallLog('lastUpdated did not answer — keeping the timetable already painted');
+                } else {
+                    console.warn('Smart Sync Ping failed, proceeding with full data fetch.', e);
+                }
             }
         }
 
@@ -2032,11 +2051,15 @@ async function loadAllSchedulesInner(force = false) {
             // Edge first (RTDB cost + speed), origin next, GitHub dump last (campus firewalls).
             const sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB'];
             const SOURCE_TIMEOUT_MS = { CLOUDFLARE: 5000, FIREBASE: 7000, GITHUB: 8000 };
-            const scheduleSources = preferredCacheBaseUrl
+            let scheduleSources = preferredCacheBaseUrl
                 ? sourcesToTry
                 : sourcesToTry.filter((key) => key !== 'CLOUDFLARE');
             if (!preferredCacheBaseUrl) {
                 waterfallWarn('cache edge did not answer — skipping CLOUDFLARE, Firebase next');
+            }
+            if (paintedFrom === 'cache' && !preferredCacheBaseUrl) {
+                scheduleSources = scheduleSources.filter((key) => key !== 'FIREBASE');
+                waterfallLog('cache edge missed and IndexedDB already painted this region — skipping the Firebase timetable');
             }
             /** Hard ceiling so a blackhole radio cannot sit on Loading stations for minutes. */
             const WATERFALL_BUDGET_MS = 18_000;
@@ -2153,12 +2176,12 @@ async function loadAllSchedulesInner(force = false) {
                 
                 try {
                     const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, downloadedDB);
-                    const proposedStationIndex = await buildGlobalStationIndexAsync(downloadedDB);
-                    
                     if (currentGen !== regionSwapGeneration) return;
 
                     $fullDatabase.set(downloadedDB);
                     $schedules.set(proposedSchedules);
+                    const proposedStationIndex = await buildGlobalStationIndexAsync(downloadedDB);
+                    if (currentGen !== regionSwapGeneration) return;
                     $globalStationIndex.set(proposedStationIndex);
                     
                     const mList = Object.keys(proposedStationIndex).sort();

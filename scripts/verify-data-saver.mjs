@@ -130,6 +130,7 @@ assert(community.includes('settleDeferredPictures(listEl)'), 'community checks t
 const cards = readFileSync(new URL('../src/lib/link-preview.js', import.meta.url), 'utf8');
 assert(cards.includes('if (!linkCardsOn()) return'), 'link cards off skips the card');
 assert(cards.includes('shouldHoldPicture(card.image)'), 'a link card picture waits only in tap mode');
+assert(cards.includes('pictureMarkup(card.image)'), 'a held link card still keeps the picture frame');
 
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('#account-data'), 'back treats Data saving as its own page');

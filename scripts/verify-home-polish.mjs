@@ -368,6 +368,10 @@ assert(logic.includes("sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB']"), 'w
 assert(logic.includes('WATERFALL_BUDGET_MS = 18_000'), 'waterfall has an 18s hard budget');
 assert(logic.includes('CLOUDFLARE: 5000'), 'Cloudflare schedule timeout is 5s');
 assert(logic.includes('FIREBASE: 7000'), 'Firebase schedule timeout is 7s');
+assert(logic.includes('lastUpdated did not answer — keeping the timetable already painted'), 'a painted timetable stays when lastUpdated does not answer');
+assert(logic.includes('skipping the Firebase timetable'), 'IndexedDB paint skips the Firebase timetable when the cache edge missed');
+assert(logic.includes('const OVERLAY_TTL_MS = 20 * 60 * 1000'), 'overlay refresh is 20 minutes');
+assert(logic.includes('standardInterval: 20 * 60 * 1000') || readFileSync(new URL('../src/lib/config.js', import.meta.url), 'utf8').includes('standardInterval: 20 * 60 * 1000'), 'board refresh is 20 minutes');
 assert(logic.includes('GITHUB: 8000'), 'GitHub schedule timeout is 8s');
 assert(logic.includes('ntSoftNetwork: true'), 'schedule waterfall uses soft network retries');
 assert(logic.includes("timeoutErr.name = 'TimeoutError'"), 'per-host timeout is not AbortError');

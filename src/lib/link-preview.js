@@ -4,7 +4,7 @@
  * and a stored card on the notice is what every commuter paints.
  */
 
-import { linkCardsOn, rememberPicture, shouldHoldPicture } from './data-saver.js';
+import { linkCardsOn, pictureMarkup, rememberPicture, settleDeferredPictures, shouldHoldPicture } from './data-saver.js';
 
 const memory = new Map();
 const failedUrls = new Set();
@@ -18,9 +18,13 @@ function decodeEntities(value) {
         .replace(/&#0?39;|&apos;/gi, "'")
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
+        .replace(/&#x([0-9a-f]+);/gi, (all, hex) => {
+            const code = Number.parseInt(hex, 16);
+            return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
+        })
         .replace(/&#(\d+);/g, (all, n) => {
             const code = Number(n);
-            return code > 0 && code < 65536 ? String.fromCharCode(code) : all;
+            return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
         })
         .replace(/\s+/g, ' ')
         .trim();
@@ -289,11 +293,13 @@ function rememberLinkPreview(preview) {
 function readyMarkup(preview) {
     const card = normalizeLinkPreview(preview);
     if (!card) return '';
-    const showImage = !!(card.image && !shouldHoldPicture(card.image));
-    if (showImage) rememberPicture(card.image);
-    const media = showImage
-        ? `<img class="nt-link-preview-media" alt="" src="${escapeAttr(card.image)}" referrerpolicy="no-referrer">`
-        : '';
+    const holdImage = !!(card.image && shouldHoldPicture(card.image));
+    if (card.image && !holdImage) rememberPicture(card.image);
+    const media = !card.image
+        ? ''
+        : holdImage
+            ? `<div class="nt-link-preview-media">${pictureMarkup(card.image)}</div>`
+            : `<img class="nt-link-preview-media" alt="" src="${escapeAttr(card.image)}" referrerpolicy="no-referrer">`;
     const desc = card.description
         ? `<div class="nt-link-preview-desc">${escapeText(card.description)}</div>`
         : '';
@@ -408,6 +414,7 @@ export function hydrateLinkPreviews(root, workerBase) {
         return;
     }
     if (!root || typeof root.querySelectorAll !== 'function') return;
+    settleDeferredPictures(root);
     root.querySelectorAll('[data-link-preview-url]').forEach((el) => {
         if (el.getAttribute('data-link-preview-state') === 'ready') return;
         const url = el.getAttribute('data-link-preview-url') || '';
@@ -438,6 +445,7 @@ export function hydrateLinkPreviews(root, workerBase) {
 }
 
 if (typeof window !== 'undefined') {
+    window.rememberPicture = rememberPicture;
     window.linkPreviewMarkup = linkPreviewMarkup;
     window.storedLinkPreviewMarkup = storedLinkPreviewMarkup;
     window.isOwnSiteUrl = isOwnSiteUrl;

@@ -448,6 +448,11 @@ ok(!worker.includes('feedback.json'), 'reply worker does not read the feedback t
 ok(worker.includes('gemini-3.5-flash-lite'), 'reply worker uses 3.5 Flash-Lite');
 ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 Flash-Lite');
 ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
+ok(worker.includes("pathname === '/speak'"), 'read-aloud has its own operator route');
+ok(worker.includes('en-US-Chirp3-HD-Achernar'), 'read-aloud uses Chirp 3 HD Achernar');
+ok(worker.includes('requireOperator'), 'read-aloud checks the operator token');
+ok(worker.includes('SPEAK_HOUR_CHARS'), 'read-aloud has a character cap');
+ok(!worker.includes('texttospeech.googleapis.com') || worker.includes('X-Goog-Api-Key'), 'the speech key stays on the worker');
 ok(worker.includes('clear'), 'shared note can be cleared online');
 ok(worker.includes('readSharedNote'), 'every suggest reloads the saved future note');
 const geminiConfig = buildGeminiRequest({

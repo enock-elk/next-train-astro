@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, fareMultiplierForListedTicket, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, warningTriangleSvg, schedulesBelongToRoute, commuterStationName } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, warningTriangleSvg, schedulesBelongToRoute, commuterStationName, sheetStationTitle } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, yieldToPaint } from './ui.js';
@@ -791,13 +791,7 @@ export function openScheduleModal(destination, dayOverride = null) {
     const destLabel = window.Renderer?._applyUIIntercepts(destination) || destination.replace(/ STATION/gi, '');
     setScheduleModalTitle(fromStationName, destLabel, titleSuffix);
 
-    const toTitleCase = (str) => {
-        if (!str) return '';
-        const cleaned = String(str).replace(/ STATION/gi, '').trim();
-        const named = commuterStationName(cleaned);
-        if (named !== cleaned || named === 'PRETORIA NORTH' || named === 'PRETORIA WEST' || named === 'Waltloo') return named;
-        return cleaned.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-    };
+    const toTitleCase = (str) => sheetStationTitle(str);
 
     modalList.innerHTML = '';
     const nowSeconds = timeToSeconds(getCurrentTime() || '00:00:00');

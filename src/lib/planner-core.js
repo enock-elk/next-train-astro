@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, isExpressSkip, isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, resolvePlannerStationInput, commuterStationName } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, isExpressSkip, isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, resolvePlannerStationInput, sheetStationTitle } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -1294,11 +1294,7 @@ export function runHeuristicFailureProbe(origin, dest, dayType = null) {
 }
 
 function titleCaseStation(s) {
-    if (!s) return '';
-    const cleaned = String(s).replace(/ STATION/gi, '').trim();
-    const named = commuterStationName(cleaned);
-    if (named !== cleaned || named === 'PRETORIA NORTH' || named === 'PRETORIA WEST' || named === 'Waltloo') return named;
-    return cleaned.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+    return sheetStationTitle(s);
 }
 
 /** Resolve a display/index station name to a key present in the station index. */

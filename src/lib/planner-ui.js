@@ -19,7 +19,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
-    resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, masterListHasStation, stationQueryHits,
+    resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, sheetStationTitle, masterListHasStation, stationQueryHits,
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
@@ -3143,13 +3143,7 @@ export const PlannerRenderer = {
         return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
     },
 
-    applyUIIntercepts: (stationName) => {
-        if (!stationName) return "";
-        const cleaned = String(stationName).replace(/ STATION/gi, '').trim();
-        const named = commuterStationName(cleaned);
-        if (named !== cleaned || named === 'PRETORIA NORTH' || named === 'PRETORIA WEST' || named === 'Waltloo') return named;
-        return cleaned.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
-    },
+    applyUIIntercepts: (stationName) => sheetStationTitle(stationName),
 
     buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, variant = 'transfer' }) => {
         let iconBg = 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400';

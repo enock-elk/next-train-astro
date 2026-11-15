@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.7': [
+        'Full train sheets title-case every stop, including Pretoria North, Pretoria West, and Waltloo. The in-app timetable and the downloaded sheet keep every stop in capitals, including Waltloo. Co-Pilot shows the pause, play, and restart tray on the draft, and the draft-ready line sits under Send. Community and Feedback names use darker inks on a light theme and lighter inks on a dark theme, and the letter disc is tinted so it does not match the wallpaper. User lookup and the short user sheet use the same card, activity tiles, and actions. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.6': [
         'The read-aloud bar closes when Developer Mode returns to its home, when the clip ends, and from its own close control. Voice and pause use the same menus as the other operator lists. Test voice plays the choices on screen before they are saved. Additional prompt, knowledge, feedback style, and community style open in a full editor that stays above the keyboard and scrolls. No commuter What\'s New. forceShow stays false.',
     ],

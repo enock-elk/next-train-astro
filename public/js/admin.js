@@ -3420,43 +3420,64 @@ const Admin = {
                 contactParts.push(`<span class="block text-[9px] font-black uppercase tracking-wider text-gray-400${emails.length ? ' mt-1' : ''}">Phone</span>${phones.map((ph) => esc(ph)).join('<br>')}`);
             }
             const titleEl = document.getElementById('commuter-peek-title');
-            if (titleEl) titleEl.textContent = peek.alias || peek.displayName || 'User';
+            if (titleEl) {
+                titleEl.textContent = peek.alias || peek.displayName || 'User';
+                titleEl.classList.add('sr-only');
+            }
             const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
-            const tile = (label, value, absent, actionId) => {
-                const tag = actionId ? 'button' : 'div';
-                const type = actionId ? ' type="button"' : '';
-                const idAttr = actionId ? ` id="${actionId}"` : '';
-                return `
-                <${tag}${type}${idAttr} class="ut-sheet-row items-start${actionId ? ' cursor-pointer focus:outline-none' : ''}">
-                    <span class="w-28 shrink-0 text-[15px] ${absent ? 'text-gray-400' : 'text-gray-500'}">${esc(label)}</span>
-                    <span class="min-w-0 flex-1 text-right text-[15px] leading-snug break-words ${absent ? 'text-gray-400' : 'text-gray-900 dark:text-white'}">${value}</span>
-                </${tag}>`;
+            const peekTile = (id, value, label, tone) => {
+                const nClass = tone === 'quiet' ? 'is-quiet' : '';
+                const inner = `<span class="ut-tile-n ${nClass}">${value}</span><span class="ut-k">${esc(label)}</span>`;
+                return id
+                    ? `<button type="button" id="${id}" class="ut-tile">${inner}</button>`
+                    : `<div class="ut-tile">${inner}</div>`;
             };
-            const countLabel = (count, noun) => {
-                if (count == null) return 'unavailable';
-                if (!count) return 'none';
-                return `${count} ${noun}`;
-            };
+            const countValue = (count) => (count == null ? '—' : String(count));
+            const initial = esc(Array.from(String(heading).trim())[0]?.toLocaleUpperCase() || 'U');
             body.innerHTML = `
-                <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
-                ${peek.alias ? `<p class="text-[11px]">Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias.</p>'}
-                ${peek.lastActivity
-                    ? `<p class="text-[11px]">Last activity: <b>${esc(Admin.formatDate(peek.lastActivity.ms))}</b> · ${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</p>`
-                    : '<p class="text-[11px] text-gray-400">No activity on file.</p>'}
-                ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
-                <div class="ut-sheet-group mt-2">
-                    ${tile('App version', esc(peek.appVersion || 'Not recorded'), !peek.appVersion)}
-                    ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
-                    ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
-                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, 'commuter-peek-feedback')}
-                    ${tile('Contacts', contactParts.length ? contactParts.join('') : 'none', !contactParts.length)}
-                    ${tile('Route', routeLabel ? esc(routeLabel) : 'none', !routeLabel)}
-                    ${tile('Fares', peek.fareCount == null ? 'unavailable' : (peek.fareCount ? esc(`${peek.fareCount}${peek.fareDetail ? ` · ${peek.fareDetail}` : ''}`) : 'none'), !peek.fareCount)}
-                    ${tile('Routing fails', esc(countLabel(peek.failCount, peek.failCount === 1 ? 'fail' : 'fails')), !peek.failCount)}
-                    ${tile('Ticket photos', esc(countLabel(peek.ticketCount, peek.ticketCount === 1 ? 'photo' : 'photos')), !peek.ticketCount)}
-                    ${tile('Crashes', esc(peek.crashKnown ? countLabel(peek.crashCount, peek.crashCount === 1 ? 'crash' : 'crashes') : 'unavailable'), !(peek.crashKnown && peek.crashCount))}
+                <div class="ut-lookup">
+                    <div class="ut-card ut-profile">
+                        <div class="ut-profile-head">
+                            <span class="ut-avatar" aria-hidden="true">${initial}</span>
+                            <div class="min-w-0 flex-1">
+                                <p class="ut-profile-name">${esc(heading)}</p>
+                                ${peek.email ? `<p class="ut-profile-email">${esc(peek.email)}</p>` : ''}
+                                ${peek.alias ? `<p class="ut-k">Alias ${esc(peek.alias)}</p>` : '<p class="ut-k">No feedback alias</p>'}
+                            </div>
+                        </div>
+                        <div class="ut-id-row">
+                            <span class="ut-mono">${esc(did)}</span>
+                            <button type="button" id="commuter-peek-copy" class="ut-chip">Copy</button>
+                        </div>
+                        <div class="ut-stats">
+                            <div><div class="ut-k">Last activity</div><div class="ut-v">${peek.lastActivity ? `${esc(Admin.formatDate(peek.lastActivity.ms))}<span class="ut-k block">${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</span>` : '<span class="ut-k">None</span>'}</div></div>
+                            <div><div class="ut-k">App version</div><div class="ut-v">${esc(peek.appVersion || 'Not recorded')}</div></div>
+                            <div><div class="ut-k">Joined</div><div class="ut-v">${esc(joinedLabel)}</div></div>
+                            <div><div class="ut-k">Route</div><div class="ut-v">${routeLabel ? esc(routeLabel) : '<span class="ut-k">None</span>'}</div></div>
+                        </div>
+                        ${contactParts.length ? `<div><div class="ut-k">Contacts</div><div class="ut-v">${contactParts.join('')}</div></div>` : ''}
+                    </div>
+                    <div>
+                        <p class="ut-lbl">Activity</p>
+                        <div class="ut-tiles">
+                            ${peekTile(peek.tripLast ? 'commuter-peek-trips' : '', peek.tripLast ? 'Yes' : 'None', 'Trip plans', peek.tripLast ? '' : 'quiet')}
+                            ${peekTile('commuter-peek-feedback', peek.hasChat ? (peek.feedbackCount ? String(peek.feedbackCount) : 'Open') : 'None', 'Feedback', peek.hasChat ? '' : 'quiet')}
+                            ${peekTile('', countValue(peek.fareCount), 'Fares', peek.fareCount ? '' : 'quiet')}
+                            ${peekTile('', countValue(peek.failCount), 'Routing fails', peek.failCount ? '' : 'quiet')}
+                            ${peekTile('', countValue(peek.ticketCount), 'Tickets', peek.ticketCount ? '' : 'quiet')}
+                            ${peekTile('', peek.crashKnown ? countValue(peek.crashCount) : '—', 'Crashes', peek.crashKnown && peek.crashCount ? '' : 'quiet')}
+                        </div>
+                    </div>
                 </div>
             `;
+            document.getElementById('commuter-peek-copy')?.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(did);
+                    if (typeof showToast === 'function') showToast('Copied', 'success');
+                } catch {
+                    if (typeof showToast === 'function') showToast('Could not copy that', 'error');
+                }
+            });
             document.getElementById('commuter-peek-feedback')?.addEventListener('click', () => {
                 close();
                 if (peek.hasChat) Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
@@ -15184,11 +15205,12 @@ const Admin = {
                     </div>
                 </div>
                 <div id="ut-pane-lookup" role="tabpanel" class="ut-pane hidden">
-                    <div class="flex gap-2 mb-3 px-1">
-                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_…), or email" />
-                        <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
+                    <div class="ut-search-row">
+                        <label for="ut-uid-input" class="sr-only">User ID or email</label>
+                        <input type="text" id="ut-uid-input" class="ut-search" placeholder="UID, device ID (usr_…), or email" />
+                        <button type="button" id="ut-lookup-btn" class="ut-search-btn">Look up</button>
                     </div>
-                    <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
+                    <div id="ut-result" class="text-left text-sm text-gray-500">Enter a UID to inspect.</div>
                 </div>
                 <div id="ut-pane-deletions" role="tabpanel" class="ut-pane hidden">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
@@ -15746,9 +15768,6 @@ const Admin = {
                 ].filter((row) => row.ms > 0).sort((a, b) => b.ms - a.ms);
                 const lastActivity = activityCandidates[0] || null;
                 const joinedLabel = joinedMs ? Admin.formatDate(joinedMs) : 'unknown';
-                const lastActivityHtml = lastActivity
-                    ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="block text-[10px] text-gray-500 mt-0.5">${Admin.commuterEsc(lastActivity.label)}</span>`
-                    : '<span class="text-gray-400">No activity on file</span>';
                 let directoryVersion = '';
                 if (!String(user.appVersion || '').trim() && uid && !user._isDeviceStub) {
                     try {
@@ -15839,81 +15858,98 @@ const Admin = {
                 const bannedAtMs = Number(flags.shadowBannedAt || 0);
                 const bannedBy = flags.shadowBannedBy ? Admin.commuterEsc(String(flags.shadowBannedBy)) : '';
                 const ticketCount = (profile.fareTicketUrls || []).length;
-                const infoRow = (label, valueHtml) => `
-                    <div class="ut-sheet-row items-start">
-                        <span class="text-[15px] text-gray-500 shrink-0 pt-0.5">${label}</span>
-                        <span class="text-right text-[15px] leading-snug min-w-0">${valueHtml}</span>
-                    </div>`;
-                const navRow = (id, label, detail) => `
-                    <button type="button" id="${id}" class="ut-sheet-row">
-                        <span class="text-[17px]">${label}</span>
-                        <span class="text-[15px] text-gray-400 shrink-0">${detail}<span aria-hidden="true"> ›</span></span>
-                    </button>`;
-                const actionRow = (id, label, tone) => {
-                    const color = tone === 'danger' ? 'text-[#ff3b30]' : 'text-[#007aff]';
-                    return `<button type="button" id="${id}" class="ut-sheet-row ${color} text-[17px] font-medium justify-center">${label}</button>`;
+                const chevron = '<svg class="ut-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
+                const tile = (id, value, label, tone) => {
+                    const nClass = tone === 'hot' ? 'is-hot' : (tone === 'quiet' ? 'is-quiet' : '');
+                    const body = `<span class="ut-tile-n ${nClass}">${value}</span><span class="ut-k">${label}</span>`;
+                    return id
+                        ? `<button type="button" id="${id}" class="ut-tile">${body}</button>`
+                        : `<div class="ut-tile">${body}</div>`;
                 };
-                const banDetail = banned
-                    ? `${expired ? 'Expired' : 'On'}${untilStr ? ` · ${untilStr}` : ''}`
-                    : 'Off';
+                const rowBtn = (id, label, extraClass) => `<button type="button" id="${id}" class="ut-row"><span class="flex-1 ${extraClass || ''}">${label}</span>${chevron}</button>`;
+                const stat = (label, valueHtml) => `<div><div class="ut-k">${label}</div><div class="ut-v">${valueHtml}</div></div>`;
+                const plainName = profile.alias || String(user.displayName || '').trim() || (user._isDeviceStub ? 'Device guest' : 'User');
+                const initial = Admin.commuterEsc(Array.from(plainName)[0]?.toLocaleUpperCase() || 'U');
+                const seenAt = Number(user.lastSeenAt) || 0;
+                const appOpen = seenAt > 0 && (Date.now() - seenAt) < 3 * 60 * 1000;
+                const banDetail = banned ? (expired ? 'Expired' : 'On') : 'Off';
+                const feedbackTile = profile.hasChat && chatDid
+                    ? tile('ut-open-chat-btn', profile.feedbackCount ? String(profile.feedbackCount) : 'Open', 'Feedback', '')
+                    : `<div class="ut-tile"><span class="ut-tile-n is-quiet">None</span><span class="ut-k">Feedback</span>${chatDid ? '<button type="button" id="ut-feedback-plus" class="ut-chip" aria-label="Start a message">+</button>' : ''}</div>`;
                 out.innerHTML = `
-                    <div class="ut-lookup space-y-5 text-left">
-                        <div class="px-1 pt-1">
-                            <p class="text-[28px] font-semibold tracking-tight text-gray-900 dark:text-white break-words leading-tight">${heading}</p>
-                            <p class="text-[15px] text-gray-500 mt-1 break-all">${accountEmailHtml}</p>
-                            ${profile.alias ? `<p class="text-[13px] text-gray-400 mt-1">Alias ${Admin.commuterEsc(profile.alias)}</p>` : ''}
-                            <p class="font-mono text-[12px] text-gray-400 break-all mt-1">${Admin.commuterEsc(uid)}</p>
-                        </div>
-                        <div class="ut-sheet-group">
-                            ${infoRow('Joined', `<b>${joinedLabel}</b>`)}
-                            ${infoRow('App version', `<b>${Admin.commuterEsc(recordedVersion)}</b>`)}
-                            ${accountCreatedMs && joinedMs && Math.abs(accountCreatedMs - joinedMs) > 60000 ? infoRow('Account created', `<b>${Admin.formatDate(accountCreatedMs)}</b>`) : ''}
-                            ${infoRow('Last activity', lastActivityHtml)}
-                            ${infoRow('Found by', Admin.commuterEsc(viaLabel))}
-                            ${deviceId && deviceId !== uid ? infoRow('Device', `<span class="break-all">${Admin.commuterEsc(deviceId)}</span>`) : ''}
-                            ${linkedIds.length ? `<details class="ut-devices"><summary class="ut-sheet-row"><span class="text-[15px] text-gray-500">Linked devices</span><span class="text-[15px] text-gray-400 shrink-0">${linkedIds.length}<span aria-hidden="true"> ›</span></span></summary><div class="ut-devices-list">${linkedIds.map((id) => `<p class="font-mono text-[12px] break-all text-gray-700 dark:text-gray-300">${Admin.commuterLabelHtml(id)}</p>`).join('')}</div></details>` : infoRow('Linked devices', 'none')}
-                            ${contactHtml ? infoRow('Contacts', contactHtml) : ''}
-                            ${legalValue ? infoRow(legalLabel, `<b>${Admin.commuterEsc(legalValue)}</b>`) : ''}
-                            ${knownGender ? infoRow('Gender', `<b>${Admin.commuterEsc(knownGender)}</b>`) : ''}
-                            ${Number.isFinite(knownAge) && knownAge > 0 ? infoRow('Age', `<b>${Math.floor(knownAge)}</b>`) : ''}
-                            ${!(Number.isFinite(knownAge) && knownAge > 0) && Number.isFinite(knownBirthYear) && knownBirthYear > 1900 ? infoRow('Birth year', `<b>${Math.floor(knownBirthYear)}</b>`) : ''}
-                            ${infoRow('Role', `<b>${flags.role || 'user'}</b> · ${score}`)}
-                            ${infoRow('Ban', `<b class="${banned && !expired ? 'text-[#ff3b30]' : ''}">${banDetail}</b>${banned ? ` · ${Admin.commuterEsc(modeStr)}` : ''}${bannedAtMs ? `<span class="block text-[12px] text-gray-400">since ${Admin.formatDate(bannedAtMs)}</span>` : ''}${bannedBy ? `<span class="block text-[12px] text-gray-400">${bannedBy}</span>` : ''}`)}
-                        </div>
-                        <div>
-                            <p class="px-4 pb-1.5 text-[13px] text-gray-500">Activity</p>
-                            <div class="ut-sheet-group">
-                                ${navRow('ut-open-bans-btn', 'Bans', banDetail)}
-                                ${profile.hasChat && chatDid ? navRow('ut-open-chat-btn', 'Feedback', profile.feedbackCount ? String(profile.feedbackCount) : 'Open') : `<div class="ut-sheet-row items-center"><span class="text-[17px]">Feedback</span><span class="flex items-center gap-2 shrink-0"><span class="text-[15px] text-gray-400">None</span>${chatDid ? '<button type="button" id="ut-feedback-plus" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#007aff] text-white text-[18px] font-semibold leading-none" aria-label="Start a message">+</button>' : ''}</span></div>`}
-                                ${chatDid ? navRow('ut-open-trips-btn', 'Trip plans', profile.tripPresent ? 'Yes' : 'None') : ''}
-                                ${(chatDid || profile.fareVotes.length) ? navRow('ut-open-fares-btn', 'Fare votes', String(profile.fareVotes.length)) : ''}
-                                ${(chatDid || profile.fails.length) ? navRow('ut-open-fails-btn', 'Routing fails', String(profile.fails.length)) : ''}
-                                ${(chatDid || profile.crashes.length) ? navRow('ut-open-crashes-btn', 'Crashes', String(profile.crashes.length)) : ''}
-                            </div>
-                        </div>
-                        <div>
-                            <p class="px-4 pb-1.5 text-[13px] text-gray-500">Live location</p>
-                            <div class="ut-sheet-group px-4 py-3">${liveHtml}</div>
-                        </div>
-                        <div>
-                            <p class="px-4 pb-1.5 text-[13px] text-gray-500">Community</p>
-                            <div class="ut-sheet-group px-4 py-3">
-                                ${communityHtml}
-                                ${defaultRouteLabel ? `<p class="text-[13px] text-gray-500 mt-2">Usual line ${Admin.commuterEsc(defaultRouteLabel)}</p>` : ''}
-                                ${ticketCount ? `<p class="text-[13px] text-gray-500">${ticketCount} ticket photo${ticketCount === 1 ? '' : 's'}</p>` : ''}
-                                <div class="mt-3 flex items-center gap-2">
-                                    <label class="text-[15px] text-gray-700 dark:text-gray-200 shrink-0" for="ut-community-max">Messages in 30 minutes</label>
-                                    <input id="ut-community-max" type="number" min="8" max="200" step="1" value="${allowanceValue}" class="w-20 h-10 px-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-0 text-[15px] text-gray-900 dark:text-white" />
-                                    <button type="button" id="ut-community-max-save" class="h-10 px-3 rounded-xl bg-[#007aff] text-white text-[15px] font-semibold">Save</button>
+                    <div class="ut-lookup">
+                        <div class="ut-card ut-profile">
+                            <div class="ut-profile-head">
+                                <span class="ut-avatar" aria-hidden="true">${initial}</span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="ut-profile-name">${heading}</p>
+                                    <p class="ut-profile-email">${accountEmailHtml}</p>
+                                    ${profile.alias && heading !== Admin.commuterEsc(profile.alias) ? `<p class="ut-k">Alias ${Admin.commuterEsc(profile.alias)}</p>` : ''}
                                 </div>
-                                <p class="text-[12px] text-gray-400 mt-1">Quiet. The rider is not told this number changed.</p>
+                            </div>
+                            <div class="ut-id-row">
+                                <span class="ut-mono">${Admin.commuterEsc(uid)}</span>
+                                <button type="button" id="ut-copy-uid" class="ut-chip">Copy</button>
+                                <span class="ut-k" style="margin-left:auto">${Admin.commuterEsc(viaLabel)}</span>
+                            </div>
+                            <div class="ut-chip-row">
+                                <span class="ut-chip ${banned && !expired ? 'ut-chip-hot' : 'ut-chip-ok'}">${banned ? (expired ? 'Ban expired' : 'Banned') : 'No ban'}</span>
+                                ${appOpen ? '<span class="ut-chip">App open now</span>' : ''}
+                                <span class="ut-chip">Role: ${Admin.commuterEsc(flags.role || 'user')} · ${score}</span>
+                            </div>
+                            ${banned ? `<p class="ut-k">${Admin.commuterEsc(modeStr)}${untilStr && untilStr !== '-' ? ` · ${Admin.commuterEsc(untilStr)}` : ''}${bannedAtMs ? ` · since ${Admin.formatDate(bannedAtMs)}` : ''}${bannedBy ? ` · ${bannedBy}` : ''}</p>` : ''}
+                            <div class="ut-stats">
+                                ${stat('Last activity', lastActivity ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="ut-k block">${Admin.commuterEsc(lastActivity.label)}</span>` : '<span class="ut-k">None</span>')}
+                                ${stat('App version', Admin.commuterEsc(recordedVersion))}
+                                ${stat('Joined', Admin.commuterEsc(joinedLabel))}
+                                ${accountCreatedMs && joinedMs && Math.abs(accountCreatedMs - joinedMs) > 60000 ? stat('Account created', Admin.formatDate(accountCreatedMs)) : ''}
+                                ${deviceId && deviceId !== uid ? stat('Device', `<span class="ut-mono">${Admin.commuterEsc(deviceId)}</span>`) : ''}
+                                ${contactHtml ? stat('Contacts', contactHtml) : ''}
+                                ${legalValue ? stat(Admin.commuterEsc(legalLabel), Admin.commuterEsc(legalValue)) : ''}
+                                ${knownGender ? stat('Gender', Admin.commuterEsc(knownGender)) : ''}
+                                ${Number.isFinite(knownAge) && knownAge > 0 ? stat('Age', String(Math.floor(knownAge))) : ''}
+                                ${!(Number.isFinite(knownAge) && knownAge > 0) && Number.isFinite(knownBirthYear) && knownBirthYear > 1900 ? stat('Birth year', String(Math.floor(knownBirthYear))) : ''}
+                            </div>
+                            ${linkedIds.length ? `<details class="ut-devices"><summary class="ut-row"><span class="flex-1">Linked devices</span><span class="ut-k">${linkedIds.length}</span>${chevron}</summary><div class="ut-devices-list">${linkedIds.map((id) => `<p class="ut-mono">${Admin.commuterLabelHtml(id)}</p>`).join('')}</div></details>` : '<p class="ut-k">No linked devices</p>'}
+                        </div>
+                        <div>
+                            <p class="ut-lbl">Activity</p>
+                            <div class="ut-tiles">
+                                ${tile('ut-open-bans-btn', banDetail, 'Bans', banned && !expired ? 'hot' : 'quiet')}
+                                ${feedbackTile}
+                                ${chatDid ? tile('ut-open-trips-btn', profile.tripPresent ? 'Yes' : 'None', 'Trip plans', profile.tripPresent ? '' : 'quiet') : tile('', 'None', 'Trip plans', 'quiet')}
+                                ${(chatDid || profile.fareVotes.length) ? tile('ut-open-fares-btn', String(profile.fareVotes.length), 'Fare votes', profile.fareVotes.length ? '' : 'quiet') : tile('', '0', 'Fare votes', 'quiet')}
+                                ${(chatDid || profile.fails.length) ? tile('ut-open-fails-btn', String(profile.fails.length), 'Routing fails', profile.fails.length ? '' : 'quiet') : tile('', '0', 'Routing fails', 'quiet')}
+                                ${(chatDid || profile.crashes.length) ? tile('ut-open-crashes-btn', String(profile.crashes.length), 'Crashes', profile.crashes.length ? '' : 'quiet') : tile('', '0', 'Crashes', 'quiet')}
                             </div>
                         </div>
-                        <div class="ut-sheet-group">
-                            ${chatDid ? actionRow('ut-start-chat-btn', profile.hasChat ? 'Reply' : 'Start chat', 'primary') : ''}
-                            ${chatDid ? actionRow('ut-alias-btn', 'Edit alias', 'primary') : ''}
-                            ${actionRow('ut-ban-btn', 'Shadow ban', 'danger')}
-                            ${actionRow('ut-lift-btn', 'Lift ban', 'primary')}
+                        <div>
+                            <p class="ut-lbl">Community</p>
+                            <div class="ut-card ut-pad">
+                                ${communityHtml}
+                                ${defaultRouteLabel ? `<p class="ut-k">Usual line ${Admin.commuterEsc(defaultRouteLabel)}</p>` : ''}
+                                ${ticketCount ? `<p class="ut-k">${ticketCount} ticket photo${ticketCount === 1 ? '' : 's'}</p>` : ''}
+                                <div class="ut-stepper">
+                                    <span class="flex-1 font-semibold text-[15px]">Messages per 30 min</span>
+                                    <button type="button" id="ut-community-max-dec" class="ut-step" aria-label="Decrease">−</button>
+                                    <input id="ut-community-max" type="number" min="8" max="200" step="1" value="${allowanceValue}" class="ut-step-value" />
+                                    <button type="button" id="ut-community-max-inc" class="ut-step" aria-label="Increase">+</button>
+                                </div>
+                                <button type="button" id="ut-community-max-save" class="ut-save-limit">Save limit</button>
+                                <span class="ut-k">Quiet change. The rider is not told.</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="ut-lbl">Live location</p>
+                            <div class="ut-card ut-pad">${liveHtml}</div>
+                        </div>
+                        ${chatDid ? `<div><p class="ut-lbl">Actions</p><div class="ut-card">${rowBtn('ut-start-chat-btn', profile.hasChat ? 'Reply' : 'Start chat')}${rowBtn('ut-alias-btn', 'Edit alias')}</div></div>` : ''}
+                        <div>
+                            <p class="ut-lbl">Moderation</p>
+                            <div class="ut-card">
+                                ${rowBtn('ut-ban-btn', 'Shadow ban', 'ut-row-danger')}
+                                ${banned ? rowBtn('ut-lift-btn', 'Lift ban') : '<button type="button" id="ut-lift-btn" class="ut-row" disabled><span class="flex-1 flex flex-col"><span>Lift ban</span><span class="ut-k">No active ban</span></span></button>'}
+                            </div>
                         </div>
                     </div>`;
                 document.getElementById('ut-open-chat-btn')?.addEventListener('click', () => {
@@ -15947,6 +15983,22 @@ const Admin = {
                     await Admin.setCommuterAlias(chatDid, profile.alias || '');
                     Admin.lookupUserTrust();
                 });
+                document.getElementById('ut-copy-uid')?.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(uid);
+                        if (typeof showToast === 'function') showToast('Copied', 'success');
+                    } catch {
+                        if (typeof showToast === 'function') showToast('Could not copy that', 'error');
+                    }
+                });
+                const bumpAllowance = (delta) => {
+                    const input = document.getElementById('ut-community-max');
+                    if (!input) return;
+                    const current = Math.floor(Number(input.value)) || 8;
+                    input.value = String(Math.min(200, Math.max(8, current + delta)));
+                };
+                document.getElementById('ut-community-max-dec')?.addEventListener('click', () => bumpAllowance(-1));
+                document.getElementById('ut-community-max-inc')?.addEventListener('click', () => bumpAllowance(1));
                 document.getElementById('ut-community-max-save')?.addEventListener('click', async () => {
                     const input = document.getElementById('ut-community-max');
                     const next = Math.floor(Number(input?.value));
@@ -16439,7 +16491,6 @@ const Admin = {
                             <p id="admin-reply-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                             <ul id="admin-reply-suggest-status-steps" class="mt-1 space-y-0.5 text-[11px] text-indigo-900 dark:text-indigo-100"></ul>
                         </div>
-                        <p id="admin-reply-suggest-done" class="hidden mt-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
                     </div>`,
 
     replyGuideModalMarkup: () => `
@@ -17315,7 +17366,8 @@ const Admin = {
             Admin.setSuggestProgress(null);
             const ready = document.getElementById('admin-reply-suggest-done');
             if (ready) {
-                ready.textContent = `Draft ready. Used ${payload.thread.length} messages. The draft is in the box. Edit it, then send.`;
+                const used = payload.thread.length;
+                ready.textContent = `Draft ready. Used ${used} message${used === 1 ? '' : 's'}. The draft is in the box. Edit it, then send.`;
                 ready.classList.remove('hidden');
             }
             Admin.syncReplyGuide();
@@ -17591,11 +17643,17 @@ const Admin = {
                             <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[12rem] overflow-visible p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
                         </div>
                         ${Admin.replySuggestMarkup()}
-                        <button type="button" id="admin-reply-listen" class="mt-3 w-full min-h-[2.75rem] rounded-2xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Listen to this draft</button>
+                        <div id="admin-reply-speech" class="mt-3 flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-1.5 shadow-sm dark:border-gray-600 dark:bg-gray-900" role="group" aria-label="Listen to this draft">
+                            <button type="button" id="admin-reply-listen" data-speech="play" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Play"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+                            <button type="button" data-speech="pause" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Pause"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg></button>
+                            <button type="button" data-speech="restart" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Restart"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/></svg></button>
+                            <span data-speech-status class="min-w-0 flex-1 px-1 text-xs font-semibold text-gray-700 dark:text-gray-200">Not playing</span>
+                        </div>
                         <div class="grid grid-cols-2 gap-2 mt-3 pt-3 pb-1 border-t border-gray-100 dark:border-gray-700">
                             <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
                             <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
                         </div>
+                        <p id="admin-reply-suggest-done" class="hidden mt-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
                     </div>
                 </div>
             `;
@@ -17824,17 +17882,46 @@ const Admin = {
         if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();
         const clearNoteBtn = document.getElementById('reply-suggest-clear-note');
         if (clearNoteBtn) clearNoteBtn.onclick = () => Admin.saveReplySuggestNote({ clear: true });
-        const listenBtn = document.getElementById('admin-reply-listen');
-        if (listenBtn) listenBtn.onclick = () => {
-            const rich = document.getElementById('admin-reply-text');
-            const words = String(rich?.innerText || rich?.textContent || '').trim();
-            const speak = window.ntSpeakOperatorCopy;
-            if (typeof speak !== 'function') return;
-            speak(words).then((result) => {
-                if (result?.hidden) return;
-                if (!result?.ok && result?.message && typeof showToast === 'function') showToast(result.message, 'error');
+        const speechTray = document.getElementById('admin-reply-speech');
+        if (speechTray && speechTray.dataset.bound !== '1') {
+            speechTray.dataset.bound = '1';
+            speechTray.addEventListener('click', (event) => {
+                const act = event.target.closest?.('[data-speech]')?.getAttribute('data-speech');
+                if (!act) return;
+                const rich = document.getElementById('admin-reply-text');
+                const words = String(rich?.innerText || rich?.textContent || '').trim();
+                const state = typeof window.ntOperatorSpeechState === 'function' ? window.ntOperatorSpeechState() : 'idle';
+                const report = (result) => {
+                    if (!result || result.hidden || result.ok) return;
+                    if (result.message && typeof showToast === 'function') showToast(result.message, 'error');
+                };
+                if (act === 'pause') {
+                    window.ntPauseOperatorSpeech?.();
+                    return;
+                }
+                if (act === 'play') {
+                    if (state === 'paused' || state === 'playing') {
+                        window.ntResumeOperatorSpeech?.();
+                        return;
+                    }
+                    const speak = window.ntSpeakOperatorCopy;
+                    if (typeof speak === 'function') speak(words).then(report);
+                    return;
+                }
+                if (act === 'restart') {
+                    if (state === 'idle' || state === 'preparing') {
+                        const speak = window.ntSpeakOperatorCopy;
+                        if (typeof speak === 'function') speak(words, { fresh: true }).then(report);
+                        return;
+                    }
+                    const restarted = window.ntRestartOperatorSpeech?.();
+                    if (restarted && restarted.ok === false) {
+                        const speak = window.ntSpeakOperatorCopy;
+                        if (typeof speak === 'function') speak(words, { fresh: true }).then(report);
+                    }
+                }
             });
-        };
+        }
         Admin.closeCopilotSettings();
         if (!editKey) Admin.loadReplySuggestNote(modal);
         Admin.bindReplyComposePreview();

@@ -1806,13 +1806,11 @@ function inboxDayLabel(ts) {
     return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const INBOX_NAME_COLORS = ['#02a698', '#53bdeb', '#06cf9c', '#e742a4', '#a281f7', '#ff7b72', '#25d366', '#d97706'];
-
 function inboxNameColor(seed) {
     const s = String(seed || 'x');
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
-    return INBOX_NAME_COLORS[Math.abs(h) % INBOX_NAME_COLORS.length];
+    return `var(--nt-name-${Math.abs(h) % 10})`;
 }
 
 function viewerInboxIdentity() {
@@ -1854,7 +1852,7 @@ function inboxAvatarHtml(name, seed, photoUrl) {
     const mark = letter
         ? `<span class="community-avatar-letter" style="color:${ink}">${escapeHTML(letter)}</span>`
         : `<span class="community-avatar-mark" style="background:${ink}" aria-hidden="true"></span>`;
-    const disc = `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0">${mark}</span>`;
+    const disc = `<span class="community-avatar-disc w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0" style="--nt-avatar:${ink}">${mark}</span>`;
     const photo = profilePhotosOn() && /^https:\/\//i.test(String(photoUrl || '')) ? String(photoUrl) : '';
     if (!photo) return disc;
     return `<span class="relative inline-flex w-8 h-8 shrink-0"><img src="${escapeHTML(photo)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');var f=this.parentElement&amp;&amp;this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/><span class="avatar-fallback hidden absolute inset-0">${disc}</span></span>`;
@@ -2078,7 +2076,7 @@ function renderMessagesThread(list) {
                 : `<div class="community-avatar">${inboxAvatarHtml(name, seed, photo)}</div>`;
         const nameHtml = grouped
             ? ''
-            : `<div class="community-bubble-name-row" style="color:${mine ? 'inherit' : inboxNameColor(seed)}"><span class="community-bubble-name truncate">${escapeHTML(name)}</span></div>`;
+            : `<div class="community-bubble-name-row" style="color:${mine ? 'var(--nt-name-own)' : inboxNameColor(seed)}"><span class="community-bubble-name truncate">${escapeHTML(name)}</span></div>`;
         const bubbleCls = mine ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
         html += `<div class="community-post-row inbox-row ${mine ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
       ${avatar}

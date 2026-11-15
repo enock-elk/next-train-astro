@@ -306,10 +306,16 @@ function formatDayDivider(ts) {
     return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Ten hues, 36° apart, so one step always leaves the neighbour above. */
-const NAME_COLORS = ['#ca2121', '#ca8621', '#a8ca21', '#43ca21', '#21ca64', '#21caca', '#2164ca', '#4321ca', '#a821ca', '#ca2186'];
+/** Dark inks for hue spacing. The painted colour is a theme token of the same slot. */
+const NAME_COLORS = ['#9f1239', '#c2410c', '#a16207', '#15803d', '#0f766e', '#0e7490', '#1d4ed8', '#4338ca', '#7e22ce', '#be185d'];
 const NAME_HUE_GAP = 32;
 let feedNameColors = new Map();
+
+function namePaint(index) {
+    const n = NAME_COLORS.length;
+    const idx = ((Number(index) || 0) % n + n) % n;
+    return `var(--nt-name-${idx})`;
+}
 
 function hashColorIndex(seed) {
     const s = String(seed || 'x');
@@ -347,16 +353,16 @@ function colorFarFrom(startIdx, neighbor) {
     const n = NAME_COLORS.length;
     const start = ((Number(startIdx) || 0) % n + n) % n;
     for (let step = 0; step < n; step++) {
-        const color = NAME_COLORS[(start + step) % n];
-        if (!huesClose(color, neighbor)) return color;
+        const idx = (start + step) % n;
+        if (!huesClose(NAME_COLORS[idx], neighbor)) return idx;
     }
-    return NAME_COLORS[start];
+    return start;
 }
 
 function nameColorFor(seed) {
     const key = String(seed || 'x');
-    if (feedNameColors.has(key)) return feedNameColors.get(key);
-    return NAME_COLORS[hashColorIndex(key)];
+    const idx = feedNameColors.has(key) ? feedNameColors.get(key) : hashColorIndex(key);
+    return namePaint(idx);
 }
 
 /**
@@ -375,18 +381,19 @@ function assignFeedNameColors(posts) {
     const assigned = new Map();
     rows.forEach((row) => {
         if (row.isOwn || !row.key || assigned.has(row.key)) return;
-        assigned.set(row.key, NAME_COLORS[hashColorIndex(row.key)]);
+        assigned.set(row.key, hashColorIndex(row.key));
     });
     for (let pass = 0; pass < NAME_COLORS.length; pass++) {
         let prevKey = '';
         let changed = false;
         rows.forEach((row) => {
             if (row.isOwn || !row.key) return;
-            const neighbor = prevKey && prevKey !== row.key ? assigned.get(prevKey) : '';
-            if (neighbor && huesClose(assigned.get(row.key), neighbor)) {
-                const current = NAME_COLORS.indexOf(assigned.get(row.key));
-                const next = colorFarFrom((current < 0 ? 0 : current) + 1, neighbor);
-                if (next !== assigned.get(row.key)) {
+            const neighborIdx = prevKey && prevKey !== row.key ? assigned.get(prevKey) : null;
+            const neighbor = neighborIdx == null ? '' : NAME_COLORS[neighborIdx];
+            const current = assigned.get(row.key);
+            if (neighbor && huesClose(NAME_COLORS[current], neighbor)) {
+                const next = colorFarFrom(current + 1, neighbor);
+                if (next !== current) {
                     assigned.set(row.key, next);
                     changed = true;
                 }
@@ -427,7 +434,9 @@ function avatarInitial(name) {
 }
 
 function avatarInk(color) {
-    return /^#[0-9a-fA-F]{6}$/.test(String(color || '')) ? String(color) : '#64748b';
+    const ink = String(color || '');
+    if (ink.startsWith('var(--nt-name-')) return ink;
+    return /^#[0-9a-fA-F]{6}$/.test(ink) ? ink : 'var(--nt-name-6)';
 }
 
 /** Letter in this person's colour. A small disc when the name has no letter. No person emoji. */
@@ -441,15 +450,16 @@ function avatarMarkHtml(name, color) {
 }
 
 function renderAvatarHtml(photoURL, name, color) {
+    const ink = avatarInk(color);
     const mark = avatarMarkHtml(name, color);
     const safePhoto = profilePhotosOn() ? sanitizeCommunityPhotoUrl(photoURL) : '';
     if (safePhoto) {
         return `<span class="relative inline-flex w-[1.625rem] h-[1.625rem] shrink-0">
             <img src="${escapeHTML(safePhoto)}" alt="" class="w-[1.625rem] h-[1.625rem] rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
-            <span class="avatar-fallback hidden absolute inset-0 w-[1.625rem] h-[1.625rem] rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">${mark}</span>
+            <span class="avatar-fallback community-avatar-disc hidden absolute inset-0 w-[1.625rem] h-[1.625rem] rounded-full flex items-center justify-center" style="--nt-avatar:${ink}">${mark}</span>
         </span>`;
     }
-    return `<span class="w-[1.625rem] h-[1.625rem] rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm shrink-0">${mark}</span>`;
+    return `<span class="community-avatar-disc w-[1.625rem] h-[1.625rem] rounded-full flex items-center justify-center text-sm shrink-0" style="--nt-avatar:${ink}">${mark}</span>`;
 }
 
 async function publicCommuterPhoto(acct) {
@@ -2576,7 +2586,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
-        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="inline-flex items-center min-w-0"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${versionChip}</span>${marksHtml}</div>`;
+        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'var(--nt-name-own)' : nameColor}"><span class="inline-flex items-center min-w-0"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${versionChip}</span>${marksHtml}</div>`;
 
     return `
       <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}"${tombstone ? ' data-deleted="1"' : ''}>

@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, stationLabelsMatch, stationQueryHits, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, sheetStationTitle, timetableStationName, stationLabelsMatch, stationQueryHits, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -220,6 +220,14 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(STATION_ALIASES['PRETORIA NORTH'] === 'PRETORIA N', 'Pretoria North alias map');
     assert(STATION_ALIASES['PRETORIA WEST'] === 'PRETORIA WES', 'Pretoria West alias map');
     assert(commuterStationName('PRETORIA-N') === 'PRETORIA NORTH', 'PRETORIA-N displays as PRETORIA NORTH');
+    assert(sheetStationTitle('PRETORIA-N') === 'Pretoria North', 'the train sheet title-cases Pretoria North');
+    assert(sheetStationTitle('PRETORIA WES') === 'Pretoria West', 'the train sheet title-cases Pretoria West');
+    assert(sheetStationTitle('BELLE-OMBRE') === 'Belle-Ombre', 'the train sheet title-cases Belle-Ombre');
+    assert(sheetStationTitle('WALTOO') === 'Waltloo', 'the train sheet spells Waltloo in title case');
+    assert(commuterStationName('WALTOO') === 'WALTLOO', 'the board spells Waltloo in capitals');
+    assert(timetableStationName('WALTOO') === 'WALTLOO', 'the timetable and download spell Waltloo in capitals');
+    assert(timetableStationName('SILVERTON') === 'SILVERTON', 'a normal timetable row stays in capitals');
+    assert(timetableStationName('kwaMASHU') === 'kwaMASHU', 'a mixed dump name stays as stored');
     assert(commuterStationName('PRETORIA WES') === 'PRETORIA WEST', 'PRETORIA WES displays as PRETORIA WEST');
     assert(commuterStationName('Pretoria-N') === 'PRETORIA NORTH', 'Pretoria-N displays as PRETORIA NORTH');
     assert(plannerStationDisplayName('PRETORIA-N') === 'PRETORIA NORTH', 'planner shows PRETORIA NORTH');

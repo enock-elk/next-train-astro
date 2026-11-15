@@ -472,6 +472,8 @@ ok(adminJs.includes('admin-prompt-editor'), 'prompts open in a full editor');
 ok(adminJs.includes('ntStopOperatorSpeech'), 'read-aloud clears when Developer Mode returns home');
 ok(worker.includes('body.preview'), 'a voice test can use the choices on screen');
 ok(adminJs.includes('Listen to this draft'), 'Co-Pilot can read the draft aloud');
+ok(adminJs.includes('id="admin-reply-speech"'), 'Co-Pilot shows the pause and play tray');
+ok(adminJs.indexOf('id="admin-reply-suggest-done"') > adminJs.indexOf('id="reply-send"'), 'the draft-ready line sits under Send');
 ok(worker.includes('requireOperator'), 'read-aloud checks the operator token');
 ok(worker.includes('SPEAK_HOUR_CHARS'), 'read-aloud has a character cap');
 ok(!worker.includes('texttospeech.googleapis.com') || worker.includes('X-Goog-Api-Key'), 'the speech key stays on the worker');

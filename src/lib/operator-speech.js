@@ -42,7 +42,21 @@ function speechBar() {
     return bar;
 }
 
+function copilotTray() {
+    const modal = document.getElementById('admin-reply-modal');
+    const tray = document.getElementById('admin-reply-speech');
+    if (!modal || !tray || modal.classList.contains('hidden')) return null;
+    return tray;
+}
+
 function setSpeechStatus(text) {
+    const tray = copilotTray();
+    if (tray) {
+        document.getElementById('nt-operator-speech')?.classList.add('hidden');
+        const label = tray.querySelector('[data-speech-status]');
+        if (label) label.textContent = text;
+        return;
+    }
     const bar = speechBar();
     bar.classList.remove('hidden');
     const label = bar.querySelector('[data-speech-status]');
@@ -51,6 +65,8 @@ function setSpeechStatus(text) {
 
 function hideSpeechBar() {
     document.getElementById('nt-operator-speech')?.classList.add('hidden');
+    const label = document.getElementById('admin-reply-speech')?.querySelector('[data-speech-status]');
+    if (label) label.textContent = 'Not playing';
 }
 
 function paintClock() {
@@ -126,6 +142,12 @@ export function stopOperatorSpeech() {
     pending = false;
     stopSpeech();
     return { ok: true, stopped: true };
+}
+
+export function operatorSpeechState() {
+    if (pending) return 'preparing';
+    if (!playing) return 'idle';
+    return playing.paused ? 'paused' : 'playing';
 }
 
 /**
@@ -225,4 +247,8 @@ export async function speakOperatorCopy(value, options = {}) {
 if (typeof window !== 'undefined') {
     window.ntSpeakOperatorCopy = speakOperatorCopy;
     window.ntStopOperatorSpeech = stopOperatorSpeech;
+    window.ntPauseOperatorSpeech = pauseOperatorSpeech;
+    window.ntResumeOperatorSpeech = resumeOperatorSpeech;
+    window.ntRestartOperatorSpeech = restartOperatorSpeech;
+    window.ntOperatorSpeechState = operatorSpeechState;
 }

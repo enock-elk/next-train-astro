@@ -832,14 +832,38 @@ const COMMUTER_STATION_LABELS = Object.freeze({
     'PRETORIA NORTH': 'PRETORIA NORTH',
     'PRETORIA WES': 'PRETORIA WEST',
     'PRETORIA WEST': 'PRETORIA WEST',
-    WALTOO: 'Waltloo',
-    WALTLOO: 'Waltloo',
+    WALTOO: 'WALTLOO',
+    WALTLOO: 'WALTLOO',
 });
 
 export function commuterStationName(raw) {
     const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
     if (!cleaned) return '';
     return COMMUTER_STATION_LABELS[cleaned.toUpperCase()] || cleaned;
+}
+
+/**
+ * Title case for the full train sheet and the other lists that already
+ * title-case every stop. Pretoria North and Pretoria West follow the same
+ * case as Belle-Ombre. Board pickers stay on commuterStationName.
+ */
+export function sheetStationTitle(raw) {
+    const named = commuterStationName(raw);
+    if (!named) return '';
+    return named.toLowerCase().replace(/(^|[^A-Za-z0-9])([a-z])/g, (_all, sep, ch) => sep + ch.toUpperCase());
+}
+
+/**
+ * In-app timetable and the downloaded sheet. Rows are stored in capitals.
+ * A corrected spelling (Waltloo, Pretoria North) stays in those capitals.
+ * A mixed dump name such as kwaMASHU is left as stored.
+ */
+export function timetableStationName(raw) {
+    const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return '';
+    const named = commuterStationName(cleaned);
+    if (cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) return named.toUpperCase();
+    return named;
 }
 
 /** Visible station text. Same capitals as the rest of the board list. */

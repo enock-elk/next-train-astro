@@ -21,7 +21,7 @@ import {
     isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel, lineSwatchClass,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
-    resolveOperatingDayType, simUsesSpecificDate, commuterStationName
+    resolveOperatingDayType, simUsesSpecificDate, sheetStationTitle, timetableStationName
 } from './utils.js';
 
 import { 
@@ -1220,7 +1220,7 @@ export const Renderer = {
             if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return;
             if (isVariantStationName(row.STATION)) return; 
             const cleanStation = row.STATION.replace(' STATION', '');
-            const shownStation = commuterStationName(cleanStation);
+            const shownStation = timetableStationName(cleanStation);
             let hasData = false;
             sortedCols.forEach(col => { if (row[col] && row[col] !== "-" && row[col] !== "") hasData = true; });
             if (!hasData) return;
@@ -1430,9 +1430,7 @@ export const Renderer = {
         let name = stationName.replace(/ STATION/gi, '').trim();
         const upperName = name.toUpperCase();
         if (upperName === 'DURBAN YARD') return 'Durban';
-        const pretty = commuterStationName(name);
-        if (pretty !== name || pretty === 'PRETORIA NORTH' || pretty === 'PRETORIA WEST' || pretty === 'Waltloo') return pretty;
-        return Renderer._toTitleCase(name);
+        return sheetStationTitle(name);
     },
 
     // Public What's New list. Renders CHANGELOG_DATA. Commuter-visible

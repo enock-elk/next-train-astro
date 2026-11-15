@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Deploy worker
         working-directory: workers/nexttrain-reply
         env:
@@ -42,7 +45,7 @@ jobs:
             exit 0
           fi
           CONFIG=wrangler.jsonc
-          if grep -q 'REPLACE_ME' wrangler.jsonc; then
+          if grep -Eq '"id"[[:space:]]*:[[:space:]]*"REPLACE_ME"' wrangler.jsonc; then
             echo "::warning::REPLY_CONTEXT KV id is still REPLACE_ME. Deploying without the shared note store."
             sed '/"kv_namespaces"/,/],/d' wrangler.jsonc > wrangler.deploy.jsonc
             CONFIG=wrangler.deploy.jsonc

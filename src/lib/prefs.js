@@ -520,9 +520,11 @@ export function applyNavChrome(style = getNavStyle()) {
         bottomNav.setAttribute('aria-hidden', show ? 'false' : 'true');
         if (show && wasHidden) {
             bottomNav.classList.add('nt-nav-enter');
+            const clearEnter = () => bottomNav.classList.remove('nt-nav-enter');
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => bottomNav.classList.remove('nt-nav-enter'));
+                requestAnimationFrame(clearEnter);
             });
+            setTimeout(clearEnter, 400);
         }
         if (show && typeof window.ntFitAppViewport === 'function') {
             requestAnimationFrame(() => {

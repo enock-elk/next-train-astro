@@ -3,8 +3,8 @@
  * Defers until Welcome completes for first-time users.
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
-import { safeStorage } from './utils.js';
-import { withBase } from './config.js';
+import { safeStorage, normalizeStationName } from './utils.js';
+import { withBase, ROUTES } from './config.js';
 import { clearLiveTrainFollow, setLiveTrainFollow } from './live-train-follow.js';
 import { whenSettledForAutoNotices } from './session-stability.js';
 import {
@@ -113,13 +113,90 @@ export function readSavedDefaults() {
 
 async function applySavedDefaultsToStore(saved = readSavedDefaults()) {
     if (!saved?.routeId) return false;
-    const { ROUTES } = await import('./config.js');
     const route = ROUTES[saved.routeId];
     if (!route?.isActive || route.region !== saved.region) return false;
     const { $userRegion, $currentRouteId } = await import('../store.js');
     if ($userRegion.get() !== saved.region) $userRegion.set(saved.region);
     if ($currentRouteId.get() !== saved.routeId) $currentRouteId.set(saved.routeId);
     return true;
+}
+
+function routesOfStation(index, stationId) {
+    const row = index?.[normalizeStationName(stationId)];
+    const routes = row?.routes;
+    if (!routes) return [];
+    if (routes instanceof Set) return [...routes];
+    if (Array.isArray(routes)) return routes;
+    return Object.keys(routes);
+}
+
+/** First active corridor in a region. Used when a link names a region, not a line. */
+export function firstActiveRouteId(region) {
+    const id = Object.keys(ROUTES).find((key) => {
+        const route = ROUTES[key];
+        return route?.region === region && route.isActive && key !== 'special_event';
+    });
+    return id || '';
+}
+
+/**
+ * Notice bucket from a shared alert. A route id stays that route.
+ * A region bucket (all_GP) and a network bucket (all) pick one active line
+ * so a first visit has a home board.
+ */
+export function homeRouteForNoticeSource(sourceKey) {
+    const key = String(sourceKey || '').trim();
+    if (ROUTES[key]?.isActive) return ROUTES[key].id;
+    const regionMatch = key.match(/^all_([A-Za-z0-9]+)$/);
+    if (regionMatch) {
+        const code = regionMatch[1].toUpperCase();
+        if (['GP', 'WC', 'KZN', 'EC'].includes(code)) return firstActiveRouteId(code);
+    }
+    if (!key || key === 'all') return firstActiveRouteId('GP');
+    return '';
+}
+
+/**
+ * Save a corridor as this phone's home and finish Welcome.
+ * A timetable link always does this. A trip, community message, or alert
+ * does this only when the phone has no saved route yet.
+ */
+export function adoptShareHome(routeId) {
+    const route = ROUTES[String(routeId || '')];
+    if (!route?.isActive || !['GP', 'WC', 'KZN', 'EC'].includes(route.region)) return false;
+    try {
+        safeStorage.setItem('userRegion', route.region);
+        safeStorage.setItem(`defaultRoute_${route.region}`, route.id);
+        safeStorage.setItem('welcomeSeen', 'true');
+        sessionStorage.removeItem(DEEPLINK_WELCOME_KEY);
+    } catch { /* ignore */ }
+    import('../store.js').then(({ $userRegion, $currentRouteId }) => {
+        if ($userRegion.get() !== route.region) $userRegion.set(route.region);
+        if ($currentRouteId.get() !== route.id) $currentRouteId.set(route.id);
+    }).catch(() => {});
+    import('./prefs.js').then((m) => {
+        m.syncInAppChrome?.();
+        m.applyReturningUserChrome?.();
+    }).catch(() => {});
+    return true;
+}
+
+/** New visitor on a trip link: home is the line both stations share, else the region. */
+export async function adoptTripHomeIfNew(fromId, toId, regionHint) {
+    if (readSavedDefaults()) return false;
+    const { $globalStationIndex } = await import('../store.js');
+    const index = $globalStationIndex.get() || {};
+    const fromRoutes = routesOfStation(index, fromId);
+    const toSet = new Set(routesOfStation(index, toId));
+    const hint = ['GP', 'WC', 'KZN', 'EC'].includes(regionHint) ? regionHint : '';
+    const active = (id) => ROUTES[id]?.isActive && (!hint || ROUTES[id].region === hint);
+    let routeId = fromRoutes.find((id) => toSet.has(id) && active(id)) || '';
+    if (!routeId) {
+        routeId = fromRoutes.find((id) => toSet.has(id) && ROUTES[id]?.isActive) || '';
+    }
+    if (!routeId && hint) routeId = firstActiveRouteId(hint);
+    if (!routeId) return false;
+    return adoptShareHome(routeId);
 }
 
 /**
@@ -628,6 +705,10 @@ export async function applyAlertDeepLink() {
     if (!link || link.kind !== 'alert') return false;
     const snap = peekShareDeeplinkSnapshot();
     if (snap && snap.kind === 'alert') consumeShareDeeplinkSnapshot();
+    if (!readSavedDefaults()) {
+        const routeId = homeRouteForNoticeSource(link.source || '');
+        if (routeId) adoptShareHome(routeId);
+    }
     if (typeof window.switchTab === 'function') window.switchTab('next-train');
     const slowToast = armContentEntry('alerts');
     let state = 'gone';
@@ -654,6 +735,7 @@ export async function applyCommunityDeepLink() {
     if (!link || link.kind !== 'community') return false;
     const snap = peekShareDeeplinkSnapshot();
     if (snap && snap.kind === 'community') consumeShareDeeplinkSnapshot();
+    if (!readSavedDefaults() && link.routeId) adoptShareHome(link.routeId);
     const slowToast = armContentEntry('community');
     let allowed = false;
     try {

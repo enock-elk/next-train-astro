@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.15.8': [
+        'Facebook, Instagram, Messenger, and Line keep the bottom nav in the visible area. A host toolbar no longer counts as the keyboard, and the nav fade cannot stay invisible. A shared timetable becomes the saved route. A first visit from a trip, a community message, or an alert saves that line and skips Welcome. A return visit keeps the saved route and opens the link. SEO Open in Next Train still does not replace a saved route. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.15.7': [
         'Full train sheets title-case every stop, including Pretoria North, Pretoria West, and Waltloo. The in-app timetable and the downloaded sheet keep every stop in capitals, including Waltloo. Co-Pilot shows the pause, play, and restart tray on the draft, and the draft-ready line sits under Send. Community and Feedback names use darker inks on a light theme and lighter inks on a dark theme, and the letter disc is tinted so it does not match the wallpaper. User lookup and the short user sheet use the same card, activity tiles, and actions. No commuter What\'s New. forceShow stays false.',
     ],

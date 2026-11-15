@@ -45,6 +45,11 @@ const {
     ingestLaunchTargetUrl,
     hasInboundShareIntent,
     isInAppBrowser,
+    adoptShareHome,
+    adoptTripHomeIfNew,
+    firstActiveRouteId,
+    homeRouteForNoticeSource,
+    readSavedDefaults,
 } = await import('../src/lib/deeplink.js');
 
 ok(isInAppBrowser('Mozilla/5.0 FBAN/FB4A FBAV/1.0'), 'FBAN is in-app browser');
@@ -168,6 +173,14 @@ ok(grid.includes('"0513"') && grid.includes('"0516"'), 'August GP sheet still ha
 
 const layout = readFileSync(join(ROOT, 'src/layouts/Layout.astro'), 'utf8');
 ok(layout.includes('launchQueue') && layout.includes('nt_launch_target_url'), 'head captures launchQueue before modules');
+ok(layout.includes('function hostWebView()'), 'viewport script knows a host webview');
+ok(layout.includes('var keyboard = !embedded && gap > 140'), 'a host toolbar is not treated as the keyboard');
+ok(layout.includes('if (!embedded)'), 'a host webview does not extend the shell under its toolbar');
+ok(layout.includes('if (editing && baseline - vh > 140) keyboard = true'), 'focusing a field in a host webview hides the nav only when the frame actually shrinks');
+ok(layout.includes('animation: nt-nav-rise'), 'bottom nav fade ends visible if frames are dropped');
+ok(!layout.includes('#bottom-nav.nt-nav-enter {\n        opacity: 0;'), 'nav enter class does not stick at opacity 0');
+const prefs = readFileSync(join(ROOT, 'src/lib/prefs.js'), 'utf8');
+ok(prefs.includes('setTimeout(clearEnter, 400)'), 'nav enter class is cleared even if animation frames do not run');
 
 const astroCfg = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
 ok(astroCfg.includes("url.pathname === '/og/share'") && astroCfg.includes('NetworkOnly'), 'SW does not cache /og/share');
@@ -240,6 +253,29 @@ const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'u
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');
 ok(deletePage.includes('Delete account'), 'deletion page tells commuters to use Account');
 ok(!/operator/i.test(deletePage), 'deletion page does not mention operator accounts');
+
+ok(firstActiveRouteId('GP') === 'pta-pien', 'a region-wide link can land on Pretoria to Pienaarspoort');
+ok(homeRouteForNoticeSource('pta-pien') === 'pta-pien', 'a route alert keeps that route');
+ok(homeRouteForNoticeSource('all_WC') && homeRouteForNoticeSource('all_WC') !== 'pta-pien', 'a Western Cape alert stays in that region');
+ok(homeRouteForNoticeSource('all') === 'pta-pien', 'a network alert still gives a new visitor a home line');
+ok(adoptShareHome('pta-pien') === true, 'a timetable link can be saved as home');
+ok(readSavedDefaults()?.routeId === 'pta-pien', 'the saved home is the timetable route');
+ok(memoryStorage.getItem('welcomeSeen') === 'true', 'saving a link home finishes Welcome');
+const kept = await adoptTripHomeIfNew('PRETORIA', 'GERMISTON', 'GP');
+ok(kept === false, 'a trip link does not replace a saved home');
+memoryStorage.removeItem('userRegion');
+memoryStorage.removeItem('defaultRoute_GP');
+memoryStorage.removeItem('welcomeSeen');
+ok(await adoptTripHomeIfNew('PRETORIA', 'GERMISTON', 'GP') === true, 'a first trip link saves a home line');
+ok(readSavedDefaults()?.region === 'GP', 'the first trip home is in the linked region');
+const timetable = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
+ok(timetable.includes('adoptShareHome(link.routeId)'), 'a shared timetable writes the default route');
+ok(timetable.includes('persistRegion: false'), 'SEO Open in Next Train still does not write userRegion');
+ok(timetable.includes('A new visitor is not pinned by the link'), 'SEO handoff still does not pin a new visitor');
+const planner = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
+ok(planner.includes('adoptTripHomeIfNew(fromId, toId, targetRegion)'), 'a trip link can save a home for a first visit');
+ok(deeplink.includes('homeRouteForNoticeSource(link.source'), 'an alert link can save the notice line');
+ok(deeplink.includes('if (!readSavedDefaults() && link.routeId) adoptShareHome(link.routeId)'), 'a community link saves that room only for a first visit');
 
 if (failures.length) {
     console.error('verify-deeplink-launch FAILED:\n - ' + failures.join('\n - '));

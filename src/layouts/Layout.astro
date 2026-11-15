@@ -141,6 +141,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         function isAndroid() {
           return /Android/i.test((window.navigator && window.navigator.userAgent) || '');
         }
+        /* Facebook, Instagram, Messenger, and Line paint a toolbar outside
+           visualViewport. That gap is not the keyboard. */
+        function hostWebView() {
+          return /FBAN|FBAV|FB_IAB|Instagram|Messenger|Line\//i.test((window.navigator && window.navigator.userAgent) || '');
+        }
         function envBottom() {
           if (cachedEnv >= 0) return cachedEnv;
           if (!document.body) return 0;
@@ -165,7 +170,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var vh = vv && vv.height ? vv.height : inner;
           var off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
           var gap = Math.max(0, inner - vh - off);
-          var keyboard = gap > 140;
+          var embedded = hostWebView();
+          root.classList.toggle('nt-host-webview', embedded);
+          // A host toolbar can be taller than 140px. Only a real IME may hide the nav.
+          var keyboard = !embedded && gap > 140;
           // Some Android builds shrink layout height with the keyboard (gap≈0).
           // If an editable is focused and the frame collapsed, keep the last full height.
           var ae = document.activeElement;
@@ -193,11 +201,19 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var full = lastFullLayoutH || lastLayoutH || layoutH;
           // visualViewport shrinks first on Android. Do not treat that as the
           // new full-screen height or the oval rides up with the IME.
-          if (editing && vv && vv.height && (full - vv.height) > 140) {
-            keyboard = true;
-          }
-          if (editing && full && layoutH < full - 80) {
-            keyboard = true;
+          // In a host webview the toolbar is already outside visualViewport.
+          // Compare with the last visible shell, not the taller layout height,
+          // or focusing the composer hides the nav with no keyboard.
+          if (embedded) {
+            var baseline = lastShellH >= 240 ? lastShellH : vh;
+            if (editing && baseline - vh > 140) keyboard = true;
+          } else {
+            if (editing && vv && vv.height && (full - vv.height) > 140) {
+              keyboard = true;
+            }
+            if (editing && full && layoutH < full - 80) {
+              keyboard = true;
+            }
           }
           var communityOn = false;
           try {
@@ -225,17 +241,25 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             // Chrome often reports offsetTop=0 while the URL bar still
             // overlays the top of the layout; the missing strip is then
             // layout minus visual height.
-            if (shellTop < 1 && layoutH > shellH + 8) {
-              var missing = Math.round(layoutH - shellH);
-              if (missing < 180) shellTop = missing;
+            // A host webview's missing strip is its own bottom toolbar.
+            // Extending the shell under that bar hid the bottom nav and
+            // left the reserved strip empty on the Next Train tab.
+            if (!embedded) {
+              if (shellTop < 1 && layoutH > shellH + 8) {
+                var missing = Math.round(layoutH - shellH);
+                if (missing < 180) shellTop = missing;
+              }
+              // visualViewport can stop short of the layout bottom. That
+              // remainder paints as a light band under the oval. Stay inside
+              // layoutH so the oval cannot ride past the screen.
+              var tail = Math.round(layoutH - shellTop - shellH);
+              if (tail > 8 && tail < 180) shellH += tail;
+              lastLayoutH = layoutH;
+              lastFullLayoutH = layoutH;
+            } else {
+              lastLayoutH = shellH;
+              lastFullLayoutH = Math.round(shellTop + shellH);
             }
-            // visualViewport can stop short of the layout bottom. That
-            // remainder paints as a light band under the oval. Stay inside
-            // layoutH so the oval cannot ride past the screen.
-            var tail = Math.round(layoutH - shellTop - shellH);
-            if (tail > 8 && tail < 180) shellH += tail;
-            lastLayoutH = layoutH;
-            lastFullLayoutH = layoutH;
             lastShellTop = shellTop;
             lastShellH = shellH;
           } else if (keyboard) {
@@ -254,6 +278,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             }
           }
           var h = layoutH;
+          if (embedded && !keyboard && shellH >= 240) h = Math.round(shellTop + shellH);
           if (shellTop + shellH > h) h = shellTop + shellH;
           if (h < 240) h = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || atLeastFull(inner) || atLeastFull(vh) || 0;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
@@ -348,7 +373,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             var visibleBottom = vv
               ? Math.round((vv.offsetTop || 0) + (vv.height || 0))
               : layout;
-            var floor = Math.max(layout, visibleBottom);
+            var floor = hostWebView() ? visibleBottom : Math.max(layout, visibleBottom);
             // More than ~6px of dead space under the bar → recover.
             return floor - rect.bottom > 6;
           } catch (e) {
@@ -1335,9 +1360,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: relative;
         transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
       }
+      /* The class must not hold opacity 0. Facebook drops animation frames
+         while the webview is opening, so a class that waits for script to
+         remove it left an empty nav strip. The animation ends visible. */
       #bottom-nav.nt-nav-enter {
-        opacity: 0;
-        transform: translateY(10px);
+        animation: nt-nav-rise 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+      @keyframes nt-nav-rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
       }
       /* Full-width bar, same colour as the header. It sits on the bottom edge.
          Safari (not Add to Home Screen) already sits above the home indicator.

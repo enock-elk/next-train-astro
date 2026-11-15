@@ -14,7 +14,7 @@ import {
     stripShareParamsFromUrl,
     isSeoAppHandoff,
 } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot, noteDeeplinkSurface } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot, noteDeeplinkSurface, adoptShareHome } from './deeplink.js';
 
 function centerInScroller(scroller, el, axis) {
     if (!scroller || !el) return;
@@ -440,12 +440,20 @@ export async function applyRouteDeepLink() {
     const slowToast = armSlowDeeplinkToast(seoHandoff ? 'Opening Next Train' : 'Still opening this link');
 
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // A saved region and route stay in storage. The linked timetable still paints.
-    // A new visitor is not pinned by the link. Welcome waits until they leave.
     const region = ['GP', 'WC', 'KZN', 'EC'].includes(link.region) ? link.region : route.region;
-    $currentRouteId.set(link.routeId);
-    ensureRoutePinnedForRegion(region, { persistRegion: false });
-    $currentRouteId.set(link.routeId);
+    // SEO Open in Next Train only browses.
+    // A saved region and route stay in storage. A new visitor is not pinned by the link.
+    // A shared timetable becomes the saved route, including for a first visit.
+    if (seoHandoff) {
+        $currentRouteId.set(link.routeId);
+        ensureRoutePinnedForRegion(region, { persistRegion: false });
+        $currentRouteId.set(link.routeId);
+    } else {
+        adoptShareHome(link.routeId);
+        $currentRouteId.set(link.routeId);
+        ensureRoutePinnedForRegion(region, { persistRegion: true });
+        $currentRouteId.set(link.routeId);
+    }
     noteDeeplinkSurface('home', { loadDefaults: false });
     import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 

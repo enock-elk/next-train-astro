@@ -3,6 +3,7 @@
  * Counts come from logs the app already keeps. Google Analytics is not in here.
  * The written note is optional and must not invent a date the digest does not have.
  */
+import { scheduleOverrideAppliesToday } from './schedule-override.js';
 import { GRANTABLE_FEATURES } from './features.js';
 import { HOLIDAY_NAMES, ROUTES, SATURDAY_PLACEHOLDER_ROUTES, SPECIAL_DATES } from './config.js';
 import { CORRIDOR_INSIGHTS, SEO_INSIGHTS, displayRouteName, listSeoCorridors } from './seo-routes.js';
@@ -599,7 +600,7 @@ export function summarizeScheduleOverride(config) {
     const regions = config?.regions && typeof config.regions === 'object' ? config.regions : {};
     return ['GP', 'WC', 'KZN', 'EC'].map((code) => {
         const row = regions[code] || {};
-        if (!row.active) return `${code} is on its normal sheet`;
+        if (!scheduleOverrideAppliesToday(row)) return `${code} is on its normal sheet`;
         const day = String(row.dayType || 'override').replace(/_/g, ' ');
         const title = scrubOperatorText(row.title || '', 80);
         return title ? `${code} is showing the ${day} sheet: ${title}` : `${code} is showing the ${day} sheet`;

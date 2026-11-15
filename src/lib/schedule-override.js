@@ -85,6 +85,40 @@ export function scheduleOverrideAppliesToday(entry, now = new Date()) {
     return dates.includes(localScheduleOverrideDateKey(now));
 }
 
+/**
+ * Drop calendar days before today. A dated force with nothing left turns off.
+ * A force with no dates stays until the operator clears Active.
+ */
+export function pruneScheduleOverrideRegion(entry, now = new Date()) {
+    const source = entry && typeof entry === 'object' ? { ...entry } : {};
+    const dates = normalizeScheduleOverrideDates(source.dates);
+    if (!dates.length) return source;
+    const today = localScheduleOverrideDateKey(now);
+    const kept = dates.filter((day) => day >= today);
+    if (!kept.length) {
+        delete source.dates;
+        source.active = false;
+        return source;
+    }
+    source.dates = kept;
+    return source;
+}
+
+export function pruneScheduleOverrideConfig(config, now = new Date()) {
+    const regionsIn = config?.regions && typeof config.regions === 'object' ? config.regions : {};
+    const regions = {};
+    let changed = false;
+    Object.keys(regionsIn).forEach((code) => {
+        const before = regionsIn[code] && typeof regionsIn[code] === 'object' ? regionsIn[code] : {};
+        const after = pruneScheduleOverrideRegion(before, now);
+        regions[code] = after;
+        const beforeDates = normalizeScheduleOverrideDates(before.dates).join(',');
+        const afterDates = normalizeScheduleOverrideDates(after.dates).join(',');
+        if (!!before.active !== !!after.active || beforeDates !== afterDates) changed = true;
+    });
+    return { config: { ...(config || {}), regions }, changed };
+}
+
 function readLocalForces() {
     try {
         const raw = safeStorage.getItem(LOCAL_FORCE_KEY);
@@ -390,4 +424,6 @@ if (typeof window !== 'undefined') {
     window.maybePromptScheduleOverride = maybePromptScheduleOverride;
     window.normalizeScheduleOverrideDates = normalizeScheduleOverrideDates;
     window.scheduleOverrideAppliesToday = scheduleOverrideAppliesToday;
+    window.pruneScheduleOverrideRegion = pruneScheduleOverrideRegion;
+    window.pruneScheduleOverrideConfig = pruneScheduleOverrideConfig;
 }

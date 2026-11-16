@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.16.4': [
+        'Live Telemetry asks Google for the six headlines and the graph together again, keeps that finished reply for 30 seconds, and the next open returns it. A report is allowed to finish. One rejected report leaves the others in place. The phone asks again every 10 seconds. Ads, Sentry, and the regional cards are unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.16.3': [
         'Editing a Feedback Hub reply or a community message keeps the blank lines. Play sits above Guide on the community composer. A community draft says what the sheet shows before it points at a desk. Co-Pilot thanks someone for a poll only when the alert is a poll, and a quoted alert sends its picture, PDF, and text. Live Telemetry answers with the last good numbers immediately and refreshes Google after that. No commuter What\'s New. forceShow stays false.',
     ],

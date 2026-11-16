@@ -97,10 +97,17 @@ ok(intraView.counts[37] === null, 'hours after latest available stay unplotted (
 
 ok(!workerJs.includes('lagBuffer'), 'worker no longer applies a 3h lagBuffer');
 ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4 bucket');
-ok(workerJs.includes('AbortSignal.timeout(call.ms)') && !workerJs.includes('attempt(6000)'), 'a slow GA4 report is asked once');
-ok(workerJs.includes('async function gaReport') && workerJs.includes('No second try'), 'a timed-out GA4 report is not sent again');
-ok(workerJs.includes('telemetry-v17/tile/'), '7-day, 30-day, all-time, and each graph are stored on their own');
-ok(workerJs.includes('function keepStoredTile'), 'a slow miss does not paint ERR over a stored number');
+ok(workerJs.includes('GA_REPORT_HANG_MS = 25000') && !workerJs.includes('AbortSignal.timeout(call.ms)'), 'a GA4 report is allowed to finish, and a hung socket still releases the batch');
+ok(!workerJs.includes('ms: 6000') && !workerJs.includes('ms: 12000'), 'the 6 and 12 second GA4 cutoffs are gone');
+ok(workerJs.includes('async function gaReport') && workerJs.includes('No second try'), 'a GA4 report is not sent again');
+ok(workerJs.includes('s-maxage=30') && workerJs.includes('telemetry${url.search}'), 'the finished GA4 reply is cached for 30 seconds');
+ok(workerJs.includes("X-Cache-Status': 'HIT'"), 'the next open returns that cached reply');
+ok(workerJs.includes('gaPayloadUseful'), 'a reply with no GA4 numbers is not cached');
+ok(!workerJs.includes('telemetry-v17/tile/') && !workerJs.includes('telemetry_snapshot'), 'GA4 is not split into short tiles or read from D1');
+ok(workerJs.includes('function keepStoredTile'), 'one failed GA4 report leaves the numbers that arrived');
+ok(adminJs.includes('setInterval(Admin.refreshTelemetry, 10000)'), 'Live Telemetry asks again every 10 seconds');
+ok(adminJs.includes('_telemetryInFlight'), 'a GA4 batch already running is not asked again');
+ok(adminJs.includes('}, 28000);'), 'the phone waits for that GA4 batch to finish');
 ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
 ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
 ok(workerJs.includes('startDate: "7daysAgo"') && !workerJs.includes('metricAggregations'), '7-day card is the one-row report again');

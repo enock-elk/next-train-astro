@@ -20,6 +20,10 @@
  * V1.17: Each slow card and each graph is stored on its own. A later refresh
  *        uses that stored number instead of painting ERR, and a slow report
  *        is asked once.
+ * V1.18: GA4 is one batch again. The finished JSON is cached for 30 seconds
+ *        and the next open returns that body. A report is allowed to finish.
+ *        One rejected report leaves the others in place. The 5-minute card
+ *        keeps its minute range.
  */
 
 import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
@@ -43,96 +47,15 @@ function keepStoredTile(current, next) {
     return '--';
 }
 
-function snapshotUseful(data) {
+function gaPayloadUseful(data) {
     if (!data || typeof data !== 'object') return false;
-    const keys = ['active5m', 'active30m', 'todayUsers', 'wauUsers', 'mauUsers', 'allTimeUsers', 'todayErrors'];
+    const keys = ['active5m', 'active30m', 'todayUsers', 'wauUsers', 'mauUsers', 'allTimeUsers'];
     if (keys.some((key) => tileIsGood(data[key]))) return true;
     return Array.isArray(data.chartData) && data.chartData.length > 0;
 }
 
-let telemetryTableReady = false;
-
-async function ensureTelemetryTable(db) {
-    if (!db || telemetryTableReady) return;
-    await db.prepare(`CREATE TABLE IF NOT EXISTS telemetry_snapshot (
-        id TEXT PRIMARY KEY,
-        payload TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-    )`).run();
-    telemetryTableReady = true;
-}
-
-async function readTelemetrySnapshot(env, rangeKey) {
-    const db = env?.REGION_PRESENCE_DB;
-    if (!db) return null;
-    try {
-        await ensureTelemetryTable(db);
-        const row = await db.prepare('SELECT payload FROM telemetry_snapshot WHERE id = ?').bind(`live-${rangeKey}`).first();
-        if (!row?.payload) return null;
-        const data = JSON.parse(row.payload);
-        return snapshotUseful(data) ? data : null;
-    } catch {
-        return null;
-    }
-}
-
-async function writeTelemetrySnapshot(env, rangeKey, data) {
-    const db = env?.REGION_PRESENCE_DB;
-    if (!db || !snapshotUseful(data)) return;
-    try {
-        await ensureTelemetryTable(db);
-        await db.prepare(`INSERT INTO telemetry_snapshot (id, payload, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`)
-            .bind(`live-${rangeKey}`, JSON.stringify(data), Date.now())
-            .run();
-    } catch { /* the phone still has this reply */ }
-}
-
-const STORED_TILE_MS = {
-    '5m': 30 * 1000,
-    '30m': 30 * 1000,
-    today: 60 * 1000,
-    wau: 10 * 60 * 1000,
-    mau: 10 * 60 * 1000,
-    all: 10 * 60 * 1000,
-};
-
-function storedTileTtl(name) {
-    if (String(name).startsWith('trend-')) return 10 * 60 * 1000;
-    return STORED_TILE_MS[name] || (10 * 60 * 1000);
-}
-
-function storedTileRequest(name) {
-    return new Request(`https://nexttrain-internal-cache.local/telemetry-v17/tile/${name}`);
-}
-
-async function readStoredTile(cache, name) {
-    const hit = await cache.match(storedTileRequest(name));
-    if (!hit) return null;
-    const storedAt = Number(hit.headers.get('x-stored-at') || 0);
-    const ttl = Number(hit.headers.get('x-ttl-ms') || 0);
-    try {
-        const data = await hit.json();
-        if (!data || typeof data !== 'object') return null;
-        const fresh = !!(storedAt && ttl && (Date.now() - storedAt) <= ttl);
-        return { ...data, fresh };
-    } catch {
-        return null;
-    }
-}
-
-async function writeStoredTile(cache, name, data) {
-    const ttl = storedTileTtl(name);
-    const body = new Response(JSON.stringify(data), {
-        headers: {
-            'Content-Type': 'application/json',
-            'x-stored-at': String(Date.now()),
-            'x-ttl-ms': String(ttl),
-        },
-    });
-    await cache.put(storedTileRequest(name), body);
-}
+// A hung socket must still release the batch. This is not the old 6 second cutoff.
+const GA_REPORT_HANG_MS = 25000;
 
 /** One Google report. No second try: a repeat is what exhausts the Analytics quota. */
 async function gaReport(call, headers) {
@@ -141,7 +64,7 @@ async function gaReport(call, headers) {
             method: 'POST',
             headers,
             body: JSON.stringify(call.body),
-            signal: AbortSignal.timeout(call.ms),
+            signal: AbortSignal.timeout(GA_REPORT_HANG_MS),
         });
         const text = await res.text();
         let json = null;
@@ -204,7 +127,7 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
     const jwt = `${dataToSign}.${encodedSignature}`;
 
     const response = await fetch('https://oauth2.googleapis.com/token', {
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(GA_REPORT_HANG_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
@@ -465,7 +388,13 @@ export default {
             }
             try {
                 const cache = caches.default;
-                await cache.delete(new Request('https://nexttrain-internal-cache.local/telemetry'));
+                const keys = ['https://nexttrain-internal-cache.local/telemetry'];
+                for (const range of ['INTRADAY', 'DAU', 'WAU', 'MAU', 'ALL']) {
+                    for (let weeksAgo = 0; weeksAgo <= 2; weeksAgo += 1) {
+                        keys.push(`https://nexttrain-internal-cache.local/telemetry?weeksAgo=${weeksAgo}&range=${range}`);
+                    }
+                }
+                await Promise.all(keys.map((key) => cache.delete(new Request(key))));
             } catch { /* ignore */ }
             return json(200, {
                 success: true,
@@ -496,10 +425,17 @@ export default {
             return json(auth.status, { error: auth.error, details: auth.details || null });
         }
 
-        const rangeKey = url.searchParams.get('range') || 'DAU';
-        const storedSnapshot = await readTelemetrySnapshot(env, rangeKey);
+        const cache = caches.default;
+        const cacheKey = new Request(`https://nexttrain-internal-cache.local/telemetry${url.search}`);
+        const cachedResponse = await cache.match(cacheKey);
+        if (cachedResponse) {
+            return new Response(cachedResponse.body, {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' },
+            });
+        }
 
-        async function assembleTelemetry(seed) {
+        async function assembleTelemetry() {
         let telemetryData = {
             active5m: '--',
             active30m: '--',
@@ -530,12 +466,6 @@ export default {
             intradayMode: null,
             intradayAsOf: null,
         };
-        if (seed && typeof seed === 'object') {
-            telemetryData = { ...telemetryData, ...seed };
-        }
-
-        const cache = caches.default;
-        let telemetryCacheStatus = 'MISS';
 
         const telemetryTasks = [];
 
@@ -562,29 +492,6 @@ export default {
             telemetryTasks.push((async () => {
                 try {
                     const range = url.searchParams.get('range') || 'DAU';
-                    const stored = {
-                        '5m': await readStoredTile(cache, '5m'),
-                        '30m': await readStoredTile(cache, '30m'),
-                        today: await readStoredTile(cache, 'today'),
-                        wau: await readStoredTile(cache, 'wau'),
-                        mau: await readStoredTile(cache, 'mau'),
-                        all: await readStoredTile(cache, 'all'),
-                        trend: await readStoredTile(cache, `trend-${range}`),
-                    };
-                    telemetryData.active5m = keepStoredTile(telemetryData.active5m, stored['5m']?.active5m);
-                    telemetryData.active30m = keepStoredTile(telemetryData.active30m, stored['30m']?.active30m);
-                    telemetryData.todayUsers = keepStoredTile(telemetryData.todayUsers, stored.today?.todayUsers);
-                    telemetryData.todaySessions = keepStoredTile(telemetryData.todaySessions, stored.today?.todaySessions);
-                    telemetryData.wauUsers = keepStoredTile(telemetryData.wauUsers, stored.wau?.wauUsers);
-                    telemetryData.mauUsers = keepStoredTile(telemetryData.mauUsers, stored.mau?.mauUsers);
-                    telemetryData.allTimeUsers = keepStoredTile(telemetryData.allTimeUsers, stored.all?.allTimeUsers);
-                    if (Array.isArray(stored.trend?.chartData) && stored.trend.chartData.length) {
-                        telemetryData.chartData = stored.trend.chartData;
-                        telemetryData.chartLabels = stored.trend.chartLabels || [];
-                        if (Array.isArray(stored.trend.sevenDayTrend)) telemetryData.sevenDayTrend = stored.trend.sevenDayTrend;
-                        if (stored.trend.intradayMode) telemetryData.intradayMode = stored.trend.intradayMode;
-                        if (stored.trend.intradayAsOf) telemetryData.intradayAsOf = stored.trend.intradayAsOf;
-                    }
                     let trendDimensions = [{ name: "date" }];
                     let trendOrderBys = [{ dimension: { dimensionName: "date" } }];
                     // 14daysAgo through today is 15 points: 14 finished days plus today.
@@ -618,10 +525,9 @@ export default {
                     const gaProperty = `https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}`;
                     const runReport = `${gaProperty}:runReport`;
                     const gaCalls = [
-                        { name: '30m', ms: 6000, url: `${gaProperty}:runRealtimeReport`, body: { metrics: [{ name: "activeUsers" }] } },
+                        { name: '30m', url: `${gaProperty}:runRealtimeReport`, body: { metrics: [{ name: "activeUsers" }] } },
                         {
                             name: '5m',
-                            ms: 6000,
                             url: `${gaProperty}:runRealtimeReport`,
                             body: {
                                 metrics: [{ name: "activeUsers" }],
@@ -630,19 +536,17 @@ export default {
                         },
                         {
                             name: 'today',
-                            ms: 9000,
                             url: runReport,
                             body: {
                                 dateRanges: [{ startDate: "today", endDate: "today" }],
                                 metrics: [{ name: "activeUsers" }, { name: "sessions" }],
                             },
                         },
-                        { name: 'wau', ms: 12000, url: runReport, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
-                        { name: 'mau', ms: 12000, url: runReport, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
-                        { name: 'all', ms: 12000, url: runReport, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'wau', url: runReport, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'mau', url: runReport, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'all', url: runReport, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
                         {
                             name: 'trend',
-                            ms: 12000,
                             url: runReport,
                             body: {
                                 dateRanges: [{ startDate: trendStartDate, endDate: trendEndDate }],
@@ -653,18 +557,9 @@ export default {
                         },
                     ];
 
-                    const due = gaCalls.filter((call) => {
-                        if (call.name === 'trend') return !(stored.trend?.fresh && stored.trend?.chartData?.length);
-                        return !stored[call.name]?.fresh;
-                    });
-                    let gaParts = [];
-                    if (!due.length) {
-                        telemetryCacheStatus = 'TILE';
-                    } else {
-                        const token = await getGoogleAccessToken(env.GA_CLIENT_EMAIL, env.GA_PRIVATE_KEY);
-                        const gaHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-                        gaParts = await Promise.all(due.map((call) => gaReport(call, gaHeaders)));
-                    }
+                    const token = await getGoogleAccessToken(env.GA_CLIENT_EMAIL, env.GA_PRIVATE_KEY);
+                    const gaHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+                    const gaParts = await Promise.all(gaCalls.map((call) => gaReport(call, gaHeaders)));
 
                     const gaByName = Object.fromEntries(gaParts.map((part) => [part.name, part]));
                     const metricAt = (part, index = 0) => {
@@ -685,31 +580,13 @@ export default {
                         return false;
                     };
 
-                    const fresh5 = metricAt(gaByName['5m']);
-                    telemetryData.active5m = keepStoredTile(telemetryData.active5m, fresh5);
-                    if (fresh5) await writeStoredTile(cache, '5m', { active5m: telemetryData.active5m });
-
-                    const fresh30 = metricAt(gaByName['30m']);
-                    telemetryData.active30m = keepStoredTile(telemetryData.active30m, fresh30);
-                    if (fresh30) await writeStoredTile(cache, '30m', { active30m: telemetryData.active30m });
-
-                    const freshToday = metricAt(gaByName.today);
-                    const freshSessions = metricAt(gaByName.today, 1);
-                    telemetryData.todayUsers = keepStoredTile(telemetryData.todayUsers, freshToday);
-                    telemetryData.todaySessions = keepStoredTile(telemetryData.todaySessions, freshSessions);
-                    if (freshToday) await writeStoredTile(cache, 'today', { todayUsers: telemetryData.todayUsers, todaySessions: telemetryData.todaySessions });
-
-                    const freshWau = metricAt(gaByName.wau);
-                    telemetryData.wauUsers = keepStoredTile(telemetryData.wauUsers, freshWau);
-                    if (freshWau) await writeStoredTile(cache, 'wau', { wauUsers: telemetryData.wauUsers });
-
-                    const freshMau = metricAt(gaByName.mau);
-                    telemetryData.mauUsers = keepStoredTile(telemetryData.mauUsers, freshMau);
-                    if (freshMau) await writeStoredTile(cache, 'mau', { mauUsers: telemetryData.mauUsers });
-
-                    const freshAll = metricAt(gaByName.all);
-                    telemetryData.allTimeUsers = keepStoredTile(telemetryData.allTimeUsers, freshAll);
-                    if (freshAll) await writeStoredTile(cache, 'all', { allTimeUsers: telemetryData.allTimeUsers });
+                    telemetryData.active5m = keepStoredTile(telemetryData.active5m, metricAt(gaByName['5m']));
+                    telemetryData.active30m = keepStoredTile(telemetryData.active30m, metricAt(gaByName['30m']));
+                    telemetryData.todayUsers = keepStoredTile(telemetryData.todayUsers, metricAt(gaByName.today));
+                    telemetryData.todaySessions = keepStoredTile(telemetryData.todaySessions, metricAt(gaByName.today, 1));
+                    telemetryData.wauUsers = keepStoredTile(telemetryData.wauUsers, metricAt(gaByName.wau));
+                    telemetryData.mauUsers = keepStoredTile(telemetryData.mauUsers, metricAt(gaByName.mau));
+                    telemetryData.allTimeUsers = keepStoredTile(telemetryData.allTimeUsers, metricAt(gaByName.all));
 
                     const failures = gaParts
                         .filter((part) => !part.ok && !gaGaveUp(part.error) && tileStillEmpty(part.name))
@@ -809,13 +686,6 @@ export default {
                     if (activeCountsArray.length) {
                         telemetryData.chartData = activeCountsArray;
                         telemetryData.chartLabels = labelsArray;
-                        await writeStoredTile(cache, `trend-${range}`, {
-                            chartData: telemetryData.chartData,
-                            chartLabels: telemetryData.chartLabels,
-                            sevenDayTrend: telemetryData.sevenDayTrend,
-                            intradayMode: telemetryData.intradayMode,
-                            intradayAsOf: telemetryData.intradayAsOf,
-                        });
                     }
                     }
 
@@ -877,27 +747,22 @@ export default {
         if (telemetryData.gaErrorDetail) {
             telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
         }
-        return { telemetryData, telemetryCacheStatus };
+        return telemetryData;
         }
 
-        if (storedSnapshot) {
-            ctx.waitUntil((async () => {
-                try {
-                    const next = await assembleTelemetry(storedSnapshot);
-                    await writeTelemetrySnapshot(env, rangeKey, next.telemetryData);
-                } catch { /* the phone already has the last numbers */ }
-            })());
-            return new Response(JSON.stringify(storedSnapshot), {
-                status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'STORED' },
-            });
+        const telemetryData = await assembleTelemetry();
+        const payload = JSON.stringify(telemetryData);
+        if (gaPayloadUseful(telemetryData)) {
+            try {
+                const responseToCache = new Response(payload, {
+                    headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=30' },
+                });
+                await cache.put(cacheKey, responseToCache.clone());
+            } catch { /* the phone still receives this reply */ }
         }
-
-        const assembled = await assembleTelemetry(null);
-        await writeTelemetrySnapshot(env, rangeKey, assembled.telemetryData);
-        return new Response(JSON.stringify(assembled.telemetryData), {
+        return new Response(payload, {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': assembled.telemetryCacheStatus },
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'MISS' },
         });
     }
 };

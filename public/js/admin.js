@@ -4863,7 +4863,7 @@ const Admin = {
 
         if (telPanel.dataset.adminLoaded === "true") {
             if (Admin.isAllowlistedAdmin(Admin.currentUser) && !Admin.telemetryInterval) {
-                Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 45000);
+                Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
             }
             Admin.refreshTelemetry();
             return;
@@ -4879,7 +4879,7 @@ const Admin = {
         Admin.refreshTelemetry();
         if (Admin.telemetryInterval) clearInterval(Admin.telemetryInterval);
         if (Admin.isAllowlistedAdmin(Admin.currentUser)) {
-            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 45000);
+            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
         }
     },
 
@@ -5149,6 +5149,7 @@ const Admin = {
 
         const secret = await Admin.getAuthKey();
         if (!secret) return;
+        if (Admin._telemetryInFlight) return;
 
         const telemetryGen = (Admin._telemetryGen || 0) + 1;
         Admin._telemetryGen = telemetryGen;
@@ -5195,6 +5196,7 @@ const Admin = {
         }
         
         try {
+            Admin._telemetryInFlight = true;
             // GUARDIAN PHASE 4 & 8: Dynamic Range Payload for Edge Workers
             const fetchUrl = new URL(CLOUDFLARE_WORKER_URL);
             fetchUrl.searchParams.set('weeksAgo', Admin.telemetryWeeksAgo); // Acts as 'daysAgo' for INTRADAY
@@ -5202,7 +5204,8 @@ const Admin = {
 
             const res = await window.guardianFetch(fetchUrl.toString(), {
                 headers: { 'Authorization': `Bearer ${secret}` }
-            }, 18000);
+            }, 28000);
+            Admin._telemetryInFlight = false;
             if (telemetryGen !== Admin._telemetryGen) return;
             
             if (res.ok) {
@@ -5610,6 +5613,7 @@ const Admin = {
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
+            Admin._telemetryInFlight = false;
             const telMsg = String((e && e.message) || e || '');
             if (typeof window.ntTrace === 'function') {
                 window.ntTrace('warn', `NT Waterfall: telemetry ${telMsg.replace(/\s+/g, ' ').slice(0, 180)}`);

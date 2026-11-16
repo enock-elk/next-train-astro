@@ -3612,7 +3612,7 @@ async function communityPostsSince(routeId, since) {
 
 async function suggestCommunityReply(focusPostId = '') {
     if (!isAdminAuthed()) return;
-    const token = ++suggestToken;
+    const suggestRun = ++suggestToken;
     const composer = document.getElementById('community-composer');
     const errEl = document.getElementById('community-error');
     const routeId = document.getElementById('community-route-select')?.value || $currentRouteId.get();
@@ -3679,7 +3679,7 @@ async function suggestCommunityReply(focusPostId = '') {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Co-Pilot could not draft a reply.');
-        if (token !== suggestToken) return;
+        if (suggestRun !== suggestToken) return;
         if (data.action === 'halt') {
             const text = haltPanelText(data) || data.reason || 'Co-Pilot needs a fact before it can draft this.';
             const haltText = document.getElementById('community-suggest-halt-text');
@@ -3690,7 +3690,7 @@ async function suggestCommunityReply(focusPostId = '') {
             return;
         }
         const draft = String(data.reply || '').trim();
-        if (token !== suggestToken) return;
+        if (suggestRun !== suggestToken) return;
         if (!draft) {
             if (errEl) errEl.textContent = 'Co-Pilot returned an empty draft.';
             return;
@@ -3711,7 +3711,7 @@ async function suggestCommunityReply(focusPostId = '') {
     } catch (err) {
         showToast(err?.message || 'Co-Pilot could not draft a reply.', 'error');
     } finally {
-        if (token === suggestToken) {
+        if (suggestRun === suggestToken) {
             status?.classList.add('hidden');
             syncCommunityCopilot();
         }

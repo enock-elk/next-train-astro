@@ -1621,6 +1621,7 @@ function paintCommunityAdminMenu(post) {
         mine && !tombstone ? item('community-sheet-edit', 'Edit', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')) : '',
         tombstone ? '' : item('community-sheet-suggest', 'Suggest reply', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')),
         item('community-sheet-lookup', 'Look up rider', communityMenuIcon('<circle cx="11" cy="8" r="3"/><path d="M5 19a6 6 0 0112 0"/><circle cx="18" cy="18" r="3"/><path d="M20.2 20.2L22 22"/>')),
+        item('community-sheet-unread', 'Mark unread', communityMenuIcon('<path d="M4 6h16"/><path d="M4 12h10"/><circle cx="18" cy="16" r="3"/>')),
         item('community-sheet-delete', 'Remove completely', communityMenuIcon('<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/>'), 'data-delete-mode="purge" data-delete-as="admin"'),
         !(tombstone && (post?.deletedBy === 'admin' || post?.body === DELETED_BY_ADMIN))
             ? item('community-sheet-delete', 'Deleted by an Admin', communityMenuIcon('<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/>'), 'data-delete-mode="tombstone" data-delete-as="admin"')
@@ -2906,6 +2907,7 @@ export function countCommunityUnreadPosts(posts, myUid, lastSeen) {
 }
 
 let accountSeenCache = { uid: '', at: 0, map: null };
+let unreadHoldRoute = '';
 
 async function readAccountCommunitySeen() {
     const acct = $account.get();
@@ -2932,7 +2934,9 @@ async function readAccountCommunitySeen() {
 
 export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts = {}) {
     if (!routeId) return;
-    const seenAt = Date.now();
+    if (!opts.force && unreadHoldRoute === routeId) return;
+    const requested = Number(opts.seenAt);
+    const seenAt = Number.isFinite(requested) && requested > 0 ? requested : Date.now();
     safeStorage.setItem(unreadSeenKey(routeId), String(seenAt));
     cachedUnreadByRoute[routeId] = 0;
     paintUnreadFromCache();
@@ -2974,6 +2978,18 @@ export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts 
     } catch {
         /* local seen cursor still keeps the commuter surface responsive */
     }
+}
+
+/** Put this message back on the operator unread cursor. The open room does not stamp it read again. */
+export async function markCommunityMessageUnread(post, routeId = '') {
+    if (!isAdminAuthed()) return { ok: false, message: 'Operators only.' };
+    const room = String(routeId || post?.routeId || document.getElementById('community-route-select')?.value || '').trim();
+    if (!room) return { ok: false, message: 'Select a route first.' };
+    const ts = Number(post?.timestamp) || 0;
+    const seenAt = ts > 1 ? ts - 1 : 1;
+    unreadHoldRoute = room;
+    await markCommunityRouteSeen(room, { seenAt, force: true });
+    return { ok: true };
 }
 
 function paintUnreadFromCache() {
@@ -3331,6 +3347,27 @@ function paintAdminAttachPreview() {
     box.innerHTML = `${images}${link}`;
 }
 
+let suggestToken = 0;
+let suggestBoundRoute = '';
+
+function dismissCommunitySuggest() {
+    suggestToken += 1;
+    suggestBoundRoute = '';
+    document.getElementById('community-suggest-halt')?.classList.add('hidden');
+    document.getElementById('community-suggest-status')?.classList.add('hidden');
+    const context = document.getElementById('community-suggest-context');
+    if (context) context.value = '';
+    syncCommunityCopilot();
+}
+
+/** Drop the suggestion card and an edit aimed at the room being left. */
+function releaseCommunityRoomChrome(nextRouteId) {
+    const next = String(nextRouteId || '');
+    if (!suggestBoundRoute || suggestBoundRoute !== next) dismissCommunitySuggest();
+    if (communityEditTarget?.routeId && communityEditTarget.routeId !== next) clearCommunityEdit();
+    if (unreadHoldRoute && unreadHoldRoute !== next) unreadHoldRoute = '';
+}
+
 function syncCommunityCopilot() {
     const box = document.getElementById('community-copilot');
     if (!box) return;
@@ -3575,9 +3612,11 @@ async function communityPostsSince(routeId, since) {
 
 async function suggestCommunityReply(focusPostId = '') {
     if (!isAdminAuthed()) return;
+    const token = ++suggestToken;
     const composer = document.getElementById('community-composer');
     const errEl = document.getElementById('community-error');
     const routeId = document.getElementById('community-route-select')?.value || $currentRouteId.get();
+    suggestBoundRoute = routeId || '';
     const since = Date.now() - 24 * 60 * 60 * 1000;
     const loaded = routeId ? await communityPostsSince(routeId, since) : [];
     const focus = findCachedPost(focusPostId) || loaded.find((p) => p?.postId === focusPostId) || null;
@@ -3640,6 +3679,7 @@ async function suggestCommunityReply(focusPostId = '') {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Co-Pilot could not draft a reply.');
+        if (token !== suggestToken) return;
         if (data.action === 'halt') {
             const text = haltPanelText(data) || data.reason || 'Co-Pilot needs a fact before it can draft this.';
             const haltText = document.getElementById('community-suggest-halt-text');
@@ -3650,6 +3690,7 @@ async function suggestCommunityReply(focusPostId = '') {
             return;
         }
         const draft = String(data.reply || '').trim();
+        if (token !== suggestToken) return;
         if (!draft) {
             if (errEl) errEl.textContent = 'Co-Pilot returned an empty draft.';
             return;
@@ -3670,8 +3711,10 @@ async function suggestCommunityReply(focusPostId = '') {
     } catch (err) {
         showToast(err?.message || 'Co-Pilot could not draft a reply.', 'error');
     } finally {
-        status?.classList.add('hidden');
-        syncCommunityCopilot();
+        if (token === suggestToken) {
+            status?.classList.add('hidden');
+            syncCommunityCopilot();
+        }
     }
 }
 
@@ -3702,6 +3745,7 @@ async function openRouteCommunityNow(opts = {}) {
     const titleEl = document.getElementById('community-route-title');
 
     if (routeId) setLastCommunityRoom(routeId);
+    releaseCommunityRoomChrome(routeId);
     syncReplyDraftForRoute(routeId);
     syncCommunityRoutePicker(routeId);
 
@@ -3734,6 +3778,7 @@ async function openRouteCommunityNow(opts = {}) {
 }
 
 export function leaveCommunityRoom() {
+    dismissCommunitySuggest();
     stopRealtimePosts();
     leaveCommunityPresence();
 }
@@ -3919,6 +3964,17 @@ async function handlePostSubmit() {
         }
         const saved = await editCommunityMessage({ ...editing, body: text });
         if (!saved.ok) {
+            const gone = /gone/i.test(saved.message || '');
+            if (gone) {
+                clearCommunityEdit();
+                if (errEl) errEl.textContent = '';
+                if (btn) {
+                    btn.textContent = 'Post';
+                    btn.disabled = false;
+                }
+                showToast('That message was removed. Post sends a new one.', 'info');
+                return;
+            }
             if (errEl) errEl.textContent = saved.message || 'Could not save that message.';
             if (btn) btn.disabled = false;
             return;
@@ -4237,9 +4293,13 @@ export function bindCommunityUi() {
         adminComposerPreview = null;
         paintCommunityComposerPreview(null);
     });
+    document.getElementById('community-suggest-dismiss')?.addEventListener('click', () => {
+        dismissCommunitySuggest();
+    });
     document.getElementById('community-route-select')?.addEventListener('change', (e) => {
         const rid = resolveCommunityRoute(e.target.value);
         if (!rid || !communityRoomAllowed(rid)) return;
+        releaseCommunityRoomChrome(rid);
         const titleEl = document.getElementById('community-route-title');
         if (titleEl) titleEl.textContent = routeLabel(rid);
         const display = document.getElementById('community-route-display');
@@ -4498,6 +4558,7 @@ export function bindCommunityUi() {
             clearCommunitySelection();
             try {
                 await deleteCommunityMessage({ routeId, postId, replyId, mode, as });
+            if (communityEditTarget?.postId === postId && !replyId) clearCommunityEdit();
                 showToast(mode === 'purge' ? 'Message removed.' : 'Message deleted.', 'success');
                 triggerHaptic();
             } catch (err) {
@@ -4515,6 +4576,18 @@ export function bindCommunityUi() {
             closeReactionSheet();
             document.getElementById('community-select-menu')?.classList.add('hidden');
             if (post) armCommunityEdit(post);
+            return;
+        }
+
+        const sheetUnread = t.closest?.('.community-sheet-unread');
+        if (sheetUnread) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const target = communityActionTarget();
+            closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
+            const marked = await markCommunityMessageUnread(target.post, target.routeId);
+            showToast(marked.ok ? 'Marked unread' : (marked.message || 'Could not mark unread'), marked.ok ? 'success' : 'error');
             return;
         }
 

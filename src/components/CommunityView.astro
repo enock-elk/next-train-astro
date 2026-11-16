@@ -166,7 +166,10 @@
                     </div>
                     <div id="community-copilot" class="hidden mb-1.5 space-y-1.5">
                         <div id="community-suggest-halt" class="hidden rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-2.5">
-                            <div id="community-suggest-halt-text" class="text-[12px] leading-relaxed whitespace-pre-wrap"></div>
+                            <div class="flex items-start justify-between gap-2">
+                                <div id="community-suggest-halt-text" class="text-[12px] leading-relaxed whitespace-pre-wrap min-w-0"></div>
+                                <button type="button" id="community-suggest-dismiss" class="shrink-0 -mr-1 -mt-1 h-7 w-7 rounded-full text-amber-900 dark:text-amber-100 font-bold focus:outline-none" aria-label="Close suggestion">×</button>
+                            </div>
                             <label for="community-suggest-context" class="block text-[11px] font-bold mt-2 mb-1">Add the missing fact</label>
                             <textarea id="community-suggest-context" rows="3" maxlength="2000" class="w-full rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
                             <button type="button" id="community-suggest-again" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-xl text-sm focus:outline-none">Suggest again</button>

@@ -285,6 +285,10 @@ assert.match(ui, /mq-showing-thread/, 'back from a monitor route closes the thre
 assert.match(community, /bestKnownPoints/, 'an older 0 snapshot uses a higher points total already seen');
 assert.match(community, /PRIORITY:/, 'suggest reply marks the held message');
 assert.match(community, /community-sheet-suggest/, 'suggest reply is on the hold menu');
+assert.match(community, /community-sheet-unread/, 'an operator can mark a message unread');
+assert.match(community, /unreadHoldRoute/, 'mark unread is not stamped read while that room stays open');
+assert.match(community, /dismissCommunitySuggest/, 'the suggestion card closes when the room is left');
+assert.match(communityView, /community-suggest-dismiss/, 'the suggestion card has a close control');
 assert.match(worker, /\/community\/points-seen/, 'a higher points total can be saved for older messages');
 assert.match(worker, /\/admin\/account-name/, 'an admin can read the Google name');
 assert.match(admin, /ut-feedback-plus/, 'Feedback None can start a message');

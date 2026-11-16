@@ -11,6 +11,8 @@ import {
     ROUTES,
     SATURDAY_PLACEHOLDER_ROUTES,
 } from './config.js';
+import { isRealTime } from './utils.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 import {
     CORRIDOR_INSIGHTS,
     CORRIDOR_PAGE_COPY,
@@ -49,6 +51,49 @@ export function describeRoute(routeId) {
         bits.push('weekday and Saturday sheets');
     }
     return `${bits.join(', ')}.`;
+}
+
+function sheetHasTimes(schedule) {
+    if (!schedule?.rows?.length || !Array.isArray(schedule.headers)) return false;
+    const skip = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index', schedule.stationColumnName || 'STATION']);
+    const cols = schedule.headers.filter((header) => header && !skip.has(header));
+    if (!cols.length) return false;
+    return schedule.rows.some((row) => cols.some((col) => isRealTime(row?.[col])));
+}
+
+/**
+ * One timetable fact for a community draft. No clock times.
+ * Uses the sheet on the phone when it belongs to this room, otherwise the route config.
+ */
+export function communityScheduleFact(routeId, message, schedules) {
+    const text = String(message || '');
+    const asksSunday = /\bsunday\b/i.test(text);
+    const asksSaturday = /\b(?:saturday|weekend)\b/i.test(text);
+    if (!asksSunday && !asksSaturday) return '';
+    const id = String(routeId || '').trim();
+    const route = ROUTES[id];
+    const name = route ? displayRouteName(route) : 'This line';
+    const mine = schedules && String(schedules._routeId || '') === id ? schedules : null;
+    const bits = [];
+    if (asksSunday) {
+        const sundaySheet = !!(mine && (sheetHasTimes(mine.sunday_to_a) || sheetHasTimes(mine.sunday_to_b)));
+        const mode = route ? effectiveRouteSheetMode(route, 'sunday') : null;
+        bits.push(sundaySheet || mode === 'sunday'
+            ? `${name} has a Sunday sheet on the phone. Do not invent a departure time.`
+            : `${name} has no Sunday train service. Do not invent a Sunday time.`);
+    }
+    if (asksSaturday) {
+        if (SATURDAY_PLACEHOLDER_ROUTES.includes(id)) {
+            bits.push(`${name} has no Saturday trains.`);
+        } else if (mine && (sheetHasTimes(mine.saturday_to_a) || sheetHasTimes(mine.saturday_to_b))) {
+            bits.push(`${name} has Saturday trains on the sheet already on the phone. Do not invent a clock time.`);
+        } else if (mine) {
+            bits.push(`${name} has no Saturday times on the sheet loaded on this phone.`);
+        } else {
+            bits.push(`${name} has a Saturday sheet. Do not invent a clock time.`);
+        }
+    }
+    return bits.join(' ');
 }
 
 function fareText() {

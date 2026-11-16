@@ -18,7 +18,7 @@ import { profilePhotosOn, settleDeferredPictures } from './data-saver.js';
 import { renderTextWithShareChips } from './share-chips.js';
 import { hydrateAlertPosterImages, renderSharedMediaHtml } from './alerts-channel.js';
 import { fetchLinkPreview, hydrateLinkPreviews, isOwnSiteUrl, storedLinkPreviewMarkup } from './link-preview.js';
-import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
+import { $currentRouteId, $schedules, $userRegion, $deviceId } from '../store.js';
 import { captureSenderStation } from './auto-locate.js';
 import { formatFeedbackDiagLine } from './feedback-diag-line.js';
 import { feedbackDiagnostics } from './hub.js';
@@ -26,6 +26,7 @@ import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { speakOperatorCopy } from './operator-speech.js';
 import { haltPanelText } from './reply-suggest.js';
+import { communityScheduleFact } from './reply-knowledge.js';
 import { closeSmoothModal, openLightbox, openSmoothModal, showCopyToast, showToast, triggerHaptic } from './ui.js';
 import { bindKeyboardThread } from './keyboard-thread.js';
 import { bootFirebase } from './firebase-boot.js';
@@ -3661,7 +3662,11 @@ async function suggestCommunityReply(focusPostId = '') {
         document.getElementById('community-guide-text')?.value || '',
         document.getElementById('community-suggest-context')?.value || '',
     ].map((part) => String(part || '').trim()).filter(Boolean).join('\n');
-    const roomNote = 'PRIORITY: the held message. Answer only the single message in this thread. Do not answer any other message. One short reply an operator can post. No email sign-off.';
+    const scheduleFact = communityScheduleFact(routeId, target?.body || target?.linkUrl || '', $schedules.get());
+    const roomNote = [
+        'PRIORITY: the held message. Answer only the single message in this thread. Do not answer any other message. One short reply an operator can post. No email sign-off.',
+        scheduleFact ? `Schedule fact: ${scheduleFact}` : '',
+    ].filter(Boolean).join('\n');
     try {
         const res = await fetch(`${REPLY_WORKER_URL}/suggest`, {
             method: 'POST',

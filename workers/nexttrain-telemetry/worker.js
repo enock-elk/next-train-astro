@@ -32,14 +32,61 @@ function gaGaveUp(err) {
     return /timeout|aborted|deadline/i.test(String(err?.message || err || ''));
 }
 
+function tileIsGood(value) {
+    const text = String(value ?? '');
+    return text !== '' && text !== '--' && text !== 'ERR' && text !== 'null' && text !== 'undefined';
+}
+
 function keepStoredTile(current, next) {
-    const good = (value) => {
-        const text = String(value ?? '');
-        return text !== '' && text !== '--' && text !== 'ERR' && text !== 'null' && text !== 'undefined';
-    };
-    if (good(next)) return String(next);
-    if (good(current)) return String(current);
+    if (tileIsGood(next)) return String(next);
+    if (tileIsGood(current)) return String(current);
     return '--';
+}
+
+function snapshotUseful(data) {
+    if (!data || typeof data !== 'object') return false;
+    const keys = ['active5m', 'active30m', 'todayUsers', 'wauUsers', 'mauUsers', 'allTimeUsers', 'todayErrors'];
+    if (keys.some((key) => tileIsGood(data[key]))) return true;
+    return Array.isArray(data.chartData) && data.chartData.length > 0;
+}
+
+let telemetryTableReady = false;
+
+async function ensureTelemetryTable(db) {
+    if (!db || telemetryTableReady) return;
+    await db.prepare(`CREATE TABLE IF NOT EXISTS telemetry_snapshot (
+        id TEXT PRIMARY KEY,
+        payload TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+    )`).run();
+    telemetryTableReady = true;
+}
+
+async function readTelemetrySnapshot(env, rangeKey) {
+    const db = env?.REGION_PRESENCE_DB;
+    if (!db) return null;
+    try {
+        await ensureTelemetryTable(db);
+        const row = await db.prepare('SELECT payload FROM telemetry_snapshot WHERE id = ?').bind(`live-${rangeKey}`).first();
+        if (!row?.payload) return null;
+        const data = JSON.parse(row.payload);
+        return snapshotUseful(data) ? data : null;
+    } catch {
+        return null;
+    }
+}
+
+async function writeTelemetrySnapshot(env, rangeKey, data) {
+    const db = env?.REGION_PRESENCE_DB;
+    if (!db || !snapshotUseful(data)) return;
+    try {
+        await ensureTelemetryTable(db);
+        await db.prepare(`INSERT INTO telemetry_snapshot (id, payload, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`)
+            .bind(`live-${rangeKey}`, JSON.stringify(data), Date.now())
+            .run();
+    } catch { /* the phone still has this reply */ }
 }
 
 const STORED_TILE_MS = {
@@ -449,6 +496,10 @@ export default {
             return json(auth.status, { error: auth.error, details: auth.details || null });
         }
 
+        const rangeKey = url.searchParams.get('range') || 'DAU';
+        const storedSnapshot = await readTelemetrySnapshot(env, rangeKey);
+
+        async function assembleTelemetry(seed) {
         let telemetryData = {
             active5m: '--',
             active30m: '--',
@@ -479,6 +530,9 @@ export default {
             intradayMode: null,
             intradayAsOf: null,
         };
+        if (seed && typeof seed === 'object') {
+            telemetryData = { ...telemetryData, ...seed };
+        }
 
         const cache = caches.default;
         let telemetryCacheStatus = 'MISS';
@@ -795,18 +849,24 @@ export default {
                         ? sentryData[sentryData.length - 1]
                         : null;
                     const count = parseInt(lastDataPoint?.[1], 10) || 0;
-                    Object.assign(telemetryData, sentryStatusFromResult({ configured: true, ok: true, count }));
+                    const sentryNext = sentryStatusFromResult({ configured: true, ok: true, count });
+                    sentryNext.todayErrors = keepStoredTile(telemetryData.todayErrors, sentryNext.todayErrors);
+                    Object.assign(telemetryData, sentryNext);
                 } catch (e) {
                     console.error("Sentry Fetch Error:", e.message);
-                    Object.assign(telemetryData, sentryStatusFromResult({
+                    const sentryNext = sentryStatusFromResult({
                         configured: true,
                         ok: false,
                         detail: e.message,
-                    }));
+                    });
+                    sentryNext.todayErrors = keepStoredTile(telemetryData.todayErrors, null);
+                    Object.assign(telemetryData, sentryNext);
                 }
             })());
         } else {
-            Object.assign(telemetryData, sentryStatusFromResult({ configured: false }));
+            const sentryNext = sentryStatusFromResult({ configured: false });
+            sentryNext.todayErrors = keepStoredTile(telemetryData.todayErrors, null);
+            Object.assign(telemetryData, sentryNext);
         }
 
         await Promise.allSettled(telemetryTasks);
@@ -817,11 +877,27 @@ export default {
         if (telemetryData.gaErrorDetail) {
             telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
         }
-        const finalResponsePayload = JSON.stringify(telemetryData);
+        return { telemetryData, telemetryCacheStatus };
+        }
 
-        return new Response(finalResponsePayload, {
+        if (storedSnapshot) {
+            ctx.waitUntil((async () => {
+                try {
+                    const next = await assembleTelemetry(storedSnapshot);
+                    await writeTelemetrySnapshot(env, rangeKey, next.telemetryData);
+                } catch { /* the phone already has the last numbers */ }
+            })());
+            return new Response(JSON.stringify(storedSnapshot), {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'STORED' },
+            });
+        }
+
+        const assembled = await assembleTelemetry(null);
+        await writeTelemetrySnapshot(env, rangeKey, assembled.telemetryData);
+        return new Response(JSON.stringify(assembled.telemetryData), {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': telemetryCacheStatus }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': assembled.telemetryCacheStatus },
         });
     }
 };

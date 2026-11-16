@@ -1427,7 +1427,8 @@ html.dark .nt-brief-fact dd {
   overflow-y: visible;
   scroll-padding-bottom: 1.25rem;
 }
-#alert-msg {
+#alert-msg,
+#admin-reply-text {
   white-space: pre-wrap;
 }
 /* Gallery swipe keeps the next picture in the stage, the same way a tab

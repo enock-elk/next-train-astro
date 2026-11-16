@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 const admin = await readFile(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
 const community = await readFile(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+const communityView = await readFile(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 const worker = await readFile(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
 const rules = JSON.parse(await readFile(new URL('../firebase-database.rules.json', import.meta.url), 'utf8'));
 
@@ -152,7 +153,6 @@ assert.doesNotMatch(
 assert.doesNotMatch(admin, /route_community\.json[^]*onValue/, 'monitor does not attach a root route listener');
 assert.doesNotMatch(admin, /status !== 'closed' && i\.status !== 'resolved'/, 'legacy approved-status overcount is gone');
 
-const communityView = await readFile(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert.match(communityView, /class="community-chrome relative z-20/, 'route chrome sits above the feed stacking context');
 assert.match(communityView, /#view-community \.community-chrome \{\s*z-index: 20;/, 'chrome z-index is pinned in CSS, not only Tailwind');
 assert.match(communityView, /#view-community \.community-route-row \{\s*z-index: 10;/, 'picker row sits above the guest hint');
@@ -285,6 +285,11 @@ assert.match(ui, /mq-showing-thread/, 'back from a monitor route closes the thre
 assert.match(community, /bestKnownPoints/, 'an older 0 snapshot uses a higher points total already seen');
 assert.match(community, /PRIORITY:/, 'suggest reply marks the held message');
 assert.match(community, /community-sheet-suggest/, 'suggest reply is on the hold menu');
+assert.match(community, /communityScheduleFact/, 'a community draft can include the timetable fact');
+const playAt = communityView.indexOf('id="community-composer-speak"');
+const guideAt = communityView.indexOf('id="community-guide-open"');
+assert.ok(playAt >= 0 && guideAt > playAt, 'Play sits above Guide');
+assert.match(communityView, /id="community-composer-speak"[^>]*>Play</, 'the community composer control is labelled Play');
 assert.match(community, /community-sheet-unread/, 'an operator can mark a message unread');
 assert.match(community, /unreadHoldRoute/, 'mark unread is not stamped read while that room stays open');
 assert.match(community, /dismissCommunitySuggest/, 'the suggestion card closes when the room is left');

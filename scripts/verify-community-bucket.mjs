@@ -61,6 +61,7 @@ assert.equal(sanitizeCommunityLinkUrl('https://nexttrain.co.za/help'), 'https://
 assert.equal(sanitizeCommunityLinkUrl('http://nexttrain.co.za/help'), '');
 
 assert.equal(sanitizeBody('https://chat.whatsapp.com/abc').verdict, 'block');
+assert.equal(sanitizeAdminBody('Hi Milio,\n\nYou can also check out other options there.').text, 'Hi Milio,\n\nYou can also check out other options there.');
 assert.equal(sanitizeAdminBody('See https://www.prasa.com/ today').verdict, 'allow');
 assert.ok(sanitizeAdminBody('See https://www.prasa.com/ today').text.includes('https://www.prasa.com/'));
 assert.equal(sanitizeAdminBody('fuck').verdict, 'block');

@@ -39,6 +39,7 @@ import {
     SUGGEST_MAX_IMAGE_BYTES,
     SUGGEST_MAX_IMAGES,
     whatsappReplyUrl,
+    noticeMediaFiles,
 } from './reply-suggest.js';
 import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
 import {
@@ -166,6 +167,7 @@ export function exposeAdminGlobals() {
         SUGGEST_MAX_IMAGES,
         whatsappReplyUrl,
         noticeQuotePlain,
+        noticeMediaFiles,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
     window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, equivalentPeriodTrend, equivalentViewability, seriesTrend, viewabilityTrend };

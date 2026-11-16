@@ -96,6 +96,23 @@ function stripHtml(text) {
         .trim();
 }
 
+/** Operator posts keep paragraph breaks. A run of blank lines stops at two. */
+function stripAdminHtml(text) {
+    return String(text || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(?:p|div|li|h[1-6])>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&amp;/gi, '&')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{4,}/g, '\n\n\n')
+        .trim();
+}
+
 /** Keep nexttrain.co.za links; refuse other URLs, scam packs, and profanity at the edge. */
 export function sanitizeBody(raw) {
     const text = stripHtml(raw);
@@ -126,7 +143,7 @@ export function sanitizeBody(raw) {
 
 /** Operators may post links. Severe language and scam packs still block. */
 export function sanitizeAdminBody(raw) {
-    const text = stripHtml(raw);
+    const text = stripAdminHtml(raw);
     const scam = classifyScamContent(text);
     if (scam.block.length) {
         return { ok: false, verdict: 'block', error: "Couldn't post that." };

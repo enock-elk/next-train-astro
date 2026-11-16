@@ -5209,6 +5209,18 @@ const Admin = {
                 const data = await res.json();
                 if (telemetryGen !== Admin._telemetryGen) return;
                 const gaKeys = ['active5m', 'active30m', 'todayUsers', 'wauUsers', 'mauUsers', 'allTimeUsers'];
+                const headlinesBlank = gaKeys.every((key) => data[key] === '--' || data[key] == null || data[key] === '');
+                if (headlinesBlank) {
+                    const graph = document.getElementById('tel-trend-container');
+                    if (graph && /Loading Graph/i.test(graph.textContent || '')) {
+                        graph.innerHTML = '<span class="text-xs text-gray-400 italic">Could not load the graph.</span>';
+                    }
+                    [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach((el) => {
+                        if (el) el.classList.remove('animate-pulse');
+                    });
+                    if (typeof hideToastIfMessage === 'function') hideToastIfMessage(Admin._telemetryLoadToast);
+                    return;
+                }
                 const gaErr = gaKeys.filter((key) => data[key] === 'ERR');
                 if (gaErr.length || data.gaErrorDetail) {
                     const detail = String(data.gaErrorDetail || 'none').replace(/\s+/g, ' ').slice(0, 280);
@@ -17181,6 +17193,7 @@ const Admin = {
     },
 
     quotedNoticesForSuggest: async (items) => {
+        Admin._quotedNoticeFiles = [];
         const parse = typeof parseFeedbackAlertQuote === 'function' ? parseFeedbackAlertQuote : null;
         const plain = window.ntReplySuggest?.noticeQuotePlain;
         if (!parse || typeof plain !== 'function') return {};
@@ -17225,8 +17238,10 @@ const Admin = {
         if (records.size < unique.length) await pull('notices_archive');
         if (records.size < unique.length) await pull('disruptions');
         const out = {};
+        const noticeFiles = [];
         let secret = '';
         try { secret = await Admin.getAuthKey(); } catch { secret = ''; }
+        const mediaOf = window.ntReplySuggest?.noticeMediaFiles;
         for (const [id, notice] of records) {
             let row = notice;
             if (row.poll && (row.poll.question || row.poll.optionA || row.poll.optionB)) {
@@ -17235,7 +17250,13 @@ const Admin = {
             }
             const text = plain(row);
             if (text) out[id] = text;
+            if (typeof mediaOf === 'function') {
+                mediaOf(row).forEach((file) => {
+                    if (file?.url && !noticeFiles.some((kept) => kept.url === file.url)) noticeFiles.push(file);
+                });
+            }
         }
+        Admin._quotedNoticeFiles = noticeFiles;
         return out;
     },
 
@@ -17268,6 +17289,7 @@ const Admin = {
             note,
             draftContext,
             quotedNotices,
+            noticeFiles: Admin._quotedNoticeFiles || [],
             allItems: Admin.cachedFeedbackData || [],
             routeRegionOf: (routeId) => (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.region) || '',
         });
@@ -18551,6 +18573,65 @@ const Admin = {
         });
     },
 
+    /**
+     * Feedback replies keep blank lines. A contenteditable block is one line.
+     * Two empty blocks stay. A third blank line is dropped.
+     */
+    replyEditorHtml: (editor) => {
+        if (!editor) return '';
+        const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        const lines = [];
+        const flushText = (value) => {
+            const text = String(value || '').replace(/\u00a0/g, ' ');
+            if (!lines.length) lines.push(text);
+            else lines[lines.length - 1] += text;
+        };
+        const breakLine = () => {
+            if (!lines.length) lines.push('');
+            lines.push('');
+        };
+        const walk = (node, block) => {
+            if (!node) return;
+            if (node.nodeType === 3) {
+                flushText(node.nodeValue);
+                return;
+            }
+            if (node.nodeType !== 1) return;
+            const tag = node.tagName;
+            if (tag === 'BR') {
+                breakLine();
+                return;
+            }
+            if ((tag === 'DIV' || tag === 'P') && block) {
+                breakLine();
+                const mark = lines.length;
+                Array.from(node.childNodes).forEach((child) => walk(child, false));
+                if (lines.length === mark) lines.push('');
+                return;
+            }
+            if (tag === 'A') {
+                flushText(node.textContent || node.getAttribute('href') || '');
+                return;
+            }
+            Array.from(node.childNodes).forEach((child) => walk(child, block));
+        };
+        Array.from(editor.childNodes).forEach((child) => walk(child, true));
+        while (lines.length && lines[0] === '') lines.shift();
+        while (lines.length && lines[lines.length - 1] === '') lines.pop();
+        const capped = [];
+        let blanks = 0;
+        lines.forEach((line) => {
+            if (line === '') {
+                blanks += 1;
+                if (blanks <= 2) capped.push('');
+                return;
+            }
+            blanks = 0;
+            capped.push(line);
+        });
+        return capped.map((line) => esc(line)).join('<br>');
+    },
+
     composerOutgoingHtml: (editor) => {
         if (!editor) return '';
         Admin.hoistEditorImages(editor);
@@ -18561,7 +18642,9 @@ const Admin = {
             const safe = esc(src);
             return safe ? `<img src="${safe}" data-nt-src="${safe}" alt="">` : '';
         }).join('');
-        const body = String(editor.innerHTML || '').trim();
+        const body = editor.id === 'admin-reply-text'
+            ? Admin.replyEditorHtml(editor)
+            : String(editor.innerHTML || '').trim();
         return `${imgHtml}${body}`.trim();
     },
 
@@ -18822,13 +18905,14 @@ const Admin = {
         if (!editor || editor.dataset.ntReplyPreview === '1') return;
         editor.dataset.ntReplyPreview = '1';
         Admin.previewSlotFor(editor);
-        const onEdit = () => {
-            Admin.linkifyEditable(editor);
+        const onEdit = (event) => {
+            const text = editor.innerText || '';
+            if (event?.type !== 'input' || /\s$/.test(text)) Admin.linkifyEditable(editor);
             Admin.scheduleAlertPreview(editor);
         };
         editor.addEventListener('input', onEdit);
         editor.addEventListener('blur', onEdit);
-        editor.addEventListener('paste', () => setTimeout(onEdit, 0));
+        editor.addEventListener('paste', () => setTimeout(() => onEdit({ type: 'blur' }), 0));
     },
 
     bindComposerChrome: () => {

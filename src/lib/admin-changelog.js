@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.16.3': [
+        'Editing a Feedback Hub reply or a community message keeps the blank lines. Play sits above Guide on the community composer. A community draft says what the sheet shows before it points at a desk. Co-Pilot thanks someone for a poll only when the alert is a poll, and a quoted alert sends its picture, PDF, and text. Live Telemetry answers with the last good numbers immediately and refreshes Google after that. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.16.2': [
         'Deleting a community message leaves edit mode, and saving a message that is already gone returns the button to Post so the text can be sent as a new message. The suggestion card has a close control and closes when that room is left. An operator can mark a message unread. The room cursor moves to just before that message in users/{uid}/community_seen and admin_state/{uid}/community_seen, which those rules already allow. The open room does not stamp it read again until another room is opened. No commuter What\'s New. forceShow stays false.',
     ],

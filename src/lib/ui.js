@@ -1438,15 +1438,22 @@ function lightboxGalleryBlocked() {
 }
 
 /**
- * Pictures already on the open Alerts channel, in the order they appear:
- * poster buttons, then each video's preview still. One step, no wrap.
+ * Pictures already on the open Alerts channel, or in the open community
+ * chat, in the order they appear. One step, no wrap.
  */
 function collectChannelSlides(host) {
-    const channel = document.getElementById('alerts-channel');
     const node = host?.nodeType === 1 ? host : null;
-    if (!channel || !node || !channel.contains(node) || lightboxGalleryBlocked()) return [];
+    if (!node || lightboxGalleryBlocked()) return [];
+    const channel = document.getElementById('alerts-channel');
+    const community = document.getElementById('community-feed-list');
+    const root = (channel && channel.contains(node))
+        ? channel
+        : (community && community.contains(node))
+            ? community
+            : null;
+    if (!root) return [];
     const slides = [];
-    channel.querySelectorAll('[data-alert-lightbox], [data-alert-video]').forEach((el) => {
+    root.querySelectorAll('[data-alert-lightbox], [data-alert-video]').forEach((el) => {
         if (el.matches('[data-alert-lightbox]')) {
             const src = el.getAttribute('data-alert-lightbox') || '';
             if (src) slides.push({ host: el, kind: 'image', src });

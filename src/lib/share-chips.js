@@ -4,8 +4,10 @@
  * Grid: the route name. Live: "Train 9115 → Pienaarspoort".
  * The click stays in the app. A live train opens Map even when that tab is off.
  */
-import { ROUTES } from './config.js';
+import { DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { noticeQuotePlain } from './feedback-quote.js';
 import {
+    parseAlertSharePath,
     parsePlannerDeepLink,
     parseRouteDeepLinkParams,
     parseLiveTrainDeepLink,
@@ -88,6 +90,107 @@ function escapeAttr(value) {
     }[ch]));
 }
 
+const ALERT_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+
+/** `/og/a/{source}/{id}` links pasted into a chat. */
+export function alertShareRefsInText(text) {
+    const refs = [];
+    for (const match of String(text || '').matchAll(ALERT_URL_RE)) {
+        const href = match[0].replace(/[),.;]+$/, '');
+        const parsed = alertShareFromHref(href);
+        if (!parsed) continue;
+        if (refs.some((row) => row.id === parsed.id && row.source === parsed.source)) continue;
+        refs.push(parsed);
+    }
+    return refs;
+}
+
+function alertShareFromHref(href) {
+    let url;
+    try { url = new URL(href); } catch { return null; }
+    const host = url.hostname.toLowerCase();
+    const ours = HOSTS.test(host)
+        || (host === 'enock-elk.github.io' && /\/og\//i.test(url.pathname))
+        || host.endsWith('.next-train-lab.pages.dev');
+    if (!ours) return null;
+    const parsed = parseAlertSharePath(url.pathname);
+    if (!parsed) return null;
+    return { ...parsed, href: url.href };
+}
+
+function alertShareCardHtml(href, parsed) {
+    return `<button type="button" class="nt-alert-share-card" data-alert-share-href="${escapeAttr(href)}" data-alert-share-source="${escapeAttr(parsed.source)}" data-alert-share-id="${escapeAttr(parsed.id)}" data-alert-share-photo="${parsed.photo || 0}"><span class="nt-alert-share-copy"><span class="nt-alert-share-kicker">Notice</span><span class="nt-alert-share-title">Loading this notice</span></span></button>`;
+}
+
+async function readNoticeJson(path) {
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}${path}.json`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+/** Live notice, then the archive. Expired records stay readable. */
+export async function loadSharedNotice(source, id) {
+    const noticeId = String(id || '').trim();
+    const noticeSource = String(source || '').trim();
+    if (!noticeId) return null;
+    let notice = noticeSource ? await readNoticeJson(`notices/${encodeURIComponent(noticeSource)}/${encodeURIComponent(noticeId)}`) : null;
+    let archived = false;
+    if (!notice) {
+        notice = await readNoticeJson(`notices_archive/${encodeURIComponent(noticeId)}`);
+        archived = !!notice;
+    }
+    if (!notice) return null;
+    const expiresAt = Number(notice.expiresAt || 0);
+    const ended = archived || notice.deleted || notice.hidden || (!!expiresAt && expiresAt <= Date.now());
+    return {
+        notice: { ...notice, id: notice.id || noticeId, _sourceKey: notice._sourceKey || noticeSource },
+        ended,
+    };
+}
+
+function paintAlertShareCard(el, loaded) {
+    const titleOf = (notice) => {
+        const plain = noticeQuotePlain(notice);
+        const line = plain.split('\n').map((row) => row.trim()).filter(Boolean);
+        return { title: line[0] || 'Notice', body: line.slice(1, 4).join('\n') };
+    };
+    if (!loaded?.notice) {
+        el.classList.add('is-ended');
+        el.innerHTML = `<span class="nt-alert-share-copy"><span class="nt-alert-share-kicker">Notice</span><span class="nt-alert-share-title">This notice is no longer available</span></span>`;
+        return;
+    }
+    const { title, body } = titleOf(loaded.notice);
+    const images = Array.isArray(loaded.notice.imageUrls) && loaded.notice.imageUrls.length
+        ? loaded.notice.imageUrls
+        : (loaded.notice.imageUrl ? [loaded.notice.imageUrl] : []);
+    const rawImage = String(images[0] || '');
+    const image = /^https:\/\//i.test(rawImage) || rawImage.startsWith('/') ? rawImage : '';
+    const ended = !!loaded.ended;
+    el.classList.toggle('is-ended', ended);
+    el.classList.toggle('is-live', !ended);
+    el.dataset.alertShareLive = ended ? '0' : '1';
+    const picture = image
+        ? `<img alt="" src="${escapeAttr(image)}" referrerpolicy="no-referrer">`
+        : '';
+    el.innerHTML = `${picture}<span class="nt-alert-share-copy"><span class="nt-alert-share-kicker">${ended ? 'This notice has ended' : 'Notice'}</span><span class="nt-alert-share-title">${escapeAttr(title)}</span>${body ? `<span class="nt-alert-share-body">${escapeAttr(body)}</span>` : ''}</span>`;
+}
+
+export function hydrateAlertShareCards(root) {
+    root?.querySelectorAll?.('.nt-alert-share-card[data-alert-share-id]').forEach((el) => {
+        if (el.dataset.alertShareBound === '1') return;
+        el.dataset.alertShareBound = '1';
+        loadSharedNotice(el.getAttribute('data-alert-share-source') || '', el.getAttribute('data-alert-share-id') || '')
+            .then((loaded) => { if (el.isConnected) paintAlertShareCard(el, loaded); })
+            .catch(() => { if (el.isConnected) paintAlertShareCard(el, null); });
+    });
+}
+
 export function shareChipHtml(href) {
     const described = describeShareUrl(href);
     if (!described) return '';
@@ -106,7 +209,8 @@ export function renderTextWithShareChips(text) {
         const url = full.replace(/[),.;]+$/, '');
         const trail = full.slice(url.length);
         html += escapeAttr(raw.slice(last, match.index));
-        const chip = shareChipHtml(url);
+        const alert = alertShareFromHref(url);
+        const chip = alert ? alertShareCardHtml(url, alert) : shareChipHtml(url);
         if (chip) html += chip;
         else if (/^https:\/\//i.test(url)) {
             html += `<a class="community-msg-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeAttr(url.replace(/^https:\/\//, ''))}</a>`;
@@ -145,7 +249,29 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
     window.ntShareChipHtml = shareChipHtml;
     window.ntOpenShareUrl = openShareUrl;
     window.__ntShareChipBound = true;
+    window.ntAlertShareRefs = alertShareRefsInText;
+    window.ntLoadSharedNotice = loadSharedNotice;
     document.addEventListener('click', async (event) => {
+        const alertCard = event.target?.closest?.('.nt-alert-share-card');
+        if (alertCard) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (alertCard.dataset.alertShareLive !== '1') return;
+            const { focusSharedAlert } = await import('./alerts-channel.js');
+            const state = await focusSharedAlert?.(
+                alertCard.getAttribute('data-alert-share-id') || '',
+                alertCard.getAttribute('data-alert-share-source') || '',
+                Number(alertCard.getAttribute('data-alert-share-photo') || 0),
+            );
+            if (state !== 'opened') {
+                alertCard.dataset.alertShareLive = '0';
+                alertCard.classList.add('is-ended');
+                alertCard.classList.remove('is-live');
+                const kicker = alertCard.querySelector('.nt-alert-share-kicker');
+                if (kicker) kicker.textContent = 'This notice has ended';
+            }
+            return;
+        }
         const chip = event.target?.closest?.('.community-share-chip');
         if (!chip) return;
         event.preventDefault();

@@ -2276,17 +2276,70 @@ html.dark .mq-report-actions button { background: #1f2937; color: #f9fafb; }
 .mq-report-actions .mq-safe { background: #007aff; color: #fff; }
 .mq-report-actions .mq-shadow-ban { background: transparent; color: #ff3b30; }
 .mq-report-actions .mq-lookup-uid { background: transparent; color: #007aff; }
-.ut-provider {
+.ut-mark-stack {
   position: absolute;
-  top: 0.85rem;
-  right: 0.85rem;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ut-provider,
+.ut-mark-stack .ut-provider,
+.ut-mark {
+  position: static;
   width: 1.35rem;
   height: 1.35rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.ut-provider svg { width: 1.2rem; height: 1.2rem; display: block; }
+.ut-provider svg, .ut-mark svg { width: 1.2rem; height: 1.2rem; display: block; }
+.nt-alert-share-card {
+  display: block;
+  width: 100%;
+  margin: 0.35rem 0;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: left;
+  color: inherit;
+}
+html.dark .nt-alert-share-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(17, 24, 39, 0.72);
+}
+.nt-alert-share-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 14rem;
+  object-fit: contain;
+  background: #f3f4f6;
+}
+html.dark .nt-alert-share-card img { background: #111827; }
+.nt-alert-share-copy { display: block; padding: 0.55rem 0.7rem 0.65rem; }
+.nt-alert-share-kicker {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+.nt-alert-share-card.is-live .nt-alert-share-kicker { color: #1d4ed8; }
+html.dark .nt-alert-share-card.is-live .nt-alert-share-kicker { color: #93c5fd; }
+.nt-alert-share-title { display: block; margin-top: 0.15rem; font-size: 0.84rem; font-weight: 700; }
+.nt-alert-share-body {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
 .admin-sheet-list {
   display: flex;
   flex-direction: column;
@@ -2470,7 +2523,7 @@ html.dark .admin-sheet-tabs { background: #111827; }
   font-size: 0.7rem;
   font-weight: 700;
 }
-.ut-account-card { padding-right: 2.6rem; }
+.ut-account-card { padding-right: 2.8rem; }
 .admin-sheet-card-meta.ut-account-route {
   display: flex;
   align-items: center;

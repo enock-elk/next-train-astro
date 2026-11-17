@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.17.2': [
+        'A community photo uses its own height, and swiping it shows the other photos in that chat. An alert link in Community or Feedback Hub opens as a notice card, and an ended notice stays on the card. Co-Pilot drops a poll thank-you unless the alert is a poll, and a quoted or linked alert sends its picture, PDF, and text, including one that has ended. User Accounts shows the count, region bars, and filters in the Trip Plans layout, with points, a WhatsApp number from past feedback, and a trip-plan mark under the sign-in icon. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.17.1': [
         'On iPhone the keyboard pans the page. The composer now docks to that pan, and a layout that already shrank does not lift the field a second time. Android still uses the gap test. A tap on a Feedback Hub reaction opens who reacted. Holding the message still opens the emoji tray. No commuter What\'s New. forceShow stays false.',
     ],

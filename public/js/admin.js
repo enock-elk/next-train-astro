@@ -15190,32 +15190,54 @@ const Admin = {
                     </div>
                 </div>
                 <div id="ut-pane-accounts" role="tabpanel" class="ut-pane">
-                    <div class="flex items-center justify-between gap-2 mb-2 px-1">
-                        <p class="text-[13px] text-gray-500 dark:text-gray-400 leading-snug">People who created an account. This list does not include guests.</p>
+                    <div class="flex justify-end px-1 mb-2">
                         <button type="button" id="ut-accounts-refresh" class="shrink-0 text-[11px] font-semibold text-blue-600 dark:text-blue-400 px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mb-2 px-1">
-                        <input type="search" id="ut-accounts-q" class="col-span-2 h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none" placeholder="Name or email" autocomplete="off">
-                        <select id="ut-accounts-region" class="h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
-                            <option value="">All regions</option>
-                            <option value="GP">Gauteng</option>
-                            <option value="WC">Western Cape</option>
-                            <option value="KZN">KwaZulu-Natal</option>
-                            <option value="EC">Eastern Cape</option>
-                            <option value="none">No region yet</option>
-                        </select>
-                        <select id="ut-accounts-provider" class="h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
-                            <option value="">All sign-in</option>
-                            <option value="google.com">Google</option>
-                            <option value="password">Email</option>
-                            <option value="facebook.com">Facebook</option>
-                            <option value="other">Other</option>
-                        </select>
-                        <select id="ut-accounts-route" class="col-span-2 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
-                            <option value="">All routes</option>
-                        </select>
+                    <div id="ut-accounts-banner" class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Accounts</p>
+                        <p id="ut-accounts-count" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">—</p>
+                        <p id="ut-accounts-count-sub" class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">People who created an account. Guests stay off this list.</p>
                     </div>
-                    <p id="ut-accounts-count" class="text-[13px] font-semibold text-gray-800 dark:text-gray-100 px-1 mb-2"></p>
+                    <div id="ut-accounts-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-2">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Insights</p>
+                        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Region share</p>
+                        <div id="ut-accounts-regions" class="space-y-1"></div>
+                        <div id="ut-accounts-chips" class="flex flex-wrap gap-1"></div>
+                    </div>
+                    <div id="ut-accounts-filters" class="mb-2">
+                        <button type="button" id="ut-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 focus:outline-none">
+                            <span>Filters</span>
+                            <svg id="ut-filters-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div id="ut-filters-body" class="hidden grid grid-cols-2 gap-2 mt-2">
+                            <input type="search" id="ut-accounts-q" class="col-span-2 h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none" placeholder="Name or email" autocomplete="off">
+                            <select id="ut-accounts-region" class="h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                                <option value="">All regions</option>
+                                <option value="GP">Gauteng</option>
+                                <option value="WC">Western Cape</option>
+                                <option value="KZN">KwaZulu-Natal</option>
+                                <option value="EC">Eastern Cape</option>
+                                <option value="none">No region yet</option>
+                            </select>
+                            <select id="ut-accounts-provider" class="h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                                <option value="">All sign-in</option>
+                                <option value="google.com">Google</option>
+                                <option value="password">Email</option>
+                                <option value="facebook.com">Facebook</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <select id="ut-accounts-route" class="col-span-2 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                                <option value="">All routes</option>
+                            </select>
+                            <select id="ut-accounts-sort" class="col-span-2 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none">
+                                <option value="joined-desc">Sort: Joined, newest</option>
+                                <option value="joined-asc">Sort: Joined, oldest</option>
+                                <option value="created-desc">Sort: Account created, newest</option>
+                                <option value="created-asc">Sort: Account created, oldest</option>
+                                <option value="name">Sort: Name</option>
+                            </select>
+                        </div>
+                    </div>
                     <div id="ut-accounts-list" class="admin-sheet-list">
                         <p class="text-xs text-gray-400 text-center py-3">Open this tab to load accounts.</p>
                     </div>
@@ -15314,11 +15336,18 @@ const Admin = {
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
         document.getElementById('ut-bans-refresh')?.addEventListener('click', () => Admin.fetchActiveBans());
         document.getElementById('ut-accounts-refresh')?.addEventListener('click', () => Admin.fetchAccountDirectory());
-        ['ut-accounts-q', 'ut-accounts-region', 'ut-accounts-provider', 'ut-accounts-route'].forEach((id) => {
+        document.getElementById('ut-filters-toggle')?.addEventListener('click', () => {
+            const bodyEl = document.getElementById('ut-filters-body');
+            const chev = document.getElementById('ut-filters-chevron');
+            if (!bodyEl) return;
+            const open = bodyEl.classList.toggle('hidden') === false;
+            chev?.classList.toggle('-rotate-90', !open);
+        });
+        ['ut-accounts-q', 'ut-accounts-region', 'ut-accounts-provider', 'ut-accounts-route', 'ut-accounts-sort'].forEach((id) => {
             document.getElementById(id)?.addEventListener('input', () => Admin.paintAccountDirectory());
             document.getElementById(id)?.addEventListener('change', () => Admin.paintAccountDirectory());
         });
-        ['ut-accounts-region', 'ut-accounts-provider', 'ut-accounts-route', 'shadow-ban-default-mode'].forEach((id) => {
+        ['ut-accounts-region', 'ut-accounts-provider', 'ut-accounts-route', 'ut-accounts-sort', 'shadow-ban-default-mode'].forEach((id) => {
             Admin.bindPremiumSelect(document.getElementById(id));
         });
         document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
@@ -15422,17 +15451,88 @@ const Admin = {
                             region: pickText(row.region, 8).toUpperCase() || pickText(user.region, 8).toUpperCase(),
                             lastRouteId: pickText(row.lastRouteId, 40) || pickText(user.lastRouteId, 40),
                             appVersion: pickText(row.appVersion, 24) || pickText(user.appVersion, 24),
+                            points: Math.max(
+                                Number(user?.marks?.points) || 0,
+                                Number(user?.points) || 0,
+                            ),
+                            phones: [],
+                            hasTrips: false,
+                            deviceIds: user.deviceIds && typeof user.deviceIds === 'object' ? user.deviceIds : {},
+                            chatDeviceId: pickText(user.chatDeviceId, 80),
                         };
                     })
                     .filter((row) => row.displayName || row.email)
-                    .filter((row) => String(row.provider || '') !== 'anonymous')
-                    .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+                    .filter((row) => String(row.provider || '') !== 'anonymous');
                 Admin._accountRows = rows;
                 Admin._accountCapped = rows.length >= 200;
                 Admin.paintAccountDirectory();
+                Admin.attachAccountSignals(secret, dynamicEndpoint).catch(() => {});
             } catch (e) {
                 list.innerHTML = `<p class="text-xs text-red-500 text-center py-3">${(typeof escapeHTML === 'function' ? escapeHTML(e?.message || 'Could not load accounts') : 'Could not load accounts')}</p>`;
             }
+        };
+
+        Admin.attachAccountSignals = async (secret, dynamicEndpoint) => {
+            const rows = Array.isArray(Admin._accountRows) ? Admin._accountRows : [];
+            if (!rows.length || !secret) return;
+            const auth = `auth=${encodeURIComponent(secret)}`;
+            if (!Array.isArray(Admin.cachedFeedbackData) || !Admin.cachedFeedbackData.length) {
+                try {
+                    const res = await window.guardianFetch(`${dynamicEndpoint}feedback.json?${auth}`, {}, 12000);
+                    if (res?.ok) {
+                        const data = await res.json();
+                        Admin.cachedFeedbackData = Array.isArray(data) ? data : Object.values(data || {});
+                    }
+                } catch { /* the account list still paints */ }
+            }
+            if (!Admin._fbTripPlanUsers || typeof Admin._fbTripPlanUsers !== 'object') {
+                try {
+                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?${auth}`, {}, 12000);
+                    if (res?.ok) Admin._fbTripPlanUsers = (await res.json()) || {};
+                } catch { Admin._fbTripPlanUsers = Admin._fbTripPlanUsers || {}; }
+            }
+            const phoneOf = (raw) => {
+                const digits = String(raw || '').replace(/\D/g, '');
+                if (digits.length < 9) return '';
+                if (digits.startsWith('0')) return `27${digits.slice(1)}`;
+                if (!digits.startsWith('27') && digits.length === 9) return `27${digits}`;
+                return digits;
+            };
+            const textPhones = (text) => {
+                const found = String(text || '').match(/(?:\+?27|0)[6-8]\d{8}/g) || [];
+                return found.map(phoneOf).filter(Boolean);
+            };
+            rows.forEach((row) => {
+                const ids = new Set([row.uid, row.chatDeviceId, ...Object.keys(row.deviceIds || {})].filter(Boolean));
+                const phones = new Set();
+                (Admin.cachedFeedbackData || []).forEach((msg) => {
+                    const did = msg?.deviceId || msg?.device_id || '';
+                    const sameEmail = row.email && String(msg?.email || '').trim().toLowerCase() === row.email.toLowerCase();
+                    if (!ids.has(did) && !sameEmail) return;
+                    const em = String(msg?.email || '').trim();
+                    if (em && !em.includes('@')) {
+                        const phone = phoneOf(em);
+                        if (phone) phones.add(phone);
+                    }
+                    textPhones(`${msg?.text || ''} ${msg?.message || ''}`).forEach((phone) => phones.add(phone));
+                });
+                row.phones = [...phones];
+                row.hasTrips = [...ids].some((id) => Admin.feedbackDeviceHasTripPlans(id));
+            });
+            Admin.paintAccountDirectory();
+            const queue = rows.filter((row) => row.uid);
+            for (let i = 0; i < queue.length; i += 20) {
+                const slice = queue.slice(i, i + 20);
+                await Promise.all(slice.map(async (row) => {
+                    try {
+                        const res = await fetch(`${dynamicEndpoint}public_profile/${encodeURIComponent(row.uid)}/points.json?${auth}`);
+                        if (!res.ok) return;
+                        const value = Number(await res.json());
+                        if (Number.isFinite(value)) row.points = Math.max(Number(row.points) || 0, value);
+                    } catch { /* marks.points still shows */ }
+                }));
+            }
+            Admin.paintAccountDirectory();
         };
 
         Admin.paintAccountDirectory = () => {
@@ -15464,8 +15564,10 @@ const Admin = {
                 Admin.bindPremiumSelect(routeSelect);
             }
             const knownProviders = new Set(['google.com', 'password', 'facebook.com']);
+            const sortKey = String(document.getElementById('ut-accounts-sort')?.value || 'joined-desc');
             const filtered = rows.filter((row) => {
-                if (q && !`${row.displayName || ''} ${row.email || ''}`.toLowerCase().includes(q)) return false;
+                const phoneHay = (row.phones || []).join(' ');
+                if (q && !`${row.displayName || ''} ${row.email || ''} ${phoneHay}`.toLowerCase().includes(q)) return false;
                 if (region === 'none' && row.region) return false;
                 if (region && region !== 'none' && row.region !== region) return false;
                 if (provider === 'other' && knownProviders.has(String(row.provider || ''))) return false;
@@ -15473,35 +15575,52 @@ const Admin = {
                 if (route && row.lastRouteId !== route) return false;
                 return true;
             });
+            const byNumber = (key, dir) => (a, b) => ((Number(a[key]) || 0) - (Number(b[key]) || 0)) * dir;
+            if (sortKey === 'joined-asc') filtered.sort(byNumber('joinedAt', 1));
+            else if (sortKey === 'created-desc') filtered.sort(byNumber('accountCreatedAt', -1));
+            else if (sortKey === 'created-asc') filtered.sort(byNumber('accountCreatedAt', 1));
+            else if (sortKey === 'name') filtered.sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || '')));
+            else filtered.sort(byNumber('joinedAt', -1));
+            const tally = { GP: 0, WC: 0, KZN: 0, EC: 0, none: 0 };
+            const signIn = { google: 0, email: 0, facebook: 0, other: 0 };
+            rows.forEach((row) => {
+                if (tally[row.region] != null && row.region) tally[row.region] += 1;
+                else tally.none += 1;
+                const key = row.provider === 'google.com' ? 'google'
+                    : row.provider === 'password' ? 'email'
+                    : row.provider === 'facebook.com' ? 'facebook'
+                    : 'other';
+                signIn[key] += 1;
+            });
             const countEl = document.getElementById('ut-accounts-count');
-            if (countEl) {
-                const tally = { GP: 0, WC: 0, KZN: 0, EC: 0, none: 0 };
-                rows.forEach((row) => {
-                    if (tally[row.region] != null && row.region !== 'none') tally[row.region] += 1;
-                    else tally.none += 1;
-                });
-                const cap = Admin._accountCapped ? ' in the latest 200' : '';
-                const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
-                if (!rows.length) {
-                    countEl.textContent = '';
-                } else if (regionNames[region]) {
-                    const total = tally[region] || 0;
-                    countEl.textContent = filtered.length === total
-                        ? `${regionNames[region]} ${total}${cap}`
-                        : `${regionNames[region]} ${total}${cap} · ${filtered.length} shown`;
-                } else if (region === 'none') {
-                    countEl.textContent = filtered.length === tally.none
-                        ? `No region yet ${tally.none}${cap}`
-                        : `No region yet ${tally.none}${cap} · ${filtered.length} shown`;
-                } else {
-                    const parts = ['GP', 'WC', 'KZN', 'EC'].filter((code) => tally[code]).map((code) => `${regionNames[code]} ${tally[code]}`);
-                    if (tally.none) parts.push(`No region ${tally.none}`);
-                    const headline = `${rows.length} account${rows.length === 1 ? '' : 's'}${cap}`;
-                    const breakdown = parts.length ? ` · ${parts.join(' · ')}` : '';
-                    countEl.textContent = filtered.length === rows.length
-                        ? `${headline}${breakdown}`
-                        : `${headline}${breakdown} · ${filtered.length} shown`;
-                }
+            const subEl = document.getElementById('ut-accounts-count-sub');
+            if (countEl) countEl.textContent = rows.length ? String(filtered.length) : '0';
+            if (subEl) {
+                const cap = Admin._accountCapped ? ' · latest 200' : '';
+                subEl.textContent = !rows.length
+                    ? 'People who created an account. Guests stay off this list.'
+                    : (filtered.length === rows.length
+                        ? `${rows.length} account${rows.length === 1 ? '' : 's'}${cap}`
+                        : `${filtered.length} of ${rows.length} shown${cap}`);
+            }
+            const regionsEl = document.getElementById('ut-accounts-regions');
+            if (regionsEl) {
+                const max = Math.max(1, tally.GP, tally.WC, tally.KZN, tally.EC);
+                regionsEl.innerHTML = ['GP', 'WC', 'KZN', 'EC'].map((code) => {
+                    const n = tally[code] || 0;
+                    const pct = Math.round((n / max) * 100);
+                    return `<div class="flex items-center gap-2"><span class="w-8 text-[10px] font-black text-slate-500">${code}</span><span class="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><span class="block h-full rounded-full bg-indigo-500/80" style="width:${pct}%"></span></span><span class="w-8 text-right text-[10px] font-mono text-slate-500">${n}</span></div>`;
+                }).join('');
+            }
+            const chipsEl = document.getElementById('ut-accounts-chips');
+            if (chipsEl) {
+                const chip = (label) => `<span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300">${label}</span>`;
+                chipsEl.innerHTML = [
+                    chip(`Google ${signIn.google}`),
+                    chip(`Email ${signIn.email}`),
+                    chip(`Facebook ${signIn.facebook}`),
+                    tally.none ? chip(`No region ${tally.none}`) : '',
+                ].filter(Boolean).join('');
             }
             if (!rows.length) {
                 list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No accounts yet. Someone appears here after they create an account and open Next Train.</p>';
@@ -15536,9 +15655,18 @@ const Admin = {
                 const routeHtml = known ? Admin.formatRouteLabelHtml(known.name) : (row.lastRouteId ? esc(routeName(row.lastRouteId)) : '');
                 const region = regionLabel(row.region);
                 const routeRow = routeHtml ? `<span class="admin-sheet-card-meta ut-account-route">${routeHtml}</span>` : '';
-                const whenBits = [when ? `Joined ${esc(when)}` : '', region, esc(row.appVersion || 'Not recorded')].filter(Boolean).join(' · ');
+                const points = Number.isFinite(Number(row.points)) ? Number(row.points) : 0;
+                const created = Number(row.accountCreatedAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.accountCreatedAt)) : '';
+                const phone = (row.phones || [])[0] || '';
+                const wa = phone
+                    ? `<a class="ut-mark text-emerald-600 dark:text-emerald-400" href="https://wa.me/${esc(phone)}" target="_blank" rel="noopener noreferrer" title="WhatsApp" aria-label="WhatsApp" onclick="event.stopPropagation()">${Admin.icon('message', 'w-4 h-4')}</a>`
+                    : '';
+                const trips = row.hasTrips
+                    ? `<span class="ut-mark text-sky-600 dark:text-sky-400" title="Has trip plans" aria-label="Has trip plans">${Admin.icon('map', 'w-4 h-4')}</span>`
+                    : '';
+                const whenBits = [`${points} points`, when ? `Joined ${esc(when)}` : '', created && created !== when ? `Created ${esc(created)}` : '', region, esc(row.appVersion || 'Not recorded')].filter(Boolean).join(' · ');
                 const whenRow = whenBits ? `<span class="admin-sheet-card-meta">${whenBits}</span>` : '';
-                btn.innerHTML = `${providerMark(row.provider)}<span class="admin-sheet-card-title">${esc(row.displayName || 'Passenger')}</span><span class="admin-sheet-card-body">${esc(row.email || 'No email')}</span>${routeRow}${whenRow}`;
+                btn.innerHTML = `<span class="ut-mark-stack">${providerMark(row.provider)}${wa}${trips}</span><span class="admin-sheet-card-title">${esc(row.displayName || 'Passenger')}</span><span class="admin-sheet-card-body break-words">${esc(row.email || 'No email')}</span>${routeRow}${whenRow}`;
                 btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
                 list.appendChild(btn);
             });
@@ -17202,9 +17330,17 @@ const Admin = {
         const plain = window.ntReplySuggest?.noticeQuotePlain;
         if (!parse || typeof plain !== 'function') return {};
         const ids = [];
+        const shares = [];
+        const refsOf = window.ntAlertShareRefs;
         for (const item of items || []) {
             const parsed = parse(item?.text || item?.message || '');
             if (parsed?.alertId) ids.push(parsed.alertId);
+            if (typeof refsOf === 'function') {
+                refsOf(`${item?.text || ''}\n${item?.message || ''}`).forEach((ref) => {
+                    ids.push(ref.id);
+                    shares.push(ref);
+                });
+            }
         }
         const unique = [...new Set(ids)];
         if (!unique.length) return {};
@@ -17241,6 +17377,24 @@ const Admin = {
         await pull('notices');
         if (records.size < unique.length) await pull('notices_archive');
         if (records.size < unique.length) await pull('disruptions');
+        for (const ref of shares) {
+            if (records.has(ref.id)) continue;
+            const paths = [
+                `notices/${encodeURIComponent(ref.source)}/${encodeURIComponent(ref.id)}`,
+                `notices_archive/${encodeURIComponent(ref.id)}`,
+            ];
+            for (const path of paths) {
+                try {
+                    const res = await window.guardianFetch(`${dynamicEndpoint}${path}.json`, {}, 8000);
+                    if (!res?.ok) continue;
+                    const data = await res.json();
+                    if (data && typeof data === 'object') {
+                        consider(data, { id: ref.id, _sourceKey: ref.source, archivedAt: path.startsWith('notices_archive') ? Date.now() : 0 });
+                        break;
+                    }
+                } catch { /* the short quote still reaches the draft */ }
+            }
+        }
         const out = {};
         const noticeFiles = [];
         let secret = '';
@@ -17253,7 +17407,8 @@ const Admin = {
                 if (tallies) row = { ...row, pollResults: tallies };
             }
             const text = plain(row);
-            if (text) out[id] = text;
+            const ended = !!(row.deleted || row.hidden || row.archivedAt || (Number(row.expiresAt) > 0 && Number(row.expiresAt) < Date.now()));
+            if (text) out[id] = ended ? `${text}\nThis notice has ended.` : text;
             if (typeof mediaOf === 'function') {
                 mediaOf(row).forEach((file) => {
                     if (file?.url && !noticeFiles.some((kept) => kept.url === file.url)) noticeFiles.push(file);

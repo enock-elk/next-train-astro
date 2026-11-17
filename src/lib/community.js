@@ -2720,7 +2720,7 @@ function wireCommunityChatGestures(listEl) {
         longTimer = null;
     };
 
-    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .community-msg-link, .community-quote-jump, [data-community-see-more], .fb-version-chip, [data-admin-changelog], [data-alert-lightbox], [data-alert-video], [data-alert-pdf], [data-nt-gif-replay], .nt-link-preview');
+    const communityInlineControl = (target) => target?.closest?.('.community-share-chip, .nt-alert-share-card, .community-msg-link, .community-quote-jump, [data-community-see-more], .fb-version-chip, [data-admin-changelog], [data-alert-lightbox], [data-alert-video], [data-alert-pdf], [data-nt-gif-replay], .nt-link-preview');
 
     listEl.addEventListener('touchstart', (e) => {
         if (communityInlineControl(e.target)) return;
@@ -3631,13 +3631,36 @@ async function suggestCommunityReply(focusPostId = '') {
     if (!target) {
         target = [...loaded].reverse().find((p) => p && !isCommunityTombstone(p) && (p.body || p.linkUrl) && !adminAuthor(p)) || null;
     }
+    const spoken = `${target?.displayName || 'Passenger'}: ${target?.body || target?.linkUrl || ''}`;
     const thread = target
         ? [{
             from: adminAuthor(target) ? 'admin' : 'commuter',
-            text: `${target.displayName || 'Passenger'}: ${target.body || target.linkUrl || ''}`,
+            text: spoken,
             at: Number(target.timestamp) || 0,
         }]
         : [];
+    const alertFiles = [];
+    if (target) {
+        const { alertShareRefsInText, loadSharedNotice } = await import('./share-chips.js');
+        const { noticeQuotePlain } = await import('./feedback-quote.js');
+        const { noticeMediaFiles } = await import('./reply-suggest.js');
+        const refs = alertShareRefsInText(`${target.body || ''}\n${target.linkUrl || ''}`);
+        for (const ref of refs) {
+            const loaded = await loadSharedNotice(ref.source, ref.id);
+            const plain = noticeQuotePlain(loaded?.notice);
+            if (!plain) continue;
+            const ended = loaded.ended ? '\nThis notice has ended.' : '';
+            thread.unshift({
+                from: 'admin',
+                role: 'alert',
+                text: `${plain}${ended}`,
+                at: Number(loaded.notice?.postedAt || loaded.notice?.timestamp || 0) || 0,
+            });
+            noticeMediaFiles(loaded.notice).forEach((file) => {
+                if (file?.url && !alertFiles.some((kept) => kept.url === file.url)) alertFiles.push(file);
+            });
+        }
+    }
     if (!thread.length) {
         if (errEl) errEl.textContent = 'Nothing in this room to answer yet.';
         return;
@@ -3680,6 +3703,7 @@ async function suggestCommunityReply(focusPostId = '') {
                 surface: 'community',
                 note: guidance ? `${roomNote}\n\nOperator guidance for this draft:\n${guidance}` : roomNote,
                 thread,
+                files: alertFiles,
             }),
         });
         const data = await res.json().catch(() => ({}));

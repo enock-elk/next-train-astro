@@ -1117,15 +1117,15 @@ export function rewriteAskingThanks(reply) {
 /** A non-poll alert must not be thanked as a poll. */
 export function stripFalsePollThanks(reply) {
     return String(reply || '')
-        .replace(/^[ \t]*thank you(?: so much)? for replying to (?:our|the) poll\.?[ \t]*$/gim, '')
-        .replace(/\n{4,}/g, '\n\n\n')
+        .replace(/thank you(?: so much)? for replying to (?:our|the|this) poll\.?/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
         .replace(/[ \t]+\n/g, '\n')
         .trim();
 }
 
 /** Poll thank-you is its own line at the top of the body, after the greeting. */
 export function ensurePollThanks(reply) {
-    const text = String(reply || '').trim();
+    const text = stripFalsePollThanks(reply);
     if (!text) return `${POLL_THANKS_LINE}`;
     const escaped = POLL_THANKS_LINE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const without = text
@@ -1222,8 +1222,11 @@ export function applyDraftGuard(result, region, thread, options = {}) {
             .trim();
     } else {
         reply = rewriteAskingThanks(reply);
-        if (threadAnswersPoll(thread)) reply = ensurePollThanks(reply);
-        else reply = stripFalsePollThanks(reply);
+    }
+    if (threadAnswersPoll(thread)) reply = ensurePollThanks(reply);
+    else reply = stripFalsePollThanks(reply);
+    if (!reply) {
+        return { action: 'halt', reply: '', reason: 'The model returned an empty draft.', questions: [] };
     }
     const early = guardDraft(reply, region);
     // A wrong-region number still halts. A missing desk is filled from the contact block.

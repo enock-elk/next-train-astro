@@ -415,6 +415,7 @@ export function hydrateLinkPreviews(root, workerBase) {
     }
     if (!root || typeof root.querySelectorAll !== 'function') return;
     settleDeferredPictures(root);
+    import('./share-chips.js').then((m) => m.hydrateAlertShareCards?.(root)).catch(() => {});
     root.querySelectorAll('[data-link-preview-url]').forEach((el) => {
         if (el.getAttribute('data-link-preview-state') === 'ready') return;
         const url = el.getAttribute('data-link-preview-url') || '';

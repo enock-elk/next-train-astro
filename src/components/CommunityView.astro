@@ -541,14 +541,23 @@
     opacity: 0.8;
   }
   .community-msg-images {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
     margin-bottom: 0.3rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
   }
-  /* One photo used to occupy only the left cell, with empty bubble beside it. */
+  .community-msg-images > * {
+    flex: 0 0 100%;
+    align-self: flex-start;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    min-width: 0;
+  }
+  /* A wide notice keeps its own height. A square frame left a blank band under it. */
   .community-msg-images.is-single {
-    grid-template-columns: 1fr;
     margin-left: -0.65rem;
     margin-right: -0.65rem;
   }
@@ -564,33 +573,40 @@
     background: transparent;
     cursor: zoom-in;
   }
-  .community-msg-images .nt-picture-hold {
-    min-height: 7.5rem;
+  .community-msg-images [data-alert-lightbox] {
+    aspect-ratio: auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .community-msg-images .nt-picture-hold,
+  .community-msg-images.is-single .nt-picture-hold {
+    min-height: 0;
     width: 100%;
+    height: auto;
     border-radius: 0.4rem;
   }
   .community-msg-images.is-single .nt-picture-hold {
-    min-height: 12rem;
     border-radius: 0;
     border-left: 0;
     border-right: 0;
   }
-  .community-msg-images img {
+  .community-msg-images img,
+  .community-msg-images.is-single img {
+    position: static;
+    inset: auto;
     display: block;
     width: 100%;
-    max-height: 9rem;
-    object-fit: cover;
-    border-radius: 0.4rem;
-    background: rgba(0, 0, 0, 0.06);
-    -webkit-touch-callout: none;
-  }
-  .community-msg-images.is-single img {
     height: auto;
     max-height: 28rem;
     object-fit: contain;
-    object-position: center top;
+    object-position: center;
+    border-radius: 0.4rem;
+    background: transparent;
+    -webkit-touch-callout: none;
+  }
+  .community-msg-images.is-single img {
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.45);
   }
   .community-msg-link {
     display: block;

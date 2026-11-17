@@ -100,9 +100,7 @@ export function bindKeyboardThread() {
     document.addEventListener('focusin', (event) => {
         if (!event.target?.closest?.('#community-composer, #messages-thread-input')) return;
         const feed = document.querySelector('#view-community .community-feed-scroll');
-        // Measure before the keyboard class squeezes the row. The shell fitter
-        // may already have stamped nt-keyboard in this same focus turn.
-        if (feed && !document.documentElement.style.getPropertyValue('--nt-bubble-lock')) {
+        if (feed && !document.documentElement.classList.contains('nt-keyboard')) {
             const sample = feed.querySelector('.community-bubble-wrap');
             const cap = sample ? parseFloat(getComputedStyle(sample).maxWidth) : 0;
             const row = feed.querySelector('.community-post-row');

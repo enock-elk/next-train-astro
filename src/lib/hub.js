@@ -41,8 +41,10 @@ import {
 } from './inbox-receipts.js';
 import {
     collapseViewerGuestReaction,
+    INBOX_REACTION_EMOJI,
     inboxMessageMatchesAdmin,
     inboxReactionActorId,
+    inboxReactionPeople,
     renderInboxReactionChips,
     renderInboxReactionPickerHtml,
     submitInboxReaction,
@@ -2015,6 +2017,7 @@ async function fetchInboxThread() {
 function renderMessagesThread(list) {
     const host = document.getElementById('messages-thread-list');
     if (!host) return;
+    hideInboxReactionsModal();
     clearInboxSelection();
     const ident = viewerInboxIdentity();
     rememberAdminIdentity(list, ident);
@@ -2112,6 +2115,157 @@ function ensureInboxReactionTray() {
     document.body.appendChild(tray);
     tray.addEventListener('contextmenu', (e) => e.preventDefault());
     return tray;
+}
+
+let inboxReactFilter = 'all';
+const inboxReactorProfiles = new Map();
+
+function hideInboxReactionsModal() {
+    const sheet = document.getElementById('inbox-reactions-modal');
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    sheet.classList.add('hidden');
+    if ((location.hash || '') === '#inbox-reactions') {
+        try { history.replaceState({ modal: 'messages-thread-modal' }, '', '#messages'); } catch { /* Back already moved */ }
+    }
+}
+
+function inboxReactorLabel(actor, profile) {
+    const mine = inboxReactionActorId(getThreadDeviceId());
+    if (actor && actor === mine) {
+        const named = String($account.get()?.displayName || '').trim();
+        if (named) return named;
+        const ident = viewerInboxIdentity();
+        if (ident?.name) return ident.name;
+        return 'You';
+    }
+    const stored = String(profile?.name || '').trim();
+    if (stored) return stored;
+    return 'Passenger';
+}
+
+async function loadInboxReactorProfiles(actors) {
+    const uids = [...new Set((actors || [])
+        .filter((id) => String(id).startsWith('uid_'))
+        .map((id) => String(id).slice(4))
+        .filter(Boolean))];
+    await Promise.all(uids.map(async (uid) => {
+        const key = `uid_${uid}`;
+        if (inboxReactorProfiles.has(key)) return;
+        try {
+            const res = await fetch(`${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(uid)}.json`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const name = String(data?.displayName || '').trim();
+            const photo = /^https:\/\//i.test(String(data?.photoURL || '')) ? String(data.photoURL).slice(0, 500) : '';
+            if (name || photo) inboxReactorProfiles.set(key, { name: name.slice(0, 80), photo });
+        } catch { /* Passenger stays */ }
+    }));
+}
+
+function ensureInboxReactionsModal() {
+    let sheet = document.getElementById('inbox-reactions-modal');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'inbox-reactions-modal';
+    sheet.className = 'fixed inset-0 z-[160] hidden flex flex-col justify-end bg-black/50';
+    sheet.innerHTML = `
+        <div class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
+            <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-inbox-react-title>Reactions</p>
+            <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-inbox-react-totals></div>
+            <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3" data-inbox-react-list></div>
+        </div>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', (e) => {
+        if (e.target === sheet) {
+            closeSmoothModal('inbox-reactions-modal');
+            return;
+        }
+        const choose = e.target.closest?.('[data-inbox-react-choose]');
+        if (choose && sheet.contains(choose)) {
+            e.preventDefault();
+            const messageId = sheet.dataset.messageId || '';
+            closeSmoothModal('inbox-reactions-modal');
+            const row = document.querySelector(`#messages-thread-list [data-inbox-msg-id="${CSS.escape(messageId)}"]`);
+            if (row) selectInboxMessage(row, { x: choose.getBoundingClientRect().left, y: choose.getBoundingClientRect().top });
+            return;
+        }
+        const chip = e.target.closest?.('[data-inbox-react-filter]');
+        if (!chip || !sheet.contains(chip)) return;
+        e.preventDefault();
+        const next = chip.getAttribute('data-inbox-react-filter') || 'all';
+        inboxReactFilter = inboxReactFilter === next ? 'all' : next;
+        paintInboxReactionsModal(sheet.dataset.messageId || '');
+    });
+    return sheet;
+}
+
+function paintInboxReactionsModal(messageId) {
+    const sheet = document.getElementById('inbox-reactions-modal');
+    const host = document.getElementById('messages-thread-list');
+    if (!sheet || sheet.dataset.messageId !== String(messageId)) return;
+    const entry = (host?._ntInboxList || []).find((m) => String(m.id) === String(messageId));
+    const people = inboxReactionPeople(entry).map((row) => ({
+        ...row,
+        profile: inboxReactorProfiles.get(row.actor) || null,
+    }));
+    const counts = {};
+    people.forEach((row) => { counts[row.emoji] = (counts[row.emoji] || 0) + 1; });
+    const total = people.length;
+    const title = sheet.querySelector('[data-inbox-react-title]');
+    if (title) title.textContent = total === 1 ? '1 reaction' : `${total} reactions`;
+    const chipClass = (on) => `inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${
+        on
+            ? 'border-gray-300 bg-gray-200 text-gray-900 dark:border-gray-500 dark:bg-gray-600 dark:text-white'
+            : 'border-gray-200 bg-gray-100 text-gray-900 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white'
+    }`;
+    const totals = sheet.querySelector('[data-inbox-react-totals]');
+    if (totals) {
+        const faces = Object.keys(INBOX_REACTION_EMOJI)
+            .filter((key) => counts[key])
+            .sort((a, b) => counts[b] - counts[a]);
+        totals.innerHTML = [
+            `<button type="button" data-inbox-react-choose="1" class="${chipClass(false)}" aria-label="Choose a reaction"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14.2c1.1 1.3 2.4 2 4 2s2.9-.7 4-2"/><circle cx="9" cy="10" r="0.8" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="0.8" fill="currentColor" stroke="none"/></svg></button>`,
+            ...faces.map((key) => {
+                const on = inboxReactFilter === key;
+                return `<button type="button" data-inbox-react-filter="${escapeHTML(key)}" class="${chipClass(on)}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${INBOX_REACTION_EMOJI[key]} ${counts[key]}"><span aria-hidden="true">${INBOX_REACTION_EMOJI[key]}</span><span class="tabular-nums">${counts[key]}</span></button>`;
+            }),
+        ].join('');
+    }
+    const shown = inboxReactFilter === 'all' ? people : people.filter((row) => row.emoji === inboxReactFilter);
+    const list = sheet.querySelector('[data-inbox-react-list]');
+    if (!list) return;
+    list.innerHTML = shown.map((row) => {
+        const name = inboxReactorLabel(row.actor, row.profile);
+        const photo = row.actor === inboxReactionActorId(getThreadDeviceId())
+            ? (viewerInboxIdentity()?.photo || row.profile?.photo || '')
+            : (row.profile?.photo || '');
+        return `<div class="flex items-center gap-3 px-2 py-2">
+            ${inboxAvatarHtml(name, row.actor, photo)}
+            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${escapeHTML(name)}</span>
+            <span class="text-xl leading-none" aria-hidden="true">${INBOX_REACTION_EMOJI[row.emoji] || ''}</span>
+        </div>`;
+    }).join('');
+}
+
+function openInboxReactionsModal(row, list) {
+    const messageId = row?.getAttribute('data-inbox-msg-id') || '';
+    if (!messageId) return;
+    const entry = (list || []).find((m) => String(m.id) === String(messageId));
+    if (!entry || !inboxReactionPeople(entry).length) return;
+    inboxReactFilter = 'all';
+    const sheet = ensureInboxReactionsModal();
+    sheet.dataset.messageId = String(messageId);
+    const wasHidden = sheet.classList.contains('hidden');
+    paintInboxReactionsModal(messageId);
+    if (wasHidden) openSmoothModal('inbox-reactions-modal');
+    triggerHaptic();
+    const actors = inboxReactionPeople(entry).map((person) => person.actor);
+    loadInboxReactorProfiles(actors).then(() => {
+        if (sheet.dataset.messageId === String(messageId) && !sheet.classList.contains('hidden')) {
+            paintInboxReactionsModal(messageId);
+        }
+    }).catch(() => {});
 }
 
 function placeInboxReactionTray(point) {
@@ -2227,7 +2381,7 @@ function bindInboxThreadReactions(host) {
         e.preventDefault();
         const row = chip.closest('[data-inbox-msg-id]');
         if (!row) return;
-        applyThreadInboxReaction(row, listOf(), chip.getAttribute('data-inbox-react'));
+        openInboxReactionsModal(row, listOf());
     });
     const tray = ensureInboxReactionTray();
     tray.addEventListener('click', (e) => {

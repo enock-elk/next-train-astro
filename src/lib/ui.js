@@ -151,6 +151,7 @@ const MODAL_HASH = {
     'planner-train-sheet-modal': '#train-sheet',
     'planner-fare-breakdown-sheet': '#trip-fare',
     'community-reactions-modal': '#community-reactions',
+    'inbox-reactions-modal': '#inbox-reactions',
     'cache-clear-modal': '#cacheclear',
     'phone-reset-modal': '#phone-reset',
     'phone-reset-network-modal': '#phone-reset-network',
@@ -306,6 +307,15 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof toggleDropdownScrim === 'function') toggleDropdownScrim();
     
     if (modalId === 'community-reactions-modal') hideCommunityReactionTray();
+    if (modalId === 'messages-thread-modal') {
+        const inboxSheet = document.getElementById('inbox-reactions-modal');
+        if (inboxSheet && !inboxSheet.classList.contains('hidden')) {
+            inboxSheet.classList.add('hidden');
+            if ((location.hash || '') === '#inbox-reactions') {
+                try { history.replaceState({ modal: 'messages-thread-modal' }, '', '#messages'); } catch { /* the thread close still pops */ }
+            }
+        }
+    }
 
     const modal = document.getElementById(modalId);
     if (modal) {
@@ -3754,6 +3764,7 @@ function bindBlurBackdropDismiss() {
 const BOTTOM_SHEET_CLOSE = {
     'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
     'community-reactions-modal': () => closeSmoothModal('community-reactions-modal'),
+    'inbox-reactions-modal': () => closeSmoothModal('inbox-reactions-modal'),
     'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),
     'nt-nearby-trains-modal': () => document.getElementById('nt-nearby-close')?.click(),
     'nt-live-tracker-modal': () => document.getElementById('nt-live-tracker-close')?.click(),

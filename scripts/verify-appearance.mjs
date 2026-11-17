@@ -521,6 +521,9 @@ assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
 assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Select Route cannot close onto an empty board');
 
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+assert(hubJs.includes('openInboxReactionsModal(row, listOf())'), 'a Feedback Hub reaction chip opens who reacted');
+assert(hubJs.includes('inbox-reactions-modal'), 'Feedback Hub who-reacted sheet is a modal');
+assert(uiJs.includes("'inbox-reactions-modal': '#inbox-reactions'"), 'Feedback Hub reactions close on Back');
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
@@ -631,6 +634,11 @@ assert(layout.includes('Layout height never follows visualViewport'), 'keyboard 
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');
 assert(layout.includes('classList.toggle(\'nt-keyboard\''), 'keyboard class is stamped on html');
+assert(layout.includes('var keyboard = !embedded && gap > 140'), 'Android keyboard test is still the gap');
+assert(layout.includes('function isIOS()'), 'iPhone keyboard pan has its own check');
+assert(layout.includes("iosKbMode = 'pan'"), 'an iPhone pan docks from offsetTop only');
+assert(layout.includes("iosKbMode = 'flush'"), 'an already-shrunk iPhone layout does not add a second inset');
+assert(layout.includes('iosHoldBaseline'), 'an iPhone keyboard frame does not replace the full shell height');
 assert(layout.includes('padding-bottom: 0 !important'), 'in-app shell has no tray pad under the pill');
 assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pill');
 assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');

@@ -141,6 +141,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         function isAndroid() {
           return /Android/i.test((window.navigator && window.navigator.userAgent) || '');
         }
+        function isIOS() {
+          return /iPhone|iPad|iPod/i.test((window.navigator && window.navigator.userAgent) || '');
+        }
         /* Facebook, Instagram, Messenger, and Line paint a toolbar outside
            visualViewport. That gap is not the keyboard. */
         function hostWebView() {
@@ -215,6 +218,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               keyboard = true;
             }
           }
+          // iPhone pans the visual window instead of shrinking it, so gap stays
+          // near 0 and the Android tests never start. A pan uses offsetTop as
+          // the inset. A layout that already shrank docks at 0, or the field
+          // lifts twice. Android never enters this branch.
+          var iosKbMode = '';
+          if (isIOS() && editing && !embedded) {
+            if (off > 80 && gap <= 140) {
+              keyboard = true;
+              iosKbMode = 'pan';
+            } else if (off < 8 && full && layoutH < full - 80) {
+              keyboard = true;
+              iosKbMode = 'flush';
+            }
+          }
+          var iosHoldBaseline = isIOS() && !embedded && (off > 80 || (editing && full && layoutH < full - 80));
           var communityOn = false;
           try {
             var cv = document.getElementById('view-community');
@@ -234,7 +252,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Do not keep a 1px first reading: iOS PWA often reports 0/1 before
           // layout, and `last || tiny || 240` would collapse the shell to white.
           if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 0;
-          if (!keyboard && layoutH >= 240 && shellH >= 240) {
+          if (!keyboard && !iosHoldBaseline && layoutH >= 240 && shellH >= 240) {
             // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
             // visualViewport while leaving the shell at top:0 put NEXT TRAIN
             // under the URL bar and left a white slab under the oval.
@@ -316,10 +334,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           }
           var kbH = 0;
           if (keyboard) {
-            kbH = Math.max(0, Math.round(gap));
-            if (vv && vv.height) {
-              var covered = Math.round((full || layoutH) - (off + vv.height));
-              if (covered > kbH) kbH = covered;
+            if (iosKbMode === 'pan') {
+              kbH = Math.round(off);
+            } else if (iosKbMode === 'flush') {
+              kbH = 0;
+            } else {
+              kbH = Math.max(0, Math.round(gap));
+              if (vv && vv.height) {
+                var covered = Math.round((full || layoutH) - (off + vv.height));
+                if (covered > kbH) kbH = covered;
+              }
             }
           }
           if (Math.abs(kbH - paintedKb) >= 1) {

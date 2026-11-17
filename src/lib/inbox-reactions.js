@@ -47,6 +47,11 @@ function countsFromReactedBy(reactedBy) {
 }
 
 /** People map only. A numeric reactions blob cannot add a second face. */
+export function inboxReactionPeople(entry) {
+    const map = cleanReactedBy(entry?.reactedBy);
+    return Object.entries(map).map(([actor, emoji]) => ({ actor, emoji }));
+}
+
 export function inboxReactionCounts(entry) {
     return countsFromReactedBy(cleanReactedBy(entry?.reactedBy));
 }
@@ -77,7 +82,7 @@ export function renderInboxReactionChips(entry, actorId = inboxReactionActorId()
     }
     return `<div class="community-reaction-pills ${isOwn ? 'ml-auto mr-1' : ''}" data-inbox-react-chips>
         ${rows.map((row) => `
-            <button type="button" data-inbox-react="${escapeHTML(row.key)}" class="community-reaction-pill" aria-label="${row.mine ? 'Remove your reaction' : `${row.count} ${escapeHTML(row.key)}`}">${row.emoji}${row.count > 1 ? ` ${row.count}` : ''}</button>
+            <button type="button" data-inbox-react="${escapeHTML(row.key)}" class="community-reaction-pill" aria-label="${row.mine ? `Your ${escapeHTML(row.key)} reaction` : `${row.count} ${escapeHTML(row.key)}`}">${row.emoji}${row.count > 1 ? ` ${row.count}` : ''}</button>
         `).join('')}
     </div>`;
 }

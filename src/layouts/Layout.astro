@@ -110,6 +110,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var paintedKb = -1;
         var cachedEnv = -1;
         var fitQueued = false;
+        var iosTouching = false;
         function markStandalone() {
           var on = false;
           try {
@@ -232,6 +233,19 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               iosKbMode = 'flush';
             }
           }
+          // Community and Feedback Hub: hide the nav and freeze the shell in
+          // this same turn, before the visual viewport has panned 80px. That
+          // pan is what flashed the header blue under the bar.
+          var chatField = false;
+          try {
+            chatField = !!(ae && typeof ae.closest === 'function'
+              && ae.closest('#community-composer, #messages-thread-input'));
+          } catch (e) {}
+          if (isIOS() && chatField && !embedded) {
+            keyboard = true;
+            if (off > 8 && gap <= 140) iosKbMode = 'pan';
+            else if (!iosKbMode) iosKbMode = 'flush';
+          }
           var iosHoldBaseline = isIOS() && !embedded && (off > 80 || (editing && full && layoutH < full - 80));
           var communityOn = false;
           try {
@@ -252,7 +266,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Do not keep a 1px first reading: iOS PWA often reports 0/1 before
           // layout, and `last || tiny || 240` would collapse the shell to white.
           if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 0;
-          if (!keyboard && !iosHoldBaseline && layoutH >= 240 && shellH >= 240) {
+          // A finger-pull changes visualViewport and then springs it back.
+          // innerHeight stays put. Writing --nt-shell-top / --nt-shell-h from
+          // that motion moves the nav and uncovers the header blue and the
+          // canvas. The release animation continues after touchend, so a
+          // stable innerHeight is the signal. A real URL-bar change moves
+          // innerHeight and still lands. Android never enters this branch.
+          var iosRubberHold = isIOS() && !embedded && !keyboard
+            && paintedShellH >= 240 && lastFullLayoutH >= 240
+            && Math.abs((inner || 0) - lastFullLayoutH) < 2
+            && (iosTouching || Math.abs(Math.max(0, off) - (paintedShellTop < 0 ? 0 : paintedShellTop)) > 1
+              || Math.abs(shellH - paintedShellH) > 1);
+          if (iosRubberHold) {
+            shellTop = paintedShellTop >= 0 ? paintedShellTop : lastShellTop;
+            shellH = paintedShellH;
+          } else if (!keyboard && !iosHoldBaseline && layoutH >= 240 && shellH >= 240) {
             // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
             // visualViewport while leaving the shell at top:0 put NEXT TRAIN
             // under the URL bar and left a white slab under the oval.
@@ -432,11 +460,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           scheduleApply();
           var vv = window.visualViewport;
           var h = vv && vv.height ? Math.round(vv.height) : Math.round(window.innerHeight || 0);
-          if (lastVvHForToast > 0 && h > lastVvHForToast + 24) {
-            // Viewport grew (browser toast / URL bar dismissed) — recover nav.
-            recoverAppViewport();
-          } else if (navNeedsRecover()) {
-            recoverAppViewport();
+          var innerNow = window.innerHeight || 0;
+          // iOS rubber-band grows visualViewport without moving innerHeight.
+          // Treating that as a dismissed toast forgot the real shell height and
+          // then pinned the nav to the bounce.
+          var iosVvOnly = isIOS() && !hostWebView()
+            && !root.classList.contains('nt-keyboard')
+            && lastFullLayoutH >= 240
+            && Math.abs(innerNow - lastFullLayoutH) < 2;
+          if (!iosVvOnly) {
+            if (lastVvHForToast > 0 && h > lastVvHForToast + 24) {
+              // Viewport grew (browser toast / URL bar dismissed) — recover nav.
+              recoverAppViewport();
+            } else if (navNeedsRecover()) {
+              recoverAppViewport();
+            }
           }
           lastVvHForToast = h;
         }
@@ -447,11 +485,84 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           setTimeout(recoverAppViewport, 80);
         });
         document.addEventListener('focusin', apply, { passive: true });
-        document.addEventListener('focusout', function () { setTimeout(function () { recoverAppViewport(true); }, 50); }, { passive: true });
+        document.addEventListener('focusout', function () {
+          setTimeout(function () {
+            // Zeroing the last full height here adopted the keyboard pan as
+            // the new shell, so the nav sprang back with the visual viewport.
+            if (isIOS() && !hostWebView()) scheduleApply();
+            else recoverAppViewport(true);
+          }, 50);
+        }, { passive: true });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', onViewportPossiblyToasted, { passive: true });
           window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });
         }
+        var iosEdgeY = 0;
+        var iosEdgeX = 0;
+        document.addEventListener('touchstart', function (event) {
+          var t = event.touches && event.touches[0];
+          if (t) {
+            iosEdgeY = t.clientY;
+            iosEdgeX = t.clientX;
+          }
+          if (isIOS()) iosTouching = true;
+        }, { passive: true, capture: true });
+        function endIosTouch(event) {
+          if (!isIOS()) return;
+          var left = event.touches ? event.touches.length : 0;
+          if (left > 0) return;
+          if (!iosTouching) return;
+          iosTouching = false;
+          scheduleApply();
+        }
+        document.addEventListener('touchend', endIosTouch, { passive: true, capture: true });
+        document.addEventListener('touchcancel', endIosTouch, { passive: true, capture: true });
+        function iosScrollerCanTake(node, dy, dx) {
+          var el = node && node.nodeType === 1 ? node : (node && node.parentElement);
+          if (!el || !el.closest) return false;
+          if (el.closest('#view-map, #map-container, .leaflet-container, #map-modal, #alert-image-lightbox, #nt-live-tracker-modal')) return true;
+          var field = el.closest('#community-composer, #messages-thread-input');
+          if (field) {
+            if (field.scrollHeight > field.clientHeight + 2) {
+              var fieldTop = field.scrollTop <= 0;
+              var fieldBottom = field.scrollTop + field.clientHeight >= field.scrollHeight - 2;
+              if (dy < 0 && !fieldTop) return true;
+              if (dy > 0 && !fieldBottom) return true;
+            }
+            return false;
+          }
+          var horizontal = Math.abs(dx || 0) > Math.abs(dy || 0) + 2;
+          if (horizontal) {
+            var grid = el.closest('#grid-container');
+            if (grid && grid.scrollWidth > grid.clientWidth + 2) return true;
+          }
+          while (el && el !== document.body && el !== document.documentElement) {
+            var style;
+            try { style = window.getComputedStyle(el); } catch (err) { break; }
+            var overflowY = style.overflowY + ' ' + style.overflow;
+            if (/(auto|scroll)/.test(overflowY) && el.scrollHeight > el.clientHeight + 2) {
+              var atTop = el.scrollTop <= 0;
+              var atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+              if (dy < 0 && !atTop) return true;
+              if (dy > 0 && !atBottom) return true;
+              return false;
+            }
+            el = el.parentElement;
+          }
+          return false;
+        }
+        document.addEventListener('touchmove', function (event) {
+          if (!isIOS() || hostWebView()) return;
+          if (!event.touches || event.touches.length !== 1) return;
+          var t = event.touches[0];
+          var dy = iosEdgeY - t.clientY;
+          var dx = iosEdgeX - t.clientX;
+          iosEdgeY = t.clientY;
+          iosEdgeX = t.clientX;
+          if (Math.abs(dy) < 1 && Math.abs(dx) < 1) return;
+          if (iosScrollerCanTake(event.target, dy, dx)) return;
+          if (event.cancelable) event.preventDefault();
+        }, { passive: false, capture: true });
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') recoverAppViewport();
         });
@@ -1222,6 +1333,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-in-app, html.nt-in-app body {
         height: var(--nt-app-h, 100svh);
         overflow: hidden;
+        overscroll-behavior: none;
         background-color: var(--nt-chrome-header, #1d4ed8);
       }
 
@@ -1304,7 +1416,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
+        overscroll-behavior: none;
         display: flex;
         flex-direction: column;
       }

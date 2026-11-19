@@ -247,6 +247,12 @@ const rendered = renderTextWithShareChips('See https://nexttrain.co.za/og/share?
 const visible = rendered.replace(/<[^>]+>/g, '');
 ok(rendered.includes('JHB ↔ Randfontein') && rendered.includes('Saturday') && !visible.includes('https://'), 'the pasted timetable URL is replaced by the route chip');
 ok(rendered.includes('data-share-url='), 'the route chip stays clickable');
+const communityLink = renderTextWithShareChips('See https://nexttrain.co.za/og/c/jhb-germiston/cp_mwn84zjm_4cze9f');
+ok(communityLink.includes('nt-community-share-card'), 'a community message link becomes a text card');
+ok(communityLink.includes('data-community-share-route="jhb-germiston"'), 'the card keeps the room');
+ok(communityLink.includes('data-community-share-post="cp_mwn84zjm_4cze9f"'), 'the card keeps the message');
+ok(!communityLink.includes('<img'), 'a community message card does not embed a picture');
+ok(!communityLink.replace(/<[^>]+>/g, '').includes('https://'), 'the pasted community address is replaced by the card');
 
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');

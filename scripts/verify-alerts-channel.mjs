@@ -463,6 +463,13 @@ const now = 1_700_000_000_000;
         message: 'See https://nexttrain.co.za/guide.html and https://www.prasa.com/ today.',
     });
     assert((many.match(/data-link-preview-url=/g) || []).length === 2, 'every url in an alert is crawled');
+    const communityPreview = linkPreviewMarkup({
+        message: 'See https://nexttrain.co.za/og/c/jhb-germiston/cp_mwn84zjm_4cze9f',
+    });
+    assert(communityPreview.includes('nt-community-share-card'), 'a community message link in an alert is a text card');
+    assert(communityPreview.includes('data-community-share-post="cp_mwn84zjm_4cze9f"'), 'the alert card keeps the message id');
+    assert(!communityPreview.includes('nt-link-preview-media'), 'a community message preview does not use a picture');
+    assert(!communityPreview.includes('data-link-preview-url='), 'a community message link is not crawled as a page preview');
     const whatsapp = linkPreviewMarkup({
         linkPreview: {
             url: 'https://www.whatsapp.com/channel/0029VaExample',

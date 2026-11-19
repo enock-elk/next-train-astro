@@ -18,7 +18,7 @@ import {
 import { rememberPicture, profilePhotosOn, shouldHoldPicture } from './data-saver.js';
 import { imageMetaForUrl } from './picture-preview.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
-import { renderTextWithShareChips } from './share-chips.js';
+import { embedCommunityShareCards, renderTextWithShareChips, stripCommunityShareUrls } from './share-chips.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -2613,6 +2613,8 @@ export function renderServiceAlertModal(notice, options = {}) {
         posterHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
     const mediaHtml = `${posterHtml}${renderAlertVideoMarkup(layout.videoUrls)}`;
+    if (linkPreviewMarkup(notice).includes('nt-community-share-card')) formattedMsg = stripCommunityShareUrls(formattedMsg);
+    else formattedMsg = embedCommunityShareCards(formattedMsg);
     content.innerHTML = `${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}`;
     ensureLightboxPlusBadges(content);
 

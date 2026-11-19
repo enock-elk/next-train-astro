@@ -9,6 +9,7 @@ import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-t
 import { isPublicPreviewUrl } from './link-preview.js';
 import { showCopyToast, showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { alertSharePath } from './share-links.js';
+import { embedCommunityShareCards, stripCommunityShareUrls } from './share-chips.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $account } from './account.js';
 import { $currentRouteId, $userRegion } from '../store.js';
@@ -872,7 +873,10 @@ function renderPostCard(notice, opts = {}) {
     const chrome = severityChrome(severity);
     const layout = layoutAlertPost(notice);
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
-    const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
+    const communityPreview = linkPreviewMarkup(notice).includes('nt-community-share-card');
+    const body = communityPreview
+        ? stripCommunityShareUrls(prepareRichHtml(stripAlertSignoffHtml(layout.body)))
+        : embedCommunityShareCards(prepareRichHtml(stripAlertSignoffHtml(layout.body)));
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${linkedPlainHtml(layout.title)}</h3>`
         : '';

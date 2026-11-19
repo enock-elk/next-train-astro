@@ -2340,6 +2340,12 @@ html.dark .nt-alert-share-card.is-live .nt-alert-share-kicker { color: #93c5fd; 
   line-height: 1.35;
   white-space: pre-wrap;
 }
+.nt-community-share-card .nt-alert-share-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .admin-sheet-list {
   display: flex;
   flex-direction: column;

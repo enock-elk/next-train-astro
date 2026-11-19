@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.19.3': [
+        'Community leaves a grey message grey when a reaction or a name refresh paints the room. The unread count stays for 45 seconds. A community message link pasted into another room or an alert shows the message text, and a tap opens that message. No picture on that card. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.19.2': [
         'Community opens from the messages saved on this phone, then syncs. Unread messages start under a count. That count leaves after 8 seconds, and when the room is left. The list stays on the message that was on screen. The seen cursor stays on the phone, and the account cursor still updates on users/{uid}/community_seen. No commuter What\'s New. forceShow stays false.',
     ],

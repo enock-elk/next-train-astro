@@ -8,6 +8,7 @@ import { DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { noticeQuotePlain } from './feedback-quote.js';
 import {
     parseAlertSharePath,
+    parseCommunitySharePath,
     parsePlannerDeepLink,
     parseRouteDeepLinkParams,
     parseLiveTrainDeepLink,
@@ -122,6 +123,117 @@ function alertShareCardHtml(href, parsed) {
     return `<button type="button" class="nt-alert-share-card" data-alert-share-href="${escapeAttr(href)}" data-alert-share-source="${escapeAttr(parsed.source)}" data-alert-share-id="${escapeAttr(parsed.id)}" data-alert-share-photo="${parsed.photo || 0}"><span class="nt-alert-share-copy"><span class="nt-alert-share-kicker">Notice</span><span class="nt-alert-share-title">Loading this notice</span></span></button>`;
 }
 
+function ourShareHost(hostname) {
+    const host = String(hostname || '').toLowerCase();
+    return HOSTS.test(host)
+        || (host === 'enock-elk.github.io' && true)
+        || host.endsWith('.next-train-lab.pages.dev');
+}
+
+/** `/og/c/{route}/{post}` pasted into a chat or an alert. */
+export function communityShareFromHref(href) {
+    let url;
+    try { url = new URL(String(href || '').trim()); } catch { return null; }
+    if (!ourShareHost(url.hostname)) return null;
+    const parsed = parseCommunitySharePath(url.pathname);
+    if (!parsed) return null;
+    return { ...parsed, href: url.href };
+}
+
+function communityShareText(value) {
+    return String(value || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/https?:\/\/\S+/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 220);
+}
+
+export function communityShareCardHtml(href) {
+    const parsed = communityShareFromHref(href);
+    if (!parsed) return '';
+    const kicker = routeTitle(parsed.routeId) || 'Community';
+    return `<button type="button" class="nt-alert-share-card nt-community-share-card" data-community-share-href="${escapeAttr(parsed.href)}" data-community-share-route="${escapeAttr(parsed.routeId)}" data-community-share-post="${escapeAttr(parsed.postId)}"><span class="nt-alert-share-copy"><span class="nt-alert-share-kicker">${escapeAttr(kicker)}</span><span class="nt-alert-share-title">Loading this message</span></span></button>`;
+}
+
+async function loadSharedCommunityPost(routeId, postId) {
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}.json`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+function paintCommunityShareCard(el, post) {
+    const gone = !post || post.deleted || post.hidden || post.removed || post.pendingReview || post.shadowOnly;
+    const kicker = el.querySelector('.nt-alert-share-kicker');
+    const title = el.querySelector('.nt-alert-share-title');
+    if (gone) {
+        el.classList.add('is-ended');
+        if (title) title.textContent = 'This message is no longer available';
+        el.querySelector('.nt-alert-share-body')?.remove();
+        return;
+    }
+    el.classList.add('is-live');
+    const name = String(post.displayName || 'Passenger').trim() || 'Passenger';
+    const body = communityShareText(post.body);
+    if (title) title.textContent = name;
+    let copy = el.querySelector('.nt-alert-share-body');
+    if (body) {
+        if (!copy) {
+            copy = document.createElement('span');
+            copy.className = 'nt-alert-share-body';
+            el.querySelector('.nt-alert-share-copy')?.appendChild(copy);
+        }
+        copy.textContent = body;
+    } else if (copy) copy.remove();
+    if (kicker && !kicker.textContent) kicker.textContent = 'Community';
+}
+
+export function hydrateCommunityShareCards(root) {
+    root?.querySelectorAll?.('.nt-community-share-card[data-community-share-post]').forEach((el) => {
+        if (el.dataset.communityShareBound === '1') return;
+        el.dataset.communityShareBound = '1';
+        loadSharedCommunityPost(el.getAttribute('data-community-share-route') || '', el.getAttribute('data-community-share-post') || '')
+            .then((post) => { if (el.isConnected) paintCommunityShareCard(el, post); })
+            .catch(() => { if (el.isConnected) paintCommunityShareCard(el, null); });
+    });
+}
+
+/** A community message address becomes the text card when the preview slot is off. */
+export function embedCommunityShareCards(html) {
+    let out = String(html || '');
+    out = out.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const card = communityShareCardHtml(href);
+        return card || tag;
+    });
+    out = out.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
+        const url = raw.replace(/[),.;]+$/, '');
+        const card = communityShareCardHtml(url);
+        if (!card) return raw;
+        return `${card}${raw.slice(url.length)}`;
+    });
+    return out;
+}
+
+/** Drop community message addresses from alert text once the card is showing. */
+export function stripCommunityShareUrls(html) {
+    let out = String(html || '');
+    out = out.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => (
+        communityShareFromHref(href) ? '' : tag
+    ));
+    out = out.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
+        const url = raw.replace(/[),.;]+$/, '');
+        if (!communityShareFromHref(url)) return raw;
+        return raw.slice(url.length);
+    });
+    return out;
+}
+
 async function readNoticeJson(path) {
     try {
         const res = await fetch(`${DYNAMIC_BASE_URL}${path}.json`);
@@ -210,7 +322,8 @@ export function renderTextWithShareChips(text) {
         const trail = full.slice(url.length);
         html += escapeAttr(raw.slice(last, match.index));
         const alert = alertShareFromHref(url);
-        const chip = alert ? alertShareCardHtml(url, alert) : shareChipHtml(url);
+        const communityCard = communityShareCardHtml(url);
+        const chip = alert ? alertShareCardHtml(url, alert) : (communityCard || shareChipHtml(url));
         if (chip) html += chip;
         else if (/^https:\/\//i.test(url)) {
             html += `<a class="community-msg-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeAttr(url.replace(/^https:\/\//, ''))}</a>`;
@@ -252,6 +365,22 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
     window.ntAlertShareRefs = alertShareRefsInText;
     window.ntLoadSharedNotice = loadSharedNotice;
     document.addEventListener('click', async (event) => {
+        const communityCard = event.target?.closest?.('.nt-community-share-card');
+        if (communityCard) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (communityCard.classList.contains('is-ended')) return;
+            const routeId = communityCard.getAttribute('data-community-share-route') || '';
+            const postId = communityCard.getAttribute('data-community-share-post') || '';
+            if (!routeId || !postId) return;
+            const { closeAlertsChannel } = await import('./alerts-channel.js');
+            closeAlertsChannel?.();
+            const community = await import('./community.js');
+            community.queueCommunityFocus?.(routeId, postId, { announce: true });
+            if (typeof window.switchTab === 'function') window.switchTab('community');
+            else community.openRouteCommunity?.({ routeId });
+            return;
+        }
         const alertCard = event.target?.closest?.('.nt-alert-share-card');
         if (alertCard) {
             event.preventDefault();

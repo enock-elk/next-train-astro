@@ -5,6 +5,7 @@
  */
 
 import { linkCardsOn, pictureMarkup, rememberPicture, settleDeferredPictures, shouldHoldPicture } from './data-saver.js';
+import { communityShareCardHtml } from './share-chips.js';
 
 const memory = new Map();
 const failedUrls = new Set();
@@ -352,6 +353,8 @@ export function linkPreviewMarkup(notice) {
     listHttpUrls(notice).forEach(push);
     if (!urls.length) return '';
     return urls.map((url) => {
+        const communityCard = communityShareCardHtml(url);
+        if (communityCard) return communityCard;
         if (stored && samePreviewUrl(stored.url, url)) return readyMarkup(stored);
         const peeked = peekLinkPreview(url);
         if (peeked) return readyMarkup(peeked);
@@ -415,7 +418,10 @@ export function hydrateLinkPreviews(root, workerBase) {
     }
     if (!root || typeof root.querySelectorAll !== 'function') return;
     settleDeferredPictures(root);
-    import('./share-chips.js').then((m) => m.hydrateAlertShareCards?.(root)).catch(() => {});
+    import('./share-chips.js').then((m) => {
+        m.hydrateAlertShareCards?.(root);
+        m.hydrateCommunityShareCards?.(root);
+    }).catch(() => {});
     root.querySelectorAll('[data-link-preview-url]').forEach((el) => {
         if (el.getAttribute('data-link-preview-state') === 'ready') return;
         const url = el.getAttribute('data-link-preview-url') || '';

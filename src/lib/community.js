@@ -374,8 +374,7 @@ function nameColorFor(seed) {
  * sits too close to the other person just above them.
  */
 function assignFeedNameColors(posts) {
-    const acct = $account.get();
-    const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
+    const myUid = myCommunityUid();
     const rows = (posts || []).map((post) => {
         const isOwn = !!(myUid && post?.uid && post.uid === myUid);
         const shown = authorPresentation(post, isOwn);
@@ -2202,7 +2201,7 @@ let communityUnreadBanner = null;
 let unreadDividerTimer = 0;
 let communityRoomSynced = '';
 let communitySeenArmed = '';
-const UNREAD_DIVIDER_MS = 8000;
+const UNREAD_DIVIDER_MS = 45000;
 const ROOM_CACHE_PREFIX = 'ntCommunityRoomV1:';
 
 function beginCommunityOpenAnchor(routeId) {
@@ -2270,8 +2269,12 @@ function writeRoomCache(routeId, posts) {
 }
 
 function myCommunityUid() {
-    const acct = $account.get();
-    return acct?.status === 'signed-in' ? (acct.uid || '') : '';
+    const acct = $account.get() || {};
+    if (acct.status === 'signed-in' && acct.uid) return acct.uid;
+    // A restoring session is guest or loading before the account returns.
+    // The saved id keeps this person's messages green instead of flashing grey.
+    if (acct.status === 'guest' && communityAuthSettled && !safeStorage.getItem('authUid')) return '';
+    return safeStorage.getItem('authUid') || '';
 }
 
 function postCarriesUnread(post, myUid, seen) {
@@ -2700,8 +2703,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const clock = formatClock24(post.timestamp);
     const postId = escapeHTML(post.postId || '');
     const uid = escapeHTML(post.uid || '');
-    const acct = $account.get();
-    const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
+    const myUid = myCommunityUid();
     const isOwn = !!(myUid && post.uid && post.uid === myUid);
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
@@ -2739,8 +2741,22 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         ? ''
         : `<div class="community-bubble-name-row" style="color:${isOwn ? 'var(--nt-name-own)' : nameColor}"><span class="inline-flex items-center min-w-0"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${versionChip}</span>${marksHtml}</div>`;
 
+    const stamp = escapeHTML([
+        isOwn ? '1' : '0',
+        grouped ? '1' : '0',
+        tombstone ? '1' : '0',
+        displayName,
+        body,
+        replyTo?.postId || '',
+        replyTo?.body || '',
+        quoteShown,
+        marksSnap?.points || '',
+        photoURL,
+        communityReactionStamp(post.postId),
+        post.pendingSend ? '1' : '0',
+    ].join('\u001f'));
     return `
-      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}"${tombstone ? ' data-deleted="1"' : ''}>
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}" data-feed-stamp="${stamp}"${tombstone ? ' data-deleted="1"' : ''}>
         <div class="community-swipe-hint" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
         </div>
@@ -2761,6 +2777,47 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
       </div>`;
 }
 
+function communityReactionStamp(postId) {
+    const byUid = cachedReactionsByPost[postId] || {};
+    return Object.keys(byUid).sort().map((uid) => `${uid}:${byUid[uid]?.emoji || ''}`).join(',');
+}
+
+let lastCommunityFeedHtml = '';
+let lastCommunityFeedRoute = '';
+
+/** Leave grey bubbles alone when a reaction or a profile paint does not change them. */
+function commitCommunityFeedHtml(listEl, routeId, html) {
+    if (lastCommunityFeedRoute === routeId && lastCommunityFeedHtml === html && listEl.childElementCount) return false;
+    const sameRoom = lastCommunityFeedRoute === routeId;
+    lastCommunityFeedHtml = html;
+    lastCommunityFeedRoute = routeId;
+    if (sameRoom && patchCommunityFeedRows(listEl, html)) return true;
+    listEl.innerHTML = html;
+    return true;
+}
+
+function patchCommunityFeedRows(listEl, html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const nextRows = [...tpl.content.querySelectorAll('.community-post-row')];
+    const liveRows = [...listEl.querySelectorAll('.community-post-row')];
+    if (!liveRows.length || liveRows.length !== nextRows.length) return false;
+    for (let i = 0; i < liveRows.length; i += 1) {
+        if (liveRows[i].getAttribute('data-post-id') !== nextRows[i].getAttribute('data-post-id')) return false;
+    }
+    const dividerText = (root) => root.querySelector('[data-community-unread-divider]')?.textContent || '';
+    if (dividerText(listEl) !== dividerText(tpl.content)) return false;
+    const dayText = (root) => [...root.querySelectorAll('.flex.justify-center')].map((el) => el.textContent || '').join('|');
+    if (dayText(listEl) !== dayText(tpl.content)) return false;
+    nextRows.forEach((next, i) => {
+        if (liveRows[i].getAttribute('data-feed-stamp') === next.getAttribute('data-feed-stamp')) return;
+        const selected = liveRows[i].classList.contains('is-selected');
+        liveRows[i].replaceWith(next);
+        if (selected) next.classList.add('is-selected');
+    });
+    return true;
+}
+
 function paintCategoryFilters() {
     // Category chips removed from UI for now; keep no-op for later revive.
 }
@@ -2776,6 +2833,8 @@ function applyFeedFilter(routeId) {
 
     if (!posts.length) {
         if (communityRoomSynced === routeId) writeRoomCache(routeId, []);
+        lastCommunityFeedHtml = '';
+        lastCommunityFeedRoute = routeId;
         listEl.innerHTML = '';
         wireCommunityChatGestures(listEl);
         if (emptyEl) {
@@ -2819,7 +2878,11 @@ function applyFeedFilter(routeId) {
         html += renderPostCard(p, routeId, { grouped });
         prevUid = uid;
     });
-    listEl.innerHTML = html;
+    const feedChanged = commitCommunityFeedHtml(listEl, routeId, html);
+    if (!feedChanged) {
+        rememberPaintedCommunityRoute(routeId);
+        return;
+    }
     settleDeferredPictures(listEl);
     hydrateAlertPosterImages(listEl);
     hydrateLinkPreviews(listEl, REPLY_WORKER_URL);

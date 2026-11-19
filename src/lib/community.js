@@ -547,7 +547,13 @@ function postsVisibleFilter(list, myUid) {
             if (p.shadowOnly && p.uid !== myUid) return false;
             return true;
         })
-        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        .sort(compareCommunityPosts);
+}
+
+function compareCommunityPosts(a, b) {
+    const dt = (Number(a?.timestamp) || 0) - (Number(b?.timestamp) || 0);
+    if (dt) return dt;
+    return String(a?.postId || '').localeCompare(String(b?.postId || ''));
 }
 
 function sameVisiblePost(a, b) {
@@ -585,7 +591,7 @@ function mergeOverlayPosts(routeId, list) {
     overlay.forEach((p) => {
         if (!merged.some((q) => sameVisiblePost(q, p))) merged.push(p);
     });
-    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    merged.sort(compareCommunityPosts);
     return dedupeFeedPosts(merged);
 }
 
@@ -597,7 +603,7 @@ function upsertOutgoingPost(post) {
     else bucket.push(post);
     const idx = cachedFeedPosts.findIndex((p) => p.postId === post.postId);
     if (idx >= 0) cachedFeedPosts[idx] = { ...cachedFeedPosts[idx], ...post };
-    else cachedFeedPosts = [...cachedFeedPosts, post].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    else cachedFeedPosts = [...cachedFeedPosts, post].sort(compareCommunityPosts);
     communityFeedPinned = true;
     applyFeedFilter(post.routeId);
 }
@@ -849,7 +855,7 @@ export async function fetchReplies(routeId, postId) {
         const myUid = acct.status === 'signed-in' ? acct.uid : null;
         return Object.values(data)
             .filter((r) => r && r.body && !r.pendingReview && (!r.hidden || r.uid === myUid))
-            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            .sort(compareCommunityPosts);
     } catch {
         return [];
     }
@@ -1960,7 +1966,7 @@ async function revealCommunityFocus(routeId) {
         const one = await fetchOneCommunityPost(routeId, focus.postId);
         if (!communityPostGone(one) && pendingCommunityFocus === focus) {
             cachedFeedPosts = [...cachedFeedPosts.filter((row) => row.postId !== one.postId), one]
-                .sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+                .sort(compareCommunityPosts);
             applyFeedFilter(routeId);
             return;
         }
@@ -2597,7 +2603,7 @@ function placeCommunityOpen(routeId, listEl) {
     const rows = [...listEl.querySelectorAll('.community-post-row')];
     const divider = listEl.querySelector('[data-community-unread-divider]');
     if (!rows.length && !divider) return false;
-    const generation = ++communityScrollGeneration;
+    communityScrollGeneration += 1;
     communityScrollGuardUntil = Date.now() + 500;
     const place = () => {
         if (divider && divider.isConnected) {
@@ -2612,11 +2618,6 @@ function placeCommunityOpen(routeId, listEl) {
     };
     place();
     if (communityRoomSynced === routeId) anchor.placed = true;
-    requestAnimationFrame(() => {
-        if (generation !== communityScrollGeneration) return;
-        communityScrollGuardUntil = Date.now() + 400;
-        place();
-    });
     return true;
 }
 
@@ -2633,6 +2634,24 @@ function bindCommunityFeedPin() {
         const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
         communityFeedPinned = gap < 160;
     }, { passive: true });
+    if (scroller.dataset.sizeBound === '1' || typeof ResizeObserver === 'undefined') return;
+    scroller.dataset.sizeBound = '1';
+    const list = scroller.querySelector('#community-feed-list');
+    if (!list) return;
+    const watcher = new ResizeObserver(() => {
+        if (!communityFeedPinned || !communityOpenAnchor?.placed) return;
+        if (Date.now() < communityScrollGuardUntil) return;
+        const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        const parked = Number(communityOpenAnchor.scrollTop) || 0;
+        const moved = Math.abs(scroller.scrollTop - parked) > 80;
+        if (moved && gap >= 160) {
+            communityFeedPinned = false;
+            return;
+        }
+        scroller.scrollTop = scroller.scrollHeight;
+        communityOpenAnchor.scrollTop = scroller.scrollTop;
+    });
+    watcher.observe(list);
 }
 
 function communityImageUrls(post) {
@@ -2751,12 +2770,23 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         replyTo?.body || '',
         quoteShown,
         marksSnap?.points || '',
+        nameColor,
         photoURL,
         communityReactionStamp(post.postId),
         post.pendingSend ? '1' : '0',
     ].join('\u001f'));
+    const structure = escapeHTML([
+        isOwn ? '1' : '0',
+        grouped ? '1' : '0',
+        tombstone ? '1' : '0',
+        body,
+        replyTo?.postId || '',
+        String(replyTo?.body || '').slice(0, 120),
+        post.pendingSend ? '1' : '0',
+        parts.media ? 'm' : '',
+    ].join('\u001f'));
     return `
-      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}" data-feed-stamp="${stamp}"${tombstone ? ' data-deleted="1"' : ''}>
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}${tombstone ? ' is-deleted' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}" data-ts="${Number(post.timestamp) || 0}" data-feed-stamp="${stamp}" data-feed-struct="${structure}"${tombstone ? ' data-deleted="1"' : ''}>
         <div class="community-swipe-hint" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
         </div>
@@ -2787,13 +2817,47 @@ let lastCommunityFeedRoute = '';
 
 /** Leave grey bubbles alone when a reaction or a profile paint does not change them. */
 function commitCommunityFeedHtml(listEl, routeId, html) {
-    if (lastCommunityFeedRoute === routeId && lastCommunityFeedHtml === html && listEl.childElementCount) return false;
+    if (lastCommunityFeedRoute === routeId && lastCommunityFeedHtml === html && listEl.childElementCount) {
+        return { changed: false, rebuilt: false };
+    }
     const sameRoom = lastCommunityFeedRoute === routeId;
     lastCommunityFeedHtml = html;
     lastCommunityFeedRoute = routeId;
-    if (sameRoom && patchCommunityFeedRows(listEl, html)) return true;
+    const patched = sameRoom ? patchCommunityFeedRows(listEl, html) : 'rebuild';
+    if (patched === 'same') return { changed: false, rebuilt: false };
+    if (patched === 'patched') return { changed: true, rebuilt: false };
     listEl.innerHTML = html;
-    return true;
+    return { changed: true, rebuilt: true };
+}
+
+function copyFeedChrome(live, next) {
+    const liveName = live.querySelector('.community-bubble-name-row');
+    const nextName = next.querySelector('.community-bubble-name-row');
+    if (liveName && nextName) {
+        if (liveName.getAttribute('style') !== nextName.getAttribute('style')) {
+            liveName.setAttribute('style', nextName.getAttribute('style') || '');
+        }
+        if (liveName.innerHTML !== nextName.innerHTML) liveName.innerHTML = nextName.innerHTML;
+    }
+    const liveQuote = live.querySelector('.community-quote-jump');
+    const nextQuote = next.querySelector('.community-quote-jump');
+    if (liveQuote && nextQuote) {
+        if (liveQuote.getAttribute('style') !== nextQuote.getAttribute('style')) {
+            liveQuote.setAttribute('style', nextQuote.getAttribute('style') || '');
+        }
+        if (liveQuote.innerHTML !== nextQuote.innerHTML) liveQuote.innerHTML = nextQuote.innerHTML;
+    }
+    const livePills = live.querySelector('.community-reaction-pills');
+    const nextPills = next.querySelector('.community-reaction-pills');
+    const article = live.querySelector('article');
+    if (livePills && nextPills) livePills.replaceWith(nextPills);
+    else if (!livePills && nextPills && article) article.appendChild(nextPills);
+    else if (livePills && !nextPills) livePills.remove();
+    const liveAvatar = live.querySelector('.community-avatar');
+    const nextAvatar = next.querySelector('.community-avatar');
+    if (liveAvatar && nextAvatar && liveAvatar.innerHTML !== nextAvatar.innerHTML) {
+        liveAvatar.innerHTML = nextAvatar.innerHTML;
+    }
 }
 
 function patchCommunityFeedRows(listEl, html) {
@@ -2801,21 +2865,35 @@ function patchCommunityFeedRows(listEl, html) {
     tpl.innerHTML = html;
     const nextRows = [...tpl.content.querySelectorAll('.community-post-row')];
     const liveRows = [...listEl.querySelectorAll('.community-post-row')];
-    if (!liveRows.length || liveRows.length !== nextRows.length) return false;
+    if (!liveRows.length || liveRows.length !== nextRows.length) return 'rebuild';
     for (let i = 0; i < liveRows.length; i += 1) {
-        if (liveRows[i].getAttribute('data-post-id') !== nextRows[i].getAttribute('data-post-id')) return false;
+        if (liveRows[i].getAttribute('data-post-id') !== nextRows[i].getAttribute('data-post-id')) return 'rebuild';
     }
     const dividerText = (root) => root.querySelector('[data-community-unread-divider]')?.textContent || '';
-    if (dividerText(listEl) !== dividerText(tpl.content)) return false;
+    if (dividerText(listEl) !== dividerText(tpl.content)) return 'rebuild';
     const dayText = (root) => [...root.querySelectorAll('.flex.justify-center')].map((el) => el.textContent || '').join('|');
-    if (dayText(listEl) !== dayText(tpl.content)) return false;
+    if (dayText(listEl) !== dayText(tpl.content)) return 'rebuild';
+    let touched = false;
     nextRows.forEach((next, i) => {
-        if (liveRows[i].getAttribute('data-feed-stamp') === next.getAttribute('data-feed-stamp')) return;
-        const selected = liveRows[i].classList.contains('is-selected');
-        liveRows[i].replaceWith(next);
+        const live = liveRows[i];
+        const liveName = live.querySelector('.community-bubble-name-row');
+        const nextName = next.querySelector('.community-bubble-name-row');
+        if (liveName && nextName && liveName.getAttribute('style') !== nextName.getAttribute('style')) {
+            liveName.setAttribute('style', nextName.getAttribute('style') || '');
+        }
+        if (live.getAttribute('data-feed-stamp') === next.getAttribute('data-feed-stamp')) return;
+        if (live.getAttribute('data-feed-struct') && live.getAttribute('data-feed-struct') === next.getAttribute('data-feed-struct')) {
+            copyFeedChrome(live, next);
+            live.setAttribute('data-feed-stamp', next.getAttribute('data-feed-stamp') || '');
+            touched = true;
+            return;
+        }
+        const selected = live.classList.contains('is-selected');
+        live.replaceWith(next);
         if (selected) next.classList.add('is-selected');
+        touched = true;
     });
-    return true;
+    return touched ? 'patched' : 'same';
 }
 
 function paintCategoryFilters() {
@@ -2878,8 +2956,8 @@ function applyFeedFilter(routeId) {
         html += renderPostCard(p, routeId, { grouped });
         prevUid = uid;
     });
-    const feedChanged = commitCommunityFeedHtml(listEl, routeId, html);
-    if (!feedChanged) {
+    const feedPaint = commitCommunityFeedHtml(listEl, routeId, html);
+    if (!feedPaint.changed) {
         rememberPaintedCommunityRoute(routeId);
         return;
     }
@@ -2900,11 +2978,16 @@ function applyFeedFilter(routeId) {
     const focusing = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
     const heldId = communityFlashPostId;
     const heldRow = heldId ? listEl.querySelector(`[data-post-id="${String(heldId).replace(/"/g, '')}"]`) : null;
+    const opening = communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed && profileRepaintRoute !== routeId;
     if (focusing) void revealCommunityFocus(routeId);
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
-    else if (communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed && profileRepaintRoute !== routeId) {
+    else if (!feedPaint.rebuilt) {
+        if (opening) {
+            if (!placeCommunityOpen(routeId, listEl)) restoreFeedViewport(scroller, viewport);
+        } else if (communityFeedPinned && communityOpenAnchor?.placed) pinCommunityFeedToLatest();
+    } else if (opening) {
         if (!placeCommunityOpen(routeId, listEl)) restoreFeedViewport(scroller, viewport);
-    } else if (profileRepaintRoute === routeId || (communityOpenAnchor?.routeId === routeId && communityOpenAnchor.placed && !communityFeedPinned) || (feedSilentRepaint && !communityFeedPinned)) {
+    } else if (communityOpenAnchor?.routeId === routeId && communityOpenAnchor.placed && !communityFeedPinned) {
         if (scroller) {
             communityScrollGeneration += 1;
             communityScrollGuardUntil = Date.now() + 400;
@@ -3441,7 +3524,6 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
             const saw = await postsReady;
             if (saw && postsSnapSeen && postsListenRouteId === routeId) {
                 startRealtimeReactions(routeId);
-                if (postsListenRouteId === routeId) applyFeedFilter(routeId);
                 return;
             }
         }
@@ -3868,7 +3950,7 @@ async function communityPostsSince(routeId, since) {
         if (!res.ok) return cached;
         const data = await res.json();
         const rows = data && typeof data === 'object' ? Object.values(data) : [];
-        return rows.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+        return rows.sort(compareCommunityPosts);
     } catch {
         return cached;
     }

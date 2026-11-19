@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.19.4': [
+        'Community keeps each bubble in place when a reaction, a name, or a profile colour arrives. The list scrolls once when the room opens: the latest message for a new reader, or the unread line for someone who has been here before. A later update stays still unless they are already on the latest message. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.19.3': [
         'Community leaves a grey message grey when a reaction or a name refresh paints the room. The unread count stays for 45 seconds. A community message link pasted into another room or an alert shows the message text, and a tap opens that message. No picture on that card. No commuter What\'s New. forceShow stays false.',
     ],

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.19.1': [
+        'Closing the keyboard leaves the community composer. Two photos on one message sit side by side, and a photo keeps a frame while it loads. The attach sheet closes from a tap outside it, and after a photo or link is added. Deleting a message lets that same text be sent again. A link card leaves the composer when the message is posted. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.17.2': [
         'A community photo uses its own height, and swiping it shows the other photos in that chat. An alert link in Community or Feedback Hub opens as a notice card, and an ended notice stays on the card. Co-Pilot drops a poll thank-you unless the alert is a poll, and a quoted or linked alert sends its picture, PDF, and text, including one that has ended. User Accounts shows the count, region bars, and filters in the Trip Plans layout, with points, a WhatsApp number from past feedback, and a trip-plan mark under the sign-in icon. No commuter What\'s New. forceShow stays false.',
     ],

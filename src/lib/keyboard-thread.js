@@ -87,12 +87,35 @@ export function liftThreadForKeyboard() {
     requestAnimationFrame(() => liftList(thread.list, extra));
 }
 
+let keyboardWasOpen = false;
+let keyboardReleaseTimer = 0;
+
+/** Back closes the keys and leaves the caret in the field, so the dock stays up. */
+function leaveChatFieldIfKeyboardClosed() {
+    const open = document.documentElement.classList.contains('nt-keyboard');
+    if (open) {
+        keyboardWasOpen = true;
+        clearTimeout(keyboardReleaseTimer);
+        return;
+    }
+    if (!keyboardWasOpen) return;
+    clearTimeout(keyboardReleaseTimer);
+    keyboardReleaseTimer = setTimeout(() => {
+        if (document.documentElement.classList.contains('nt-keyboard')) return;
+        keyboardWasOpen = false;
+        const el = document.activeElement;
+        if (!el?.closest?.('#community-composer, #messages-thread-input')) return;
+        el.blur();
+    }, 160);
+}
+
 export function bindKeyboardThread() {
     if (bound || typeof window === 'undefined') return;
     bound = true;
     const run = () => {
         rememberWallpaper();
         liftThreadForKeyboard();
+        leaveChatFieldIfKeyboardClosed();
     };
     rememberWallpaper();
     window.visualViewport?.addEventListener('resize', run, { passive: true });

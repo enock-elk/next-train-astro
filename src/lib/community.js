@@ -37,6 +37,7 @@ import {
     recordRateHit as recordTrustRateHit,
     checkContentSafety,
     rememberBody,
+    forgetBody,
     queueAutoModeration,
     startRateLimitCountdown,
 } from './trust.js';
@@ -154,6 +155,8 @@ let adminLinkUrl = '';
 let adminComposerPreview = null;
 let adminPreviewClearedUrl = '';
 let adminPreviewTimer = null;
+let adminPreviewEpoch = 0;
+const releasedDuplicatePosts = new Set();
 
 function communityWorkerBase() {
     return COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
@@ -784,7 +787,12 @@ async function startRealtimePosts(routeId) {
                 const list = data
                     ? postsVisibleFilter(Object.values(data), myUid)
                     : [];
-                cachedFeedPosts = mergeOverlayPosts(routeId, list);
+                const merged = mergeOverlayPosts(routeId, list);
+                cachedFeedPosts.forEach((old) => {
+                    const now = merged.find((row) => String(row?.postId) === String(old?.postId));
+                    if (old && now && !isCommunityTombstone(old) && isCommunityTombstone(now)) noteDeletedOwnPost(old);
+                });
+                cachedFeedPosts = merged;
                 if (reactionsListenRouteId === routeId) syncVisibleReactionListeners(routeId);
                 feedSilentRepaint = true;
                 applyFeedFilter(routeId);
@@ -917,7 +925,17 @@ function askCommunityDelete({ title, body, confirmLabel } = {}) {
     return pending;
 }
 
+function noteDeletedOwnPost(post) {
+    const id = String(post?.postId || '');
+    if (!id || releasedDuplicatePosts.has(id)) return;
+    const acct = $account.get();
+    if (!acct?.uid || post?.uid !== acct.uid) return;
+    releasedDuplicatePosts.add(id);
+    if (!isCommunityTombstone(post)) forgetBody(post.body);
+}
+
 export async function deleteCommunityMessage({ routeId, postId, replyId = '', mode = 'tombstone', as = 'author' } = {}) {
+    const existing = findCachedPost(postId);
     const token = await ensureAuthToken();
     if (!token) throw new Error('Sign in again to delete this message.');
     const res = await fetch(`${communityWorkerBase()}/community/message`, {
@@ -953,6 +971,7 @@ export async function deleteCommunityMessage({ routeId, postId, replyId = '', mo
         throw new Error(data.error || 'Could not delete this message.');
     }
     if (replyId) return data;
+    noteDeletedOwnPost(existing);
     if (mode === 'purge') {
         cachedFeedPosts = cachedFeedPosts.filter((p) => String(p.postId) !== String(postId));
         if (localOverlayByRoute[routeId]) {
@@ -2500,9 +2519,10 @@ function communityMediaParts(post) {
     const laid = renderSharedMediaHtml(String(post?.body || ''), extras);
     let media = laid.media || '';
     if (laid.imageUrls.length && media) {
+        const layout = laid.imageUrls.length === 1 ? ' is-single' : laid.imageUrls.length === 2 ? ' is-pair' : '';
         media = media.replace(
             /class="[^"]*"(\s+data-alert-media)/,
-            `class="community-msg-images${laid.imageUrls.length === 1 ? ' is-single' : ''}"$1`,
+            `class="community-msg-images${layout}"$1`,
         );
     }
     const kept = storedLinkPreviewMarkup(post?.linkPreview);
@@ -3544,10 +3564,20 @@ async function addAdminAddress(raw) {
 }
 
 function clearCommunityComposerPreview() {
+    adminPreviewEpoch += 1;
+    clearTimeout(adminPreviewTimer);
     adminComposerPreview = null;
     adminPreviewClearedUrl = '';
     const slot = document.getElementById('community-link-preview');
     if (slot) slot.innerHTML = '';
+}
+
+function closeCommunityAttach() {
+    const modal = document.getElementById('community-attach-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden');
+    const url = document.getElementById('community-attach-url');
+    if (url && document.activeElement === url) url.blur();
 }
 
 function communityPreviewUrl() {
@@ -3579,6 +3609,7 @@ function scheduleCommunityLinkPreview() {
 
 async function refreshCommunityLinkPreview() {
     if (!isAdminAuthed()) return;
+    const epoch = adminPreviewEpoch;
     const url = communityPreviewUrl();
     const slot = document.getElementById('community-link-preview');
     if (!slot) return;
@@ -3590,6 +3621,7 @@ async function refreshCommunityLinkPreview() {
     if (adminComposerPreview?.url === url && slot.querySelector('.nt-link-preview')) return;
     try {
         const preview = await fetchLinkPreview(url, REPLY_WORKER_URL);
+        if (epoch !== adminPreviewEpoch) return;
         if (!preview?.url || preview.url !== communityPreviewUrl() || preview.url === adminPreviewClearedUrl) return;
         if (isOwnSiteUrl(preview.url)) return;
         adminComposerPreview = preview;
@@ -4025,8 +4057,21 @@ async function handlePostSubmit() {
 
     const draft = body;
     const savedQuote = replyDraft;
+    const savedImages = adminImages.slice();
+    const savedLink = adminLinkUrl;
+    const savedPreview = adminComposerPreview;
     let quoteCleared = false;
     let stagedId = '';
+    let composerExtrasCleared = false;
+    const restoreComposerExtras = () => {
+        if (!composerExtrasCleared) return;
+        adminImages.splice(0, adminImages.length, ...savedImages);
+        adminLinkUrl = savedLink;
+        adminComposerPreview = savedPreview;
+        paintAdminAttachPreview();
+        if (savedPreview) paintCommunityComposerPreview(savedPreview);
+        composerExtrasCleared = false;
+    };
     const result = await submitCommunityPost(body, routeId, {
         onStage(post) {
             stagedId = post.postId;
@@ -4037,6 +4082,12 @@ async function handlePostSubmit() {
             rememberComposerDraft('');
             clearReplyDraft();
             quoteCleared = true;
+            adminImages.splice(0, adminImages.length);
+            adminLinkUrl = '';
+            clearCommunityComposerPreview();
+            paintAdminAttachPreview();
+            closeCommunityAttach();
+            composerExtrasCleared = true;
             upsertOutgoingPost(post);
         },
     });
@@ -4044,6 +4095,7 @@ async function handlePostSubmit() {
     if (!result.ok) {
         const failedId = result.postId || stagedId;
         if (failedId) dropOutgoingPost(routeId, failedId);
+        restoreComposerExtras();
         if (composer && draft && !composer.value) {
             composer.value = draft;
             fitCommunityComposer(composer);
@@ -4074,6 +4126,7 @@ async function handlePostSubmit() {
     if (cutShort) {
         const failedId = result.post?.postId || result.postId || stagedId;
         if (failedId) dropOutgoingPost(routeId, failedId);
+        restoreComposerExtras();
         if (composer && draft) {
             composer.value = draft;
             fitCommunityComposer(composer);
@@ -4279,13 +4332,21 @@ export function bindCommunityUi() {
         fillCommunityPosterSelect();
     });
     document.getElementById('community-attach-modal')?.addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+        if (e.target === e.currentTarget) closeCommunityAttach();
     });
+    document.addEventListener('pointerdown', (e) => {
+        const modal = document.getElementById('community-attach-modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if (e.target.closest?.('#community-attach-tray, #community-attach-btn, #community-attach-file')) return;
+        closeCommunityAttach();
+    }, true);
     document.getElementById('community-attach-add')?.addEventListener('click', () => {
         const input = document.getElementById('community-attach-url');
         const value = input?.value || '';
         if (input) input.value = '';
-        addAdminAddress(value);
+        void addAdminAddress(value).then(() => {
+            if (adminLinkUrl || adminImages.length) closeCommunityAttach();
+        });
     });
     document.getElementById('community-attach-file')?.addEventListener('change', async (e) => {
         const input = e.target;
@@ -4293,11 +4354,11 @@ export function bindCommunityUi() {
         input.value = '';
         if (!file || !isAdminAuthed()) return;
         const url = await uploadCommunityPhoto(file);
-        if (url) addAdminImage(url);
+        if (url && addAdminImage(url)) closeCommunityAttach();
     });
     document.getElementById('community-poster-select')?.addEventListener('change', (e) => {
         const value = e.target.value;
-        if (value) addAdminImage(value);
+        if (value && addAdminImage(value)) closeCommunityAttach();
         e.target.value = '';
     });
     document.getElementById('community-attach-preview')?.addEventListener('click', (e) => {
@@ -4365,7 +4426,10 @@ export function bindCommunityUi() {
         }
     });
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') setCommunityRouteListOpen(false);
+        if (e.key === 'Escape') {
+            setCommunityRouteListOpen(false);
+            closeCommunityAttach();
+        }
     });
     window.addEventListener('resize', () => fitCommunityRouteLabels());
     document.getElementById('community-refresh-btn')?.addEventListener('click', () => {

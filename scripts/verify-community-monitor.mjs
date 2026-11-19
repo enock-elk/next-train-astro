@@ -253,6 +253,13 @@ assert.match(communityView, /community-avatar-spacer/, 'Community CSS keeps What
 assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
 assert.match(community, /left > 3/, 'quota hint stays hidden until 3 messages remain');
 assert.match(community, /viewing\) cachedUnreadByRoute\[viewing\] = 0/, 'the open room is cleared before a slower unread count returns');
+assert.match(community, /ntCommunityRoomV1:/, 'a community room is kept on this phone');
+assert.match(community, /readRoomCache\(routeId\)/, 'opening a room paints the saved messages first');
+assert.match(community, /UNREAD_DIVIDER_MS = 8000/, 'the unread count leaves after 8 seconds');
+assert.match(community, /unread messages/, 'the room shows how many messages are unread');
+assert.match(community, /data-community-unread-divider/, 'unread messages start under a divider');
+assert.match(community, /settleCommunityRoomSeen\(paintedCommunityRouteId\)/, 'leaving the room clears the unread count');
+assert.doesNotMatch(community, /markCommunityRouteSeen\(routeId, \{ silent: true \}\)/, 'a live update does not stamp the room seen');
 assert.match(community, /paintedCommunityRouteId/, 'only a painted room is treated as open');
 assert.match(community, /pendingSend: true/, 'a send appears in the room before the server answers');
 assert.match(community, /community-msg-receipt/, 'a sending message shows a clock, then a tick');

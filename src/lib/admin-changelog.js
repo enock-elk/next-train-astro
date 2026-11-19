@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.19.2': [
+        'Community opens from the messages saved on this phone, then syncs. Unread messages start under a count. That count leaves after 8 seconds, and when the room is left. The list stays on the message that was on screen. The seen cursor stays on the phone, and the account cursor still updates on users/{uid}/community_seen. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.19.1': [
         'Closing the keyboard leaves the community composer. Two photos on one message sit side by side, and a photo keeps a frame while it loads. The attach sheet closes from a tap outside it, and after a photo or link is added. Deleting a message lets that same text be sent again. A link card leaves the composer when the message is posted. No commuter What\'s New. forceShow stays false.',
     ],

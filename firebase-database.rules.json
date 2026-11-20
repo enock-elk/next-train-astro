@@ -410,7 +410,7 @@
       ".indexOn": ["status"],
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-        ".write": "(auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+        ".write": "(auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous' && newData.exists() && (!data.exists() || data.child('status').val() === 'pending') && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
         ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'requestedAt', 'status']) && newData.child('uid').val() === $uid && newData.child('requestedAt').isNumber() && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'done'))"
       }
     },
@@ -459,6 +459,11 @@
         "community_seen": {
           "$routeId": {
             ".validate": "newData.isNumber() && newData.val() > 0"
+          }
+        },
+        "nameHistory": {
+          "$at": {
+            ".validate": "newData.hasChildren(['name', 'at']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 80 && newData.child('at').isNumber() && newData.child('at').val() > 0"
           }
         }
       }

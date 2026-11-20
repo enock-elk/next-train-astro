@@ -168,7 +168,7 @@ ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads'
 ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
 ok(adminJs.includes('commuter-peek-feedback'), 'feedback tile opens the thread');
 ok(adminJs.includes('Last activity:'), 'user sheet shows latest activity');
-ok(adminJs.includes("Admin.startFeedbackChat(did, '')"), 'grey feedback tile can start a chat');
+ok(adminJs.includes('Admin.startFeedbackChat(chatId'), 'grey feedback tile can start a chat');
 ok(adminJs.includes('commuter-peek-trips'), 'trip plans tile opens plans');
 ok(!adminJs.includes('commuter-peek-chat'), 'user sheet has no Open chat button');
 ok(adminJs.includes('ut-tab-deletions') && adminJs.includes('ut-pane-deletions'), 'deletion requests live in User Trust');

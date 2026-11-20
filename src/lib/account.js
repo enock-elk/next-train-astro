@@ -7,6 +7,7 @@
  *     displayName, photoURL, email?, createdAt,
  *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
+ *     nameHistory: { [at]: { name, at } },
  *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, dataSaver, updatedAt },
  *     recentTrips: [{ from, to, fullFrom, fullTo, at, region }]
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
@@ -480,6 +481,46 @@ async function waitForFirebase(timeoutMs = 8000) {
     });
 }
 
+function rememberedName(raw) {
+    const name = clampDisplayName(raw);
+    if (!name || /^(passenger|you|admin|anonymous)$/i.test(name)) return '';
+    return name;
+}
+
+/** Keep the previous display name on the account when it actually changes. */
+function priorNamePatch(existing, nextName, now) {
+    const prev = rememberedName(existing?.displayName);
+    const next = rememberedName(nextName);
+    if (!prev || !next || prev.toLowerCase() === next.toLowerCase()) return {};
+    const history = existing?.nameHistory && typeof existing.nameHistory === 'object' ? existing.nameHistory : {};
+    const seen = new Set(
+        Object.values(history)
+            .map((row) => rememberedName(row?.name).toLowerCase())
+            .filter(Boolean),
+    );
+    if (seen.has(prev.toLowerCase())) return {};
+    const at = Number(now) || Date.now();
+    return { [`nameHistory/${at}`]: { name: prev, at } };
+}
+
+function retainedNamesFrom(existing, ...extra) {
+    const names = {};
+    const add = (raw, at) => {
+        const name = rememberedName(raw);
+        if (!name) return;
+        const when = Number(at) || Date.now();
+        if (!names[name] || when < names[name]) names[name] = when;
+    };
+    extra.forEach((row) => add(row?.name, row?.at));
+    add(existing?.displayName, existing?.updatedAt || existing?.createdAt);
+    add(existing?.providerName, existing?.createdAt);
+    const history = existing?.nameHistory && typeof existing.nameHistory === 'object' ? existing.nameHistory : {};
+    Object.values(history).forEach((row) => add(row?.name, row?.at));
+    const kept = existing?.retainedNames && typeof existing.retainedNames === 'object' ? existing.retainedNames : {};
+    Object.entries(kept).forEach(([name, at]) => add(name, at));
+    return names;
+}
+
 /**
  * Ensure users/{uid} exists and link current device_id (additive — never wipes prefs).
  * @param {object} user
@@ -561,6 +602,7 @@ export async function ensureUserProfile(user, opts = {}) {
             if (!existing.displayNameCustom) {
                 patch.displayName = displayName;
             }
+            Object.assign(patch, priorNamePatch(existing, patch.displayName || existing.displayName || displayName, now));
             if (legalName) patch.providerName = legalName;
             if (provider) patch.provider = provider;
             Object.keys(mergedDeviceIds).forEach((id) => {
@@ -671,6 +713,11 @@ export async function updateAccountDisplayName(raw) {
             displayNameCustom: !!custom,
             updatedAt: Date.now(),
         };
+        try {
+            const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`));
+            const existing = snap.exists() ? (snap.val() || {}) : null;
+            Object.assign(profileRow, priorNamePatch(existing, displayName, profileRow.updatedAt));
+        } catch { /* the new name still saves */ }
         if (photoURL) profileRow.photoURL = photoURL;
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
         try {
@@ -844,11 +891,22 @@ export async function requestAccountDeletion() {
     }
     const now = Date.now();
     const draft = deletionRequestDraft(user);
+    const deviceId = getDeviceId();
+    let existing = null;
+    try {
+        const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`));
+        existing = snap.exists() ? (snap.val() || {}) : null;
+    } catch { existing = null; }
     const record = {
         uid: user.uid,
-        email: user.email || null,
-        displayName: state.displayName || user.displayName || null,
-        deviceId: getDeviceId(),
+        email: user.email || existing?.email || null,
+        displayName: state.displayName || user.displayName || existing?.displayName || null,
+        deviceId,
+        deviceIds: {
+            ...(existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : {}),
+            ...(deviceId ? { [deviceId]: true } : {}),
+        },
+        retainedNames: retainedNamesFrom(existing, { name: state.displayName || user.displayName, at: now }),
         requestedAt: now,
         status: 'pending',
         reason: 'user_request',

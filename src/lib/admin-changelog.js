@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.20.1': [
+        'A person opened from Community Monitor, Feedback, or User Trust is the same contact when the account lists that device, the device points at that account, or the feedback was sent with that account or its email. The feedback count, alias, route, and trip plans follow that link. Changing a display name keeps the previous name on the account. Deleting the live profile keeps the name, earlier names, email, and alias on the deletion record. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.19.4': [
         'Community keeps each bubble in place when a reaction, a name, or a profile colour arrives. The list scrolls once when the room opens: the latest message for a new reader, or the unread line for someone who has been here before. A later update stays still unless they are already on the latest message. No commuter What\'s New. forceShow stays false.',
     ],

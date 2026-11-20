@@ -1262,6 +1262,9 @@ const Admin = {
             const named = Admin.communityAliasFromItems(group);
             if (named) {
                 if (String(Admin.cachedAliases[did] || '') !== named) pending.push([did, named]);
+                const uid = group.map((item) => item.accountUid).find((id) => id) || '';
+                if (uid && !String(Admin.cachedAliases[uid] || '').trim()) pending.push([uid, named]);
+                if (uid) Admin.rememberCommuterLinks([did, uid]);
                 return;
             }
             const uid = group.map((item) => item.accountUid).find((id) => id) || '';
@@ -1284,6 +1287,8 @@ const Admin = {
                 }
                 const name = await Admin.communityNameForAccount(uid);
                 if (name && String(Admin.cachedAliases[job.did] || '') !== name) pending.push([job.did, name]);
+                if (name && uid && !String(Admin.cachedAliases[uid] || '').trim()) pending.push([uid, name]);
+                if (uid) Admin.rememberCommuterLinks([job.did, uid]);
             }
         };
         await Promise.all(Array.from({ length: Math.min(6, queue.length) }, () => pull()));
@@ -3166,21 +3171,283 @@ const Admin = {
         return `Joined ${pretty}`;
     },
 
-    showJoinedHint: (id) => {
-        Admin.openCommuterPeek(id);
+    showJoinedHint: (id, linkedId = '') => {
+        Admin.openCommuterPeek(id, linkedId);
+    },
+
+    /**
+     * Join a device id and an account only when a stored link or the account email says so.
+     * A shared display name is not enough.
+     */
+    mergeCommuterIds: ({ startId = '', accounts = [], devices = [], feedback = [] } = {}) => {
+        const ids = new Set();
+        const emails = new Set();
+        const names = [];
+        const addId = (value) => {
+            const id = String(value || '').trim();
+            if (!id || id === 'Anonymous / Legacy' || id === 'unknown') return;
+            ids.add(id);
+        };
+        const addEmail = (value) => {
+            const email = String(value || '').trim().toLowerCase();
+            if (email.includes('@')) emails.add(email);
+        };
+        const addName = (value, at) => {
+            const name = String(value || '').trim().replace(/\s+/g, ' ');
+            if (!name || name.length > 80 || /^(passenger|you|admin|anonymous)$/i.test(name)) return;
+            const when = Number(at) || 0;
+            const hit = names.find((row) => row.name.toLowerCase() === name.toLowerCase());
+            if (hit) {
+                if (when && (!hit.at || when < hit.at)) hit.at = when;
+                return;
+            }
+            names.push({ name, at: when });
+        };
+        addId(startId);
+        (accounts || []).forEach((user) => {
+            if (!user || typeof user !== 'object') return;
+            addId(user.uid);
+            addEmail(user.email);
+            const deviceIds = user.deviceIds;
+            if (deviceIds && typeof deviceIds === 'object') Object.keys(deviceIds).forEach(addId);
+            const history = user.nameHistory;
+            if (history && typeof history === 'object') {
+                Object.values(history).forEach((row) => {
+                    if (row && typeof row === 'object') addName(row.name, row.at);
+                });
+            }
+            const retained = user.retainedNames;
+            if (retained && typeof retained === 'object') {
+                Object.entries(retained).forEach(([name, at]) => addName(name, at));
+            }
+            const aliases = user.aliases;
+            if (aliases && typeof aliases === 'object') {
+                Object.entries(aliases).forEach(([id, name]) => {
+                    addId(id);
+                    addName(name, user.retainedAt || user.requestedAt);
+                });
+            }
+        });
+        (devices || []).forEach((device) => {
+            if (!device || typeof device !== 'object') return;
+            const id = String(device.id || '').trim();
+            const uid = String(device.uid || '').trim();
+            if (id && (ids.has(id) || (uid && ids.has(uid)))) addId(id);
+            if (uid && id && ids.has(id)) addId(uid);
+            if (id && ids.has(id)) addEmail(device.email);
+        });
+        (feedback || []).forEach((item) => {
+            if (!item || item.isFromAdmin) return;
+            const did = String(item.deviceId || item.device_id || '').trim();
+            const uid = String(item.accountUid || '').trim();
+            const email = String(item.email || '').trim().toLowerCase();
+            const uidHit = !!(uid && ids.has(uid));
+            const deviceHit = !!(did && ids.has(did));
+            const emailHit = !!(email && emails.has(email) && (!uid || ids.has(uid)));
+            if (!uidHit && !deviceHit && !emailHit) return;
+            addId(did);
+            if (uid) addId(uid);
+        });
+        names.sort((a, b) => (a.at || 0) - (b.at || 0));
+        return { ids: [...ids], emails: [...emails], names };
+    },
+
+    rememberCommuterLinks: (ids) => {
+        const list = [...new Set((ids || []).map((id) => String(id || '').trim()).filter(Boolean))];
+        if (list.length < 2) return;
+        if (!Admin._commuterLinks) Admin._commuterLinks = new Map();
+        list.forEach((id) => {
+            const prev = Admin._commuterLinks.get(id) || new Set();
+            list.forEach((other) => prev.add(other));
+            Admin._commuterLinks.set(id, prev);
+        });
+    },
+
+    expandCommuterIdentity: async (startId, fetchJson, seed = {}) => {
+        const id = String(startId || '').trim();
+        if (!id || typeof fetchJson !== 'function') return { ids: [], emails: [], names: [], accounts: [], devices: [] };
+        const cache = Admin._identityCache || (Admin._identityCache = new Map());
+        const alsoIds = (Array.isArray(seed.also) ? seed.also : []).map((item) => String(item || '').trim()).filter(Boolean);
+        const cached = cache.get(id);
+        if (cached && !seed.userNode && !seed.deviceNode && alsoIds.every((item) => cached.ids.includes(item))) return cached;
+        const accounts = [];
+        const devices = [];
+        const seenUsers = new Set();
+        const seenDevices = new Set();
+        const pushAccount = (uid, node) => {
+            if (!node || typeof node !== 'object') return;
+            accounts.push({ ...node, uid: node.uid || uid });
+        };
+        if (seed.userNode && typeof seed.userNode === 'object') {
+            pushAccount(id, seed.userNode);
+            seenUsers.add(id);
+        }
+        if (seed.deviceNode && typeof seed.deviceNode === 'object') {
+            devices.push({ ...seed.deviceNode, id });
+            seenDevices.add(id);
+        }
+        const loadUser = async (uid) => {
+            const key = String(uid || '').trim();
+            if (!key || /^usr_/i.test(key) || seenUsers.has(key)) return;
+            seenUsers.add(key);
+            const node = await fetchJson(`users/${encodeURIComponent(key)}.json`);
+            if (node && typeof node === 'object') {
+                pushAccount(key, node);
+                return;
+            }
+            const tomb = await fetchJson(`account_deletions/${encodeURIComponent(key)}.json`);
+            if (tomb && typeof tomb === 'object') pushAccount(key, { ...tomb, _tombstone: true });
+        };
+        const loadDevice = async (did) => {
+            const key = String(did || '').trim();
+            if (!key || !/^usr_/i.test(key) || seenDevices.has(key) || devices.length >= 8) return;
+            seenDevices.add(key);
+            const node = await fetchJson(`devices/${encodeURIComponent(key)}.json`);
+            if (node && typeof node === 'object') devices.push({ ...node, id: key });
+        };
+        const extras = Array.isArray(seed.also) ? seed.also : [];
+        for (const extra of extras) {
+            const key = String(extra || '').trim();
+            if (!key) continue;
+            if (/^usr_/i.test(key)) await loadDevice(key);
+            else await loadUser(key);
+        }
+        if (/^usr_/i.test(id)) await loadDevice(id);
+        else await loadUser(id);
+        let merged = Admin.mergeCommuterIds({ startId: id, accounts, devices, feedback: Admin.cachedFeedbackData || [] });
+        for (let guard = 0; guard < 4; guard += 1) {
+            const pendingDevices = merged.ids.filter((item) => /^usr_/i.test(item) && !seenDevices.has(item)).slice(0, 8);
+            const pendingUsers = merged.ids.filter((item) => item && !/^usr_/i.test(item) && !seenUsers.has(item)).slice(0, 4);
+            devices.forEach((device) => {
+                const uid = String(device?.uid || '').trim();
+                if (uid && !seenUsers.has(uid) && !pendingUsers.includes(uid)) pendingUsers.push(uid);
+            });
+            if (!pendingDevices.length && !pendingUsers.length) break;
+            await Promise.all([
+                ...pendingDevices.map((item) => loadDevice(item)),
+                ...pendingUsers.map((item) => loadUser(item)),
+            ]);
+            merged = Admin.mergeCommuterIds({ startId: id, accounts, devices, feedback: Admin.cachedFeedbackData || [] });
+        }
+        const result = { ...merged, accounts, devices };
+        result.ids.forEach((item) => cache.set(item, result));
+        cache.set(id, result);
+        Admin.rememberCommuterLinks(result.ids);
+        return result;
     },
 
     /** Compact “i” next to a user/device id — opens the peek sheet, does not replace the id. */
-    userIdJoinHintHtml: (id) => {
+    userIdJoinHintHtml: (id, linkedId = '') => {
         const raw = String(id || '').trim();
         if (!raw || raw === 'Anonymous / Legacy' || raw === 'unknown') return '';
         const label = Admin.formatJoinedLabel(raw) || 'User info';
-        const safeId = raw.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const safe = (value) => String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const title = (typeof escapeHTML === 'function' ? escapeHTML(label) : label.replace(/"/g, '&quot;'));
-        return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
+        const extra = linkedId && String(linkedId).trim() && String(linkedId).trim() !== raw
+            ? `, '${safe(linkedId)}'`
+            : '';
+        return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safe(raw)}'${extra})" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
     },
 
-    collectCommuterPeek: async (id) => {
+    joinCommuterPeek: async ({ did, linkedId = '', fetchJson, looksDevice, inboxNode, deviceNode, userNode, tripNode, secret, dynamicEndpoint }) => {
+        const identity = await Admin.expandCommuterIdentity(did, fetchJson, {
+            userNode: !looksDevice && userNode && typeof userNode === 'object' ? userNode : null,
+            deviceNode: looksDevice && deviceNode && typeof deviceNode === 'object' ? deviceNode : null,
+            also: linkedId ? [linkedId] : [],
+        });
+        const ids = Admin.commuterIdSet(identity.ids, did);
+        const accountNode = (identity.accounts || []).find((row) => row && !row._tombstone)
+            || (identity.accounts || [])[0]
+            || (userNode && typeof userNode === 'object' ? userNode : null);
+        const linkedDevices = [...ids].filter((item) => /^usr_/i.test(item)).slice(0, 8);
+        const inboxById = new Map();
+        if (looksDevice && inboxNode && typeof inboxNode === 'object') inboxById.set(did, inboxNode);
+        await Promise.all(linkedDevices.map(async (item) => {
+            if (inboxById.has(item)) return;
+            const node = await fetchJson(`inbox/${encodeURIComponent(item)}.json`);
+            if (node && typeof node === 'object') inboxById.set(item, node);
+        }));
+        const accountEmail = String(accountNode?.email || deviceNode?.email || '').trim().toLowerCase();
+        const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
+            const fbDid = String(i?.deviceId || i?.device_id || '').trim();
+            const fbUid = String(i?.accountUid || '').trim();
+            const fbEmail = String(i?.email || '').trim().toLowerCase();
+            if (ids.has(fbDid) || ids.has(fbUid)) return true;
+            return !!(accountEmail && fbEmail === accountEmail && (!fbUid || ids.has(fbUid)));
+        });
+        const latestFeedback = feedbackItems.filter((i) => !i.isFromAdmin)
+            .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))[0] || null;
+        const contacts = { emails: [], phones: [] };
+        if (typeof Admin.collectFeedbackContacts === 'function') {
+            const seenMail = new Set();
+            const seenPhone = new Set();
+            [did, ...linkedDevices].forEach((item) => {
+                if (!item) return;
+                const found = Admin.collectFeedbackContacts(item);
+                (found.emails || []).forEach((email) => {
+                    const key = String(email).trim().toLowerCase();
+                    if (!key || seenMail.has(key)) return;
+                    seenMail.add(key);
+                    contacts.emails.push(email);
+                });
+                (found.phones || []).forEach((phone) => {
+                    if (!phone || seenPhone.has(phone)) return;
+                    seenPhone.add(phone);
+                    contacts.phones.push(phone);
+                });
+            });
+        }
+        let tripLast = Number(tripNode?.lastSeen) || 0;
+        let tripRegion = tripNode?.region || '';
+        const noteTrip = (id, node) => {
+            if (node) {
+                const last = Number(node.lastSeen) || 0;
+                if (last > tripLast) tripLast = last;
+                tripRegion = tripRegion || node.region || '';
+            }
+            const index = Admin._fbTripPlanUsers && typeof Admin._fbTripPlanUsers === 'object'
+                ? (Admin._fbTripPlanUsers[id] || Admin._fbTripPlanUsers[String(id).replace(/[.#$[\]/]/g, '_')])
+                : null;
+            if (!index) return;
+            const indexed = Number(index.lastSeen) || 0;
+            if (indexed > tripLast) tripLast = indexed;
+            tripRegion = tripRegion || index.region || '';
+        };
+        noteTrip(did, tripNode);
+        await Promise.all(linkedDevices.map(async (item) => {
+            if (item === did) return;
+            noteTrip(item, await fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(item)}.json`));
+        }));
+        const inboxHas = [...inboxById.values()].some((node) => node && typeof node === 'object' && Object.keys(node).length);
+        const chatDevice = linkedDevices.find((item) => feedbackItems.some((row) => String(row.deviceId || row.device_id || '') === item))
+            || linkedDevices.find((item) => inboxById.get(item))
+            || (looksDevice ? did : (linkedDevices[0] || ''));
+        const alias = [...ids].map((item) => Admin.commuterAlias(item)).find(Boolean) || '';
+        if (alias) {
+            if (!Admin.cachedAliases || typeof Admin.cachedAliases !== 'object') Admin.cachedAliases = {};
+            const missingAlias = [...ids].filter((item) => !String(Admin.cachedAliases[item] || '').trim());
+            missingAlias.forEach((item) => { Admin.cachedAliases[item] = alias; });
+            if (secret && missingAlias.length) {
+                missingAlias.forEach((item) => {
+                    fetch(`${dynamicEndpoint}admin_state/aliases/${encodeURIComponent(item)}.json?auth=${encodeURIComponent(secret)}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(alias),
+                    }).catch(() => {});
+                });
+            }
+        }
+        const headingName = alias || accountNode?.displayName || deviceNode?.displayName || '';
+        const earlierNames = (identity.names || [])
+            .map((row) => row.name)
+            .filter((name) => name && name.toLowerCase() !== String(headingName).trim().toLowerCase());
+        return {
+            ids, accountNode, feedbackItems, latestFeedback, contacts, tripLast, tripRegion,
+            inboxHas, chatDevice, alias, earlierNames,
+        };
+    },
+
+    collectCommuterPeek: async (id, linkedId = '') => {
         const did = String(id || '').trim();
         await Admin.ensureAliasesLoaded();
         const secret = await Admin.getAuthKey();
@@ -3223,33 +3490,17 @@ const Admin = {
             if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
             else ticketStatus = 'unavailable';
         }
-        let accountNode = userNode && typeof userNode === 'object' ? userNode : null;
-        const linkedUid = String(deviceNode?.uid || '').trim();
-        if (linkedUid && linkedUid !== did) {
-            const linked = await fetchJson(`users/${encodeURIComponent(linkedUid)}.json`);
-            if (linked && typeof linked === 'object') accountNode = linked;
-        }
-        const ids = Admin.commuterIdSet(did, linkedUid || deviceNode?.uid, userNode && looksDevice ? null : did);
-        const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
-            const fbDid = String(i?.deviceId || i?.device_id || '').trim();
-            return ids.has(fbDid) || fbDid === did;
+        const joined = await Admin.joinCommuterPeek({
+            did, linkedId, fetchJson, looksDevice, inboxNode, deviceNode, userNode, tripNode, secret, dynamicEndpoint,
         });
-        const latestFeedback = feedbackItems.filter((i) => !i.isFromAdmin)
-            .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))[0] || null;
-        const contacts = typeof Admin.collectFeedbackContacts === 'function'
-            ? Admin.collectFeedbackContacts(did)
-            : { emails: [], phones: [] };
-        let tripLast = Number(tripNode?.lastSeen) || 0;
-        let tripRegion = tripNode?.region || '';
-        const tripIndex = Admin._fbTripPlanUsers && typeof Admin._fbTripPlanUsers === 'object'
-            ? (Admin._fbTripPlanUsers[did] || Admin._fbTripPlanUsers[did.replace(/[.#$[\]/]/g, '_')])
-            : null;
-        if (tripIndex) {
-            const last = Number(tripIndex.lastSeen) || 0;
-            if (last > tripLast) tripLast = last;
-            tripRegion = tripRegion || tripIndex.region || '';
-        }
-        const inboxHas = !!(inboxNode && typeof inboxNode === 'object' && Object.keys(inboxNode).length);
+        const ids = joined.ids;
+        const accountNode = joined.accountNode;
+        const feedbackItems = joined.feedbackItems;
+        const latestFeedback = joined.latestFeedback;
+        const contacts = joined.contacts;
+        const tripLast = joined.tripLast;
+        const tripRegion = joined.tripRegion;
+        const inboxHas = joined.inboxHas;
         const crashKnown = Array.isArray(Admin.cachedCrashData);
         const crashCount = (Admin.cachedCrashData || []).filter((c) => {
             const cDid = String(c?.deviceId || c?.device_id || '').trim();
@@ -3321,19 +3572,26 @@ const Admin = {
         }
         activity.sort((a, b) => b.ms - a.ms);
         const lastActivity = activity[0] || null;
+        const chatDevice = joined.chatDevice;
+        const alias = joined.alias;
+        const earlierNames = joined.earlierNames;
         return {
             id: did,
-            alias: Admin.commuterAlias(did),
+            alias,
+            earlierNames,
+            linkedIds: [...ids],
+            chatDevice,
             joinedMs: Admin.accountJoinMs({
-                createdAt: userNode?.createdAt,
-                accountCreatedAt: userNode?.accountCreatedAt,
-                joinedAt: userNode?.joinedAt,
-                deviceIds: userNode?.deviceIds,
-                deviceId: did,
+                createdAt: accountNode?.createdAt || userNode?.createdAt,
+                accountCreatedAt: accountNode?.accountCreatedAt || userNode?.accountCreatedAt,
+                joinedAt: accountNode?.joinedAt || userNode?.joinedAt,
+                deviceIds: accountNode?.deviceIds || userNode?.deviceIds,
+                deviceId: chatDevice || did,
+                uid: accountNode?.uid || '',
             }) || null,
-            displayName: userNode?.displayName || deviceNode?.displayName || '',
-            email: userNode?.email || deviceNode?.email || '',
-            linkedUid: deviceNode?.uid || '',
+            displayName: accountNode?.displayName || deviceNode?.displayName || userNode?.displayName || '',
+            email: accountNode?.email || deviceNode?.email || userNode?.email || '',
+            linkedUid: accountNode?.uid || deviceNode?.uid || '',
             tripLast,
             tripRegion,
             hasChat: inboxHas || feedbackItems.length > 0,
@@ -3341,7 +3599,7 @@ const Admin = {
             latestFeedbackAt: latestFeedback ? Number(latestFeedback.timestamp) || 0 : 0,
             latestFeedbackId: latestFeedback?.id || latestFeedback?.feedbackId || '',
             contacts,
-            defaultRoute: Admin.inferCommuterDefaultRoute(did, latestFeedback || {}),
+            defaultRoute: Admin.inferCommuterDefaultRoute(chatDevice || did, latestFeedback || {}),
             crashCount,
             fareLine: interactionLine('Fares', fareStatus, fareVotes.length, fareDetail),
             failLine: interactionLine('Routing fails', failStatus, fails.length, ''),
@@ -3374,7 +3632,7 @@ const Admin = {
         return newest?.version || '';
     },
 
-    openCommuterPeek: async (id) => {
+    openCommuterPeek: async (id, linkedId = '') => {
         const did = String(id || '').trim();
         if (!did || did === 'Anonymous / Legacy' || did === 'unknown') return;
         document.getElementById('admin-commuter-peek')?.remove();
@@ -3405,7 +3663,7 @@ const Admin = {
         };
         const body = document.getElementById('commuter-peek-body');
         try {
-            const peek = await Admin.collectCommuterPeek(did);
+            const peek = await Admin.collectCommuterPeek(did, linkedId);
             if (!body.isConnected) return;
             const esc = Admin.commuterEsc;
             const heading = peek.alias || peek.displayName || did;
@@ -3443,12 +3701,14 @@ const Admin = {
                                 <p class="ut-profile-name">${esc(heading)}</p>
                                 ${peek.email ? `<p class="ut-profile-email">${esc(peek.email)}</p>` : ''}
                                 ${peek.alias ? `<p class="ut-k">Alias ${esc(peek.alias)}</p>` : '<p class="ut-k">No feedback alias</p>'}
+                                ${(peek.earlierNames || []).length ? `<p class="ut-k">Earlier names ${peek.earlierNames.map((name) => esc(name)).join(', ')}</p>` : ''}
                             </div>
                         </div>
                         <div class="ut-id-row">
                             <span class="ut-mono">${esc(did)}</span>
                             <button type="button" id="commuter-peek-copy" class="ut-chip">Copy</button>
                         </div>
+                        ${(peek.linkedIds || []).filter((item) => item && item !== did).length ? `<p class="ut-k">Same person ${(peek.linkedIds || []).filter((item) => item && item !== did).slice(0, 4).map((item) => esc(item)).join(', ')}</p>` : ''}
                         <div class="ut-stats">
                             <div><div class="ut-k">Last activity</div><div class="ut-v">${peek.lastActivity ? `${esc(Admin.formatDate(peek.lastActivity.ms))}<span class="ut-k block">${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</span>` : '<span class="ut-k">None</span>'}</div></div>
                             <div><div class="ut-k">App version</div><div class="ut-v">${esc(peek.appVersion || 'Not recorded')}</div></div>
@@ -3480,13 +3740,14 @@ const Admin = {
             });
             document.getElementById('commuter-peek-feedback')?.addEventListener('click', () => {
                 close();
-                if (peek.hasChat) Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
-                else Admin.startFeedbackChat(did, '');
+                const chatId = peek.chatDevice || did;
+                if (peek.hasChat) Admin.openFeedbackForDevice(chatId, peek.latestFeedbackId);
+                else Admin.startFeedbackChat(chatId, '');
             });
             if (peek.tripLast) {
                 document.getElementById('commuter-peek-trips')?.addEventListener('click', () => {
                     close();
-                    Admin.openFeedbackTripPlans(did);
+                    Admin.openFeedbackTripPlans(peek.chatDevice || did);
                 });
             }
         } catch (e) {
@@ -3499,8 +3760,15 @@ const Admin = {
         if (!raw || raw === 'Anonymous / Legacy') return '';
         const map = Admin.cachedAliases;
         if (!map || typeof map !== 'object') return '';
-        const alias = map[raw];
-        return alias ? String(alias).trim() : '';
+        const direct = map[raw] ? String(map[raw]).trim() : '';
+        if (direct) return direct;
+        const linked = Admin._commuterLinks && Admin._commuterLinks.get(raw);
+        if (!linked) return '';
+        for (const other of linked) {
+            const name = map[other] ? String(map[other]).trim() : '';
+            if (name) return name;
+        }
+        return '';
     },
 
     commuterLabel: (id) => Admin.commuterAlias(id) || String(id || '').trim(),
@@ -3609,9 +3877,21 @@ const Admin = {
         Admin.openReplyModal(feedbackId || '', did);
     },
 
-    collectCommuterProfile: async ({ uid, deviceId, extraIds = [] } = {}) => {
+    collectCommuterProfile: async ({ uid, deviceId, extraIds = [], accountEmail = '' } = {}) => {
         await Admin.ensureAliasesLoaded();
-        const ids = Admin.commuterIdSet(uid, deviceId, extraIds);
+        const deviceMap = {};
+        [deviceId, ...(extraIds || [])].forEach((item) => {
+            const id = String(item || '').trim();
+            if (id) deviceMap[id] = true;
+        });
+        const seeded = Admin.mergeCommuterIds({
+            startId: uid || deviceId,
+            accounts: [{ uid, email: accountEmail, deviceIds: deviceMap }],
+            devices: deviceId ? [{ id: deviceId, uid }] : [],
+            feedback: Admin.cachedFeedbackData || [],
+        });
+        Admin.rememberCommuterLinks(seeded.ids);
+        const ids = Admin.commuterIdSet(seeded.ids);
         const secret = await Admin.getAuthKey();
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const fetchJson = async (path) => {
@@ -13749,9 +14029,9 @@ const Admin = {
                         ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
                         : '';
                     const authorId = message.uid || message.deviceId || '';
-                    const authorHint = authorId && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(authorId) : '';
+                    const authorHint = authorId && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(authorId, message.deviceId || '') : '';
                     const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
-                    const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid) : '';
+                    const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid, message.replyTo?.deviceId || '') : '';
                     const removed = message.deleted === true
                         || message.body === 'Deleted message'
                         || message.body === 'Deleted by an Admin';
@@ -14914,21 +15194,73 @@ const Admin = {
         const auth = `?auth=${encodeURIComponent(secret)}`;
         const did = String(deviceId || '').trim();
         if (typeof window.confirm === 'function'
-            && !window.confirm(`Delete database data for ${id}? This cannot be undone.`)) {
+            && !window.confirm(`Delete the live profile for ${id}? The name, earlier names, and alias stay on the deletion record.`)) {
             return;
         }
         try {
-            const jobs = [
-                fetch(`${base}users/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }),
-                fetch(`${base}account_deletions/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }),
-            ];
-            if (did) {
-                jobs.push(fetch(`${base}devices/${encodeURIComponent(did)}.json${auth}`, { method: 'DELETE' }));
+            const readJson = async (path) => {
+                const res = await fetch(`${base}${path}${auth}`);
+                if (!res.ok) return null;
+                return res.json();
+            };
+            const [user, prior] = await Promise.all([
+                readJson(`users/${encodeURIComponent(id)}.json`),
+                readJson(`account_deletions/${encodeURIComponent(id)}.json`),
+            ]);
+            const deviceIds = {
+                ...(user?.deviceIds && typeof user.deviceIds === 'object' ? user.deviceIds : {}),
+                ...(prior?.deviceIds && typeof prior.deviceIds === 'object' ? prior.deviceIds : {}),
+            };
+            if (did) deviceIds[did] = deviceIds[did] || true;
+            const names = {};
+            const keepName = (raw, at) => {
+                const name = String(raw || '').trim();
+                if (!name || name.length > 80 || /^(passenger|you|admin|anonymous)$/i.test(name)) return;
+                const when = Number(at) || Date.now();
+                if (!names[name] || when < names[name]) names[name] = when;
+            };
+            keepName(user?.displayName, user?.updatedAt || user?.createdAt);
+            keepName(user?.providerName, user?.createdAt);
+            keepName(prior?.displayName, prior?.requestedAt);
+            if (user?.nameHistory && typeof user.nameHistory === 'object') {
+                Object.values(user.nameHistory).forEach((row) => keepName(row?.name, row?.at));
             }
-            const results = await Promise.all(jobs);
-            if (results.some((res) => !res.ok)) throw new Error('delete failed');
+            if (prior?.retainedNames && typeof prior.retainedNames === 'object') {
+                Object.entries(prior.retainedNames).forEach(([name, at]) => keepName(name, at));
+            }
+            const aliases = { ...(prior?.aliases && typeof prior.aliases === 'object' ? prior.aliases : {}) };
+            await Admin.ensureAliasesLoaded();
+            Object.keys(deviceIds).concat([id, did]).forEach((item) => {
+                const alias = Admin.commuterAlias(item);
+                if (item && alias) aliases[item] = alias;
+            });
+            const tomb = {
+                uid: id,
+                email: user?.email || prior?.email || null,
+                displayName: user?.displayName || prior?.displayName || null,
+                deviceId: did || prior?.deviceId || Object.keys(deviceIds)[0] || null,
+                deviceIds,
+                aliases,
+                retainedNames: names,
+                requestedAt: Number(prior?.requestedAt || user?.deletionRequestedAt) || Date.now(),
+                status: 'done',
+                retainedAt: Date.now(),
+                reason: prior?.reason || user?.deletionRequestedReason || 'user_request',
+            };
+            const saved = await fetch(`${base}account_deletions/${encodeURIComponent(id)}.json${auth}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(tomb),
+            });
+            if (!saved.ok) throw new Error('could not keep the name');
+            const removed = await fetch(`${base}users/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' });
+            if (!removed.ok && removed.status !== 404) throw new Error('delete failed');
+            if (Admin._identityCache) {
+                Admin._identityCache.delete(id);
+                Object.keys(deviceIds).forEach((item) => Admin._identityCache.delete(item));
+            }
             if (typeof showToast === 'function') {
-                showToast('User data deleted from the database', 'success');
+                showToast('Live profile deleted. The name and alias stay on file.', 'success');
             }
             Admin.fetchAccountDeletions();
             if (typeof Admin.syncAllBadges === 'function') Admin.syncAllBadges();
@@ -14973,7 +15305,7 @@ const Admin = {
         },
         'account-deletions': {
             title: 'Deletion requests',
-            body: 'Requests sent from Account. Delete data removes the profile from the database.',
+            body: 'Requests sent from Account. Delete data removes the live profile. The name, earlier names, email, and alias stay on the deletion record.',
         },
         'live-share': {
             title: 'Live sharing',
@@ -15893,10 +16225,26 @@ const Admin = {
                 const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
                     ? Object.keys(user.deviceIds).filter(Boolean)
                     : (deviceId ? [deviceId] : []);
+                let keptNames = [];
+                try {
+                    const secret = await Admin.getAuthKey();
+                    const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                    const identity = await Admin.expandCommuterIdentity(uid, async (path) => {
+                        const res = await fetch(`${endpoint}${path}${auth}`);
+                        if (!res.ok) return null;
+                        return res.json();
+                    }, { userNode: user._isDeviceStub ? null : user });
+                    (identity.ids || []).forEach((item) => {
+                        if (item && !linkedIds.includes(item)) linkedIds.push(item);
+                    });
+                    keptNames = (identity.names || []).map((row) => row.name).filter(Boolean);
+                } catch { keptNames = []; }
                 const profile = await Admin.collectCommuterProfile({
                     uid,
-                    deviceId,
+                    deviceId: linkedIds.find((item) => /^usr_/i.test(item)) || deviceId,
                     extraIds: linkedIds,
+                    accountEmail: user.email || '',
                 });
                 const fareAt = Math.max(0, ...(profile.fareVotes || []).map((v) => Number(v.at) || 0));
                 const crashAt = Math.max(0, ...(profile.crashes || []).map((c) => Number(c.timestamp || c.at || c.time) || 0));
@@ -15949,6 +16297,14 @@ const Admin = {
                 const heading = profile.alias
                     ? Admin.commuterEsc(profile.alias)
                     : name;
+                const currentKey = String(profile.alias || user.displayName || '').trim().toLowerCase();
+                const earlierNamesHtml = keptNames
+                    .filter((item) => {
+                        const key = String(item || '').trim().toLowerCase();
+                        return key && key !== currentKey;
+                    })
+                    .map((item) => Admin.commuterEsc(item))
+                    .join(', ');
                 const providerName = String(authAccount?.providerName || user.providerName || '').trim();
                 const providerId = String(authAccount?.providerId || user.provider || '').trim().toLowerCase();
                 const accountEmailRaw = String(user.email || '').trim();
@@ -16029,6 +16385,7 @@ const Admin = {
                                     <p class="ut-profile-name">${heading}</p>
                                     <p class="ut-profile-email">${accountEmailHtml}</p>
                                     ${profile.alias && heading !== Admin.commuterEsc(profile.alias) ? `<p class="ut-k">Alias ${Admin.commuterEsc(profile.alias)}</p>` : ''}
+                                    ${earlierNamesHtml ? `<p class="ut-k">Earlier names ${earlierNamesHtml}</p>` : ''}
                                 </div>
                             </div>
                             <div class="ut-id-row">

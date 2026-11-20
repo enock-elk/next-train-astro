@@ -542,6 +542,23 @@ const ireneGrid = {
 };
 const kempHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
 if (!kempHtml.includes('>KEMP<') || !kempHtml.includes('data-kemp-train="0604"') || !kempHtml.includes('data-kemp-train="0618"')) fail('through Irene columns must show clickable KEMP');
+const paddedIrene = {
+    headers: ['STATION', '0604', '0626'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'PRETORIA', '0604': '5:10:00', '0626': '6:30:00' },
+        { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
+        { STATION: 'OLIFANTSFONTEIN' },
+        { STATION: 'KEMPTON PARK' },
+    ],
+};
+const paddedHtml = Renderer._buildGridHTML(paddedIrene, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
+if (paddedHtml.includes('>OLIFANTSFONTEIN<') || paddedHtml.includes('>KEMPTON PARK<')) {
+    fail('Irene grid must not list stops that only a Kempton train times');
+}
+if (!paddedHtml.includes('data-kemp-train="0604"') || !paddedHtml.includes('data-kemp-train="0618"') || !paddedHtml.includes('>PRETORIA<') || !paddedHtml.includes('>IRENE<')) {
+    fail('KEMP columns stay on the Irene stops');
+}
 if (kempHtml.includes('data-kemp-train="0626"')) fail('an Irene terminator must not be marked KEMP');
 if (!kempHtml.includes('color:#1d4ed8') || !kempHtml.includes('letter-spacing:0.02em')) fail('KEMP must use the NO SVC tag metrics');
 if (/0604[\s\S]{0,400}bg-red-50/.test(kempHtml) || /bg-green-50[\s\S]{0,80}KEMP/.test(kempHtml)) {

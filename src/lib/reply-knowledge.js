@@ -111,7 +111,7 @@ function fareText() {
         return `${code} (${km}): single ${zar(price.single)}, return ${zar(price.return)}, weekly Mon-Fri ${zar(price.weekly_mon_fri)}, weekly Mon-Sat ${zar(price.weekly_mon_sat)}, monthly ${zar(price.monthly)}.`;
     });
     return [
-        'Fares are the adult cash prices in Next Train, effective 1 August 2025. Tickets are bought with cash at the station. The app does not sell tickets.',
+        'Fares are the adult cash prices in Next Train. Monthly fares apply from 1 December 2026. Single, return, and weekly fares are unchanged until a further increase covering all ticket types, expected no earlier than 1 April 2027. Tickets are bought with cash at the station. The app does not sell tickets.',
         'The price shown for a trip is often the maximum for that line, terminus to terminus. A shorter trip can cost less at the station.',
         ...rows,
         'Off-peak is weekdays only, trains departing from 09:30 to 14:30. It is not 09:00 to 14:00. No off-peak discount on Saturday, Sunday, or a public holiday.',

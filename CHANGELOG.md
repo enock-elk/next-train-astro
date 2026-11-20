@@ -1,5 +1,12 @@
 # Changelog
 
+## V10_11.20.3 — Monthly fares and Irene stops (20 Nov 2026)
+
+- Monthly Mon-Sat passes are Z1 R215, Z2 R266, Z3 R291, and Z4 R322 from 1 December 2026. Singles, returns, and weeklies stay on the August 2025 table. Zone kilometre bands stay 1-15, 16-40, 41-135, and over 135.
+- Guide, Ticket Prices, route fare tables, and Co-Pilot note that a further increase covering all ticket types is expected no earlier than 1 April 2027.
+- Irene timetables drop station rows that have no time on an Irene train before a Kempton column is copied on. KEMP still marks a train that continues past Irene or starts at Kempton Park.
+- Scheduled alert rules allow the community worker service account to claim and publish. The hourly GitHub poke fails when the worker reports failed jobs. Deploy the database rules.
+
 ## V10_11.12.15 — no release notes
 
 ## V10_11.12.14 — no release notes

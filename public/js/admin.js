@@ -27581,7 +27581,7 @@ const Admin = {
                             Z1 1-15 - Z2 16-40 - Z3 41-135 - Z4 &gt;135 km.
                         </p>
                         <p id="zone-audit-monthly-legend" class="text-[9px] text-emerald-800 dark:text-emerald-400 font-medium leading-snug">
-                            Monthly tickets: Z1 R180 - Z2 R220 - Z3 R250 - Z4 R280.
+                            Monthly tickets: Z1 R215 - Z2 R266 - Z3 R291 - Z4 R322.
                         </p>
 
                         <div>
@@ -27800,7 +27800,7 @@ const Admin = {
             }).filter(Boolean);
             return bits.length
                 ? `Monthly tickets: ${bits.join(' - ')}.`
-                : 'Monthly tickets: Z1 R180 - Z2 R220 - Z3 R250 - Z4 R280.';
+                : 'Monthly tickets: Z1 R215 - Z2 R266 - Z3 R291 - Z4 R322.';
         };
         const zoneAuditMonthlyLegend = document.getElementById('zone-audit-monthly-legend');
         if (zoneAuditMonthlyLegend) zoneAuditMonthlyLegend.textContent = formatZoneMonthlyLegend();

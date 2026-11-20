@@ -108,7 +108,7 @@
     },
     "notices": {
       ".read": true,
-      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
       "$target": {
         "reactions": {
           "$emoji": {
@@ -136,14 +136,14 @@
 
     "notices_meta": {
       ".read": true,
-      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')"
     },
 
     "polls": {
       "$pollId": {
         ".read": true,
         "_meta": {
-          ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
           ".validate": "!newData.exists() || ((!newData.hasChild('closesAt') || (newData.child('closesAt').isNumber() && newData.child('closesAt').val() > 0)) && (!newData.hasChild('allowMultiple') || newData.child('allowMultiple').isBoolean()) && (newData.hasChild('closesAt') || newData.hasChild('allowMultiple')))"
         },
         "$voteId": {
@@ -278,8 +278,13 @@
     },
 
     "notices_scheduled": {
-      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')"
+    },
+
+    "notices_scheduler_status": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')"
     },
 
     "disruptions_archive": {

@@ -321,10 +321,10 @@ assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy remov
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('finalPrice = Math.floor(finalPrice)'), 'fare button floors to the lower rand');
-assert(FARE_CONFIG.zones_detailed.Z1.monthly === 180, 'Z1 monthly is the V5 R180');
-assert(FARE_CONFIG.zones_detailed.Z2.monthly === 220, 'Z2 monthly is the V5 R220');
-assert(FARE_CONFIG.zones_detailed.Z3.monthly === 250, 'Z3 monthly is the V5 R250');
-assert(FARE_CONFIG.zones_detailed.Z4.monthly === 280, 'Z4 monthly is the V5 R280');
+assert(FARE_CONFIG.zones_detailed.Z1.monthly === 215, 'Z1 monthly is the 1 Dec 2026 R215');
+assert(FARE_CONFIG.zones_detailed.Z2.monthly === 266, 'Z2 monthly is the 1 Dec 2026 R266');
+assert(FARE_CONFIG.zones_detailed.Z3.monthly === 291, 'Z3 monthly is the 1 Dec 2026 R291');
+assert(FARE_CONFIG.zones_detailed.Z4.monthly === 322, 'Z4 monthly is the 1 Dec 2026 R322');
 assert(FARE_CONFIG.zones.Z1 === 10 && FARE_CONFIG.zones.Z2 === 12 && FARE_CONFIG.zones.Z3 === 14 && FARE_CONFIG.zones.Z4 === 15, 'peak singles are unchanged');
 assert(liveBoard.includes('!quietPaint && typeof paintHeaderDayLabel'), 'quiet minute tick skips rewriting the day label');
 

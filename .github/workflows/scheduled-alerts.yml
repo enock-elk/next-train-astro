@@ -51,6 +51,7 @@ jobs:
                 echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
                 export BODY
                 python3 -c 'import os; s=os.environ.get("BODY","")[:400].replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::notice::"+s)'
+                python3 -c 'import json,os,sys; data=json.loads(os.environ.get("BODY","")); failed=int(data.get("failed") or 0); sys.exit(print("::error::Scheduled alerts worker reported %s failed job(s)."%failed) or 1) if failed>0 else 0'
                 exit 0
               }
             fi
@@ -60,6 +61,8 @@ jobs:
             BODY="$(post "X-Cron-Secret: ${SECRET}")" && {
               echo "$BODY"
               echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
+              export BODY
+              python3 -c 'import json,os,sys; data=json.loads(os.environ.get("BODY","")); failed=int(data.get("failed") or 0); sys.exit(print("::error::Scheduled alerts worker reported %s failed job(s)."%failed) or 1) if failed>0 else 0'
               exit 0
             }
           fi

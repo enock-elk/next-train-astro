@@ -993,9 +993,27 @@ export const Renderer = {
 
     // --- 3. TIMETABLE DAILY MATRIX COMPILER ---
 
+    /**
+     * Irene sheets list the whole Kempton corridor, with blank cells past Irene.
+     * Drop those rows before a Kempton column is copied on, or the grafted time
+     * makes Kempton Park, Oakmoor, and the other outer stops appear.
+     */
+    _ireneRowsWithOwnTimes: (schedule) => {
+        const ownIds = (schedule?.headers || [])
+            .map((header) => String(header || '').trim())
+            .filter((header) => /^\d{4}[a-zA-Z]*$/.test(header));
+        const rows = (schedule?.rows || []).filter((row) => {
+            const station = String(row?.STATION || '');
+            if (!station || /updated/i.test(station) || isVariantStationName(station)) return true;
+            return ownIds.some((id) => isRealTime(row[id]));
+        });
+        return { ...schedule, rows };
+    },
+
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false, dayType = null) => {
         const kempIds = new Set();
         if (routeId === 'pta-irene') {
+            schedule = Renderer._ireneRowsWithOwnTimes(schedule);
             const sibKey = siblingSheetKey(routeId, sheetName);
             const db = $fullDatabase.get();
             if (sibKey && db && db[sibKey]) {

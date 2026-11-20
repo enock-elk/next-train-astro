@@ -179,7 +179,8 @@ ok(communityScheduleFact('pta-pien', 'please add just 1 train on Sunday', null).
 ok(communityScheduleFact('pta-pien', 'the morning train', null) === '', 'a message that does not name a day adds no sheet fact');
 ok(communityStyleRules().includes('say what the sheet shows first'), 'a community draft leads with the timetable fact');
 ok(knowledgeBase().includes('first Monday'), 'Cato Ridge maintenance day is in the knowledge base');
-ok(knowledgeBase().includes('R180.00'), 'zone 1 monthly fare is in the knowledge base');
+ok(knowledgeBase().includes('R215.00'), 'zone 1 monthly fare is in the knowledge base');
+ok(knowledgeBase().includes('1 December 2026'), 'monthly fare date is in the knowledge base');
 ok(knowledgeBase().includes('09:30'), 'off-peak window is in the knowledge base');
 const photoUrl = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.jpg?alt=media&token=abc';
 const pdfUrl = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.pdf?alt=media&token=abc';

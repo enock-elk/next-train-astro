@@ -208,6 +208,44 @@ this.may = communityUnreadMayCount;
     assert.equal(unread.may('guest', { authSettled: true }), true, 'a settled guest uses this phone cursor');
     assert.equal(unread.may('signed-in', { seenLoaded: true }), true, 'a loaded account cursor can count');
 }
+assert.match(community, /UNREAD_AWAY_MS = 20 \* 1000/, 'other tabs check for new community messages about every 20 seconds');
+assert.doesNotMatch(community, /UNREAD_AWAY_MS = 3 \* 60 \* 1000/, 'the away unread check is not a 3 minute wait');
+assert.match(community, /scheduleUnreadRetry\(\)/, 'a skipped unread count tries again');
+assert.doesNotMatch(community, /Date\.now\(\) - unreadPolledAt < 45000/, 'returning to the app does not wait 45 seconds to count');
+{
+    const paintAt = community.indexOf('function paintUnreadFromCache');
+    const paintEnd = community.indexOf('function paintCommunityUnreadBadge');
+    const paintSrc = community.slice(paintAt, paintEnd);
+    assert.match(paintSrc, /activeTab'\) !== 'community'\) return/, 'an away unread poll does not rebuild the hidden room list');
+    assert.ok(
+        paintSrc.indexOf('syncCommunityRoutePicker') > paintSrc.indexOf("!== 'community'"),
+        'room list sync stays behind the other-tab return'
+    );
+}
+{
+    const start = community.indexOf('function mergeUnreadCounts');
+    const end = community.indexOf('function communityUnreadPollWait');
+    assert.ok(start > 0 && end > start, 'unread merge helper is extractable');
+    const merged = {};
+    new Function(`${community.slice(start, end).replace(/^export /gm, '')}
+this.merge = mergeUnreadCounts;
+this.wait = null;
+`).call(merged);
+    const kept = merged.merge({ a: 2, b: 1 }, ['a', 'b', 'c'], [null, 0, 3], '');
+    assert.deepEqual(kept, { a: 2, b: 0, c: 3 }, 'a failed room read keeps its last count and a finished zero clears');
+    const viewing = merged.merge({ a: 4 }, ['a'], [4], 'a');
+    assert.deepEqual(viewing, { a: 0 }, 'the open room does not stay on the badge');
+    const waitStart = community.indexOf('function communityUnreadPollWait');
+    const waitEnd = community.indexOf('async function countUnreadOnRoute');
+    const waits = {};
+    new Function(`${community.slice(waitStart, waitEnd).replace(/^export /gm, '')}
+const UNREAD_POLL_MS = 45000;
+const UNREAD_AWAY_MS = 20000;
+this.wait = communityUnreadPollWait;
+`).call(waits);
+    assert.equal(waits.wait(false), 20000, 'another tab polls on the short wait');
+    assert.equal(waits.wait(true), 45000, 'the open tab can wait longer because the room is live');
+}
 assert.match(rules.rules.users.$uid.community_seen.$routeId['.validate'], /newData\.isNumber/, 'account seen cursors are timestamps');
 assert.match(community, /\.\.\.replyToPayload/, 'quote-reply top-level posts keep their quote when held or published');
 assert.match(worker, /rtdbUpdate\(env, \{/);

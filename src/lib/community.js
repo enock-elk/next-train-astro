@@ -137,9 +137,15 @@ let unreadPollTimer = null;
 let quotaHintTimer = null;
 const UNREAD_SEEN_PREFIX = 'communityLastSeen_';
 const LAST_ROOM_PREFIX = 'communityLastRoom_';
-const UNREAD_POLL_MS = 60 * 1000;
-const UNREAD_AWAY_MS = 3 * 60 * 1000;
+const UNREAD_POLL_MS = 45 * 1000;
+/** Home, planner, and map have no live room. This is the only new-message signal. */
+const UNREAD_AWAY_MS = 20 * 1000;
+const UNREAD_RETRY_MS = 2500;
+const UNREAD_RESUME_MS = 12 * 1000;
 let unreadPolledAt = 0;
+let unreadCountedAt = 0;
+let unreadRetryTimer = 0;
+let unreadRetryDelay = UNREAD_RETRY_MS;
 /** @type {Record<string, number>} */
 let cachedUnreadByRoute = {};
 /** Route whose feed is actually on screen. Opening the tab is not enough. */
@@ -822,14 +828,15 @@ async function startRealtimePosts(routeId) {
     }
 }
 
-export async function fetchRoutePosts(routeId) {
-    if (!routeId || !navigator.onLine) return [];
+export async function fetchRoutePosts(routeId, opts = {}) {
+    const miss = opts.strict ? null : [];
+    if (!routeId || !navigator.onLine) return miss;
     try {
         const q = await authQuery();
         const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json${q ? `${q}&` : '?'}orderBy="timestamp"&limitToLast=${FEED_LIMIT}`
         );
-        if (!res.ok) return [];
+        if (!res.ok) return miss;
         const data = await res.json();
         if (!data) return [];
         const acct = $account.get();
@@ -837,7 +844,7 @@ export async function fetchRoutePosts(routeId) {
         const list = postsVisibleFilter(Object.values(data), myUid);
         return mergeOverlayPosts(routeId, list);
     } catch {
-        return [];
+        return miss;
     }
 }
 
@@ -3313,6 +3320,8 @@ function paintUnreadFromCache() {
         .filter(([, n]) => n > 0)
         .map(([id, n]) => ({ id, n, label: routeLabel(id) }));
     paintCommunityUnreadBadge(rooms.length, rooms);
+    // The room list is display:none on other tabs. Rewriting it runs label fitting.
+    if (safeStorage.getItem('activeTab') !== 'community') return;
     const rid = document.getElementById('community-route-select')?.value;
     if (rid || document.getElementById('community-route-list')) {
         syncCommunityRoutePicker(rid);
@@ -3361,24 +3370,72 @@ async function fetchPostsNewerThan(routeId, lastSeen) {
     return Object.values(data);
 }
 
+/**
+ * Keep a room's last count when that read fails. The room on screen counts as read.
+ * `counted` uses null for a failed read and a number for a finished one.
+ */
+export function mergeUnreadCounts(prev, routeIds, counted, viewingId = '') {
+    const next = {};
+    (routeIds || []).forEach((id, i) => {
+        const n = counted ? counted[i] : null;
+        if (n == null) {
+            const kept = Number(prev?.[id]) || 0;
+            if (kept > 0) next[id] = kept;
+            return;
+        }
+        next[id] = id && id === viewingId ? 0 : n;
+    });
+    if (viewingId) next[viewingId] = 0;
+    return next;
+}
+
+/** How long to wait before the next badge read. Other tabs wait less: nothing else is listening. */
+export function communityUnreadPollWait(onCommunity) {
+    return onCommunity ? UNREAD_POLL_MS : UNREAD_AWAY_MS;
+}
+
 async function countUnreadOnRoute(routeId, viewingId, accountSeen) {
     if (!routeId || routeId === viewingId) return 0;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
     try {
         const cursor = communityUnreadCursor(
             safeStorage.getItem(unreadSeenKey(routeId)),
             accountSeen ? accountSeen[routeId] : null
         );
-        let posts = await fetchPostsNewerThan(routeId, cursor.established ? cursor.lastSeen : 0);
-        if (!posts) posts = await fetchRoutePosts(routeId);
+        const lastSeen = cursor.established ? cursor.lastSeen : 0;
+        let posts = await fetchPostsNewerThan(routeId, lastSeen);
+        if (posts == null) posts = await fetchRoutePosts(routeId, { strict: true });
+        if (posts == null) return null;
         const acct = $account.get();
         const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
-        return countCommunityUnreadPosts(posts, myUid, cursor.established ? cursor.lastSeen : 0);
+        return countCommunityUnreadPosts(posts, myUid, lastSeen);
     } catch {
-        return 0;
+        return null;
     }
 }
 
 let unreadRefreshToken = 0;
+
+function cachedUnreadTotal() {
+    return Object.values(cachedUnreadByRoute).reduce((sum, n) => sum + (Number(n) || 0), 0);
+}
+
+function noteUnreadCounted() {
+    unreadCountedAt = Date.now();
+    unreadRetryDelay = UNREAD_RETRY_MS;
+}
+
+/** Auth or the account seen cursor was not ready. Try again soon, then back off to the normal wait. */
+function scheduleUnreadRetry() {
+    if (unreadRetryTimer || typeof window === 'undefined') return;
+    const wait = unreadRetryDelay;
+    unreadRetryTimer = setTimeout(() => {
+        unreadRetryTimer = 0;
+        if (document.hidden) return;
+        refreshCommunityUnreadBadge();
+    }, wait);
+    unreadRetryDelay = Math.min(UNREAD_AWAY_MS, unreadRetryDelay * 2);
+}
 
 /**
  * Count unread posts per region room (newer than last visit) and name them on the badge.
@@ -3399,10 +3456,14 @@ export async function refreshCommunityUnreadBadge() {
         seenLoaded: signedIn && accountSeen != null,
         authSettled: communityAuthSettled,
     });
-    if (!mayCount) return Object.values(cachedUnreadByRoute).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    if (!mayCount) {
+        scheduleUnreadRetry();
+        return cachedUnreadTotal();
+    }
     const routes = regionCommunityRoutes();
     if (!routes.length) {
         cachedUnreadByRoute = {};
+        noteUnreadCounted();
         paintCommunityUnreadBadge(0);
         return 0;
     }
@@ -3412,28 +3473,37 @@ export async function refreshCommunityUnreadBadge() {
         paintUnreadFromCache();
     }
 
-    const next = {};
-    await Promise.all(routes.map(async (r) => {
-        next[r.id] = await countUnreadOnRoute(r.id, viewing, signedIn ? accountSeen : null);
-    }));
+    unreadPolledAt = Date.now();
+    const counted = await Promise.all(routes.map((r) => (
+        countUnreadOnRoute(r.id, viewing, signedIn ? accountSeen : null)
+    )));
     if (token !== unreadRefreshToken) return 0;
     const stillViewing = viewingCommunityRouteId();
-    if (stillViewing) next[stillViewing] = 0;
+    const next = mergeUnreadCounts(
+        cachedUnreadByRoute,
+        routes.map((r) => r.id),
+        counted,
+        stillViewing
+    );
     cachedUnreadByRoute = next;
+    noteUnreadCounted();
     paintUnreadFromCache();
     return Object.values(next).reduce((sum, n) => sum + n, 0);
 }
 
 function unreadPollDue() {
     const onCommunity = safeStorage.getItem('activeTab') === 'community';
-    const wait = onCommunity ? UNREAD_POLL_MS : UNREAD_AWAY_MS;
-    return Date.now() - unreadPolledAt >= wait;
+    return Date.now() - unreadPolledAt >= communityUnreadPollWait(onCommunity);
+}
+
+function communityUnreadResumeDue() {
+    if (!unreadCountedAt) return true;
+    return Date.now() - unreadCountedAt >= UNREAD_RESUME_MS;
 }
 
 export function startCommunityUnreadWatch() {
     if (typeof window === 'undefined' || window.__ntCommunityUnreadWatch) return;
     window.__ntCommunityUnreadWatch = true;
-    unreadPolledAt = Date.now();
     const noteAccount = (acct) => {
         if (acct?.status === 'loading' || acct?.status === 'pending' || acct?.status === 'signed-in') {
             communityAuthSettled = true;
@@ -3445,6 +3515,10 @@ export function startCommunityUnreadWatch() {
             accountSeenCache = { uid: acct?.uid || '', at: 0, map: null };
         }
     };
+    const resumeUnread = () => {
+        if (document.hidden || !communityUnreadResumeDue()) return;
+        refreshCommunityUnreadBadge();
+    };
     noteAccount($account.get());
     $account.subscribe((acct) => {
         noteAccount(acct);
@@ -3453,19 +3527,14 @@ export function startCommunityUnreadWatch() {
     refreshCommunityUnreadBadge();
     unreadPollTimer = setInterval(() => {
         if (document.hidden || !unreadPollDue()) return;
-        unreadPolledAt = Date.now();
         refreshCommunityUnreadBadge();
-    }, UNREAD_POLL_MS);
-    window.addEventListener('focus', () => {
-        if (Date.now() - unreadPolledAt < 45000) return;
-        unreadPolledAt = Date.now();
-        refreshCommunityUnreadBadge();
-    });
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) return;
-        if (Date.now() - unreadPolledAt < 45000) return;
-        unreadPolledAt = Date.now();
-        refreshCommunityUnreadBadge();
+    }, UNREAD_AWAY_MS);
+    window.addEventListener('focus', resumeUnread);
+    document.addEventListener('visibilitychange', resumeUnread);
+    window.addEventListener('nt-tab-changed', () => {
+        paintUnreadFromCache();
+        if (safeStorage.getItem('activeTab') === 'community') return;
+        resumeUnread();
     });
 }
 
@@ -4520,7 +4589,9 @@ async function expandReplies(postId, routeId, container) {
 }
 
 export function bindCommunityUi() {
-    if (typeof document === 'undefined' || window.__ntCommunityBound) return;
+    if (typeof document === 'undefined') return;
+    startCommunityUnreadWatch();
+    if (window.__ntCommunityBound) return;
     window.__ntCommunityBound = true;
     bindCommunityVisibilityTeardown();
     import('./rider-marks.js').then((m) => m.paintCommunityMarksChip?.()).catch(() => {});
@@ -4764,7 +4835,6 @@ export function bindCommunityUi() {
     });
     document.getElementById('community-reply-bar-clear')?.addEventListener('click', () => clearReplyDraft());
 
-    startCommunityUnreadWatch();
     import('./community-presence.js').then((m) => m.bindCommunityPresenceInfo?.()).catch(() => {});
 
     // Category filter chips removed from UI for now.

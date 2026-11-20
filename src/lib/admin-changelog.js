@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.20.2': [
+        'New community messages raise the bottom-bar badge while the board, planner, or map is open. The check runs about every 20 seconds, and a failed read keeps the last count. The hidden room list stays as it is during that check. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.20.1': [
         'A person opened from Community Monitor, Feedback, or User Trust is the same contact when the account lists that device, the device points at that account, or the feedback was sent with that account or its email. The feedback count, alias, route, and trip plans follow that link. Changing a display name keeps the previous name on the account. Deleting the live profile keeps the name, earlier names, email, and alias on the deletion record. No commuter What\'s New. forceShow stays false.',
     ],

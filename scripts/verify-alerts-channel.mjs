@@ -848,6 +848,7 @@ const now = 1_700_000_000_000;
     assert(channelJs.includes('alertMenuActions'), 'the alert menu is only there when an admin can pin or delete');
     const alertsMarkup = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
     assert(alertsMarkup.includes('id="alerts-select-bar"') && alertsMarkup.includes('id="alerts-select-menu"'), 'the alerts header has a selection bar');
+    assert(alertsMarkup.includes('relative z-20 shrink-0') && alertsMarkup.includes('id="alerts-select-menu"'), 'Pin and Delete sit above the alert cards');
     const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     assert(uiJs.includes('__ntHideAlertReactionBreakdown'), 'history back asks the reaction sheet to close');
     const pollJs = readFileSync(new URL('../src/lib/alert-poll.js', import.meta.url), 'utf8');

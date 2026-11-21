@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.21.1': [
+        'Alerts header is z-20, above the feed. Pin and Delete hang under that header and were painting behind the cards because the feed is also a stacking context at z-1. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.20.3': [
         'Monthly Mon-Sat passes are Z1 R215, Z2 R266, Z3 R291, Z4 R322 from 1 December 2026. Singles, returns, and weeklies stay on the August 2025 table. Zone km bands stay 1-15, 16-40, 41-135, over 135. Guide, Ticket Prices, SEO fare tables, and Co-Pilot say a further increase covering all ticket types is expected no earlier than 1 April 2027. Irene grids drop station rows with no time on an Irene train before a Kempton column is copied on, so blank spreadsheet stops such as Kempton Park and Olifantsfontein stay off the Irene sheet. KEMP still marks a train that continues past Irene or starts at Kempton Park. Scheduled alerts: notices, notices_meta, notices_scheduled, polls/_meta, and notices_scheduler_status allow nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com, because the worker claim write was 401 Permission denied and only the Scheduled tab posted. The hourly GitHub poke exits when the worker reports failed jobs. Deploy firebase-database.rules.json. What\'s New covers monthly fares and the Irene timetable. forceShow stays false.',
     ],

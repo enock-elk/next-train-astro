@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_11.21.1 — no release notes
+
+- Alerts Pin and Delete sit above the cards. The header is a higher stacking context than the feed.
+
 ## V10_11.20.3 — Monthly fares and Irene stops (20 Nov 2026)
 
 - Monthly Mon-Sat passes are Z1 R215, Z2 R266, Z3 R291, and Z4 R322 from 1 December 2026. Singles, returns, and weeklies stay on the August 2025 table. Zone kilometre bands stay 1-15, 16-40, 41-135, and over 135.

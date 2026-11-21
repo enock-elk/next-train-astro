@@ -23,7 +23,12 @@
 <div id="alerts-channel" class="fixed inset-0 bg-slate-200 dark:bg-gray-950 z-[115] hidden flex flex-col transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="alerts-channel-title">
     <div id="alerts-channel-card" class="relative flex flex-col h-full w-full bg-slate-200 dark:bg-gray-950 scale-100 overflow-hidden">
         <div id="alerts-channel-wallpaper" class="nt-pack-wallpaper" aria-hidden="true"></div>
-        <header class="relative z-[1] shrink-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
+        <!--
+          z-20, not z-[1]. The feed is also a stacking context. Pin and Delete
+          hang below this header, so a matching z-index lets the later feed
+          paint over the menu.
+        -->
+        <header class="relative z-20 shrink-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
             <div id="alerts-channel-home" class="flex items-center gap-2">
                 <button type="button" id="alerts-channel-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -49,7 +54,7 @@
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
                 </button>
             </div>
-            <div id="alerts-select-menu" class="hidden absolute right-3 top-full z-20 mt-1 min-w-[10rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl py-1" role="menu"></div>
+            <div id="alerts-select-menu" class="hidden absolute right-3 top-full z-30 mt-1 min-w-[10rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl py-1" role="menu"></div>
         </header>
 
         <div id="alerts-channel-scroll" class="relative z-[1] flex-1 overflow-y-auto custom-scrollbar px-3 py-3">

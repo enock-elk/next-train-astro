@@ -287,6 +287,12 @@
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')"
     },
 
+    "schedule_qa_status": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
+      ".validate": "!newData.exists() || (newData.hasChildren(['errors', 'warnings', 'at']) && newData.child('errors').isNumber() && newData.child('errors').val() >= 0 && newData.child('errors').val() <= 100000 && newData.child('warnings').isNumber() && newData.child('warnings').val() >= 0 && newData.child('warnings').val() <= 100000 && newData.child('at').isNumber() && (!newData.hasChild('sheets') || (newData.child('sheets').isNumber() && newData.child('sheets').val() >= 0)) && (!newData.hasChild('lines') || (newData.child('lines').isString() && newData.child('lines').val().length <= 900)))"
+    },
+
     "disruptions_archive": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"

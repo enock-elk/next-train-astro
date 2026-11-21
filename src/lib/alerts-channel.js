@@ -822,7 +822,7 @@ function openAlertReactionBreakdown(notice) {
         sheet.className = 'hidden fixed inset-0 z-[132]';
         sheet.innerHTML = `
             <div class="absolute inset-0 bg-black/50" data-breakdown-scrim></div>
-            <div class="absolute left-0 right-0 bottom-0 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl border-t border-gray-200 dark:border-gray-700 px-4 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div data-sheet-card class="absolute left-0 right-0 bottom-0 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl border-t border-gray-200 dark:border-gray-700 px-4 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
                 <div class="flex justify-center mb-3"><span class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></span></div>
                 <p class="text-base font-black text-gray-900 dark:text-white mb-3" data-breakdown-title>Reactions</p>
                 <div class="flex flex-wrap gap-2" data-breakdown-chips></div>

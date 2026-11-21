@@ -1063,6 +1063,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         const limit = checkCommunityRateLimit();
         if (!limit.ok) return limit;
     }
+    showToast('Sending', 'info', 1800, '', { action: true });
 
     const place = await captureSenderStation();
     const placeFields = place?.station
@@ -1795,7 +1796,7 @@ function ensureCommunityReactionsModal() {
     sheet.id = 'community-reactions-modal';
     sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[100] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
-        <div class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
+        <div data-sheet-card class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
             <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-community-react-title>Reactions</p>
             <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-community-react-chips></div>
@@ -2020,6 +2021,61 @@ function revealCommunityRow(row, opts = {}) {
     bubble?.classList.add('nt-community-force-flash');
 }
 
+function communityRowScrollTarget(scroller, row, align) {
+    const box = scroller.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    if (!box.height || !rowRect.height) return scroller.scrollTop;
+    const delta = align === 'center'
+        ? (rowRect.top + rowRect.height / 2) - (box.top + box.height / 2)
+        : rowRect.bottom - (box.bottom - 16);
+    return scroller.scrollTop + delta;
+}
+
+/** A fixed short ease, so a long jump still shows the travel without crawling. */
+function easeCommunityScroll(scroller, targetTop, ms, onDone) {
+    if (!scroller) return;
+    const from = scroller.scrollTop;
+    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const to = Math.max(0, Math.min(max, targetTop));
+    const generation = ++communityScrollGeneration;
+    communityScrollGuardUntil = Date.now() + ms + 120;
+    if (Math.abs(to - from) < 2) {
+        scroller.scrollTop = to;
+        if (onDone) onDone();
+        return;
+    }
+    const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const step = (now) => {
+        if (generation !== communityScrollGeneration) return;
+        const t = Math.min(1, (now - start) / ms);
+        const eased = 1 - ((1 - t) ** 3);
+        scroller.scrollTop = from + (to - from) * eased;
+        if (t < 1) requestAnimationFrame(step);
+        else if (onDone) onDone();
+    };
+    requestAnimationFrame(step);
+}
+
+function flashCommunityBubble(row) {
+    const bubble = row?.querySelector('.community-bubble');
+    bubble?.classList.remove('nt-quote-flash');
+    if (bubble) void bubble.offsetWidth;
+    bubble?.classList.add('nt-quote-flash');
+}
+
+function easePaintedOwnPost(listEl) {
+    const id = communityEasePostId;
+    if (!id || !listEl) return false;
+    const row = listEl.querySelector(`[data-post-id="${String(id).replace(/"/g, '')}"]`);
+    if (!row) return false;
+    const scroller = row.closest('.community-feed-scroll');
+    communityEasePostId = '';
+    communityFeedPinned = true;
+    if (!scroller) return true;
+    easeCommunityScroll(scroller, communityRowScrollTarget(scroller, row, 'end'), 400);
+    return true;
+}
+
 function jumpToQuotedCommunityPost(postId) {
     const id = String(postId || '').trim();
     const rows = [...document.querySelectorAll('#community-feed-list .community-post-row')];
@@ -2029,29 +2085,12 @@ function jumpToQuotedCommunityPost(postId) {
         return;
     }
     const scroller = row.closest('.community-feed-scroll');
-    if (scroller) {
-        const generation = ++communityScrollGeneration;
-        communityScrollGuardUntil = Date.now() + 1800;
-        communityFeedPinned = false;
-        const place = () => {
-            const box = scroller.getBoundingClientRect();
-            const rowRect = row.getBoundingClientRect();
-            if (!box.height || !rowRect.height) return;
-            const delta = (rowRect.top + rowRect.height / 2) - (box.top + box.height / 2);
-            scroller.scrollTop = Math.max(0, scroller.scrollTop + delta);
-        };
-        place();
-        requestAnimationFrame(() => {
-            if (generation !== communityScrollGeneration) return;
-            place();
-        });
-    }
-    const bubble = row.querySelector('.community-bubble');
-    bubble?.classList.remove('nt-quote-flash');
-    if (bubble) void bubble.offsetWidth;
-    bubble?.classList.add('nt-quote-flash');
+    communityFeedPinned = false;
     communityFlashPostId = id;
-    communityFocusHold = Date.now() + 1800;
+    communityFocusHold = Date.now() + 2200;
+    const flash = () => flashCommunityBubble(row);
+    if (scroller) easeCommunityScroll(scroller, communityRowScrollTarget(scroller, row, 'center'), 450, flash);
+    else flash();
 }
 
 function shareOrigin() {
@@ -2144,11 +2183,58 @@ function communitySenderContext(roomRouteId) {
     };
 }
 
+function cleanAppVersion(raw) {
+    const version = String(raw || '').split(' - ')[0].split(' · ')[0].trim();
+    return /^V\d+_/i.test(version) ? version : '';
+}
+
+const accountVersionByUid = new Map();
+const accountVersionPending = new Set();
+
+function versionForPost(post) {
+    return cleanAppVersion(post?.appVersion) || accountVersionByUid.get(post?.uid) || '';
+}
+
+/** One lookup per person when the post itself has no build. Operators only. */
+function queueAccountVersions(routeId, posts) {
+    if (!isAdminAuthed() || !routeId) return;
+    const need = [];
+    (posts || []).forEach((post) => {
+        const uid = String(post?.uid || '');
+        if (!uid || cleanAppVersion(post?.appVersion)) return;
+        if (accountVersionByUid.has(uid) || accountVersionPending.has(uid)) return;
+        need.push(uid);
+    });
+    const unique = [...new Set(need)];
+    if (!unique.length) return;
+    unique.forEach((uid) => accountVersionPending.add(uid));
+    void (async () => {
+        const q = await authQuery();
+        if (!q) {
+            unique.forEach((uid) => accountVersionPending.delete(uid));
+            return;
+        }
+        await Promise.all(unique.map(async (uid) => {
+            try {
+                const res = await fetch(`${DYNAMIC_BASE_URL}users/${encodeURIComponent(uid)}/appVersion.json${q}`);
+                const raw = res.ok ? await res.json() : '';
+                accountVersionByUid.set(uid, cleanAppVersion(typeof raw === 'string' ? raw : ''));
+            } catch {
+                accountVersionByUid.set(uid, '');
+            } finally {
+                accountVersionPending.delete(uid);
+            }
+        }));
+        const openId = document.getElementById('community-route-select')?.value || '';
+        if (openId === routeId) applyFeedFilter(routeId);
+    })();
+}
+
 /** Operators only. Commuters keep the name, with no route, station, or handset. */
 function communityVersionChip(post, routeId) {
     if (!isAdminAuthed()) return '';
-    const version = String(post?.appVersion || '').split(' - ')[0].split(' · ')[0].trim();
-    if (!/^V\d+_/i.test(version)) return '';
+    const version = versionForPost(post);
+    if (!version) return '';
     const routeKey = String(post?.defaultRouteId || routeId || '').trim();
     const routeName = ROUTES[routeKey]?.name || '';
     const routeLabel = routeName ? formatRouteLabelPlain(routeName) : '';
@@ -2207,6 +2293,7 @@ function communityActionTarget() {
 const publicProfiles = new Map();
 let feedAuthorMeta = new Map();
 let communityFeedPinned = true;
+let communityEasePostId = '';
 let communityScrollGuardUntil = 0;
 let communityScrollGeneration = 0;
 let communityOpenAnchor = null;
@@ -2735,6 +2822,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const photoURL = shown.photoURL || '';
     const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
     const versionChip = grouped ? '' : communityVersionChip(post, routeId);
+    const versionShown = grouped ? '' : versionForPost(post);
     const nameColor = nameColorFor(authorColorKey(post.uid, displayName));
     const replyTo = !tombstone && post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
     const quoteShown = replyTo
@@ -2765,7 +2853,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
-        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'var(--nt-name-own)' : nameColor}"><span class="inline-flex items-center min-w-0"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${versionChip}</span>${marksHtml}</div>`;
+        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'var(--nt-name-own)' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${versionChip}${marksHtml}</div>`;
 
     const stamp = escapeHTML([
         isOwn ? '1' : '0',
@@ -2779,6 +2867,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         marksSnap?.points || '',
         nameColor,
         photoURL,
+        versionShown,
         communityReactionStamp(post.postId),
         post.pendingSend ? '1' : '0',
     ].join('\u001f'));
@@ -2934,6 +3023,7 @@ function applyFeedFilter(routeId) {
     }
     if (emptyEl) emptyEl.classList.add('hidden');
 
+    queueAccountVersions(routeId, posts);
     let html = '';
     let lastDate = '';
     let prevUid = '';
@@ -2965,6 +3055,7 @@ function applyFeedFilter(routeId) {
     });
     const feedPaint = commitCommunityFeedHtml(listEl, routeId, html);
     if (!feedPaint.changed) {
+        easePaintedOwnPost(listEl);
         rememberPaintedCommunityRoute(routeId);
         return;
     }
@@ -2986,7 +3077,9 @@ function applyFeedFilter(routeId) {
     const heldId = communityFlashPostId;
     const heldRow = heldId ? listEl.querySelector(`[data-post-id="${String(heldId).replace(/"/g, '')}"]`) : null;
     const opening = communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed && profileRepaintRoute !== routeId;
-    if (focusing) void revealCommunityFocus(routeId);
+    if (easePaintedOwnPost(listEl)) {
+        /* the sent row eases into view ahead of the unread anchor */
+    } else if (focusing) void revealCommunityFocus(routeId);
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
     else if (!feedPaint.rebuilt) {
         if (opening) {
@@ -4471,6 +4564,8 @@ async function handlePostSubmit() {
             paintAdminAttachPreview();
             closeCommunityAttach();
             composerExtrasCleared = true;
+            communityEasePostId = post.postId;
+            communityFeedPinned = true;
             upsertOutgoingPost(post);
         },
     });

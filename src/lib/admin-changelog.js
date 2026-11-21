@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.21.2': [
+        'Community shows the operator version chip beside the name, a Sending toast on each post, a short ease to the message you just sent, and a short ease when you open a quote. Action toasts can repeat. User Accounts counts every account and loads older pages with See more. Maintenance icon and colour use the custom menu, with the icon drawn on each row. Fare correction cards are shorter. Community, inbox, and alert reaction sheets pull down to close. Schedule Data QA runs hourly and turns the header red when the stored scan has errors. A successful routing_fails upload stays a flow line. A probe timer says timed out. A hung fetch stops at its own timer. The cache matrix notes when the edge schedule is older than Firebase. Deploy firebase-database.rules.json so schedule_qa_status can be written. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.21.1': [
         'Alerts header is z-20, above the feed. Pin and Delete hang under that header and were painting behind the cards because the feed is also a stacking context at z-1. No commuter What\'s New. forceShow stays false.',
     ],

@@ -824,6 +824,30 @@ export async function runScheduledAlerts(env, options = {}) {
     return summary;
 }
 
+function qaStatusText(value, max) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+/** GitHub runs the scanner. This only stores the small summary operators read. */
+export async function acceptScheduleQaStatus(env, body, options = {}) {
+    const errors = Number(body?.errors);
+    const warnings = Number(body?.warnings);
+    const sheets = Number(body?.sheets);
+    const at = Number(body?.at) || Date.now();
+    if (!Number.isFinite(errors) || errors < 0 || errors > 100000) throw new Error('Bad error count');
+    if (!Number.isFinite(warnings) || warnings < 0 || warnings > 100000) throw new Error('Bad warning count');
+    const summary = {
+        errors: Math.floor(errors),
+        warnings: Math.floor(warnings),
+        sheets: Number.isFinite(sheets) && sheets >= 0 ? Math.floor(sheets) : 0,
+        at,
+        lines: qaStatusText(body?.lines, 900),
+    };
+    const rtdb = options.rtdb || createRtdbClient(env);
+    await rtdb.put('schedule_qa_status', summary);
+    return summary;
+}
+
 function cronSecret(env) {
     return String(env?.ALERT_CRON_SECRET || env?.TTL_WIPE_SECRET || env?.CRON_SECRET || '').trim();
 }
@@ -839,6 +863,7 @@ const GITHUB_ACTIONS_OIDC_ISS = 'https://token.actions.githubusercontent.com';
 const GITHUB_ACTIONS_OIDC_AUD = 'nexttrain-community';
 const GITHUB_ACTIONS_OIDC_REPO = 'enock-elk/next-train-astro';
 const GITHUB_ACTIONS_OIDC_WORKFLOW = 'enock-elk/next-train-astro/.github/workflows/scheduled-alerts.yml';
+const GITHUB_ACTIONS_OIDC_QA_WORKFLOW = 'enock-elk/next-train-astro/.github/workflows/scheduled-schedule-qa.yml';
 
 function decodeJwtPart(part) {
     const pad = '='.repeat((4 - (part.length % 4)) % 4);
@@ -867,7 +892,8 @@ export async function verifyGithubActionsOidc(token) {
     if (!aud.includes(GITHUB_ACTIONS_OIDC_AUD)) throw new Error('OIDC audience mismatch');
     if (payload.repository !== GITHUB_ACTIONS_OIDC_REPO) throw new Error('OIDC repository mismatch');
     const workflow = String(payload.job_workflow_ref || payload.workflow_ref || '');
-    if (!workflow.startsWith(`${GITHUB_ACTIONS_OIDC_WORKFLOW}@`)) throw new Error('OIDC workflow mismatch');
+    const allowedWorkflows = [GITHUB_ACTIONS_OIDC_WORKFLOW, GITHUB_ACTIONS_OIDC_QA_WORKFLOW];
+    if (!allowedWorkflows.some((ref) => workflow.startsWith(`${ref}@`))) throw new Error('OIDC workflow mismatch');
     const jwksRes = await fetch(`${GITHUB_ACTIONS_OIDC_ISS}/.well-known/jwks`);
     if (!jwksRes.ok) throw new Error('OIDC JWKS unavailable');
     const jwks = await jwksRes.json();
@@ -2327,6 +2353,21 @@ export default {
                 return await handleScheduledAlertsAdmin(request, env);
             } catch (e) {
                 return json(env, request, 500, { ok: false, error: e.message || 'Scheduled alert run failed' });
+            }
+        }
+        if (request.method === 'POST' && url.pathname === '/cron/schedule-qa') {
+            if (!await cronAuthorized(request, env)) {
+                return json(env, request, 401, { ok: false, error: 'Unauthorized' });
+            }
+            try {
+                if (!hasFirebaseAdminEnv(env)) {
+                    return json(env, request, 500, { ok: false, error: 'Firebase Admin env incomplete' });
+                }
+                const body = await request.json().catch(() => ({}));
+                const result = await acceptScheduleQaStatus(env, body);
+                return json(env, request, 200, { ok: true, ...result });
+            } catch (e) {
+                return json(env, request, 400, { ok: false, error: e.message || 'Schedule QA status failed' });
             }
         }
         if (request.method === 'POST' && url.pathname === '/community/ttl-wipe') {

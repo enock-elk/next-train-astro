@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_11.21.2 — no release notes
+
+- Operator community chips, send motion, account paging, maintenance menus, shorter fare cards, pull-to-dismiss reaction sheets, hourly schedule QA, and two log labels. Live site still needs Deploy production. Database rules need `npm run firebase:rules` for `schedule_qa_status`.
+
 ## V10_11.21.1 — no release notes
 
 - Alerts Pin and Delete sit above the cards. The header is a higher stacking context than the feed.

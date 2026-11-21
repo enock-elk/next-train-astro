@@ -2169,7 +2169,7 @@ function ensureInboxReactionsModal() {
     sheet.id = 'inbox-reactions-modal';
     sheet.className = 'fixed inset-0 z-[160] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
-        <div class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
+        <div data-sheet-card class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
             <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-inbox-react-title>Reactions</p>
             <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-inbox-react-totals></div>

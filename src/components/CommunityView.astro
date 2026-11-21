@@ -488,6 +488,19 @@
   }
   .community-bubble-name {
     min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .community-bubble-name-row .fb-version-chip {
+    flex: 0 0 auto;
+    margin-left: 0.35rem;
+    font-size: 0.65rem;
+    line-height: 1.2;
+  }
+  .community-bubble-name-row .community-bubble-marks {
+    margin-left: auto;
   }
   .community-bubble-marks {
     display: inline-flex;

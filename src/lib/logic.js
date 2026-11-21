@@ -683,7 +683,10 @@ export async function probeReachability(timeoutMs = 3500) {
                 } else if (!onLine) {
                     waterfallWarn(`OS offline — ${host} failed: ${probeErrorText(result.err)}`);
                 } else {
-                    waterfallWarn(`probe ${host} failed: ${probeErrorText(result.err)} (no HTTP response: DNS, certificate, or CORS)`);
+                    const probeWhy = result.err?.name === 'AbortError'
+                        ? 'timed out'
+                        : 'no HTTP response: DNS, certificate, or CORS';
+                    waterfallWarn(`probe ${host} failed: ${probeErrorText(result.err)} (${probeWhy})`);
                 }
                 const cachesDone = urls.every((url, i) => !isCacheProbeUrl(url) || settled[i]);
                 const cacheUsable = settled.some((row) => row?.httpOk && isCacheProbeUrl(row.url));
@@ -902,9 +905,14 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     
     const controller = new AbortController();
     let timedOut = false;
+    let rejectTimeout = () => {};
+    const timeoutPromise = new Promise((_, reject) => { rejectTimeout = reject; });
     const id = setTimeout(() => {
         timedOut = true;
         controller.abort();
+        const timeoutErr = new Error(`Timeout after ${timeoutMs}ms`);
+        timeoutErr.name = 'TimeoutError';
+        rejectTimeout(timeoutErr);
     }, timeoutMs);
     
     if (fetchOptions.signal) {
@@ -913,7 +921,12 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     }
     
     try {
-        const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
+        const request = fetch(url, { ...fetchOptions, signal: controller.signal });
+        request.catch(() => { /* a late abort must not surface after the timer already won */ });
+        const response = await Promise.race([
+            request,
+            timeoutPromise,
+        ]);
         clearTimeout(id);
 
         // Captive portals often return HTTP 200 with HTML login pages

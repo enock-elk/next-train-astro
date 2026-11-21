@@ -160,6 +160,9 @@ assert.match(community, /Remove completely/, 'an operator can still remove a mes
 assert.match(community, /function communityVersionChip/, 'an operator sees the build on a community name');
 assert.match(community, /openAdminChangelogLookup/, 'the community build opens the feedback version card');
 assert.match(community, /if \(!isAdminAuthed\(\)\) return ''/, 'commuters do not see the community version chip');
+assert.match(community, /users\/\$\{encodeURIComponent\(uid\)\}\/appVersion\.json/, 'a post with no build falls back to the account version');
+assert.match(community, /easeCommunityScroll/, 'a quoted message eases into view');
+assert.match(community, /showToast\('Sending', 'info', 1800, '', \{ action: true \}\)/, 'posting shows a Sending toast on every send');
 assert.match(community, /defaultRouteId/, 'a community message stores the default route');
 assert.match(community, /workerDenied/, 'a denied worker delete falls back to the operator write');
 assert.doesNotMatch(community, /adminStationName/, 'the station is not written on the community name');

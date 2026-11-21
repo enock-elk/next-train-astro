@@ -900,6 +900,8 @@ const toastShownAt = [];
 const TOAST_GLOBAL_GAP_MS = 1200;
 const TOAST_WINDOW_MS = 30_000;
 const TOAST_MAX_PER_WINDOW = 4;
+/** A new tap or send may repeat the same words. One double-tap still paints once. */
+const TOAST_ACTION_GAP_MS = 400;
 const TOAST_COOLDOWN_MS = {
     info: 8_000,
     success: 8_000,
@@ -930,14 +932,17 @@ function toastMessageKey(message, type) {
 function toastAllowsShow(message, type, options = {}) {
     const now = Date.now();
     const key = toastMessageKey(message, type);
-    const cooldown = Number(options.cooldownMs) > 0
-        ? Number(options.cooldownMs)
-        : (TOAST_COOLDOWN_MS[type] || TOAST_COOLDOWN_MS.info);
+    const action = options.action === true;
+    const cooldown = action
+        ? TOAST_ACTION_GAP_MS
+        : (Number(options.cooldownMs) > 0
+            ? Number(options.cooldownMs)
+            : (TOAST_COOLDOWN_MS[type] || TOAST_COOLDOWN_MS.info));
     const lastSame = toastLastByKey.get(key) || 0;
     if (!options.refresh && lastSame && now - lastSame < cooldown) return false;
-    if (!options.force && lastToastAt && now - lastToastAt < TOAST_GLOBAL_GAP_MS) return false;
+    if (!action && !options.force && lastToastAt && now - lastToastAt < TOAST_GLOBAL_GAP_MS) return false;
     while (toastShownAt.length && now - toastShownAt[0] > TOAST_WINDOW_MS) toastShownAt.shift();
-    if (!options.force && toastShownAt.length >= TOAST_MAX_PER_WINDOW) return false;
+    if (!action && !options.force && toastShownAt.length >= TOAST_MAX_PER_WINDOW) return false;
     toastLastByKey.set(key, now);
     lastToastAt = now;
     toastShownAt.push(now);
@@ -962,7 +967,8 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     const holdMs = toastHoldMs(message, duration, { persist, untilDismiss });
 
     // Debounce spamming. Ignore if the exact same message is already visible.
-    if (!options.refresh && toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
+    // A new tap or send (options.action) may show that line again.
+    if (!options.refresh && !options.action && toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
         return;
     }
     if (!toastAllowsShow(message, type, options)) return;
@@ -3772,6 +3778,7 @@ const BOTTOM_SHEET_CLOSE = {
     'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
     'community-reactions-modal': () => closeSmoothModal('community-reactions-modal'),
     'inbox-reactions-modal': () => closeSmoothModal('inbox-reactions-modal'),
+    'alerts-reaction-breakdown': () => window.__ntHideAlertReactionBreakdown?.(),
     'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),
     'nt-nearby-trains-modal': () => document.getElementById('nt-nearby-close')?.click(),
     'nt-live-tracker-modal': () => document.getElementById('nt-live-tracker-close')?.click(),
@@ -3791,7 +3798,9 @@ function isBottomSheetHost(el) {
 }
 
 function sheetCardFromHost(host) {
-    return host.querySelector(':scope > div:not([aria-hidden])') || host.firstElementChild;
+    const marked = host.querySelector(':scope > [data-sheet-card]');
+    if (marked) return marked;
+    return host.querySelector(':scope > div:not([aria-hidden]):not([data-breakdown-scrim])') || host.firstElementChild;
 }
 
 function bindBottomSheetPullDismiss() {

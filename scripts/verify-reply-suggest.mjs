@@ -18,7 +18,11 @@ import {
     haltPanelText,
     htmlAttrUrl,
     isThreadFileUrl,
+    noticeMediaFiles,
+    suggestPublicMediaUrl,
     liaisonRules,
+    communityStyleRules,
+    normalizeVoicePrefs,
     knowledgeBase,
     noticeQuotePlain,
     withQuotedNoticeText,
@@ -34,7 +38,7 @@ import {
     PRASA_SURVEY_URL,
     whatsappReplyUrl,
 } from '../src/lib/reply-suggest.js';
-import { describeRoute } from '../src/lib/reply-knowledge.js';
+import { communityScheduleFact, describeRoute } from '../src/lib/reply-knowledge.js';
 import { whatsappMarkupToHtml } from '../src/lib/rich-text.js';
 import {
     buildTextAssistRequest,
@@ -117,7 +121,8 @@ ok(liaisonRules('GP').includes('Do not write "I want to gently mention"'), 'the 
 ok(liaisonRules('GP').includes('Do not stack both'), 'independence lines stay to one sentence');
 ok(liaisonRules('GP').includes('ADMIN ALERT'), 'a quoted notice is an admin alert');
 ok(liaisonRules('GP').includes('Only Next Train can post an alert'), 'only admin posts alerts');
-ok(liaisonRules('GP').includes('thank-you for replying to the poll on its own line'), 'poll thank-you sits on its own line at the top');
+ok(liaisonRules('GP').includes('Only if that alert text has a Poll: line'), 'poll thank-you is only for a real poll');
+ok(liaisonRules('GP').includes('A photo, a PDF, a text alert, a call for responses, or a call to action is not a poll'), 'a text alert is not called a poll');
 ok(liaisonRules('GP').includes('Do not thank them for sharing'), 'a reply is not treated as the commuter posting the alert');
 ok(liaisonRules('GP').includes('their service is good'), 'praise cues skip the PRASA disclaimer');
 ok(liaisonRules('GP').includes("Thank you for your message where you're asking about"), 'train questions thank for the message, not for asking alone');
@@ -170,14 +175,22 @@ ok(knowledgeBase().includes('pta-pien'), 'route keys are in the knowledge base')
 ok(describeRoute('pta-pien').includes('Pienaarspoort'), 'pta-pien is Pretoria to Pienaarspoort');
 ok(describeRoute('herc-koed').includes('no Saturday'), 'Hercules to Koedoespoort has no Saturday trains');
 ok(describeRoute('ec-berlin').includes('no Saturday'), 'East London to Berlin has no Saturday trains');
+ok(communityScheduleFact('pta-pien', 'please add just 1 train on Sunday', null).includes('no Sunday train service'), 'a Sunday ask says this line has no Sunday service');
+ok(communityScheduleFact('pta-pien', 'the morning train', null) === '', 'a message that does not name a day adds no sheet fact');
+ok(communityStyleRules().includes('say what the sheet shows first'), 'a community draft leads with the timetable fact');
 ok(knowledgeBase().includes('first Monday'), 'Cato Ridge maintenance day is in the knowledge base');
-ok(knowledgeBase().includes('R180.00'), 'zone 1 monthly fare is in the knowledge base');
+ok(knowledgeBase().includes('R215.00'), 'zone 1 monthly fare is in the knowledge base');
+ok(knowledgeBase().includes('1 December 2026'), 'monthly fare date is in the knowledge base');
 ok(knowledgeBase().includes('09:30'), 'off-peak window is in the knowledge base');
 const photoUrl = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.jpg?alt=media&token=abc';
 const pdfUrl = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.pdf?alt=media&token=abc';
 ok(isThreadFileUrl(photoUrl), 'a chat photo URL is allowed');
 ok(isThreadFileUrl(pdfUrl), 'a chat PDF URL is allowed');
 ok(!isThreadFileUrl('https://evil.example/a.jpg'), 'a foreign file URL is dropped');
+ok(isThreadFileUrl('https://nexttrain.co.za/images/alerts/fare.jpg'), 'an alert poster can be sent to Co-Pilot');
+ok(suggestPublicMediaUrl('/images/alerts/fare.jpg') === 'https://nexttrain.co.za/images/alerts/fare.jpg', 'a catalog poster becomes an absolute address');
+const posterFiles = noticeMediaFiles({ imageUrl: '/images/alerts/fare.jpg', message: 'Fares' });
+ok(posterFiles.length === 1 && posterFiles[0].kind === 'image', 'a quoted alert poster is a file on the draft');
 ok(whatsappMarkupToHtml('*Metrorail Update*') === '<b>Metrorail Update</b>', 'WhatsApp stars become bold');
 ok(whatsappMarkupToHtml('hello') === '', 'plain alert paste stays plain text');
 const gap = unansweredCommuterMessages([
@@ -353,6 +366,12 @@ ok(pollDraft.action === 'draft', 'a poll reply still drafts');
 const pollLines = pollDraft.reply.split('\n');
 ok(pollLines[0] === 'Hi there,', 'poll thank-you keeps the greeting');
 ok(pollLines[3] === 'Thank you for replying to our poll.', 'poll thank-you is its own line under the greeting');
+const falsePoll = applyDraftGuard({
+    action: 'draft',
+    reply: 'Hi there,\n\n\nThank you so much for replying to our poll.\n\nThe fares are still reasonable.\n\nThank you for using Next Train.',
+}, 'GP', visit.thread);
+ok(falsePoll.action === 'draft' && !/poll/i.test(falsePoll.reply), 'a text alert is not thanked as a poll');
+ok(falsePoll.reply.includes('The fares are still reasonable.'), 'the rest of that draft stays');
 const deskOk = applyDraftGuard({
     action: 'draft',
     reply: 'Please call the Customer Service desk on 031 813 0456 and ask for a reference number.',
@@ -448,6 +467,33 @@ ok(!worker.includes('feedback.json'), 'reply worker does not read the feedback t
 ok(worker.includes('gemini-3.5-flash-lite'), 'reply worker uses 3.5 Flash-Lite');
 ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 Flash-Lite');
 ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
+ok(worker.includes("pathname === '/speak'"), 'read-aloud has its own operator route');
+ok(worker.includes('en-US-Chirp3-HD-Achernar'), 'read-aloud uses Chirp 3 HD Achernar');
+ok(worker.includes("pathname === '/voice'"), 'each operator can save a Chirp voice');
+ok(worker.includes('normalizeVoicePrefs'), 'an unknown voice falls back on the worker');
+ok(communityStyleRules().includes('Do not end with "Thank you for using Next Train."'), 'community drafts are told not to close with the feedback line');
+ok(!communityStyleRules().includes('End every draft'), 'community style does not require the feedback closing');
+ok(liaisonRules('GP').includes('Thank you for using Next Train.'), 'feedback drafts still close with the feedback line');
+ok(normalizeVoicePrefs({ voice: 'nope', speakingRate: 9, volumeGainDb: 40 }).voice === 'en-US-Chirp3-HD-Achernar', 'an unknown Chirp name stays on Achernar');
+ok(normalizeVoicePrefs({ speakingRate: 1.53 }).speakingRate === 1.55, 'speed stays on a Chirp step');
+const communityDraft = applyDraftGuard({
+    action: 'draft',
+    reply: "Thank you for your message where you're asking about Saulsville.\n\nThe desk is 011 013 0306.\n\nThank you for using Next Train.",
+}, 'GP', [], { surface: 'community' });
+ok(!communityDraft.reply.includes('Thank you for using Next Train.'), 'a community draft drops the feedback closing');
+ok(!communityDraft.reply.includes("Thank you for your message where you're asking about"), 'a community draft drops the summary opening');
+ok(adminJs.includes('id="admin-prefs-body"'), 'Admin preferences starts as its own System Controls section');
+ok(adminJs.includes('id="admin-voice-test"'), 'a voice can be tried before it is saved');
+ok(adminJs.includes('bindPremiumSelect'), 'voice choices use the premium menu');
+ok(adminJs.includes('admin-prompt-editor'), 'prompts open in a full editor');
+ok(adminJs.includes('ntStopOperatorSpeech'), 'read-aloud clears when Developer Mode returns home');
+ok(worker.includes('body.preview'), 'a voice test can use the choices on screen');
+ok(adminJs.includes('Listen to this draft'), 'Co-Pilot can read the draft aloud');
+ok(adminJs.includes('id="admin-reply-speech"'), 'Co-Pilot shows the pause and play tray');
+ok(adminJs.indexOf('id="admin-reply-suggest-done"') > adminJs.indexOf('id="reply-send"'), 'the draft-ready line sits under Send');
+ok(worker.includes('requireOperator'), 'read-aloud checks the operator token');
+ok(worker.includes('SPEAK_HOUR_CHARS'), 'read-aloud has a character cap');
+ok(!worker.includes('texttospeech.googleapis.com') || worker.includes('X-Goog-Api-Key'), 'the speech key stays on the worker');
 ok(worker.includes('clear'), 'shared note can be cleared online');
 ok(worker.includes('readSharedNote'), 'every suggest reloads the saved future note');
 const geminiConfig = buildGeminiRequest({

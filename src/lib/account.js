@@ -7,7 +7,8 @@
  *     displayName, photoURL, email?, createdAt,
  *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
- *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, updatedAt },
+ *     nameHistory: { [at]: { name, at } },
+ *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, dataSaver, updatedAt },
  *     recentTrips: [{ from, to, fullFrom, fullTo, at, region }]
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
@@ -19,7 +20,7 @@ import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
 import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION } from './config.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { safeStorage } from './utils.js';
+import { safeStorage, applyCanonicalDeviceId } from './utils.js';
 import {
     getAuthProviders,
     isAuthProviderActionDisabled,
@@ -33,6 +34,7 @@ import {
     refuseDisplayName,
     DISPLAY_NAME_REFUSE_MSG,
 } from './display-name.js';
+import { paintDataSaverUi, readDataSaver, writeDataSaver } from './data-saver.js';
 
 /** @typedef {'guest' | 'loading' | 'signed-in'} AccountStatus */
 
@@ -59,15 +61,39 @@ function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || null;
 }
 
-export function deviceIdAgeMs(id, linkedAt) {
-    if (typeof linkedAt === 'number' && Number.isFinite(linkedAt) && linkedAt > 1e9) {
-        return linkedAt < 1e12 ? linkedAt * 1000 : linkedAt;
+/** Keep the account's first usr_ id on this phone, including a later sign-in. */
+function adoptAccountUserId(canonical) {
+    const id = String(canonical || '').trim();
+    if (!/^usr_[a-z0-9]{4,}_[0-9]{10,13}$/i.test(id)) return '';
+    if (getDeviceId() !== id) {
+        applyCanonicalDeviceId(id);
+        $deviceId.set(id);
+        if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = id;
     }
+    return id;
+}
+
+function stampMs(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 1e9) return 0;
+    return value < 1e12 ? value * 1000 : value;
+}
+
+/** Earlier of the link stamp and the epoch baked into usr_…_timestamp. */
+export function deviceIdAgeMs(id, linkedAt) {
+    const linked = stampMs(linkedAt);
     const m = String(id || '').match(/_(\d{10,13})$/);
-    if (!m) return Number.MAX_SAFE_INTEGER;
-    const raw = Number(m[1]);
-    if (!Number.isFinite(raw)) return Number.MAX_SAFE_INTEGER;
-    return raw < 1e12 ? raw * 1000 : raw;
+    const embedded = m ? stampMs(Number(m[1])) : 0;
+    if (embedded && linked) return Math.min(embedded, linked);
+    if (embedded) return embedded;
+    if (linked) return linked;
+    return Number.MAX_SAFE_INTEGER;
+}
+
+/** Keep the first-seen time when a later sign-in would stamp "now". */
+function earlierDeviceStamp(id, current, now) {
+    const age = deviceIdAgeMs(id, typeof current === 'number' ? current : null);
+    if (age !== Number.MAX_SAFE_INTEGER) return age;
+    return now;
 }
 
 /** Oldest linked device wins for admin inbox. Local mint is still recorded. */
@@ -105,6 +131,7 @@ export function readLocalAccountPrefs() {
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
         notificationsOn: safeStorage.getItem('notifyRoomActivity') === 'true',
+        dataSaver: readDataSaver(),
         pinnedRoutes: readPinnedRoutes(),
         updatedAt: Date.now(),
     };
@@ -148,6 +175,17 @@ export async function pushSignedInOps({ force = false, now = Date.now() } = {}) 
     if ('lat' in patch || 'lon' in patch || 'latitude' in patch || 'longitude' in patch) return false;
     try {
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), patch);
+        try {
+            await window.firebaseDbUpdate(
+                window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`),
+                {
+                    region: patch.region,
+                    lastRouteId: patch.lastRouteId,
+                    appVersion: patch.appVersion,
+                    updatedAt: now,
+                }
+            );
+        } catch { /* directory rules may lag the users row */ }
         return true;
     } catch {
         return false;
@@ -219,6 +257,9 @@ export async function applyAccountPrefs(prefs) {
                     safeStorage.setItem(`defaultRoute_${region}`, id.trim().slice(0, 40));
                 }
             }
+        }
+        if (prefs.dataSaver && typeof prefs.dataSaver === 'object') {
+            writeDataSaver({ ...prefs.dataSaver, push: false });
         }
         if (typeof prefs.notificationsOn === 'boolean') {
             safeStorage.setItem('notifyRoomActivity', prefs.notificationsOn ? 'true' : 'false');
@@ -340,6 +381,23 @@ function cleanPhotoUrl(value) {
     return url;
 }
 
+/** Google keeps its own name on providerData after a custom display name is saved. */
+export function providerLegalName(user) {
+    const rows = Array.isArray(user?.providerData) ? user.providerData : [];
+    for (const row of rows) {
+        const providerId = String(row?.providerId || '');
+        if (providerId !== 'google.com' && providerId !== 'facebook.com') continue;
+        const name = String(row?.displayName || '').trim();
+        if (name) return name.slice(0, 80);
+    }
+    return '';
+}
+
+function providerIdOf(user) {
+    const rows = Array.isArray(user?.providerData) ? user.providerData : [];
+    return String(rows.find((row) => row?.providerId)?.providerId || (user?.email ? 'password' : '')).slice(0, 40);
+}
+
 /** Google often leaves the picture on providerData after user.photoURL is empty. */
 export function resolveAuthPhotoURL(user) {
     const direct = cleanPhotoUrl(user?.photoURL);
@@ -371,15 +429,17 @@ function publishUser(user, extras = {}) {
     const providerId = Array.isArray(user.providerData)
         ? (user.providerData.find((row) => row?.providerId)?.providerId || null)
         : null;
+    const prev = $account.get();
+    const keepCustom = !extras.displayName && prev?.uid === user.uid && prev.displayNameCustom && prev.displayName;
     $account.set({
         status: 'signed-in',
         uid: user.uid,
-        displayName: extras.displayName || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger')),
+        displayName: extras.displayName || (keepCustom ? prev.displayName : formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'))),
         photoURL,
         email: user.email || null,
         emailVerified: !!user.emailVerified,
         authProvider: extras.authProvider || providerId,
-        displayNameCustom: !!extras.displayNameCustom,
+        displayNameCustom: extras.displayNameCustom != null ? !!extras.displayNameCustom : !!keepCustom,
         chatDeviceId: extras.chatDeviceId || $account.get().chatDeviceId || null,
     });
     safeStorage.setItem('authUid', user.uid);
@@ -421,6 +481,46 @@ async function waitForFirebase(timeoutMs = 8000) {
     });
 }
 
+function rememberedName(raw) {
+    const name = clampDisplayName(raw);
+    if (!name || /^(passenger|you|admin|anonymous)$/i.test(name)) return '';
+    return name;
+}
+
+/** Keep the previous display name on the account when it actually changes. */
+function priorNamePatch(existing, nextName, now) {
+    const prev = rememberedName(existing?.displayName);
+    const next = rememberedName(nextName);
+    if (!prev || !next || prev.toLowerCase() === next.toLowerCase()) return {};
+    const history = existing?.nameHistory && typeof existing.nameHistory === 'object' ? existing.nameHistory : {};
+    const seen = new Set(
+        Object.values(history)
+            .map((row) => rememberedName(row?.name).toLowerCase())
+            .filter(Boolean),
+    );
+    if (seen.has(prev.toLowerCase())) return {};
+    const at = Number(now) || Date.now();
+    return { [`nameHistory/${at}`]: { name: prev, at } };
+}
+
+function retainedNamesFrom(existing, ...extra) {
+    const names = {};
+    const add = (raw, at) => {
+        const name = rememberedName(raw);
+        if (!name) return;
+        const when = Number(at) || Date.now();
+        if (!names[name] || when < names[name]) names[name] = when;
+    };
+    extra.forEach((row) => add(row?.name, row?.at));
+    add(existing?.displayName, existing?.updatedAt || existing?.createdAt);
+    add(existing?.providerName, existing?.createdAt);
+    const history = existing?.nameHistory && typeof existing.nameHistory === 'object' ? existing.nameHistory : {};
+    Object.values(history).forEach((row) => add(row?.name, row?.at));
+    const kept = existing?.retainedNames && typeof existing.retainedNames === 'object' ? existing.retainedNames : {};
+    Object.entries(kept).forEach(([name, at]) => add(name, at));
+    return names;
+}
+
 /**
  * Ensure users/{uid} exists and link current device_id (additive — never wipes prefs).
  * @param {object} user
@@ -442,22 +542,47 @@ export async function ensureUserProfile(user, opts = {}) {
             displayNameCustom: !!(customName || existing?.displayNameCustom),
         });
         const localPrefs = readLocalAccountPrefs();
-        const mergedDeviceIds = { ...(existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : {}) };
+        const priorIds = existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : null;
+        const mergedDeviceIds = { ...(priorIds || {}) };
+        Object.keys(mergedDeviceIds).forEach((id) => {
+            mergedDeviceIds[id] = earlierDeviceStamp(id, mergedDeviceIds[id], now);
+        });
         if (deviceId && mergedDeviceIds[deviceId] == null) {
-            mergedDeviceIds[deviceId] = now;
+            mergedDeviceIds[deviceId] = earlierDeviceStamp(deviceId, null, now);
         }
-        const chatDeviceId = pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
+        const canonical = Object.keys(mergedDeviceIds).length
+            ? pickCanonicalChatDeviceId(mergedDeviceIds, '')
+            : deviceId;
+        const adopted = adoptAccountUserId(canonical) || deviceId;
+        if (adopted && mergedDeviceIds[adopted] == null) {
+            mergedDeviceIds[adopted] = earlierDeviceStamp(adopted, null, now);
+        }
+        let presenceMs = 0;
+        Object.keys(mergedDeviceIds).forEach((id) => {
+            const age = deviceIdAgeMs(id, mergedDeviceIds[id]);
+            if (age === Number.MAX_SAFE_INTEGER) return;
+            if (!presenceMs || age < presenceMs) presenceMs = age;
+        });
+        const accountCreatedAt = stampMs(existing?.accountCreatedAt) || stampMs(existing?.createdAt) || now;
+        const joinedAt = Math.min(accountCreatedAt, presenceMs || accountCreatedAt);
+        const chatDeviceId = adopted || pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
         const photoURL = (await adoptProviderPhoto(user)) || cleanPhotoUrl(existing?.photoURL) || null;
 
+        const legalName = providerLegalName(user);
+        const provider = providerIdOf(user);
         if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
                 displayName,
                 displayNameCustom: !!customName,
+                ...(legalName ? { providerName: legalName } : {}),
+                ...(provider ? { provider } : {}),
                 photoURL,
                 email: user.email || null,
                 createdAt: now,
-                deviceIds: deviceId ? { [deviceId]: now } : {},
+                accountCreatedAt: now,
+                joinedAt,
+                deviceIds: { ...mergedDeviceIds },
                 flags: {
                     shadowBanned: false,
                     shadowBannedUntil: 0,
@@ -477,9 +602,14 @@ export async function ensureUserProfile(user, opts = {}) {
             if (!existing.displayNameCustom) {
                 patch.displayName = displayName;
             }
-            if (deviceId && existing.deviceIds?.[deviceId] == null) {
-                patch[`deviceIds/${deviceId}`] = now;
-            }
+            Object.assign(patch, priorNamePatch(existing, patch.displayName || existing.displayName || displayName, now));
+            if (legalName) patch.providerName = legalName;
+            if (provider) patch.provider = provider;
+            Object.keys(mergedDeviceIds).forEach((id) => {
+                if (priorIds?.[id] !== mergedDeviceIds[id]) patch[`deviceIds/${id}`] = mergedDeviceIds[id];
+            });
+            if (existing.accountCreatedAt == null) patch.accountCreatedAt = accountCreatedAt;
+            if (existing.joinedAt == null || stampMs(existing.joinedAt) > joinedAt) patch.joinedAt = joinedAt;
             const flags = existing.flags;
             if (!flags) {
                 patch.flags = { shadowBanned: false, shadowBannedUntil: 0, role: 'user' };
@@ -507,22 +637,32 @@ export async function ensureUserProfile(user, opts = {}) {
             }
         }
 
-        if (deviceId) {
+        const linkDevice = async (id) => {
+            if (!id) return;
             await window.firebaseDbUpdate(
-                window.firebaseDbRef(window.firebaseDb, `devices/${deviceId}`),
-                { uid: user.uid, linkedAt: typeof existing?.deviceIds?.[deviceId] === 'number' ? existing.deviceIds[deviceId] : now }
+                window.firebaseDbRef(window.firebaseDb, `devices/${id}`),
+                { uid: user.uid, linkedAt: typeof mergedDeviceIds[id] === 'number' ? mergedDeviceIds[id] : now }
             );
-        }
+        };
+        await linkDevice(adopted || deviceId);
+        if (deviceId && deviceId !== adopted) await linkDevice(deviceId);
 
         try {
             const provider = user.providerData?.[0]?.providerId || (user.email ? 'password' : '');
+            const ops = accountOpsFields(now);
             await window.firebaseDbUpdate(
                 window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`),
                 {
                     displayName: displayName || null,
+                    ...(legalName ? { providerName: legalName } : {}),
                     email: user.email || existing?.email || null,
                     createdAt: existing?.createdAt || now,
+                    accountCreatedAt,
+                    joinedAt,
                     provider: String(provider || '').slice(0, 40) || null,
+                    region: ops.region,
+                    lastRouteId: ops.lastRouteId,
+                    appVersion: ops.appVersion,
                     updatedAt: now,
                 }
             );
@@ -538,6 +678,11 @@ export async function ensureUserProfile(user, opts = {}) {
             chatDeviceId,
             photoURL,
         });
+        if (displayName) {
+            import('./rider-marks.js')
+                .then((m) => m.publishPublicProfile({ displayName }))
+                .catch(() => {});
+        }
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
@@ -568,6 +713,11 @@ export async function updateAccountDisplayName(raw) {
             displayNameCustom: !!custom,
             updatedAt: Date.now(),
         };
+        try {
+            const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`));
+            const existing = snap.exists() ? (snap.val() || {}) : null;
+            Object.assign(profileRow, priorNamePatch(existing, displayName, profileRow.updatedAt));
+        } catch { /* the new name still saves */ }
         if (photoURL) profileRow.photoURL = photoURL;
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
         try {
@@ -618,6 +768,7 @@ export async function initAccount() {
             m.watchOperatorMessageBadge();
             return m.syncOperatorMessageBadge();
         }).catch(() => {});
+        if (openedFromVerifyLink && user?.emailVerified) emailVerifiedToastShown = true;
         if (openedFromVerifyLink && typeof window.showToast === 'function') {
             window.showToast(user?.emailVerified ? 'Email verified' : 'Open the link in your email, then come back.', user?.emailVerified ? 'success' : 'info');
         }
@@ -634,12 +785,44 @@ export async function initAccount() {
         }
         window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     });
+    watchEmailVerifyOnFocus();
+}
+
+const AUTH_WAIT_MESSAGE = 'Too many attempts. Wait a moment and try again.';
+let emailVerifiedToastShown = false;
+
+function watchEmailVerifyOnFocus() {
+    if (typeof document === 'undefined' || window.__ntEmailVerifyWatch) return;
+    window.__ntEmailVerifyWatch = true;
+    const check = async () => {
+        if (document.visibilityState === 'hidden') return;
+        if (emailVerifiedToastShown || !accountNeedsEmailVerify()) return;
+        const card = document.getElementById('account-verify-card');
+        if (!card || card.classList.contains('hidden')) return;
+        try {
+            const ok = await refreshVerifiedSession();
+            if (!ok || emailVerifiedToastShown) return;
+            emailVerifiedToastShown = true;
+            if (typeof window.showToast === 'function') window.showToast('Email verified', 'success');
+        } catch { /* the verify card stays until the inbox confirms it */ }
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+}
+
+function passwordMeetsNewAccountRule(password) {
+    const value = String(password || '');
+    return value.length >= 8 && /[A-Za-z]/.test(value) && /\d/.test(value);
 }
 
 async function guardAuthAttempt(kind = 'signIn') {
     const { rtdbWriteGuard } = await import('./rtdb-rate.js');
     const message = rtdbWriteGuard(kind === 'signUp' ? 'signUp' : 'signIn');
-    if (message) throw new Error(message);
+    if (message) {
+        const err = new Error(AUTH_WAIT_MESSAGE);
+        err.code = 'auth/too-many-requests';
+        throw err;
+    }
 }
 
 export async function signInWithGoogle() {
@@ -708,11 +891,22 @@ export async function requestAccountDeletion() {
     }
     const now = Date.now();
     const draft = deletionRequestDraft(user);
+    const deviceId = getDeviceId();
+    let existing = null;
+    try {
+        const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`));
+        existing = snap.exists() ? (snap.val() || {}) : null;
+    } catch { existing = null; }
     const record = {
         uid: user.uid,
-        email: user.email || null,
-        displayName: state.displayName || user.displayName || null,
-        deviceId: getDeviceId(),
+        email: user.email || existing?.email || null,
+        displayName: state.displayName || user.displayName || existing?.displayName || null,
+        deviceId,
+        deviceIds: {
+            ...(existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : {}),
+            ...(deviceId ? { [deviceId]: true } : {}),
+        },
+        retainedNames: retainedNamesFrom(existing, { name: state.displayName || user.displayName, at: now }),
         requestedAt: now,
         status: 'pending',
         reason: 'user_request',
@@ -757,8 +951,8 @@ export async function signUpWithEmail(email, password, displayName) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
     await guardAuthAttempt('signUp');
-    if (password.length < 6) {
-        throw new Error('Password must be at least 6 characters.');
+    if (!passwordMeetsNewAccountRule(password)) {
+        throw new Error('Use at least 8 characters, with a letter and a number.');
     }
     if (displayName?.trim()) {
         const check = refuseDisplayName(displayName);
@@ -812,14 +1006,45 @@ export async function signOutAccount() {
     import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
 }
 
+let accountAuthFlow = false;
+let accountAuthFromHub = false;
+let accountWasSigned = false;
+
+function paintAccountHubChrome(state = $account.get()) {
+    const signed = state?.status === 'signed-in';
+    document.getElementById('account-edit-profile-pill')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-signin-pill')?.classList.toggle('hidden', signed);
+    document.getElementById('account-guest-note')?.classList.toggle('hidden', signed);
+    document.getElementById('account-signout-btn')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-modal-email')?.classList.toggle('hidden', !signed);
+    const profileBtn = document.getElementById('account-profile-toggle');
+    if (profileBtn) profileBtn.setAttribute('aria-label', signed ? 'Edit profile' : 'Sign in');
+}
+
+/** Settings hub for a guest or a signed-in rider. Local settings stay on this phone. */
+export function showAccountHub() {
+    if (typeof document === 'undefined') return;
+    accountAuthFlow = false;
+    accountAuthFromHub = false;
+    document.getElementById('account-signed-in')?.classList.remove('hidden');
+    document.getElementById('account-guest')?.classList.add('hidden');
+    document.getElementById('account-settings-host')?.classList.remove('hidden');
+    document.getElementById('account-legal-footer')?.classList.add('hidden');
+    paintAccountPane('hub');
+    paintAccountHubChrome();
+}
+
 export function showAccountGuestScreen(screen) {
     if (typeof document === 'undefined') return;
     const guest = document.getElementById('account-guest');
     if (!guest) return;
+    accountAuthFlow = true;
     const name = screen === 'signin' || screen === 'reset' || screen === 'invalid'
         ? screen
         : 'create';
     guest.setAttribute('data-account-screen', name);
+    guest.classList.remove('hidden');
+    document.getElementById('account-signed-in')?.classList.add('hidden');
     guest.querySelectorAll('[data-account-only]').forEach((el) => {
         const list = (el.getAttribute('data-account-only') || '').split(/\s+/).filter(Boolean);
         el.classList.toggle('hidden', !list.includes(name));
@@ -901,7 +1126,32 @@ export async function offerNextTrainAccount({ title, body, wait = false } = {}) 
     return waitForSignedIn(180000);
 }
 
+/** The hub is a fixed drawer. The account sheet sits in the page, so the drawer paints over it unless it is parked first. */
+function parkHubForAccount() {
+    if (typeof document === 'undefined') return;
+    const sidenav = document.getElementById('sidenav');
+    const overlay = document.getElementById('sidenav-overlay');
+    const hubOpen = document.body.classList.contains('sidenav-open')
+        || !!sidenav?.classList.contains('translate-x-0')
+        || !!sidenav?.classList.contains('open');
+    if (sidenav) {
+        sidenav.style.transition = 'none';
+        sidenav.classList.remove('translate-x-0', 'open', '-translate-x-full');
+        sidenav.classList.add('translate-x-full');
+    }
+    if (overlay) {
+        overlay.classList.add('hidden', 'opacity-0');
+        overlay.classList.remove('open');
+    }
+    document.body.classList.remove('sidenav-open');
+    if (sidenav) requestAnimationFrame(() => { sidenav.style.transition = ''; });
+    if (hubOpen && typeof location !== 'undefined' && location.hash === '#sidenav') {
+        try { history.replaceState({ view: 'home' }, '', '#home'); } catch { /* ignore */ }
+    }
+}
+
 export function openAccountModal() {
+    parkHubForAccount();
     const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
     if (modal) {
         modal.style.removeProperty('top');
@@ -910,8 +1160,7 @@ export function openAccountModal() {
         modal.style.removeProperty('--nt-feedback-vv-top');
         modal.style.removeProperty('--nt-feedback-vv-height');
     }
-    const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
-    if (!signedOpen) showAccountGuestScreen('create');
+    if (!accountAuthFlow) showAccountHub();
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
     }
@@ -963,11 +1212,13 @@ const accountSheetStack = [];
 const ACCOUNT_PANE_HASH = {
     profile: '#account-profile',
     notifications: '#account-notifications',
+    data: '#account-data',
     appearance: '#account-appearance',
 };
 const ACCOUNT_PANE_TITLE = {
     profile: 'Edit profile',
     notifications: 'Notifications',
+    data: 'Data saving',
     appearance: 'Appearance',
 };
 
@@ -994,6 +1245,7 @@ function paintAccountPane(pane) {
             input.value = $account.get().displayName || '';
         }
     }
+    if (next === 'data') paintDataSaverUi();
     const scroller = document.querySelector('[data-account-scroll]');
     if (scroller) scroller.scrollTop = 0;
 }
@@ -1214,6 +1466,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     const modalEmail = document.getElementById('account-modal-email');
 
     const signed = state.status === 'signed-in';
+    const showHub = signed || !accountAuthFlow;
     if (nameEl) nameEl.textContent = signed ? (state.displayName || 'Passenger') : 'Account';
     if (subEl) {
         subEl.textContent = state.status === 'loading'
@@ -1239,15 +1492,16 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }
     }
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
-    if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
-    if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
+    if (signedBlock) signedBlock.classList.toggle('hidden', !showHub);
+    if (guestBlock) guestBlock.classList.toggle('hidden', showHub || state.status === 'loading');
     const screenTitle = document.getElementById('account-screen-title');
     // Guest heroes already show Welcome / Welcome back / Reset; do not repeat in the top bar.
     if (screenTitle) screenTitle.textContent = signed ? (ACCOUNT_PANE_TITLE[getAccountPane()] || '') : '';
     document.getElementById('account-prefs-label')?.classList.add('hidden');
-    document.getElementById('account-settings-host')?.classList.toggle('hidden', !signed);
-    document.getElementById('account-legal-footer')?.classList.toggle('hidden', signed);
-    if (!signed) paintAccountPane('hub');
+    document.getElementById('account-settings-host')?.classList.toggle('hidden', !showHub);
+    document.getElementById('account-legal-footer')?.classList.toggle('hidden', showHub);
+    if (!signed && showHub && accountWasSigned) paintAccountPane('hub');
+    accountWasSigned = signed;
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -1268,7 +1522,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (photoBox) delete photoBox.dataset.dirty;
         const marksBox = document.getElementById('account-marks-community');
         if (marksBox) delete marksBox.dataset.dirty;
-        if (modalName) modalName.textContent = 'Passenger';
+        if (modalName) modalName.textContent = showHub ? 'Guest' : 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
@@ -1336,6 +1590,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     const cluster = document.getElementById('settings-profile-cluster');
     const hosted = !!cluster?.closest('#account-settings-host');
     if (cluster) cluster.classList.toggle('hidden', signed && hosted);
+    if (showHub) paintAccountHubChrome(state);
 }
 
 export function syncAuthProviderUi(providers = getAuthProviders(), busy = _accountUiBusy) {
@@ -1508,9 +1763,50 @@ function openBadgeHowSheet(badgeId, state, marks) {
     showAccountSheet('account-badge-how-sheet');
 }
 
+function visitorRouteIds() {
+    const ids = new Set();
+    const current = String($currentRouteId.get() || '');
+    if (current) ids.add(current);
+    for (const code of ['GP', 'WC', 'KZN', 'EC']) {
+        const pinned = safeStorage.getItem(`defaultRoute_${code}`);
+        if (pinned) ids.add(String(pinned));
+    }
+    return [...ids];
+}
+
+function pointsFeatureOn(features, key) {
+    if (features.isFeatureGranted(key)) return true;
+    const region = String($userRegion.get() || '').toUpperCase();
+    if (region && features.isFeatureEnabled(key, '', region)) return true;
+    return visitorRouteIds().some((id) => features.isFeatureEnabled(key, id));
+}
+
+function liveShareOn(features) {
+    if (features.isFeatureGranted(features.FEATURE_KEYS.RIDE_CHECKIN)) return true;
+    return visitorRouteIds().some((id) => features.isRideCheckInPinned(id));
+}
+
+export function visiblePointAction(id, features, chrome) {
+    const community = chrome?.canAccessPilotSurface?.('community') === true;
+    const share = liveShareOn(features);
+    const delay = pointsFeatureOn(features, features.FEATURE_KEYS.DELAY_REPORTS_UI);
+    if (id === 'first_community_post' || id === 'community_message') return community;
+    if (id === 'first_share_day' || id === 'join_confirm') return share;
+    if (id === 'delay_report' || id === 'delay_confirm') return delay;
+    if (id === 'streak_3day' || id === 'streak_5day') return community || share || delay;
+    return false;
+}
+
 export function paintAccountPoints(state) {
     if (typeof document === 'undefined') return;
-    import('./rider-marks.js').then((m) => {
+    Promise.all([
+        import('./rider-marks.js'),
+        import('./features.js'),
+        import('./admin-chrome.js'),
+    ]).then(([m, features, chrome]) => {
+        const actionOn = (id) => visiblePointAction(id, features, chrome);
+        const marksCard = document.getElementById('account-marks-toggle')?.closest('div.rounded-\\[12px\\]');
+        if (marksCard) marksCard.classList.toggle('hidden', !actionOn('community_message'));
         const st = state || m.readMarks();
         const tier = m.tierForPoints(st.points);
         const next = m.nextTierForPoints(st.points);
@@ -1541,9 +1837,12 @@ export function paintAccountPoints(state) {
         }
         const earn = document.getElementById('account-earn-list');
         if (earn) {
-            earn.innerHTML = m.MARK_CATALOG.map((c) => (
+            const rows = m.MARK_CATALOG.filter((c) => actionOn(c.id));
+            earn.innerHTML = rows.map((c) => (
                 `<li><span class="font-semibold text-gray-800 dark:text-gray-200">${escapeAccountHtml(c.title)}</span> · ${c.points} ${m.pointsWord(c.points)}. ${escapeAccountHtml(c.how)}</li>`
             )).join('');
+            const earnCard = earn.closest('div.rounded-\\[12px\\]');
+            if (earnCard) earnCard.classList.toggle('hidden', !rows.length);
         }
         const contrib = document.getElementById('account-contrib-list');
         if (contrib) {
@@ -1551,8 +1850,15 @@ export function paintAccountPoints(state) {
                 ? m.listContributionDays(st)
                 : [];
             const painted = new Map();
-            contrib.innerHTML = days.length
-                ? days.map((day) => {
+            const visibleDays = days.map((day) => ({
+                ...day,
+                items: (day.items || []).filter((item) => actionOn(item.action)),
+            })).filter((day) => day.items.length).map((day) => ({
+                ...day,
+                total: day.items.reduce((sum, item) => sum + (Number(item.points) || 0), 0),
+            }));
+            contrib.innerHTML = visibleDays.length
+                ? visibleDays.map((day) => {
                     const when = day.day && typeof m.formatContributionDate === 'function'
                         ? m.formatContributionDate(day.day)
                         : (day.day ? day.day : 'Earlier');
@@ -1587,7 +1893,7 @@ export function paintAccountPoints(state) {
                 { id: 'delay_confirm', kind: 'validate', title: 'Validation' },
                 { id: 'streak_3day', kind: 'streak3', title: '3-day streak' },
                 { id: 'streak_5day', kind: 'streak5', title: '5-day streak' },
-            ];
+            ].filter((b) => actionOn(b.id));
             grid.innerHTML = badges.map((b) => {
                 const progress = m.badgeProgress(b.id, st);
                 const on = progress.unlocked;
@@ -1599,6 +1905,8 @@ export function paintAccountPoints(state) {
                 if (!btn) return;
                 openBadgeHowSheet(btn.getAttribute('data-badge-id'), st, m);
             };
+            const badgeCard = grid.closest('div.rounded-\\[12px\\]');
+            if (badgeCard) badgeCard.classList.toggle('hidden', !badges.length);
         }
     }).catch(() => {});
 }
@@ -1639,6 +1947,10 @@ export function bindAccountUi() {
         const guest = document.getElementById('account-guest');
         const screen = guest?.getAttribute('data-account-screen') || 'create';
         const guestOpen = guest && !guest.classList.contains('hidden');
+        if (guestOpen && accountAuthFromHub) {
+            showAccountHub();
+            return;
+        }
         if (guestOpen && screen !== 'create') {
             showAccountGuestScreen('create');
             return;
@@ -1721,7 +2033,7 @@ export function bindAccountUi() {
             const code = e?.code || '';
             if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(code)) {
                 showAccountGuestScreen('invalid');
-                showErr('Those details did not match. Try again, or create an account.');
+                showErr('Those details did not match. Try again, or create an account. If you forgot your password, please tap Forgot password.');
             } else {
                 showErr(friendlyAuthError(e));
             }
@@ -1799,8 +2111,8 @@ export function bindAccountUi() {
             showErr('Enter email and password.');
             return;
         }
-        if (password.length < 6) {
-            showErr('Password must be at least 6 characters.');
+        if (!passwordMeetsNewAccountRule(password)) {
+            showErr('Use at least 8 characters, with a letter and a number.');
             return;
         }
         setBusy(true);
@@ -1834,8 +2146,9 @@ export function bindAccountUi() {
         try {
             const next = await updateAccountDisplayName(input?.value || '');
             if (input) input.value = next;
-            const { setShowPhotoInAlerts } = await import('./rider-marks.js');
+            const { publishPublicProfile, setShowPhotoInAlerts } = await import('./rider-marks.js');
             await setShowPhotoInAlerts(!!photo?.checked);
+            await publishPublicProfile({ displayName: next });
             await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
@@ -1949,11 +2262,32 @@ export function bindAccountUi() {
     document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
     document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
+        if ($account.get()?.status !== 'signed-in') {
+            accountAuthFromHub = true;
+            showAccountGuestScreen('signin');
+            return;
+        }
         setAccountPane('profile');
     });
     document.getElementById('account-open-notifications')?.addEventListener('click', () => {
         setAccountPane('notifications');
     });
+    document.getElementById('account-open-data')?.addEventListener('click', () => {
+        setAccountPane('data');
+    });
+    document.getElementById('account-data-pictures-auto')?.addEventListener('click', () => {
+        writeDataSaver({ pictures: 'auto' });
+    });
+    document.getElementById('account-data-pictures-tap')?.addEventListener('click', () => {
+        writeDataSaver({ pictures: 'tap' });
+    });
+    document.getElementById('account-data-link-cards')?.addEventListener('change', (event) => {
+        writeDataSaver({ linkCards: !!event.target.checked });
+    });
+    document.getElementById('account-data-profile-photos')?.addEventListener('change', (event) => {
+        writeDataSaver({ profilePhotos: !!event.target.checked });
+    });
+    paintDataSaverUi();
     document.getElementById('account-open-appearance')?.addEventListener('click', () => {
         setAccountPane('appearance');
     });
@@ -2018,10 +2352,13 @@ function friendlyAuthError(e) {
     const code = e?.code || '';
     if (code === 'auth/invalid-email') return 'Invalid email address.';
     if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        return 'Wrong email or password.';
+        return 'Wrong email or password. If you forgot your password, please tap Forgot password.';
     }
-    if (code === 'auth/email-already-in-use') return 'Email already registered - try Sign in.';
+    if (code === 'auth/email-already-in-use') return 'Email already registered. Try Sign in. If you forgot your password, please tap Forgot password.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
+    if (code === 'auth/too-many-requests' || /too many/i.test(String(e?.message || ''))) {
+        return AUTH_WAIT_MESSAGE;
+    }
     if (code === 'auth/network-request-failed') return 'Network error - try again.';
     if (code === 'auth/unauthorized-domain') return 'This site cannot sign in. Open nexttrain.co.za.';
     if (code === 'auth/popup-blocked') return 'Popup blocked. Allow popups and try again.';

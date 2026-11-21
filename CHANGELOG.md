@@ -1,5 +1,129 @@
 # Changelog
 
+## V10_11.21.1 — no release notes
+
+- Alerts Pin and Delete sit above the cards. The header is a higher stacking context than the feed.
+
+## V10_11.20.3 — Monthly fares and Irene stops (20 Nov 2026)
+
+- Monthly Mon-Sat passes are Z1 R215, Z2 R266, Z3 R291, and Z4 R322 from 1 December 2026. Singles, returns, and weeklies stay on the August 2025 table. Zone kilometre bands stay 1-15, 16-40, 41-135, and over 135.
+- Guide, Ticket Prices, route fare tables, and Co-Pilot note that a further increase covering all ticket types is expected no earlier than 1 April 2027.
+- Irene timetables drop station rows that have no time on an Irene train before a Kempton column is copied on. KEMP still marks a train that continues past Irene or starts at Kempton Park.
+- Scheduled alert rules allow the community worker service account to claim and publish. The hourly GitHub poke fails when the worker reports failed jobs. Deploy the database rules.
+
+## V10_11.12.15 — no release notes
+
+## V10_11.12.14 — no release notes
+
+## V10_11.12.13 — no release notes
+
+## V10_11.12.12 — no release notes
+
+## V10_11.12.11 — no release notes
+
+## V10_11.12.10 — no release notes
+
+## V10_11.12.9 — no release notes
+
+## V10_11.12.8 — no release notes
+
+## V10_11.12.7 — no release notes
+
+## V10_11.12.6 — no release notes
+
+## V10_11.12.5 — no release notes
+
+## V10_11.12.4 — no release notes
+
+## V10_11.12.3 — no release notes
+
+## V10_11.12.2 — no release notes
+
+## V10_11.12.1 — no release notes
+
+## V10_11.11.14 — no release notes
+
+## V10_11.11.13 — no release notes
+
+## V10_11.11.12 — no release notes
+
+## V10_11.11.11 — no release notes
+
+## V10_11.11.10 — no release notes
+
+## V10_11.11.9 — no release notes
+
+## V10_11.11.8 — no release notes
+
+## V10_11.11.7 — no release notes
+
+## V10_11.11.6 — no release notes
+
+## V10_11.11.5 — no release notes
+
+## V10_11.11.4 — no release notes
+
+## V10_11.11.3 — no release notes
+
+## V10_11.11.2 — no release notes
+
+## V10_11.11.1 — no release notes
+
+## V10_11.10.15 — no release notes
+
+## V10_11.10.14 — no release notes
+
+## V10_11.10.13
+
+- The map region choice uses the same look as the welcome screen.
+
+## V10_11.10.12
+
+- The network map asks which region to open when this phone has not chosen one yet. Back from that choice opens Next Train.
+
+## V10_11.10.11 — no release notes
+
+## V10_11.10.10 — no release notes
+
+## V10_11.10.9 — no release notes
+
+## V10_11.10.8 — no release notes
+
+- Community placeholders use a letter in that person's colour. A renamed account shows the new name on older messages.
+
+## V10_11.10.7
+
+- Pull down further to refresh. A circle fills in as you pull, and it completes when the refresh is ready.
+- If a password does not match, the message tells you to tap Forgot password.
+
+## V10_11.10.6
+
+- A picture that is waiting to download shows a blurred preview and the file size.
+- Tap that picture when you want the full photo.
+- Alert posters include the printed timetable sheets, listed by route. Retired fare, mass meeting, ballast, and health posters are removed.
+
+## V10_11.10.5 — no release notes
+
+- Community unread badges stay for a session that has not opened that route. A signed-in account shares its seen cursor. A signed-out phone keeps its own.
+
+## V10_11.10.4 — no release notes
+
+- Data saving calls the web-address card Link Previews.
+- Community Monitor fills the chat, keeps one route title, and puts message actions in Options.
+- Admin tab rows can be swiped. Linked device ids sit in a collapsed row.
+- An accepted community message writes one public points total.
+
+## V10_11.10.3 — no release notes
+
+- Dev Hub badges wait for the in-flight schedule stamp check and download, then read community activity four routes at a time.
+- Community Monitor lists routes from the shallow activity index and the newest 20 rows per route.
+
+## V10_11.10.2
+
+- Data saving starts off. Pictures load on their own until you change that.
+- You can make a picture wait until you tap it. A picture already saved on this phone still shows.
+- Link previews can stay off. The timetable still loads.
+
 ## V10_11.01.4 — no release notes
 
 - Guide, map loading pin, welcome pulse, tomorrow shared trains, passenger fare refresh, Co-Pilot header scroll.

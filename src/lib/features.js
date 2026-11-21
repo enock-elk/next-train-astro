@@ -7,20 +7,23 @@
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"], regionIds: ["KZN"] },
- *   communityTab:      { enabled: true, routeIds: ["pta-kempton"], regionIds: [] },
+ *   communityTab:      { killed: true } hides the tab everywhere.
+ *                      blockedRegionIds / blockedRouteIds hide one region or route.
+ *                      The old enabled flag and routeIds list do not hide it.
  *   accounts:          { enabled: true, routeIds: ["pta-kempton"], regionIds: [] }
  * }
  *
  * A region, route, or device grant stays on until an admin turns that
  * switch off. Empty routeIds with a region still enables the feature.
- * Community rooms are stricter: a listed route is the only room, and a
- * region checkbox does not open the other communities in that region.
- * Empty routeIds with a region still opens every community there.
- * Accounts use that same route rule. The switch starts off.
+ * Accounts use the route rule: a listed route is the only account sheet, and a
+ * region checkbox does not open the other routes in that region.
+ * Empty routeIds with a region still opens every account sheet there.
+ * The accounts switch starts off. Community ignores route lists and the old
+ * enabled:false. It stays on until killed, or until that region or route is blocked.
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
- * Map and Community tabs stay off until config/features lists pinned routes.
+ * Map stays off until config/features lists pinned routes. Community stays on.
  * The green live-share chip uses `isRideCheckInPinned` (RTDB pins only, no
  * lab `*` default). Production: missing config → other flags off. Planner
  * trip fare is always on and is not a config/features flag.
@@ -43,7 +46,6 @@ export { PILOT_ROUTE_IDS };
 
 export const GRANTABLE_FEATURES = [
     { key: FEATURE_KEYS.MAP_TAB, label: 'Map' },
-    { key: FEATURE_KEYS.COMMUNITY_TAB, label: 'Community' },
     { key: FEATURE_KEYS.RIDE_CHECKIN, label: "I'm on it / live share" },
     { key: FEATURE_KEYS.DELAY_REPORTS_UI, label: 'Delay reports' },
     { key: FEATURE_KEYS.COMMUNITY_REALTIME, label: 'Community realtime' },
@@ -316,13 +318,56 @@ export function isListedAccountsRoute(routeId) {
     return communityRouteOnEntry(entry, routeId);
 }
 
-/** Community room from the loaded config. A device grant opens every room. */
+function communityIdList(raw) {
+    return Array.isArray(raw) ? raw.map((id) => String(id || '').trim()).filter(Boolean) : [];
+}
+
+/**
+ * Community blocks from System Controls.
+ * `killed` hides the tab everywhere. `blockedRegionIds` and `blockedRouteIds`
+ * hide one region or one route. The old enabled flag and routeIds allow-list
+ * are ignored, so a pilot-off config does not hide the tab.
+ * @param {{ killed?: boolean, blockedRegionIds?: string[], blockedRouteIds?: string[] } | null | undefined} entry
+ * @param {{ id?: string, region?: string } | null | undefined} route
+ */
+export function routeBlockedByCommunity(entry, route) {
+    if (!entry) return false;
+    if (entry.killed === true) return true;
+    const id = String(route?.id || '').trim();
+    if (id && communityIdList(entry.blockedRouteIds).includes(id)) return true;
+    const region = String(route?.region || regionForRouteId(id) || '').toUpperCase();
+    const blockedRegions = communityIdList(entry.blockedRegionIds).map((code) => code.toUpperCase());
+    return !!(region && blockedRegions.includes(region));
+}
+
+/**
+ * Community is on for every commuter until System Controls sets killed.
+ * A blocked region or route is handled by routeBlockedByCommunity.
+ */
+export function isCommunityTabKilled() {
+    const entry = cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB];
+    return !!(entry && entry.killed === true);
+}
+
+/** True when this region still has a community room a commuter can open. */
+export function isCommunityOpenInRegion(region) {
+    if (isCommunityTabKilled()) return false;
+    const code = String(region || '').toUpperCase();
+    const entry = cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB];
+    if (code && communityIdList(entry?.blockedRegionIds).map((id) => id.toUpperCase()).includes(code)) return false;
+    const routes = Object.values(ROUTES || {}).filter((r) => (
+        r && r.isActive && r.id !== 'special_event' && String(r.region || '').toUpperCase() === code
+    ));
+    if (!routes.length) return true;
+    return routes.some((route) => !routeBlockedByCommunity(entry, route));
+}
+
+/** Any active room that System Controls has not blocked. */
 export function isListedCommunityRoute(routeId) {
-    if (isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
-    const bag = cachedFeatures || defaultsForEnv();
-    const entry = normalizeEntry(FEATURE_KEYS.COMMUNITY_TAB, bag?.[FEATURE_KEYS.COMMUNITY_TAB]);
-    if (entry.signedInOnly && !viewerMayUseSignedInFeature()) return false;
-    return communityRouteOnEntry(entry, routeId);
+    const id = String(routeId || '').trim();
+    const route = id && ROUTES?.[id];
+    if (!(route && route.isActive && route.id !== 'special_event')) return false;
+    return !routeBlockedByCommunity(cachedFeatures?.[FEATURE_KEYS.COMMUNITY_TAB], route);
 }
 
 /**
@@ -356,6 +401,9 @@ if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
     window.isListedCommunityRoute = isListedCommunityRoute;
+    window.isCommunityTabKilled = isCommunityTabKilled;
+    window.isCommunityOpenInRegion = isCommunityOpenInRegion;
+    window.routeBlockedByCommunity = routeBlockedByCommunity;
     window.isListedAccountsRoute = isListedAccountsRoute;
     window.isFeatureGranted = isFeatureGranted;
     window.getGrantedFeatures = getGrantedFeatures;

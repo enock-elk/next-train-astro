@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.11 - Latest-available charts)
+ * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.12 - Exact regional split)
  * --------------------------------------------------------------------------
  * Path B: Secure Telemetry Bridge
  *
@@ -10,10 +10,74 @@
  * V1.11: INTRADAY plots through the latest GA4 bucket (no 3h hide). ALL-time
  *        fills months from Jan 2026. Regional payload includes sessions + note
  *        that unique users by region are not a partition of TODAY.
+ * V1.12: Regional cards come from D1. One reporting device, one selected region
+ *        per Johannesburg day. GA stays the site-wide people total. Sentry
+ *        status is separate from Firebase app diagnostics.
+ * V1.13: The last-5-minutes tile uses a realtime minute range. One rejected
+ *        GA4 query no longer blanks the other tiles.
+ * V1.14: Each Google and Sentry call gives up after a few seconds, so one
+ *        slow report cannot hold the whole Live Telemetry response.
+ * V1.17: Each slow card and each graph is stored on its own. A later refresh
+ *        uses that stored number instead of painting ERR, and a slow report
+ *        is asked once.
+ * V1.18: GA4 is one batch again. The finished JSON is cached for 30 seconds
+ *        and the next open returns that body. A report is allowed to finish.
+ *        One rejected report leaves the others in place. The 5-minute card
+ *        keeps its minute range.
  */
 
-import { classifyCrmRegion, clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
+import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
+import { isoTodayUtc, loadCleverRange } from './clever-ads.js';
 import { dispatchProductionDeploy, getDeployStatus } from './deploy-github.js';
+import { sentryStatusFromResult, safeSentryDetail } from './region-presence.js';
+import { handleRegionPresence, readRegionalSplit } from './region-store.js';
+
+function gaGaveUp(err) {
+    return /timeout|aborted|deadline/i.test(String(err?.message || err || ''));
+}
+
+function tileIsGood(value) {
+    const text = String(value ?? '');
+    return text !== '' && text !== '--' && text !== 'ERR' && text !== 'null' && text !== 'undefined';
+}
+
+function keepStoredTile(current, next) {
+    if (tileIsGood(next)) return String(next);
+    if (tileIsGood(current)) return String(current);
+    return '--';
+}
+
+function gaPayloadUseful(data) {
+    if (!data || typeof data !== 'object') return false;
+    const keys = ['active5m', 'active30m', 'todayUsers', 'wauUsers', 'mauUsers', 'allTimeUsers'];
+    if (keys.some((key) => tileIsGood(data[key]))) return true;
+    return Array.isArray(data.chartData) && data.chartData.length > 0;
+}
+
+// A hung socket must still release the batch. This is not the old 6 second cutoff.
+const GA_REPORT_HANG_MS = 25000;
+
+/** One Google report. No second try: a repeat is what exhausts the Analytics quota. */
+async function gaReport(call, headers) {
+    try {
+        const res = await fetch(call.url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(call.body),
+            signal: AbortSignal.timeout(GA_REPORT_HANG_MS),
+        });
+        const text = await res.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+        if (!res.ok) {
+            const msg = json?.error?.message || text.replace(/\s+/g, ' ').slice(0, 180);
+            return { name: call.name, ok: false, error: msg, json: null };
+        }
+        return { name: call.name, ok: true, error: '', json };
+    } catch (err) {
+        return { name: call.name, ok: false, error: String(err?.message || err).slice(0, 180), json: null };
+    }
+}
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
     const header = { alg: 'RS256', typ: 'JWT' };
@@ -63,6 +127,7 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
     const jwt = `${dataToSign}.${encodedSignature}`;
 
     const response = await fetch('https://oauth2.googleapis.com/token', {
+        signal: AbortSignal.timeout(GA_REPORT_HANG_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
@@ -100,6 +165,7 @@ async function requireAdmin(request, env, { requireConfiguredKey = false } = {})
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ idToken }),
+            signal: AbortSignal.timeout(3000),
         });
         const verifyData = await verifyRes.json();
         if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
@@ -200,6 +266,40 @@ export default {
             });
         }
 
+        // Public selected-region beacon. CORS is limited to Next Train origins.
+        // The response never echoes the device id. The stored key is a hash.
+        if (url.pathname === '/region-presence' && (request.method === 'POST' || request.method === 'OPTIONS')) {
+            return handleRegionPresence(request, env);
+        }
+
+        // One Johannesburg day of the exact device split. Admin day paging uses this
+        // so a previous day does not refetch the whole analytics payload.
+        if (request.method === 'GET' && url.pathname === '/admin/region-split') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: false });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            try {
+                const split = await readRegionalSplit(env.REGION_PRESENCE_DB, Date.now(), url.searchParams.get('day') || '');
+                return json(200, {
+                    ...split,
+                    metric: 'reportingDevices',
+                    source: 'selected-region',
+                });
+            } catch (e) {
+                return json(200, {
+                    GP: 0, WC: 0, KZN: 0, EC: 0,
+                    reportingDevices: 0,
+                    metric: 'reportingDevices',
+                    source: 'selected-region',
+                    exact: false,
+                    status: 'error',
+                    day: url.searchParams.get('day') || null,
+                    detail: String(e?.message || e).slice(0, 180),
+                });
+            }
+        }
+
         // Admin: start production publish (GitHub workflow_dispatch). Token never
         // leaves this Worker. Live host push still uses repo secret METRORAIL_APP_DEPLOY_TOKEN.
         if (request.method === 'POST' && url.pathname === '/admin/deploy-production') {
@@ -258,6 +358,27 @@ export default {
             });
         }
 
+        // Ad revenue. The Clever script id is CLEVER_SCRIPT_ID on this Worker.
+        // A search longer than 3 months is stitched here. The phone never sees the token.
+        if (request.method === 'GET' && url.pathname === '/admin/ads') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: true });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            const scriptId = String(env.CLEVER_SCRIPT_ID || '').trim();
+            if (!scriptId) {
+                return json(503, { error: 'Ad stats are not configured' });
+            }
+            const end = url.searchParams.get('end') || isoTodayUtc();
+            const start = url.searchParams.get('start') || `${end.slice(0, 8)}01`;
+            try {
+                const stats = await loadCleverRange(scriptId, start, end);
+                return json(200, stats);
+            } catch (e) {
+                return json(e.status || 502, { error: String(e.message || 'Could not load ad stats').slice(0, 180) });
+            }
+        }
+
         // Legacy admin clients POST here after notice/alert edits. Clear this
         // Worker's short-lived telemetry Cache API entry only (no zone purge).
         if (request.method === 'POST' && url.pathname === '/admin/purge') {
@@ -267,7 +388,13 @@ export default {
             }
             try {
                 const cache = caches.default;
-                await cache.delete(new Request('https://nexttrain-internal-cache.local/telemetry'));
+                const keys = ['https://nexttrain-internal-cache.local/telemetry'];
+                for (const range of ['INTRADAY', 'DAU', 'WAU', 'MAU', 'ALL']) {
+                    for (let weeksAgo = 0; weeksAgo <= 2; weeksAgo += 1) {
+                        keys.push(`https://nexttrain-internal-cache.local/telemetry?weeksAgo=${weeksAgo}&range=${range}`);
+                    }
+                }
+                await Promise.all(keys.map((key) => cache.delete(new Request(key))));
             } catch { /* ignore */ }
             return json(200, {
                 success: true,
@@ -298,6 +425,17 @@ export default {
             return json(auth.status, { error: auth.error, details: auth.details || null });
         }
 
+        const cache = caches.default;
+        const cacheKey = new Request(`https://nexttrain-internal-cache.local/telemetry${url.search}`);
+        const cachedResponse = await cache.match(cacheKey);
+        if (cachedResponse) {
+            return new Response(cachedResponse.body, {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' },
+            });
+        }
+
+        async function assembleTelemetry() {
         let telemetryData = {
             active5m: '--',
             active30m: '--',
@@ -307,45 +445,58 @@ export default {
             mauUsers: '--',
             allTimeUsers: '--',
             todayErrors: '--',
+            sentryStatus: 'unconfigured',
+            sentryErrorDetail: null,
             cleverRevenue: '--',
             cleverHits: '--',
             sevenDayTrend: [0, 0, 0, 0, 0, 0, 0],
             chartData: [],
             chartLabels: [],
             regionalBreakdown: {
-                GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0,
-                unsetUsers: 0,
-                otherUsers: 0,
-                sessions: { GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0 },
-                metric: 'users',
+                GP: 0, WC: 0, KZN: 0, EC: 0,
+                reportingDevices: 0,
+                gaPeopleToday: null,
+                metric: 'reportingDevices',
+                source: 'selected-region',
+                exact: false,
+                status: 'error',
+                day: null,
+                detail: 'Regional split did not finish',
             },
             intradayMode: null,
             intradayAsOf: null,
         };
 
-        const cache = caches.default;
-        const cacheKey = new Request(`https://nexttrain-internal-cache.local/telemetry${url.search}`);
-        let cachedResponse = await cache.match(cacheKey);
-
-        if (cachedResponse) {
-            return new Response(cachedResponse.body, {
-                status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' }
-            });
-        }
-
         const telemetryTasks = [];
+
+        telemetryTasks.push((async () => {
+            try {
+                const split = await Promise.race([
+                    readRegionalSplit(env.REGION_PRESENCE_DB),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Regional split timed out')), 4000)),
+                ]);
+                telemetryData.regionalBreakdown = {
+                    ...telemetryData.regionalBreakdown,
+                    ...split,
+                    metric: 'reportingDevices',
+                    source: 'selected-region',
+                };
+            } catch (e) {
+                telemetryData.regionalBreakdown.status = 'error';
+                telemetryData.regionalBreakdown.exact = false;
+                telemetryData.regionalBreakdown.detail = String(e?.message || e).slice(0, 180);
+            }
+        })());
 
         if (env.GA_PROPERTY_ID && env.GA_CLIENT_EMAIL && env.GA_PRIVATE_KEY) {
             telemetryTasks.push((async () => {
                 try {
-                    const token = await getGoogleAccessToken(env.GA_CLIENT_EMAIL, env.GA_PRIVATE_KEY);
-                    const gaHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
                     const range = url.searchParams.get('range') || 'DAU';
                     let trendDimensions = [{ name: "date" }];
                     let trendOrderBys = [{ dimension: { dimensionName: "date" } }];
-                    let trendStartDate = "13daysAgo";
+                    // 14daysAgo through today is 15 points: 14 finished days plus today.
+                    // Stats compare the last 7 finished days with the 7 before them.
+                    let trendStartDate = "14daysAgo";
                     let trendEndDate = "today";
 
                     if (range === 'INTRADAY') {
@@ -371,92 +522,80 @@ export default {
                         trendStartDate = "2026-01-01";
                     }
 
-                    const responses = await Promise.all([
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runRealtimeReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({ metrics: [{ name: "activeUsers" }] })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runRealtimeReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dimensionFilter: {
-                                    filter: {
-                                        fieldName: "minutesAgo",
-                                        numericFilter: { operation: "LESS_THAN", value: { int64Value: "5" } }
-                                    }
-                                },
-                                metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
+                    const gaProperty = `https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}`;
+                    const runReport = `${gaProperty}:runReport`;
+                    const gaCalls = [
+                        { name: '30m', url: `${gaProperty}:runRealtimeReport`, body: { metrics: [{ name: "activeUsers" }] } },
+                        {
+                            name: '5m',
+                            url: `${gaProperty}:runRealtimeReport`,
+                            body: {
+                                metrics: [{ name: "activeUsers" }],
+                                minuteRanges: [{ startMinutesAgo: 4, endMinutesAgo: 0 }],
+                            },
+                        },
+                        {
+                            name: 'today',
+                            url: runReport,
+                            body: {
                                 dateRanges: [{ startDate: "today", endDate: "today" }],
-                                metrics: [{ name: "activeUsers" }, { name: "sessions" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }]
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
+                                metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+                            },
+                        },
+                        { name: 'wau', url: runReport, body: { dateRanges: [{ startDate: "7daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'mau', url: runReport, body: { dateRanges: [{ startDate: "28daysAgo", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        { name: 'all', url: runReport, body: { dateRanges: [{ startDate: "2026-01-01", endDate: "today" }], metrics: [{ name: "activeUsers" }] } },
+                        {
+                            name: 'trend',
+                            url: runReport,
+                            body: {
                                 dateRanges: [{ startDate: trendStartDate, endDate: trendEndDate }],
                                 dimensions: trendDimensions,
                                 metrics: [{ name: "activeUsers" }],
-                                orderBys: trendOrderBys
-                            })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "today", endDate: "today" }],
-                                dimensions: [{ name: "customUser:crm_region" }],
-                                metrics: [{ name: "activeUsers" }, { name: "sessions" }]
-                            })
-                        })
-                    ]);
+                                orderBys: trendOrderBys,
+                            },
+                        },
+                    ];
 
-                    for (let i = 0; i < responses.length; i++) {
-                        if (!responses[i].ok) throw new Error(`GA4 API Request [${i}] Failed: ${await responses[i].text()}`);
-                    }
+                    const token = await getGoogleAccessToken(env.GA_CLIENT_EMAIL, env.GA_PRIVATE_KEY);
+                    const gaHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+                    const gaParts = await Promise.all(gaCalls.map((call) => gaReport(call, gaHeaders)));
 
-                    const [
-                        realtime30Data, realtime5Data,
-                        dailyData, wauData, mauData, allTimeData,
-                        trendData, regionalData
-                    ] = await Promise.all(responses.map(r => r.json()));
+                    const gaByName = Object.fromEntries(gaParts.map((part) => [part.name, part]));
+                    const metricAt = (part, index = 0) => {
+                        if (!part?.ok) return null;
+                        const total = part.json?.totals?.[0]?.metricValues?.[index]?.value;
+                        const raw = total != null ? total : part.json?.rows?.[0]?.metricValues?.[index]?.value;
+                        const n = parseInt(raw, 10);
+                        return String(Number.isFinite(n) ? n : 0);
+                    };
+                    const tileStillEmpty = (name) => {
+                        if (name === '5m') return telemetryData.active5m === '--';
+                        if (name === '30m') return telemetryData.active30m === '--';
+                        if (name === 'today') return telemetryData.todayUsers === '--';
+                        if (name === 'wau') return telemetryData.wauUsers === '--';
+                        if (name === 'mau') return telemetryData.mauUsers === '--';
+                        if (name === 'all') return telemetryData.allTimeUsers === '--';
+                        if (name === 'trend') return !telemetryData.chartData?.length;
+                        return false;
+                    };
 
-                    telemetryData.active30m = String(parseInt(realtime30Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.active5m = String(parseInt(realtime5Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.todayUsers = String(parseInt(dailyData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.todaySessions = String(parseInt(dailyData?.rows?.[0]?.metricValues?.[1]?.value) || 0);
-                    telemetryData.wauUsers = String(parseInt(wauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.mauUsers = String(parseInt(mauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-                    telemetryData.allTimeUsers = String(parseInt(allTimeData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
+                    telemetryData.active5m = keepStoredTile(telemetryData.active5m, metricAt(gaByName['5m']));
+                    telemetryData.active30m = keepStoredTile(telemetryData.active30m, metricAt(gaByName['30m']));
+                    telemetryData.todayUsers = keepStoredTile(telemetryData.todayUsers, metricAt(gaByName.today));
+                    telemetryData.todaySessions = keepStoredTile(telemetryData.todaySessions, metricAt(gaByName.today, 1));
+                    telemetryData.wauUsers = keepStoredTile(telemetryData.wauUsers, metricAt(gaByName.wau));
+                    telemetryData.mauUsers = keepStoredTile(telemetryData.mauUsers, metricAt(gaByName.mau));
+                    telemetryData.allTimeUsers = keepStoredTile(telemetryData.allTimeUsers, metricAt(gaByName.all));
 
-                    if (regionalData?.rows) {
-                        regionalData.rows.forEach(row => {
-                            const bucket = classifyCrmRegion(row.dimensionValues?.[0]?.value);
-                            const users = parseInt(row.metricValues?.[0]?.value) || 0;
-                            const sessions = parseInt(row.metricValues?.[1]?.value) || 0;
-                            if (bucket === 'UNSET') telemetryData.regionalBreakdown.unsetUsers += users;
-                            else if (bucket === 'OTHER') telemetryData.regionalBreakdown.otherUsers += users;
-                            const key = (bucket === 'UNSET' || bucket === 'OTHER') ? 'OTHER' : bucket;
-                            telemetryData.regionalBreakdown[key] += users;
-                            telemetryData.regionalBreakdown.sessions[key] += sessions;
-                        });
-                    }
-                    telemetryData.regionalBreakdown.todayUsers = parseInt(telemetryData.todayUsers, 10) || 0;
-                    telemetryData.regionalBreakdown.todaySessions = parseInt(telemetryData.todaySessions, 10) || 0;
+                    const failures = gaParts
+                        .filter((part) => !part.ok && !gaGaveUp(part.error) && tileStillEmpty(part.name))
+                        .map((part) => `${part.name}: ${part.error}`);
+                    if (failures.length) telemetryData.gaErrorDetail = failures.join(' | ');
 
+                    const trendData = gaByName.trend?.ok ? gaByName.trend.json : null;
+
+                    if (trendData) {
                     let activeCountsArray = [];
                     let labelsArray = [];
 
@@ -539,23 +678,25 @@ export default {
                         }
                     }
 
-                    if (range === 'DAU' || !url.searchParams.has('range')) {
+                    if ((range === 'DAU' || !url.searchParams.has('range')) && activeCountsArray.length) {
                         const recent7 = activeCountsArray.slice(-7);
                         telemetryData.sevenDayTrend = [...Array(7).fill(0), ...recent7].slice(-7);
                     }
 
-                    telemetryData.chartData = activeCountsArray;
-                    telemetryData.chartLabels = labelsArray;
+                    if (activeCountsArray.length) {
+                        telemetryData.chartData = activeCountsArray;
+                        telemetryData.chartLabels = labelsArray;
+                    }
+                    }
 
                 } catch (e) {
                     console.error("GA4 Fetch Error:", e.message);
-                    telemetryData.active5m = "ERR";
-                    telemetryData.active30m = "ERR";
-                    telemetryData.todayUsers = "ERR";
-                    telemetryData.wauUsers = "ERR";
-                    telemetryData.mauUsers = "ERR";
-                    telemetryData.allTimeUsers = "ERR";
-                    telemetryData.gaErrorDetail = e.message;
+                    const message = String(e?.message || e);
+                    if (!gaGaveUp(message)) {
+                        const headlines = [telemetryData.active5m, telemetryData.active30m, telemetryData.todayUsers, telemetryData.wauUsers, telemetryData.mauUsers, telemetryData.allTimeUsers];
+                        const anyNumber = headlines.some((value) => value !== '--' && value !== 'ERR');
+                        if (!anyNumber) telemetryData.gaErrorDetail = message.slice(0, 180);
+                    }
                 }
             })());
         }
@@ -564,65 +705,64 @@ export default {
             telemetryTasks.push((async () => {
                 try {
                     const sentryRes = await fetch(`https://sentry.io/api/0/projects/${env.SENTRY_ORG}/${env.SENTRY_PROJECT}/stats/?stat=received&resolution=1d`, {
-                        headers: { 'Authorization': `Bearer ${env.SENTRY_AUTH_TOKEN}` }
+                        headers: { 'Authorization': `Bearer ${env.SENTRY_AUTH_TOKEN}` },
+                        signal: AbortSignal.timeout(4000),
                     });
 
                     if (!sentryRes.ok) {
                         const errText = await sentryRes.text();
-                        throw new Error(`Sentry API Rejected: ${errText}`);
+                        throw new Error(`Sentry API Rejected: ${safeSentryDetail(errText)}`);
                     }
 
                     const sentryData = await sentryRes.json();
-
-                    if (Array.isArray(sentryData) && sentryData.length > 0) {
-                        const lastDataPoint = sentryData[sentryData.length - 1];
-                        telemetryData.todayErrors = String(parseInt(lastDataPoint?.[1]) || 0);
-                    } else {
-                        telemetryData.todayErrors = "0";
-                    }
+                    const lastDataPoint = Array.isArray(sentryData) && sentryData.length > 0
+                        ? sentryData[sentryData.length - 1]
+                        : null;
+                    const count = parseInt(lastDataPoint?.[1], 10) || 0;
+                    const sentryNext = sentryStatusFromResult({ configured: true, ok: true, count });
+                    sentryNext.todayErrors = keepStoredTile(telemetryData.todayErrors, sentryNext.todayErrors);
+                    Object.assign(telemetryData, sentryNext);
                 } catch (e) {
                     console.error("Sentry Fetch Error:", e.message);
-                    telemetryData.todayErrors = "ERR";
-                    telemetryData.sentryErrorDetail = e.message;
+                    const sentryNext = sentryStatusFromResult({
+                        configured: true,
+                        ok: false,
+                        detail: e.message,
+                    });
+                    sentryNext.todayErrors = keepStoredTile(telemetryData.todayErrors, null);
+                    Object.assign(telemetryData, sentryNext);
                 }
             })());
+        } else {
+            const sentryNext = sentryStatusFromResult({ configured: false });
+            sentryNext.todayErrors = keepStoredTile(telemetryData.todayErrors, null);
+            Object.assign(telemetryData, sentryNext);
         }
-
-        telemetryTasks.push((async () => {
-            try {
-                const cleverRes = await fetch("https://c2p.cleverwebserver.com/dashboard/ZmI0MWI3OTc5MjkzODk2MWVlZmE2NGZiY2I=", {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-                    }
-                });
-                if (cleverRes.ok) {
-                    const cleverHtml = await cleverRes.text();
-                    const revMatch = cleverHtml.match(/Estimated Reven(?:ue)?[\s\S]{0,200}?([\d.,]+\s*USD)/i);
-                    if (revMatch && revMatch[1]) {
-                        telemetryData.cleverRevenue = revMatch[1].trim();
-                    }
-                    const hitsMatch = cleverHtml.match(/Total Hits[\s\S]{0,200}?(\d+)/i);
-                    if (hitsMatch && hitsMatch[1]) {
-                        telemetryData.cleverHits = hitsMatch[1].trim();
-                    }
-                }
-            } catch (e) {
-                console.error("CleverAds Fetch Error:", e.message);
-            }
-        })());
 
         await Promise.allSettled(telemetryTasks);
 
-        const finalResponsePayload = JSON.stringify(telemetryData);
+        const gaPeople = parseInt(telemetryData.todayUsers, 10);
+        telemetryData.regionalBreakdown.gaPeopleToday = Number.isFinite(gaPeople) ? gaPeople : null;
 
-        const responseToCache = new Response(finalResponsePayload, {
-            headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=30' }
-        });
-        await cache.put(cacheKey, responseToCache.clone());
+        if (telemetryData.gaErrorDetail) {
+            telemetryData.gaErrorDetail = String(telemetryData.gaErrorDetail).replace(/\s+/g, ' ').slice(0, 500);
+        }
+        return telemetryData;
+        }
 
-        return new Response(finalResponsePayload, {
+        const telemetryData = await assembleTelemetry();
+        const payload = JSON.stringify(telemetryData);
+        if (gaPayloadUseful(telemetryData)) {
+            try {
+                const responseToCache = new Response(payload, {
+                    headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=30' },
+                });
+                await cache.put(cacheKey, responseToCache.clone());
+            } catch { /* the phone still receives this reply */ }
+        }
+        return new Response(payload, {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'MISS' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'MISS' },
         });
     }
 };

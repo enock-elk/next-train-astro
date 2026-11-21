@@ -234,6 +234,23 @@ if (ads.includes("setProperty('display', 'none'")) {
   }
 }
 
+{
+  // Vendor mutations arrive in bursts while a creative runs. Each of these
+  // stopped a whole-document scan or a forced reflow from repeating per burst.
+  if (!ads.includes('return overlayNodesMemo.slice()') || !ads.includes('queueMicrotask(clearOverlayNodesMemo)')) {
+    fail('overlay scan must run once per synchronous pass and hand out copies');
+  }
+  if (!/safeThisBatch === null\) safeThisBatch = isSafeZone\(\)/.test(ads) || !/filledThisBatch === null\) filledThisBatch = isAdFilled\(\)/.test(ads)) {
+    fail('ad observer must check safe zone / fill once per mutation batch');
+  }
+  if (!ads.includes("attributeFilter: ['class', 'style', 'src']")) {
+    fail('ad observer only needs class, style and src attribute records');
+  }
+  if (!/!animate && !adEntering && !shellMotionLock && shell\.style\.getPropertyValue\(name\) === next/.test(ads)) {
+    fail('setShellVar must not force a reflow when the shell var is unchanged');
+  }
+}
+
 if (failures.length) {
   console.error(`\n✗ clever-ads check failed (${failures.length}):`);
   for (const f of failures) console.error(`  - ${f}`);

@@ -1,7 +1,7 @@
 ---
 /**
  * Static full-day departure list for a station direction.
- * Mirrors the upcoming-trains modal: time, train id, To {terminus} / To {short} badge.
+ * Mirrors the upcoming-trains modal: time, train id, and the To / From pill.
  */
 interface Props {
   title: string;
@@ -33,6 +33,15 @@ const { title, trains, emptyLabel = 'No trains on this sheet.' } = Astro.props;
           </div>
           {t.badge === 'direct' ? (
             <span class="text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap text-right">
+              {t.badgeLabel}
+            </span>
+          ) : t.badge === 'from' ? (
+            <span class="text-[10px] font-bold text-purple-600 bg-purple-100 dark:text-purple-300 dark:bg-purple-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap text-right">
+              {t.badgeLabel}
+            </span>
+          ) : t.badge === 'divergent' ? (
+            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap text-right border border-red-200 dark:border-red-800">
+              <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.2 1.8 20.2h20.4L12 3.2zm0 5.2 1 6.2h-2L12 8.4zM12 17.2a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3z"/></svg>
               {t.badgeLabel}
             </span>
           ) : (

@@ -9,7 +9,7 @@
 import { safeStorage, escapeHTML } from './utils.js';
 import { isAdminAuthed, canAccessPilotSurface, canOpenTrackingMap } from './admin-chrome.js';
 import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
-import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
+import { DYNAMIC_BASE_URL, APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
 import { markPendingReload, isSettledForAutoNotices, whenSettledForAutoNotices } from './session-stability.js';
 import { clearLiveTrainFollow, isLiveTrainFollowActive } from './live-train-follow.js';
@@ -21,8 +21,11 @@ import {
     SUPPORT_EMAIL,
 } from './recovery.js';
 import { sanitizeAttachmentDisplayUrl } from './attachments.js';
+import { alertSharePath } from './share-links.js';
 import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
 import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
+import { downloadImageFile } from './save-image.js';
+import { holdLeaveForWelcome } from './deeplink.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -147,6 +150,8 @@ const MODAL_HASH = {
     'disruption-modal': '#disruption',
     'planner-train-sheet-modal': '#train-sheet',
     'planner-fare-breakdown-sheet': '#trip-fare',
+    'community-reactions-modal': '#community-reactions',
+    'inbox-reactions-modal': '#inbox-reactions',
     'cache-clear-modal': '#cacheclear',
     'phone-reset-modal': '#phone-reset',
     'phone-reset-network-modal': '#phone-reset-network',
@@ -174,7 +179,7 @@ function hashForModal(modalId) {
 }
 
 /** Account sheets and inner pages sit above #account. Keep in sync with account.js. */
-const ACCOUNT_SHEET_HASHES = new Set(['#account-points', '#account-name', '#account-badge', '#account-contrib', '#account-profile', '#account-notifications', '#account-appearance']);
+const ACCOUNT_SHEET_HASHES = new Set(['#account-points', '#account-name', '#account-badge', '#account-contrib', '#account-profile', '#account-notifications', '#account-data', '#account-appearance']);
 
 function isAccountSheetHash(hash) {
     return ACCOUNT_SHEET_HASHES.has(hash || '');
@@ -197,7 +202,15 @@ function anyFixedModalOpen() {
 }
 
 /** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
+function hideCommunityReactionTray() {
+    const tray = document.getElementById('community-reaction-sheet');
+    if (!tray) return;
+    tray.classList.add('hidden');
+    tray.style.zIndex = '';
+}
+
 function hideFixedModal(modalId) {
+    if (modalId === 'community-reactions-modal') hideCommunityReactionTray();
     const modal = document.getElementById(modalId);
     if (!modal) return;
     const inner = modal.firstElementChild;
@@ -271,8 +284,21 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 
-    // Failsafe telemetry wipe for admin panel
-    if (window.Admin && window.Admin.telemetryInterval) {
+    // Failsafe telemetry wipe for admin panel. The loading toast is until-dismiss,
+    // so closing Dev Mode has to take it down here. A fetch already in flight
+    // must not paint it again.
+    if (modalId === 'dev-modal' && window.Admin) {
+        if (window.Admin.telemetryInterval) {
+            clearInterval(window.Admin.telemetryInterval);
+            window.Admin.telemetryInterval = null;
+        }
+        window.Admin._telemetryGen = (window.Admin._telemetryGen || 0) + 1;
+        const telemetryToast = window.Admin._telemetryLoadToast || 'Loading telemetry…';
+        if (typeof hideToastIfMessage === 'function') {
+            hideToastIfMessage(telemetryToast);
+            setTimeout(() => hideToastIfMessage(telemetryToast), 400);
+        }
+    } else if (window.Admin && window.Admin.telemetryInterval) {
         clearInterval(window.Admin.telemetryInterval);
         window.Admin.telemetryInterval = null;
     }
@@ -280,6 +306,17 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     // Ensure cinematic scrim is released when ANY modal closes
     if (typeof toggleDropdownScrim === 'function') toggleDropdownScrim();
     
+    if (modalId === 'community-reactions-modal') hideCommunityReactionTray();
+    if (modalId === 'messages-thread-modal') {
+        const inboxSheet = document.getElementById('inbox-reactions-modal');
+        if (inboxSheet && !inboxSheet.classList.contains('hidden')) {
+            inboxSheet.classList.add('hidden');
+            if ((location.hash || '') === '#inbox-reactions') {
+                try { history.replaceState({ modal: 'messages-thread-modal' }, '', '#messages'); } catch { /* the thread close still pops */ }
+            }
+        }
+    }
+
     const modal = document.getElementById(modalId);
     if (modal) {
         const inner = modal.firstElementChild;
@@ -447,7 +484,7 @@ export function bindHistoryBackNavigation() {
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
             if (isStandalone) {
                 const activeTab = safeStorage.getItem('activeTab');
-                if (activeTab === 'trip-planner' || activeTab === 'community') {
+                if (activeTab === 'trip-planner' || activeTab === 'community' || activeTab === 'map') {
                     history.pushState({ view: 'home' }, '', '#home');
                     switchTab('next-train');
                     return;
@@ -504,6 +541,44 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        const openModalIds = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)')).map((modal) => modal.id);
+        const topModalId = (() => {
+            let highestZ = -1;
+            let topId = '';
+            document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)').forEach((modal) => {
+                let zIndex = 0;
+                const zMatch = modal.className.match(/z-\[?(\d+)\]?/);
+                if (zMatch?.[1]) zIndex = parseInt(zMatch[1], 10);
+                const inlineZ = parseInt(modal.style?.zIndex, 10);
+                if (Number.isFinite(inlineZ)) zIndex = Math.max(zIndex, inlineZ);
+                if (!zIndex) {
+                    const computedZ = window.getComputedStyle(modal).zIndex;
+                    if (computedZ !== 'auto') zIndex = parseInt(computedZ, 10) || 0;
+                }
+                if (zIndex >= highestZ) {
+                    highestZ = zIndex;
+                    topId = modal.id;
+                }
+            });
+            return topId;
+        })();
+        const restoreHash = (hash, state) => {
+            if ((location.hash || '') === hash) return;
+            try { history.pushState(state, '', hash); } catch { /* the highlight is already cleared */ }
+        };
+        if (typeof window.__ntInboxSelectionOpen === 'function' && window.__ntInboxSelectionOpen()
+            && (!topModalId || topModalId === 'messages-thread-modal')) {
+            window.__ntClearInboxSelection?.();
+            restoreHash('#messages', { modal: 'messages-thread-modal' });
+            return;
+        }
+        if (typeof window.__ntCommunitySelectionOpen === 'function' && window.__ntCommunitySelectionOpen()
+            && openModalIds.length === 0) {
+            window.__ntClearCommunitySelection?.();
+            restoreHash('#community', { tab: 'community' });
+            return;
+        }
+
         // Close the top overlay first (Account over Options, archived alert over Dev Mode).
         // Never close Dev Mode while a panel is drilled in — that was jumping users to home.
         // A pop that lands on this overlay's own hash must leave it up (profile over account).
@@ -539,6 +614,25 @@ export function bindHistoryBackNavigation() {
         if (document.body.classList.contains('sidenav-open')) {
             if (hashNow === '#sidenav') return;
             if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
+            return;
+        }
+
+        // A community monitor route sits on the panel. Back closes that route,
+        // not the whole Dev Mode grid.
+        if (document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) {
+            window.Admin?._mqCloseThread?.({ fromPop: true });
+            const stillPanel = window.Admin?.panelIdFromDevHash?.(hashNow) === 'moderation-queue-panel';
+            if (!stillPanel && window.Admin) {
+                window.Admin._drillStack = ['moderation-queue-panel'];
+                try {
+                    history.pushState(
+                        { adminPanel: 'moderation-queue-panel', drillStack: ['moderation-queue-panel'] },
+                        '',
+                        '#dev-moderation-queue-panel'
+                    );
+                } catch { /* the thread is already closed */ }
+                window.Admin.showDrilledPanel?.('moderation-queue-panel', { quiet: true });
+            }
             return;
         }
 
@@ -604,7 +698,7 @@ export function bindHistoryBackNavigation() {
         const hash = location.hash;
         if (!hash || hash === '#home') {
             const activeTab = safeStorage.getItem('activeTab');
-            if (activeTab === 'trip-planner' || activeTab === 'community') {
+            if (activeTab === 'trip-planner' || activeTab === 'community' || activeTab === 'map') {
                 switchTab('next-train');
             }
         } else if (hash === '#planner' || hash === '#planner-results') {
@@ -818,6 +912,7 @@ const TOAST_MATCH_MS = 2500;
 const TOAST_LONG_MS = 4000;
 
 function toastHoldMs(message, duration, options = {}) {
+    if (options.untilDismiss) return 0;
     if (options.persist) return TOAST_LONG_MS;
     const text = String(message || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
     const extra = Math.max(0, text.length - 64) * 18;
@@ -839,7 +934,7 @@ function toastAllowsShow(message, type, options = {}) {
         ? Number(options.cooldownMs)
         : (TOAST_COOLDOWN_MS[type] || TOAST_COOLDOWN_MS.info);
     const lastSame = toastLastByKey.get(key) || 0;
-    if (lastSame && now - lastSame < cooldown) return false;
+    if (!options.refresh && lastSame && now - lastSame < cooldown) return false;
     if (!options.force && lastToastAt && now - lastToastAt < TOAST_GLOBAL_GAP_MS) return false;
     while (toastShownAt.length && now - toastShownAt[0] > TOAST_WINDOW_MS) toastShownAt.shift();
     if (!options.force && toastShownAt.length >= TOAST_MAX_PER_WINDOW) return false;
@@ -862,11 +957,12 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     const center = options.center === true;
     const fitLine = options.fitLine === true;
     const persist = !!options.persist;
-    const dismissible = errorToast || !!options.dismissible;
-    const holdMs = toastHoldMs(message, duration, { persist });
+    const untilDismiss = !!options.untilDismiss;
+    const dismissible = errorToast || !!options.dismissible || untilDismiss;
+    const holdMs = toastHoldMs(message, duration, { persist, untilDismiss });
 
     // Debounce spamming. Ignore if the exact same message is already visible.
-    if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
+    if (!options.refresh && toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
         return;
     }
     if (!toastAllowsShow(message, type, options)) return;
@@ -1013,6 +1109,11 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (safeDuration > 0) {
         toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration);
     }
+}
+
+/** Short "Copied" confirmation. Shows again if the same line is already up. */
+export function showCopyToast() {
+    showToast('Copied', 'success', 2500, '', { force: true, refresh: true });
 }
 
 /** Hide the toast only when it is still showing this message, so a later toast stays. */
@@ -1337,15 +1438,22 @@ function lightboxGalleryBlocked() {
 }
 
 /**
- * Pictures already on the open Alerts channel, in the order they appear:
- * poster buttons, then each video's preview still. One step, no wrap.
+ * Pictures already on the open Alerts channel, or in the open community
+ * chat, in the order they appear. One step, no wrap.
  */
 function collectChannelSlides(host) {
-    const channel = document.getElementById('alerts-channel');
     const node = host?.nodeType === 1 ? host : null;
-    if (!channel || !node || !channel.contains(node) || lightboxGalleryBlocked()) return [];
+    if (!node || lightboxGalleryBlocked()) return [];
+    const channel = document.getElementById('alerts-channel');
+    const community = document.getElementById('community-feed-list');
+    const root = (channel && channel.contains(node))
+        ? channel
+        : (community && community.contains(node))
+            ? community
+            : null;
+    if (!root) return [];
     const slides = [];
-    channel.querySelectorAll('[data-alert-lightbox], [data-alert-video]').forEach((el) => {
+    root.querySelectorAll('[data-alert-lightbox], [data-alert-video]').forEach((el) => {
         if (el.matches('[data-alert-lightbox]')) {
             const src = el.getAttribute('data-alert-lightbox') || '';
             if (src) slides.push({ host: el, kind: 'image', src });
@@ -1374,6 +1482,56 @@ function rememberLightboxSlides(host) {
     lbDragX = 0;
 }
 
+function ensureLightboxStrip() {
+    const { stage, img } = lightboxEls();
+    if (!stage || !img) return null;
+    let strip = document.getElementById('alert-image-lightbox-strip');
+    if (strip) return strip;
+    strip = document.createElement('div');
+    strip.id = 'alert-image-lightbox-strip';
+    const makePeer = (id) => {
+        const el = document.createElement('img');
+        el.id = id;
+        el.alt = '';
+        el.draggable = false;
+        el.decoding = 'async';
+        el.className = 'max-w-full max-h-full object-contain select-none pointer-events-none';
+        return el;
+    };
+    stage.insertBefore(strip, img);
+    strip.append(makePeer('alert-image-lightbox-prev'), img, makePeer('alert-image-lightbox-next'));
+    return strip;
+}
+
+function placeLightboxStrip(dx, animate) {
+    const strip = ensureLightboxStrip();
+    if (!strip) return;
+    strip.style.transition = animate ? 'transform 180ms ease' : 'none';
+    strip.style.transform = `translateX(${dx}px)`;
+}
+
+function assignLightboxFrame(el, src) {
+    if (!el) return;
+    if (!src) {
+        if (el.getAttribute('src')) el.removeAttribute('src');
+        return;
+    }
+    if (el.getAttribute('src') !== src) el.src = src;
+}
+
+/** The picture on either side is already in the stage, so a sideways swipe reveals it. */
+function primeLightboxNeighbors() {
+    ensureLightboxStrip();
+    assignLightboxFrame(
+        document.getElementById('alert-image-lightbox-prev'),
+        slideDisplaySrc(lbSlides[lbSlide - 1]),
+    );
+    assignLightboxFrame(
+        document.getElementById('alert-image-lightbox-next'),
+        slideDisplaySrc(lbSlides[lbSlide + 1]),
+    );
+}
+
 function showLightboxSlide(index) {
     if (index < 0 || index >= lbSlides.length) return;
     const slide = lbSlides[index];
@@ -1382,21 +1540,70 @@ function showLightboxSlide(index) {
     lbDragX = 0;
     lbStepping = false;
     resetAlertLightboxTransform();
+    placeLightboxStrip(0, false);
     paintLightboxImage(slideDisplaySrc(slide));
+    primeLightboxNeighbors();
     announceLightboxNotice(slide.host);
+}
+
+/**
+ * The neighbour element already holds the next picture. Promote that element
+ * so the settle does not clear the stage and wait on a new download.
+ */
+function adoptLightboxNeighbor(index) {
+    const goingNext = index > lbSlide;
+    const prev = document.getElementById('alert-image-lightbox-prev');
+    const current = document.getElementById('alert-image-lightbox-img');
+    const next = document.getElementById('alert-image-lightbox-next');
+    const incoming = goingNext ? next : prev;
+    const recycle = goingNext ? prev : next;
+    const hasFrame = !!(incoming && incoming.getAttribute('src'));
+    if (hasFrame && current && recycle) {
+        incoming.id = 'alert-image-lightbox-img';
+        current.id = goingNext ? 'alert-image-lightbox-prev' : 'alert-image-lightbox-next';
+        recycle.id = goingNext ? 'alert-image-lightbox-next' : 'alert-image-lightbox-prev';
+        incoming.style.transform = '';
+        current.style.transform = '';
+        recycle.style.transform = '';
+    }
+    const slide = lbSlides[index];
+    lbSlide = index;
+    lbAxis = '';
+    lbDragX = 0;
+    resetAlertLightboxTransform();
+    placeLightboxStrip(0, false);
+    if (!hasFrame) paintLightboxImage(slideDisplaySrc(slide));
+    else hideLightboxStatus();
+    primeLightboxNeighbors();
+    announceLightboxNotice(slide.host);
+    lbStepping = false;
 }
 
 function finishLightboxStep(index, exitX) {
     if (lbStepping || index < 0 || index >= lbSlides.length) return;
     lbStepping = true;
-    const { img } = lightboxEls();
-    if (img) img.style.transition = 'transform 180ms ease';
+    primeLightboxNeighbors();
     lbScale = 1;
+    lbX = 0;
     lbY = 0;
     lbDismissY = 0;
-    lbX = exitX;
-    applyAlertLightboxTransform();
-    window.setTimeout(() => showLightboxSlide(index), 170);
+    const { img } = lightboxEls();
+    if (img) {
+        img.style.transition = 'none';
+        img.style.transform = 'translate(0px, 0px) scale(1)';
+    }
+    placeLightboxStrip(exitX, true);
+    const strip = document.getElementById('alert-image-lightbox-strip');
+    let settled = false;
+    const done = (event) => {
+        if (event && event.target !== strip) return;
+        if (settled) return;
+        settled = true;
+        strip?.removeEventListener('transitionend', done);
+        adoptLightboxNeighbor(index);
+    };
+    strip?.addEventListener('transitionend', done);
+    window.setTimeout(() => done(), 220);
 }
 
 function commitLightboxDrag() {
@@ -1413,7 +1620,12 @@ function commitLightboxDrag() {
         finishLightboxStep(lbSlide - 1, width);
         return true;
     }
-    applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+    lbX = 0;
+    lbY = 0;
+    lbDismissY = 0;
+    const { img } = lightboxEls();
+    if (img) img.style.transform = 'translate(0px, 0px) scale(1)';
+    placeLightboxStrip(0, true);
     return true;
 }
 
@@ -1430,13 +1642,60 @@ function followLightboxDrag(dx) {
     const atEnd = lbSlide >= lbSlides.length - 1 && drag < 0;
     if (lbSlides.length < 2 || atStart || atEnd) drag *= 0.28;
     lbDragX = drag;
-    lbX = drag;
+    lbX = 0;
     lbY = 0;
     lbDismissY = 0;
     const { img, overlay } = lightboxEls();
-    if (img) img.style.transition = 'none';
+    if (img) {
+        img.style.transition = 'none';
+        img.style.transform = 'translate(0px, 0px) scale(1)';
+    }
     if (overlay) overlay.style.transition = '';
-    applyAlertLightboxTransform();
+    placeLightboxStrip(drag, false);
+}
+
+function lightboxImageExt(type, src) {
+    const kind = String(type || '').toLowerCase();
+    if (kind.includes('gif') || /\.gif(\?|$)/i.test(src)) return 'gif';
+    if (kind.includes('png') || /\.png(\?|$)/i.test(src)) return 'png';
+    if (kind.includes('webp') || /\.webp(\?|$)/i.test(src)) return 'webp';
+    return 'jpg';
+}
+
+/** A cross-origin host (an image link on a community message) has no CORS, so the save goes through the community worker. */
+async function fetchLightboxBlob(src) {
+    try {
+        const res = await fetch(src, { credentials: 'omit' });
+        if (res.ok) {
+            const blob = await res.blob();
+            if (blob.size && (!blob.type || blob.type.startsWith('image/'))) return blob;
+        }
+    } catch { /* the image host did not allow the page to read the file */ }
+    if (!/^https:\/\//i.test(src)) return null;
+    const base = String(COMMUNITY_WORKER_URL || (typeof window !== 'undefined' && window.COMMUNITY_WORKER_URL) || COMMUNITY_WORKER_FALLBACK_URL).replace(/\/$/, '');
+    if (!base) return null;
+    const res = await fetch(`${base}/media/file?u=${encodeURIComponent(src)}`, { credentials: 'omit' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.size || (blob.type && !blob.type.startsWith('image/'))) return null;
+    return blob;
+}
+
+/** Save the picture already on screen. The tap is the only fetch. */
+async function downloadLightboxImage() {
+    const img = document.getElementById('alert-image-lightbox-img');
+    const src = img?.currentSrc || img?.src || '';
+    if (!src) return;
+    try {
+        const blob = await fetchLightboxBlob(src);
+        if (!blob) throw new Error('download');
+        const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+        const file = new File([blob], `next-train.${lightboxImageExt(type, src)}`, { type });
+        await downloadImageFile(file);
+        showToast('Download started', 'success');
+    } catch {
+        showToast('Could not download this picture', 'error');
+    }
 }
 
 function bindAlertImageLightbox() {
@@ -1446,6 +1705,16 @@ function bindAlertImageLightbox() {
     document.getElementById('alert-image-lightbox-close')?.addEventListener('click', (e) => {
         e.preventDefault();
         closeLightbox();
+    });
+    document.getElementById('alert-image-lightbox-download')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        downloadLightboxImage();
+    });
+    document.getElementById('alert-image-lightbox-share')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        shareLightboxPhoto();
     });
     const blockPageZoom = (e) => {
         if (e.touches && e.touches.length > 1) e.preventDefault();
@@ -1702,6 +1971,9 @@ function lightboxNoticeMeta(host) {
 function announceLightboxNotice(host) {
     const meta = lightboxNoticeMeta(host);
     const { overlay } = lightboxEls();
+    const node = host?.nodeType === 1 ? host : null;
+    const photo = node?.getAttribute?.('data-alert-photo') || '';
+    const share = document.getElementById('alert-image-lightbox-share');
     if (overlay) {
         if (meta) {
             overlay.dataset.ntNoticeId = meta.id;
@@ -1710,10 +1982,50 @@ function announceLightboxNotice(host) {
             delete overlay.dataset.ntNoticeId;
             delete overlay.dataset.ntNoticeSrc;
         }
+        const linked = !!(meta && photo && !overlay.dataset.ntFeedbackGallery);
+        if (linked) overlay.dataset.ntPhoto = photo;
+        else delete overlay.dataset.ntPhoto;
+        share?.classList.toggle('hidden', !linked);
     }
     try {
         window.dispatchEvent(new CustomEvent('nt-alert-lightbox', { detail: meta }));
     } catch { /* ignore */ }
+}
+
+function lightboxPhotoShareUrl() {
+    const { overlay } = lightboxEls();
+    const id = overlay?.dataset.ntNoticeId || '';
+    const photo = overlay?.dataset.ntPhoto || '';
+    if (!id || !photo) return '';
+    const origin = (typeof location !== 'undefined' && /^https?:$/.test(location.protocol))
+        ? location.origin
+        : 'https://nexttrain.co.za';
+    return `${origin}${alertSharePath(overlay.dataset.ntNoticeSrc || 'all', id, photo)}`;
+}
+
+async function shareLightboxPhoto() {
+    const url = lightboxPhotoShareUrl();
+    if (!url) return;
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ url });
+            return;
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+            try {
+                await navigator.share({ text: url });
+                return;
+            } catch (err2) {
+                if (err2?.name === 'AbortError') return;
+            }
+        }
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copied', 'success');
+    } catch {
+        showToast('Could not share this photo', 'error');
+    }
 }
 
 function lightboxCandidateSrc(url, host) {
@@ -1768,9 +2080,12 @@ export function openLightbox(url, host) {
     }
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
+    ensureLightboxStrip();
+    placeLightboxStrip(0, false);
     paintLightboxImage(displaySrc);
     announceLightboxNotice(wrap || host);
     rememberLightboxSlides(wrap || host);
+    primeLightboxNeighbors();
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -1789,6 +2104,9 @@ export function closeLightbox(fromPopState = false) {
             delete overlay.dataset.ntAdminLift;
         }
         resetAlertLightboxTransform();
+        placeLightboxStrip(0, false);
+        assignLightboxFrame(document.getElementById('alert-image-lightbox-prev'), '');
+        assignLightboxFrame(document.getElementById('alert-image-lightbox-next'), '');
         lbSlides = [];
         lbSlide = 0;
         lbAxis = '';
@@ -1983,9 +2301,11 @@ export function initGlobalErrorHandler() {
         document.getElementById('safe-mode-clear-btn')?.addEventListener('click', async () => {
             try {
                 const keep = localStorage.getItem('next_train_device_id');
+                const viewedReplies = localStorage.getItem('ntInboxAcknowledgedV1');
                 localStorage.clear();
                 sessionStorage.clear();
                 if (keep) localStorage.setItem('next_train_device_id', keep);
+                if (viewedReplies) localStorage.setItem('ntInboxAcknowledgedV1', viewedReplies);
             } catch (ex) {}
             try {
                 if (window.indexedDB) indexedDB.deleteDatabase('NextTrainDB');
@@ -2028,8 +2348,17 @@ export function moveTabIndicator(element) {
     });
 }
 
+/** The screen that is actually open. The highlight follows this, not a stale tab id. */
+function visibleShellTab() {
+    if (typeof document === 'undefined') return 'next-train';
+    if (document.getElementById('view-map')?.classList.contains('active')) return 'map';
+    if (document.getElementById('view-community')?.classList.contains('active')) return 'community';
+    if (document.getElementById('view-trip-planner')?.classList.contains('active')) return 'trip-planner';
+    return 'next-train';
+}
+
 /** Sync Home · Plan · Map · Community · Options on the bottom bar. */
-export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'next-train') {
+export function syncBottomNavActive(tab) {
     if (typeof document === 'undefined') return;
     const home = document.getElementById('bottom-nav-home');
     const plan = document.getElementById('bottom-nav-plan');
@@ -2038,9 +2367,15 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
     const options = document.getElementById('bottom-nav-options');
     if (!home && !plan && !map && !community && !options) return;
 
-    const mode = tab === 'community'
+    const swiping = document.getElementById('app-scroll')?.classList.contains('is-tab-swiping');
+    const seen = visibleShellTab();
+    const use = swiping && tab ? tab : (seen || tab || safeStorage.getItem('activeTab') || 'next-train');
+    if (!swiping && use && use !== 'options' && safeStorage.getItem('activeTab') !== use) {
+        safeStorage.setItem('activeTab', use);
+    }
+    const mode = use === 'community'
         ? 'community'
-        : (tab === 'map' ? 'map' : (tab === 'trip-planner' ? 'plan' : 'home'));
+        : (use === 'map' ? 'map' : (use === 'trip-planner' ? 'plan' : 'home'));
     const hubOpen = document.body.classList.contains('sidenav-open');
     const paint = (el, on) => {
         if (!el) return;
@@ -2127,8 +2462,23 @@ export function setImmersiveChrome(on) {
     });
 }
 
+/** Reactions and the emoji tray belong to Community. Leaving the tab hides them. */
+function dismissCommunityTabSheets() {
+    const tray = document.getElementById('community-reaction-sheet');
+    if (tray) {
+        tray.classList.add('hidden');
+        tray.style.zIndex = '';
+    }
+    hideFixedModal('community-reactions-modal');
+    hideFixedModal('community-attach-modal');
+    if (location.hash === '#community-reactions') {
+        try { history.replaceState(history.state || { tab: 'community' }, '', '#community'); } catch { /* ignore */ }
+    }
+}
+
 export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
+    try { window.Admin?.hideInboxReactionPicker?.(); } catch { /* feedback tray is optional */ }
 
     if (tab === 'map' && !canOpenTrackingMap()) tab = 'next-train';
     if (tab !== 'next-train') cancelPendingGridOpenFromUi();
@@ -2140,7 +2490,11 @@ export function switchTab(tab, opts = null) {
         window.closeAppHub(true);
     }
 
+    // A shared trip, message, or alert stays up until they leave it.
+    if (holdLeaveForWelcome(tab)) return;
+
     const prev = safeStorage.getItem('activeTab') || 'next-train';
+    if (tab !== 'community' && prev === 'community') dismissCommunityTabSheets();
 
     if (tab === 'trip-planner') {
         if (location.hash !== '#planner' && location.hash !== '#planner-results') {
@@ -2151,7 +2505,7 @@ export function switchTab(tab, opts = null) {
             history.pushState({ tab: 'map' }, '', '#map');
         }
     } else if (tab === 'community') {
-        if (location.hash !== '#community') {
+        if (location.hash !== '#community' && !location.hash.startsWith('#community/')) {
             history.pushState({ tab: 'community' }, '', '#community');
         }
     } else if (location.hash !== '#home' && location.hash !== '') {
@@ -2162,6 +2516,8 @@ export function switchTab(tab, opts = null) {
             || location.hash === '#legal'
             || location.hash === '#fare'
             || location.hash === '#account'
+            || location.hash === '#alerts'
+            || location.hash.startsWith('#alerts/')
             || isAccountSheetHash(location.hash);
         if (!keepHash) {
             history.replaceState({ tab: 'next-train' }, '', '#home');
@@ -2223,6 +2579,16 @@ export function switchTab(tab, opts = null) {
     try {
         window.dispatchEvent(new CustomEvent('nt-tab-changed', { detail: { tab } }));
     } catch { /* ignore */ }
+
+    let linkSurface = '';
+    try { linkSurface = sessionStorage.getItem('nt_deeplink_surface') || ''; } catch { /* ignore */ }
+    const leftLink = (linkSurface === 'community' && prev === 'community' && tab !== 'community')
+        || (linkSurface === 'map' && prev === 'map' && tab !== 'map')
+        || (linkSurface === 'planner' && prev === 'trip-planner' && tab !== 'trip-planner')
+        || (linkSurface === 'home' && prev === 'next-train' && tab !== 'next-train');
+    if (leftLink) {
+        import('./deeplink.js').then((m) => m.finishDeeplinkVisit?.()).catch(() => {});
+    }
 }
 
 export function initTabIndicator() {
@@ -2246,65 +2612,222 @@ export function initTabIndicator() {
     }
     window.addEventListener('resize', updateIndicator);
     requestAnimationFrame(updateIndicator);
+    if (!window.__ntNavViewWatch && typeof MutationObserver !== 'undefined') {
+        window.__ntNavViewWatch = true;
+        const watch = () => {
+            if (document.getElementById('app-scroll')?.classList.contains('is-tab-swiping')) return;
+            syncBottomNavActive();
+        };
+        const mo = new MutationObserver(watch);
+        document.querySelectorAll('.view-section').forEach((el) => {
+            mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+        });
+    }
+}
+
+function swipeTabOrder() {
+    const order = ['next-train', 'trip-planner'];
+    const mapBtn = document.getElementById('bottom-nav-map');
+    const communityBtn = document.getElementById('bottom-nav-community');
+    if (mapBtn && !mapBtn.classList.contains('hidden')) order.push('map');
+    const communityShown = document.documentElement.getAttribute('data-pilot-community') === '1'
+        || (isAdminAuthed() && !communityBtn?.classList.contains('hidden'));
+    if (communityBtn && communityShown) order.push('community');
+    return order;
+}
+
+function swipeViewId(tab) {
+    if (tab === 'next-train') return 'view-next-train';
+    if (tab === 'map') return 'view-map';
+    if (tab === 'community') return 'view-community';
+    return 'view-trip-planner';
 }
 
 export function setupSwipeNavigation() {
     if (typeof document === 'undefined') return;
     let touchStartX = 0;
     let touchStartY = 0;
+    let lastX = 0;
+    let lastT = 0;
+    let tracking = false;
+    let horizontal = false;
     let swipeIgnore = false;
+    let peer = null;
+    let current = null;
+    let direction = 0;
+    let edgeForward = false;
     const contentArea = document.getElementById('main-content');
-    if (!contentArea) return;
+    const scroller = document.getElementById('app-scroll');
+    if (!contentArea || !scroller) return;
 
     const swipeBlocked = () => {
         const mapModal = document.getElementById('map-modal');
         const tripMapModal = document.getElementById('trip-map-modal');
+        if (document.documentElement.classList.contains('nt-full-overlay')) return true;
+        if (document.querySelector('div[id$="-modal"].fixed:not(.hidden)')) return true;
         return document.body.classList.contains('sidenav-open') ||
             (mapModal && !mapModal.classList.contains('hidden')) ||
             (tripMapModal && !tripMapModal.classList.contains('hidden'));
     };
 
     const swipeIgnoreFrom = (target) => !!target?.closest?.(
-        'input, textarea, select, [contenteditable="true"], .community-post-row, .community-feed-scroll, #community-reaction-sheet, #community-route-list, #community-reply-bar'
+        'input, textarea, select, [contenteditable="true"], #account-modal, .community-post-row, #community-reaction-sheet, #community-reactions-modal, #community-route-list, #community-reply-bar, #map-tab-frame, .map-tab-pane, iframe'
     );
 
+    const clearSwipe = () => {
+        scroller.classList.remove('is-tab-swiping');
+        [current, peer].forEach((el) => {
+            if (!el) return;
+            el.classList.remove('is-swipe-current', 'is-swipe-peer');
+            el.style.transform = '';
+            el.style.transition = '';
+            el.style.top = '';
+            el.style.height = '';
+        });
+        peer = null;
+        current = null;
+        direction = 0;
+        horizontal = false;
+        tracking = false;
+        edgeForward = false;
+        syncBottomNavActive(safeStorage.getItem('activeTab') || 'next-train');
+    };
+
+    const placePeer = (dx, animate) => {
+        if (!current || !peer) return;
+        const width = current.offsetWidth || scroller.clientWidth || 1;
+        peer.style.top = `${current.offsetTop}px`;
+        peer.style.height = `${current.offsetHeight}px`;
+        const transition = animate ? 'transform 0.22s ease' : 'none';
+        current.style.transition = transition;
+        peer.style.transition = transition;
+        current.style.transform = `translateX(${dx}px)`;
+        peer.style.transform = `translateX(${dx + (direction * width)}px)`;
+        const order = swipeTabOrder();
+        const cur = safeStorage.getItem('activeTab') || 'next-train';
+        const safeCur = order.includes(cur) ? cur : 'next-train';
+        const next = order[Math.max(0, order.indexOf(safeCur)) + direction];
+        const passed = Math.abs(dx) > width * 0.2;
+        syncBottomNavActive(passed && next ? next : safeCur);
+    };
+
     contentArea.addEventListener('touchstart', (e) => {
-        if (swipeBlocked()) return;
+        if (swipeBlocked() || e.touches.length !== 1) return;
         swipeIgnore = swipeIgnoreFrom(e.target);
         if (swipeIgnore) return;
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
+        clearSwipe();
+        tracking = true;
+        horizontal = false;
+        touchStartX = e.touches[0].screenX;
+        touchStartY = e.touches[0].screenY;
+        lastX = touchStartX;
+        lastT = Date.now();
     }, { passive: true });
 
-    contentArea.addEventListener('touchend', (e) => {
-        if (swipeIgnore || swipeBlocked()) return;
-
-        const endX = e.changedTouches[0].screenX;
-        const endY = e.changedTouches[0].screenY;
-        const diffX = endX - touchStartX;
-        const diffY = endY - touchStartY;
-        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-            // Include Map; Community when the top tab is visible (lab).
-            const order = ['next-train', 'trip-planner'];
-            const mapBtn = document.getElementById('bottom-nav-map');
-            const communityBtn = document.getElementById('bottom-nav-community');
-            if (mapBtn && !mapBtn.classList.contains('hidden')) order.push('map');
-            if (communityBtn && !communityBtn.classList.contains('hidden')) order.push('community');
+    contentArea.addEventListener('touchmove', (e) => {
+        if (!tracking || swipeIgnore || swipeBlocked() || e.touches.length !== 1) return;
+        const x = e.touches[0].screenX;
+        const y = e.touches[0].screenY;
+        const dx = x - touchStartX;
+        const dy = y - touchStartY;
+        lastX = x;
+        lastT = Date.now();
+        if (!horizontal) {
+            if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+            if (Math.abs(dy) > Math.abs(dx)) {
+                tracking = false;
+                return;
+            }
+            horizontal = true;
+            const order = swipeTabOrder();
             const cur = safeStorage.getItem('activeTab') || 'next-train';
             const safeCur = order.includes(cur) ? cur : 'next-train';
             const idx = Math.max(0, order.indexOf(safeCur));
-            if (diffX > 0) {
-                switchTab(order[Math.max(0, idx - 1)]);
+            direction = dx < 0 ? 1 : -1;
+            const nextIdx = idx + direction;
+            if (nextIdx < 0 || nextIdx >= order.length) {
+                edgeForward = direction > 0 && Math.abs(dx) > 24;
+                tracking = false;
+                horizontal = false;
                 return;
             }
-            // Last content tab: swipe forward opens Options (side nav).
-            // Commuter last tab is Trip Planner; operator last tab is Community (or Map).
-            const lastTab = order[order.length - 1];
-            if (safeCur === lastTab) {
+            current = document.getElementById(swipeViewId(safeCur));
+            peer = document.getElementById(swipeViewId(order[nextIdx]));
+            if (!current || !peer) {
+                tracking = false;
+                return;
+            }
+            scroller.classList.add('is-tab-swiping');
+            current.classList.add('is-swipe-current');
+            peer.classList.add('is-swipe-peer');
+        }
+        if (!horizontal) return;
+        if (e.cancelable) e.preventDefault();
+        const width = current?.offsetWidth || 1;
+        const clamped = Math.max(-width, Math.min(width, dx));
+        placePeer(clamped);
+    }, { passive: false });
+
+    const finish = (e) => {
+        const endX = e.changedTouches?.[0]?.screenX ?? lastX;
+        const dx = endX - touchStartX;
+        if (edgeForward && dx < -50 && !horizontal) {
+            edgeForward = false;
+            tracking = false;
+            if (!holdLeaveForWelcome('options')) {
                 import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
-                return;
             }
-            switchTab(order[Math.min(order.length - 1, idx + 1)]);
+            return;
+        }
+        if (!tracking || swipeIgnore) {
+            tracking = false;
+            return;
+        }
+        const width = current?.offsetWidth || scroller.clientWidth || 1;
+        const dt = Math.max(1, Date.now() - lastT);
+        const velocity = (endX - lastX) / dt;
+        const commit = horizontal && (Math.abs(dx) > width * 0.28 || Math.abs(velocity) > 0.45);
+        if (!commit || !peer || !current) {
+            if (horizontal && current && peer) {
+                placePeer(0, true);
+                const done = () => clearSwipe();
+                current.addEventListener('transitionend', done, { once: true });
+                setTimeout(done, 260);
+            } else {
+                clearSwipe();
+            }
+            return;
+        }
+        const order = swipeTabOrder();
+        const cur = safeStorage.getItem('activeTab') || 'next-train';
+        const safeCur = order.includes(cur) ? cur : 'next-train';
+        const idx = Math.max(0, order.indexOf(safeCur));
+        const nextTab = order[idx + direction];
+        current.style.transition = 'transform 0.2s ease';
+        peer.style.transition = 'transform 0.2s ease';
+        const end = direction < 0 ? width : -width;
+        current.style.transform = `translateX(${end}px)`;
+        peer.style.transform = 'translateX(0px)';
+        let settled = false;
+        const settle = () => {
+            if (settled) return;
+            settled = true;
+            if (nextTab) switchTab(nextTab);
+            clearSwipe();
+        };
+        peer.addEventListener('transitionend', settle, { once: true });
+        setTimeout(settle, 240);
+        tracking = false;
+        horizontal = false;
+    };
+
+    contentArea.addEventListener('touchend', finish, { passive: true });
+    contentArea.addEventListener('touchcancel', () => {
+        if (horizontal && current && peer) {
+            placePeer(0, true);
+            setTimeout(clearSwipe, 240);
+        } else {
+            clearSwipe();
         }
     }, { passive: true });
 }
@@ -3247,6 +3770,8 @@ function bindBlurBackdropDismiss() {
 /** Bottom sheets that rise from the bottom. Pull down on the card to close. */
 const BOTTOM_SHEET_CLOSE = {
     'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
+    'community-reactions-modal': () => closeSmoothModal('community-reactions-modal'),
+    'inbox-reactions-modal': () => closeSmoothModal('inbox-reactions-modal'),
     'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),
     'nt-nearby-trains-modal': () => document.getElementById('nt-nearby-close')?.click(),
     'nt-live-tracker-modal': () => document.getElementById('nt-live-tracker-close')?.click(),

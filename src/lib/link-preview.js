@@ -4,6 +4,9 @@
  * and a stored card on the notice is what every commuter paints.
  */
 
+import { linkCardsOn, pictureMarkup, rememberPicture, settleDeferredPictures, shouldHoldPicture } from './data-saver.js';
+import { communityShareCardHtml } from './share-chips.js';
+
 const memory = new Map();
 const failedUrls = new Set();
 const STORAGE_PREFIX = 'nt_link_preview:';
@@ -16,12 +19,27 @@ function decodeEntities(value) {
         .replace(/&#0?39;|&apos;/gi, "'")
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
+        .replace(/&#x([0-9a-f]+);/gi, (all, hex) => {
+            const code = Number.parseInt(hex, 16);
+            return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
+        })
         .replace(/&#(\d+);/g, (all, n) => {
             const code = Number(n);
-            return code > 0 && code < 65536 ? String.fromCharCode(code) : all;
+            return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
         })
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+export function isOwnSiteUrl(value) {
+    const href = cleanHttpUrl(value);
+    if (!href) return false;
+    let host = '';
+    try { host = new URL(href).hostname.toLowerCase().replace(/\.$/, ''); } catch { return false; }
+    if (/^(?:www\.|lab\.)?nexttrain\.co\.za$/i.test(host)) return true;
+    if (host === 'enock-elk.github.io') return true;
+    if (host.endsWith('.next-train-lab.pages.dev')) return true;
+    return false;
 }
 
 export function cleanHttpUrl(value) {
@@ -35,6 +53,34 @@ export function cleanHttpUrl(value) {
     if (url.username || url.password) return '';
     if (url.href.length > 2000) return '';
     return url.href;
+}
+
+/** Host without www/m, plus path and query. Scheme and a trailing slash do not make a second card. */
+export function previewUrlKey(value) {
+    const href = cleanHttpUrl(value);
+    if (!href) return '';
+    try {
+        const url = new URL(href);
+        const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www|m)\./, '');
+        let path = url.pathname || '/';
+        if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+        return `${host}${path}${url.search}`.toLowerCase();
+    } catch {
+        return '';
+    }
+}
+
+export function samePreviewUrl(a, b) {
+    const left = previewUrlKey(a);
+    const right = previewUrlKey(b);
+    return !!(left && right && left === right);
+}
+
+function pinPreviewUrl(preview, requested) {
+    if (!preview || typeof preview !== 'object') return preview;
+    const req = cleanHttpUrl(requested);
+    if (req && samePreviewUrl(preview.url, req)) return { ...preview, url: req };
+    return preview;
 }
 
 /** https pages a preview worker may open. Blocks local and private hosts. */
@@ -87,7 +133,7 @@ export function listHttpUrls(notice) {
     for (const item of list) {
         const raw = String(item || '').trim();
         const url = cleanHttpUrl(/^www\./i.test(raw) ? `https://${raw}` : raw);
-        if (!url || !isPublicPreviewUrl(url) || out.includes(url)) continue;
+        if (!url || !isPublicPreviewUrl(url) || out.some((have) => samePreviewUrl(have, url))) continue;
         out.push(url);
         if (out.length >= 8) break;
     }
@@ -248,9 +294,13 @@ function rememberLinkPreview(preview) {
 function readyMarkup(preview) {
     const card = normalizeLinkPreview(preview);
     if (!card) return '';
-    const media = card.image
-        ? `<img class="nt-link-preview-media" alt="" src="${escapeAttr(card.image)}" referrerpolicy="no-referrer">`
-        : '';
+    const holdImage = !!(card.image && shouldHoldPicture(card.image));
+    if (card.image && !holdImage) rememberPicture(card.image);
+    const media = !card.image
+        ? ''
+        : holdImage
+            ? `<div class="nt-link-preview-media">${pictureMarkup(card.image)}</div>`
+            : `<img class="nt-link-preview-media" alt="" src="${escapeAttr(card.image)}" referrerpolicy="no-referrer">`;
     const desc = card.description
         ? `<div class="nt-link-preview-desc">${escapeText(card.description)}</div>`
         : '';
@@ -276,18 +326,36 @@ function loadingMarkup(url) {
     </a>`;
 }
 
+/** A card the author kept. Next Train addresses stay links, not cards. */
+export function storedLinkPreviewMarkup(preview) {
+    if (!linkCardsOn()) return '';
+    const card = normalizeLinkPreview(preview);
+    if (!card || isOwnSiteUrl(card.url) || isLiftedVideoUrl(card.url)) return '';
+    return readyMarkup(card);
+}
+
+function suppressedPreview(notice, url) {
+    const list = Array.isArray(notice?.suppressedPreviewUrls) ? notice.suppressedPreviewUrls : [];
+    return list.some((item) => samePreviewUrl(item, url));
+}
+
 export function linkPreviewMarkup(notice) {
+    if (!linkCardsOn()) return '';
     if (notice?.suppressLinkPreview) return '';
     const stored = normalizeLinkPreview(notice?.linkPreview);
     const urls = [];
-    if (stored?.url && !isLiftedVideoUrl(stored.url)) urls.push(stored.url);
-    listHttpUrls(notice).forEach((url) => {
-        if (isLiftedVideoUrl(url) || urls.includes(url)) return;
+    const push = (url) => {
+        if (!url || isLiftedVideoUrl(url) || suppressedPreview(notice, url)) return;
+        if (urls.some((have) => samePreviewUrl(have, url))) return;
         urls.push(url);
-    });
+    };
+    if (stored?.url) push(stored.url);
+    listHttpUrls(notice).forEach(push);
     if (!urls.length) return '';
     return urls.map((url) => {
-        if (stored && stored.url === url) return readyMarkup(stored);
+        const communityCard = communityShareCardHtml(url);
+        if (communityCard) return communityCard;
+        if (stored && samePreviewUrl(stored.url, url)) return readyMarkup(stored);
         const peeked = peekLinkPreview(url);
         if (peeked) return readyMarkup(peeked);
         return loadingMarkup(url);
@@ -333,7 +401,7 @@ export async function fetchLinkPreview(url, workerBase) {
     const base = String(workerBase || '').replace(/\/$/, '');
     if (base) {
         const worker = await readPreviewJson(`${base}/unfurl?url=${encodeURIComponent(clean)}`, 8000);
-        const stored = worker.ok ? rememberLinkPreview(worker.data) : null;
+        const stored = worker.ok ? rememberLinkPreview(pinPreviewUrl(worker.data, clean)) : null;
         if (stored) return stored;
     }
     const micro = await readPreviewJson(`${PREVIEW_FALLBACK}/?url=${encodeURIComponent(clean)}`, 8000);
@@ -344,11 +412,24 @@ export async function fetchLinkPreview(url, workerBase) {
 }
 
 export function hydrateLinkPreviews(root, workerBase) {
+    if (!linkCardsOn()) {
+        root?.querySelectorAll?.('.nt-link-preview, [data-link-preview-url]').forEach((el) => el.remove());
+        return;
+    }
     if (!root || typeof root.querySelectorAll !== 'function') return;
+    settleDeferredPictures(root);
+    import('./share-chips.js').then((m) => {
+        m.hydrateAlertShareCards?.(root);
+        m.hydrateCommunityShareCards?.(root);
+    }).catch(() => {});
     root.querySelectorAll('[data-link-preview-url]').forEach((el) => {
         if (el.getAttribute('data-link-preview-state') === 'ready') return;
         const url = el.getAttribute('data-link-preview-url') || '';
         fetchLinkPreview(url, workerBase).then((preview) => {
+            if (!linkCardsOn()) {
+                if (el.isConnected) el.remove();
+                return;
+            }
             if (!el.isConnected) return;
             if (!preview) {
                 el.remove();
@@ -367,5 +448,17 @@ export function hydrateLinkPreviews(root, workerBase) {
         }).catch(() => {
             if (el.isConnected) el.remove();
         });
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.rememberPicture = rememberPicture;
+    window.linkPreviewMarkup = linkPreviewMarkup;
+    window.storedLinkPreviewMarkup = storedLinkPreviewMarkup;
+    window.isOwnSiteUrl = isOwnSiteUrl;
+    window.hydrateLinkPreviews = hydrateLinkPreviews;
+    window.addEventListener('ntdatasaver', () => {
+        if (linkCardsOn()) return;
+        document.querySelectorAll('.nt-link-preview, [data-link-preview-url]').forEach((el) => el.remove());
     });
 }

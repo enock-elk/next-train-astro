@@ -98,12 +98,19 @@ assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no 
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
 assert(css.includes('button#current-day.nt-day-quiet'), 'Sunday uses the quiet day class');
-assert(css.includes('background: #fbbf24'), 'Sunday status is an amber dot');
-assert(css.includes('button#current-day.nt-day-quiet span.text-red-600::before'), 'Sunday status paints a leading dot');
+assert(/html:not\(\[data-colour-pack\]\) button#current-day\.nt-day-quiet span\.text-red-600,[\s\S]{0,280}margin-left:\s*0\.12rem/.test(css), 'Sunday No service uses the Saturday capsule offset');
+assert(/html:not\(\[data-colour-pack\]\) button#current-day\.nt-day-quiet span\.text-red-600,[\s\S]{0,320}padding:\s*0\.05rem 0\.42rem/.test(css), 'Sunday No service uses the Saturday capsule padding');
+assert(/html:not\(\[data-colour-pack\]\) button#current-day\.nt-day-quiet span\.text-red-600,[\s\S]{0,360}border-radius:\s*999px/.test(css), 'Sunday No service uses the Saturday capsule radius');
+assert(/html:not\(\[data-colour-pack\]\) button#current-day\.nt-day-quiet span\.text-red-600,[\s\S]{0,420}color-mix\(in srgb, #fcd34d 16%, transparent\)/.test(css), 'Sunday No service uses the Saturday 16% wash in amber');
+assert(css.includes('color: #fcd34d !important'), 'Sunday No service text is amber on a blue or navy header');
+assert(/html\[data-colour-pack="earthy"\] button#current-day\.nt-day-quiet span[\s\S]{0,280}color-mix\(in srgb, #9a3412 28%, transparent\)/.test(css), 'Earthy Sunday wash matches the Earthy Saturday wash strength');
+assert(/html\[data-colour-pack="earthy"\]\.dark button#current-day\.nt-day-quiet span[\s\S]{0,220}color-mix\(in srgb, #fcd34d 18%, transparent\)/.test(css), 'dark Earthy Sunday wash matches the dark Saturday wash strength');
+assert(!css.includes('button#current-day.nt-day-quiet span.text-red-600::before'), 'Sunday No service no longer uses only an amber dot');
+assert(!/button#current-day\.nt-day-quiet span\.text-red-600[\s\S]{0,500}border:\s*1px/.test(css), 'Sunday No service has no outline of its own');
 assert(css.includes('color: #f87171 !important;'), 'SEO day line keeps pale red');
 assert(!css.includes('background: #e11d48'), 'Sunday is no longer a solid red nested pill');
 assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');
-assert(css.includes('html.dark button#current-day.nt-day-quiet span.text-red-600'), 'dark Sunday uses the quiet pill');
+assert(css.includes('html.dark[data-colour-pack="earthy"] button#current-day.nt-day-quiet span.text-red-600'), 'dark Earthy Sunday uses the same capsule');
 assert(css.includes('clamp(1.35rem, 4.15dvh, 2.35rem)'), 'header wordmark tracks screen height');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
@@ -204,7 +211,7 @@ assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar
 
 const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
 assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after Welcome');
-assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
+assert(prefs.includes("(safeStorage.getItem('welcomeSeen') === 'true' || deeplinkOpen) && !welcomeOpen"), 'bottom bar waits until Welcome is done');
 assert(prefs.includes('ntProdClassicPackV1'), 'production pack FLAG still exists');
 assert(!prefs.includes('if (pack && pack !== COLOUR_PACKS.CLASSIC)'), 'missing FLAG does not remap Earthy to Classic');
 assert(prefs.includes('syncPrefsAccordionSummary'), 'theme accordion subtitle follows the live pack');
@@ -514,6 +521,9 @@ assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
 assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Select Route cannot close onto an empty board');
 
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+assert(hubJs.includes('openInboxReactionsModal(row, listOf())'), 'a Feedback Hub reaction chip opens who reacted');
+assert(hubJs.includes('inbox-reactions-modal'), 'Feedback Hub who-reacted sheet is a modal');
+assert(uiJs.includes("'inbox-reactions-modal': '#inbox-reactions'"), 'Feedback Hub reactions close on Back');
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
@@ -624,6 +634,11 @@ assert(layout.includes('Layout height never follows visualViewport'), 'keyboard 
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');
 assert(layout.includes('classList.toggle(\'nt-keyboard\''), 'keyboard class is stamped on html');
+assert(layout.includes('var keyboard = !embedded && gap > 140'), 'Android keyboard test is still the gap');
+assert(layout.includes('function isIOS()'), 'iPhone keyboard pan has its own check');
+assert(layout.includes("iosKbMode = 'pan'"), 'an iPhone pan docks from offsetTop only');
+assert(layout.includes("iosKbMode = 'flush'"), 'an already-shrunk iPhone layout does not add a second inset');
+assert(layout.includes('iosHoldBaseline'), 'an iPhone keyboard frame does not replace the full shell height');
 assert(layout.includes('padding-bottom: 0 !important'), 'in-app shell has no tray pad under the pill');
 assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pill');
 assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');
@@ -669,13 +684,13 @@ assert(rendererGrid.includes("isExport ? '21px' : '14px'") && rendererGrid.inclu
 assert(rendererGrid.includes('font-size:18px') && rendererGrid.includes('font-weight:400') && rendererGrid.includes('line-height:14px;'), 'export train IDs are larger and regular weight; in-app IDs stay 14px');
 assert(!rendererGrid.includes('nt-station-col, th:first-child'), 'export snapshot does not restyle the station column beyond the old renderer');
 assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
-assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');
+assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is on');
 
 const adminChrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
 assert(adminChrome.includes('getPinnedRouteIds'), 'pilot chrome reads pinned routes');
 assert(adminChrome.includes("safeStorage.getItem('defaultRoute_' + region)"), 'pilot access uses pin keys, not the viewed corridor');
 assert(adminChrome.includes('FEATURE_KEYS.MAP_TAB'), 'Map tab is a pin-gated feature');
-assert(adminChrome.includes('FEATURE_KEYS.COMMUNITY_TAB'), 'Community tab is a pin-gated feature');
+assert(adminChrome.includes('isCommunityOpenInRegion'), 'Community stays on unless this region is blocked or the tab is killed');
 assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
 assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
 assert(adminChrome.includes('placeAccountSettings'), 'Passenger Type and Theme move into Account when that row is visible');
@@ -686,7 +701,7 @@ assert(liveBoard.includes("timeEl.classList.add('hidden')"), 'commuters do not s
 
 const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 assert(adminJs.includes('id="exp-features-header"'), 'System Controls has Experimental features');
-assert(adminJs.includes("'exp-map-enabled'") && adminJs.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
+assert(adminJs.includes("'exp-map-enabled'") && adminJs.includes('id="community-tab-switch"') && adminJs.includes('blockedRegionIds') && adminJs.includes('blockedRouteIds'), 'Map stays experimental and Community can be blocked by region or route');
 assert(adminJs.includes("I'm on it / live share") && adminJs.includes('Delay reports') && adminJs.includes('Community realtime') && adminJs.includes('Push notifications'), 'experimental accordion lists remaining grantable features');
 assert(!adminJs.includes("{ key: 'tripPrice', label: 'Trip price' }"), 'Trip price is not a grantable experimental feature');
 assert(adminJs.includes('exp-feat-header') && adminJs.includes('exp-feat-body'), 'feature types are nested accordions');

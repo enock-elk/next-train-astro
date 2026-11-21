@@ -1087,6 +1087,10 @@
             return false;
         }
 
+        function mapHasStationFocus() {
+            try { return !!String(new URLSearchParams(location.search).get('station') || '').trim(); } catch (_) { return false; }
+        }
+
         /** Map view region only — never overwrite a returning user's saved app region/route. */
         function resolveMapRegion() {
             try {
@@ -1111,9 +1115,33 @@
             }
             const saved = readSavedAppRegion();
             if (saved) return saved;
-            // Cold start only: no app region yet — seed GP so first-time map visitors can load
-            try { localStorage.setItem('userRegion', 'GP'); } catch (e) {}
-            return 'GP';
+            // Station preview and the in-app map tab still need a region to draw.
+            // Do not write that fallback onto the phone.
+            if (isMapTabEmbed() || mapHasStationFocus()) return 'GP';
+            return null;
+        }
+
+        function showMapRegionGate() {
+            document.documentElement.classList.add('nt-map-needs-region');
+            const gate = document.getElementById('map-region-gate');
+            if (gate) gate.classList.remove('hidden');
+            const placeholder = document.getElementById('map-placeholder');
+            if (placeholder) placeholder.style.display = 'none';
+            const back = document.getElementById('map-back-link');
+            if (back) {
+                const base = (typeof window.APP_BASE === 'string' ? window.APP_BASE : '/').replace(/\/?$/, '/');
+                back.setAttribute('data-href', base);
+                back.setAttribute('aria-label', 'Back to Next Train');
+            }
+        }
+
+        function bindMapRegionGate() {
+            const gate = document.getElementById('map-region-gate');
+            if (!gate || gate.dataset.bound === '1') return;
+            gate.dataset.bound = '1';
+            gate.querySelectorAll('[data-region]').forEach((btn) => {
+                btn.addEventListener('click', () => switchMapRegion(btn.getAttribute('data-region')));
+            });
         }
 
         function regionRoutesHref(region) {
@@ -1123,6 +1151,22 @@
             const slug = slugs[region] || DEFAULT_REGION_SLUGS[region] || 'gauteng';
             const base = (typeof window.APP_BASE === 'string' ? window.APP_BASE : '/').replace(/\/?$/, '/');
             return `${base}regions/${slug}.html`;
+        }
+
+        function appHomeHref() {
+            return (typeof window.APP_BASE === 'string' ? window.APP_BASE : '/').replace(/\/?$/, '/');
+        }
+
+        /** A first visit has not picked a regular route. Back opens Welcome, not the region timetable. */
+        function coldMapVisitor() {
+            try {
+                if (localStorage.getItem('welcomeSeen') === 'true') return false;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.indexOf('defaultRoute_') === 0 && localStorage.getItem(key)) return false;
+                }
+            } catch (e) {}
+            return true;
         }
 
         function syncMapChromeRegion(region) {
@@ -1135,7 +1179,13 @@
                 el.classList.toggle('is-active', el.getAttribute('data-region') === code);
             });
             const back = document.getElementById('map-back-link');
-            if (back) back.setAttribute('data-href', regionRoutesHref(code));
+            if (!back) return;
+            if (coldMapVisitor()) {
+                back.setAttribute('data-href', appHomeHref());
+                back.setAttribute('aria-label', 'Back to Next Train');
+                return;
+            }
+            back.setAttribute('data-href', regionRoutesHref(code));
         }
 
         function switchMapRegion(region) {
@@ -1293,10 +1343,15 @@
 
         window.addEventListener('load', async () => {
             const bootRegion = resolveMapRegion();
-            syncMapChromeRegion(bootRegion);
             bindMapRegionPicker();
             bindMapLegendToggle();
             bindMapColdStartControls();
+            bindMapRegionGate();
+            if (!bootRegion) {
+                showMapRegionGate();
+                return;
+            }
+            syncMapChromeRegion(bootRegion);
             try {
                 await initDynamicMap();
                 
@@ -1466,8 +1521,9 @@
             if (typeof L === 'undefined') throw new Error("Leaflet Missing");
             if (typeof ROUTES === 'undefined') throw new Error("Config Missing");
 
-            // Guardian: URL ?region= → localStorage → GP
+            // Guardian: URL ?region= → this visit → saved app region. A bare map does not invent Gauteng.
             const currentRegion = resolveMapRegion();
+            if (!currentRegion) return;
             syncMapChromeRegion(currentRegion);
             
             // Center map dynamically based on region
@@ -1617,8 +1673,17 @@
                 }[c]));
             }
 
+            function commuterMapStationName(raw) {
+                const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
+                const key = cleaned.toUpperCase();
+                if (key === 'PRETORIA-N' || key === 'PRETORIA N' || key === 'PRETORIA NORTH') return 'PRETORIA NORTH';
+                if (key === 'PRETORIA WES' || key === 'PRETORIA WEST') return 'PRETORIA WEST';
+                if (key === 'WALTOO' || key === 'WALTLOO') return 'Waltloo';
+                return cleaned;
+            }
+
             function stationPopupHtml(origName, routeSet, routes) {
-                const title = escapeMapHtml(String(origName || '').replace(/ STATION/gi, ''));
+                const title = escapeMapHtml(commuterMapStationName(origName));
                 const ids = routeSet instanceof Set ? [...routeSet] : [...(routeSet || [])];
                 const rows = [];
                 const seen = new Set();
@@ -2382,7 +2447,7 @@
                       () => stationPopupHtml(data.origName, data.routes, drawnRoutes),
                       { maxWidth: 280, className: 'map-station-popup' }
                   )
-                  .bindTooltip(data.origName.replace(/ STATION/gi, ''), { 
+                  .bindTooltip(commuterMapStationName(data.origName), { 
                       permanent: true, 
                       direction: 'top',
                       offset: [0, -5],

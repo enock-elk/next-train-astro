@@ -7,13 +7,14 @@ import { $currentRouteId, $userRegion, $schedules, $fullDatabase, $globalExclusi
 import { loadAllSchedules, ensureRoutePinnedForRegion, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim, yieldToPaint } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService, openTrainMarkSheet } from './live-board.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
     stripShareParamsFromUrl,
     isSeoAppHandoff,
 } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot, noteDeeplinkSurface, adoptShareHome } from './deeplink.js';
 
 function centerInScroller(scroller, el, axis) {
     if (!scroller || !el) return;
@@ -227,6 +228,7 @@ function paintOpenGridBody() {
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
     bindGridExpressSkips();
     bindGridKempNotes();
+    bindGridProvNotes();
     bindGridViaNotes();
     window.Renderer?.fitGridStatusTags?.(grid);
 }
@@ -256,9 +258,12 @@ function bindGridKempNotes() {
     grid.dataset.kempBound = '1';
     const open = (el) => {
         const train = el?.getAttribute?.('data-kemp-train') || 'This train';
+        const fromKempton = el?.getAttribute?.('data-kemp-from') === '1';
         openTrainMarkSheet({
             train,
-            body: `Train ${train} continues to Kempton Park. Irene is not the last stop.`,
+            body: fromKempton
+                ? `Train ${train} starts at Kempton Park. Irene is not the first stop.`
+                : `Train ${train} continues to Kempton Park. Irene is not the last stop.`,
             badge: 'KEMP',
         });
     };
@@ -271,6 +276,33 @@ function bindGridKempNotes() {
     grid.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || hit.tagName === 'TD') return;
+        e.preventDefault();
+        open(hit);
+    });
+}
+
+function bindGridProvNotes() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.provBound === '1') return;
+    grid.dataset.provBound = '1';
+    const open = (el) => {
+        const train = el?.getAttribute?.('data-prov-train') || 'This train';
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} is provisional. It is listed, but it is not guaranteed to run.`,
+            badge: 'Prov',
+        });
+    };
+    grid.addEventListener('click', (e) => {
+        const hit = e.target?.closest?.('[data-prov-open="1"]');
+        if (!hit || e.target?.closest?.('[data-expr-skip="1"]')) return;
+        e.preventDefault();
+        open(hit);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const hit = e.target?.closest?.('[data-prov-open="1"]');
         if (!hit || hit.tagName === 'TD') return;
         e.preventDefault();
         open(hit);
@@ -367,10 +399,13 @@ export function parseRouteDeepLink() {
     const snap = peekShareDeeplinkSnapshot();
     if (snap && snap.kind === 'live') return null;
     const fromUrl = parseRouteDeepLinkParams(location.search);
-    // URL wins over a leftover share snapshot so a Hercules page cannot open Pretoria.
-    const raw = (fromUrl && fromUrl.routeId)
-        ? fromUrl
-        : ((snap && snap.kind === 'route') ? snap : null);
+    // A chip click sets prefer so the pasted timetable wins over the page URL.
+    // Otherwise the page URL wins, so a Hercules page cannot open Pretoria.
+    const raw = (snap && snap.kind === 'route' && snap.prefer)
+        ? snap
+        : ((fromUrl && fromUrl.routeId)
+            ? fromUrl
+            : ((snap && snap.kind === 'route') ? snap : null));
     if (!raw || !ROUTES[raw.routeId]) return null;
     // Grid day: sat/sun deep links use saturday; WC can deep-link public_holiday
     let day = 'weekday';
@@ -404,43 +439,23 @@ export async function applyRouteDeepLink() {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast(seoHandoff ? 'Opening Next Train' : 'Still opening this link');
 
-    const returning = safeStorage.getItem('welcomeSeen') === 'true';
-    const defaultKey = 'defaultRoute_' + route.region;
-    const existingDefault = safeStorage.getItem(defaultKey);
-    const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
-    let savedRegionBefore = null;
-    try { savedRegionBefore = safeStorage.getItem('userRegion'); } catch { /* ignore */ }
-
-    if (!returning) {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // Layout may have stamped nt-onboarding before welcomeSeen / pin restore.
-    // SEO Open and shared route links skip Welcome, so re-show the bottom bar here.
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
-    // SEO cold launch seeds a pin only when none exists. Returning commuters keep their default.
-    // Shared links pin only when none exists.
-    if (seoHandoff) {
-        try {
-            if (!savedRegionBefore) safeStorage.setItem('userRegion', route.region);
-            if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId);
-        } catch { /* ignore */ }
-    } else if (!hasUsableDefault) {
-        safeStorage.setItem(defaultKey, link.routeId);
-    }
-
-    // Set the linked corridor first so a same-region pin cannot restore Pretoria
-    // (or any other default) before schedules load.
     const region = ['GP', 'WC', 'KZN', 'EC'].includes(link.region) ? link.region : route.region;
-    $currentRouteId.set(link.routeId);
-    // A returning commuter opening an SEO page must not overwrite their saved
-    // region. The linked route still paints; their home timetable cache stays.
-    ensureRoutePinnedForRegion(region, { persistRegion: !(seoHandoff && savedRegionBefore) });
-    $currentRouteId.set(link.routeId);
-    // Cross-region SEO open may rewrite userRegion in storage; restore a returning pin.
-    if (seoHandoff && savedRegionBefore) {
-        try { safeStorage.setItem('userRegion', savedRegionBefore); } catch { /* ignore */ }
+    // SEO Open in Next Train only browses.
+    // A saved region and route stay in storage. A new visitor is not pinned by the link.
+    // A shared timetable becomes the saved route, including for a first visit.
+    if (seoHandoff) {
+        $currentRouteId.set(link.routeId);
+        ensureRoutePinnedForRegion(region, { persistRegion: false });
+        $currentRouteId.set(link.routeId);
+    } else {
+        adoptShareHome(link.routeId);
+        $currentRouteId.set(link.routeId);
+        ensureRoutePinnedForRegion(region, { persistRegion: true });
+        $currentRouteId.set(link.routeId);
     }
+    noteDeeplinkSurface('home', { loadDefaults: false });
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
@@ -573,8 +588,16 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
         } else if (currentDayType === 'public_holiday') {
             const slot = scheduleCacheSlot('public_holiday', route.region, direction.toLowerCase());
             hasServiceToday = scheduleHasService(scheds[slot]) || routeHasSaturdayService(scheds);
-        } else if (currentDayType !== 'sunday') {
-            const testKey = scheduleCacheSlot(currentDayType, route.region, direction.toLowerCase());
+        } else if (currentDayType === 'sunday') {
+            const mode = effectiveRouteSheetMode(route, 'sunday');
+            if (mode === 'sunday' || mode === 'special') {
+                const dir = direction.toLowerCase();
+                hasServiceToday = scheduleHasService(scheds[`${mode}_to_${dir}`])
+                    || scheduleHasService(scheds[`${mode}_to_a`])
+                    || scheduleHasService(scheds[`${mode}_to_b`]);
+            }
+        } else {
+            const testKey = scheduleCacheSlot(currentDayType, route.region, direction.toLowerCase(), route);
             hasServiceToday = scheduleHasService(scheds[testKey]);
         }
         if (!hasServiceToday) {
@@ -598,11 +621,19 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
         else if (dayOverride === 'sunday') targetDayIdx = 0;
     }
 
-    // Sunday maps to weekday sheets; WC public_holiday uses pub sheets
-    const sheetDayType = selectedDay === 'sunday'
-        ? 'weekday'
-        : normalizeScheduleSheetDay(selectedDay, route.region);
-    const sheetKey = scheduleCacheSlot(selectedDay === 'sunday' ? 'weekday' : selectedDay, route.region, direction.toLowerCase());
+    // Sunday maps to weekday sheets unless this route's Sunday or Special tab is on.
+    const gridMode = effectiveRouteSheetMode(route, selectedDay);
+    const sheetDayType = (gridMode === 'special' || gridMode === 'sunday')
+        ? gridMode
+        : (selectedDay === 'sunday'
+            ? 'weekday'
+            : normalizeScheduleSheetDay(selectedDay, route.region));
+    const sheetKey = scheduleCacheSlot(
+        selectedDay,
+        route.region,
+        direction.toLowerCase(),
+        (gridMode === 'sunday' || gridMode === 'special') ? route : null
+    );
     const noSatService = sheetDayType === 'saturday' && !routeHasSaturdayService(scheds);
     const noPubService = sheetDayType === 'public_holiday'
         && !scheduleHasService(scheds[sheetKey])
@@ -862,6 +893,7 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
     bindGridExpressSkips();
     bindGridKempNotes();
+    bindGridProvNotes();
     bindGridViaNotes();
     bindGridExclusionRefresh();
 

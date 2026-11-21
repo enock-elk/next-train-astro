@@ -36,8 +36,14 @@ export function formatAccountDisplayName(fullName) {
     if (!parts.length) return 'Passenger';
     const first = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
     if (parts.length === 1) return first.slice(0, DISPLAY_NAME_MAX);
-    const initials = parts.slice(1).map((p) => p.charAt(0).toUpperCase()).join('');
-    return `${first} ${initials}`.slice(0, DISPLAY_NAME_MAX);
+    const rest = parts.slice(1);
+    // "Enock LK" is already first name plus initials. Abbreviating again
+    // turned that saved name into "Enock L".
+    const alreadyShort = rest.every((p) => p.length <= 2);
+    const tail = alreadyShort
+        ? rest.map((p) => p.toUpperCase()).join('')
+        : rest.map((p) => p.charAt(0).toUpperCase()).join('');
+    return `${first} ${tail}`.slice(0, DISPLAY_NAME_MAX);
 }
 
 export function clampDisplayName(raw) {

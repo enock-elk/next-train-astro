@@ -259,6 +259,7 @@ const {
   scheduleOverrideAppliesToday,
   localScheduleOverrideDateKey,
   localForceRowApplies,
+  pruneScheduleOverrideRegion,
 } = await import('../src/lib/schedule-override.js');
 assert.deepEqual(
   normalizeScheduleOverrideDates('2026-10-27, 2026-10-28\n2026-10-27'),
@@ -296,6 +297,24 @@ assert.equal(
   localForceRowApplies({ dayType: 'saturday', dates: ['2026-11-06'] }, new Date('2026-11-06T22:30:00Z')),
   false,
   'a dated force is dropped offline once that Johannesburg day is over'
+);
+const expiredForce = pruneScheduleOverrideRegion(
+  { active: true, dayType: 'saturday', dates: ['2026-11-04'], title: 'Election Day' },
+  new Date('2026-11-15T10:00:00+02:00'),
+);
+assert.equal(expiredForce.active, false, 'a force whose dates are all past turns off');
+assert.equal(expiredForce.dates, undefined, 'past dates are not kept');
+assert.equal(expiredForce.title, 'Election Day', 'the message text stays for the next force');
+const mixedForce = pruneScheduleOverrideRegion(
+  { active: true, dayType: 'saturday', dates: ['2026-11-04', '2026-11-20'] },
+  new Date('2026-11-15T10:00:00+02:00'),
+);
+assert.deepEqual(mixedForce.dates, ['2026-11-20'], 'only today and later dates stay');
+assert.equal(mixedForce.active, true, 'a future date keeps the force on');
+assert.equal(
+  pruneScheduleOverrideRegion({ active: true, dayType: 'saturday' }, new Date('2026-11-15T10:00:00+02:00')).active,
+  true,
+  'a force with no dates stays until it is turned off',
 );
 assert.equal(
   localForceRowApplies({ dayType: 'saturday', dates: ['2026-11-06'] }, new Date('2026-11-06T18:00:00Z')),

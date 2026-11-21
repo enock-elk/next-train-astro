@@ -314,7 +314,9 @@ import { withBase } from '../lib/config.js';
                         </span>
                         <span id="account-modal-display-name" class="relative mt-3 block truncate text-[26px] font-bold tracking-tight text-gray-900 dark:text-white leading-tight">Passenger</span>
                         <span id="account-modal-email" class="relative mt-1 block truncate text-[14px] font-normal text-gray-500 dark:text-gray-400"></span>
-                        <span class="relative mt-3 inline-flex h-9 items-center rounded-full bg-[#4C8DFF] px-4 text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(76,141,255,0.28)]">Edit profile</span>
+                        <span id="account-guest-note" class="relative mt-2 hidden block px-6 text-[13px] font-normal leading-snug text-gray-500 dark:text-gray-400">Sign in to sync and unlock features.</span>
+                        <span id="account-edit-profile-pill" class="relative mt-3 inline-flex h-9 items-center rounded-full bg-[#4C8DFF] px-4 text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(76,141,255,0.28)]">Edit profile</span>
+                        <span id="account-signin-pill" class="relative mt-3 hidden flex h-9 w-fit mx-auto items-center rounded-full bg-[#4C8DFF] px-4 text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(76,141,255,0.28)]">Sign in</span>
                         <svg id="account-profile-chevron" class="sr-only" aria-hidden="true"></svg>
                     </button>
                     <div class="grid grid-cols-2 gap-3">
@@ -328,7 +330,6 @@ import { withBase } from '../lib/config.js';
                                 <span id="account-passenger-type-display" class="truncate text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Adult</span>
                                 <svg class="h-3.5 w-3.5 shrink-0 text-[#4C8DFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                             </span>
-                            <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Used for fare estimates</span>
                         </button>
                     </div>
                     <div class="space-y-2">
@@ -341,6 +342,16 @@ import { withBase } from '../lib/config.js';
                                 <span class="min-w-0 flex-1">
                                     <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Notifications</span>
                                     <span id="account-notify-summary" class="mt-0.5 block truncate text-[12px] font-normal text-gray-500 dark:text-gray-400">Off</span>
+                                </span>
+                                <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                            <button type="button" id="account-open-data" class="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4C8DFF]/10 text-[#4C8DFF]" aria-hidden="true">
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path></svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Data saving</span>
+                                    <span id="account-data-summary" class="mt-0.5 block truncate text-[12px] font-normal text-gray-500 dark:text-gray-400">Off</span>
                                 </span>
                                 <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                             </button>
@@ -442,13 +453,50 @@ import { withBase } from '../lib/config.js';
                     <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
                         <div id="account-notifications-slot"></div>
                     </div>
-                    <p class="px-1 text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Changes save as you switch. No Save button needed.</p>
+                </div>
+                <div data-account-view="data" class="hidden space-y-3">
+                    <p class="px-1 text-[13px] font-normal leading-snug text-gray-500 dark:text-gray-400">Data saving starts off. The timetable always loads. A picture already saved on this phone still shows.</p>
+                    <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] divide-y divide-black/[0.06] dark:divide-white/10 dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <button type="button" id="account-data-pictures-auto" aria-pressed="true" class="flex min-h-[56px] w-full items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                            <span class="min-w-0">
+                                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Automatic</span>
+                                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Pictures load on their own.</span>
+                            </span>
+                            <svg data-nt-data-check class="h-5 w-5 shrink-0 text-[#4C8DFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </button>
+                        <button type="button" id="account-data-pictures-tap" aria-pressed="false" class="flex min-h-[56px] w-full items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                            <span class="min-w-0">
+                                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Only when I tap</span>
+                                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">A picture waits until you tap it.</span>
+                            </span>
+                            <svg data-nt-data-check class="hidden h-5 w-5 shrink-0 text-[#4C8DFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </button>
+                    </div>
+                    <div class="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[0.04] bg-white px-4 py-3.5 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <label for="account-data-link-cards" class="min-w-0">
+                            <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Link Previews</span>
+                            <span class="mt-0.5 block text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Shows a card for a web address. Off leaves the address as text.</span>
+                        </label>
+                        <span class="relative inline-block w-10 shrink-0 select-none align-middle">
+                            <input type="checkbox" id="account-data-link-cards" class="toggle-checkbox absolute block h-5 w-5 appearance-none rounded-full border-4 border-gray-300 bg-white outline-none" checked />
+                            <label for="account-data-link-cards" class="toggle-label block h-5 cursor-pointer overflow-hidden rounded-full bg-gray-300"></label>
+                        </span>
+                    </div>
+                    <div class="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[0.04] bg-white px-4 py-3.5 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <label for="account-data-profile-photos" class="min-w-0">
+                            <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Profile photos</span>
+                            <span class="mt-0.5 block text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Off keeps the usual placeholder and does not download the photo.</span>
+                        </label>
+                        <span class="relative inline-block w-10 shrink-0 select-none align-middle">
+                            <input type="checkbox" id="account-data-profile-photos" class="toggle-checkbox absolute block h-5 w-5 appearance-none rounded-full border-4 border-gray-300 bg-white outline-none" checked />
+                            <label for="account-data-profile-photos" class="toggle-label block h-5 cursor-pointer overflow-hidden rounded-full bg-gray-300"></label>
+                        </span>
+                    </div>
                 </div>
                 <div data-account-view="appearance" class="hidden space-y-3">
                     <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
                         <div id="account-appearance-slot"></div>
                     </div>
-                    <p class="px-1 text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Changes save as you switch. No Save button needed.</p>
                 </div>
             </div>
 
@@ -463,7 +511,7 @@ import { withBase } from '../lib/config.js';
                     <p data-account-only="signin" class="hidden text-[26px] font-bold tracking-tight text-gray-900 dark:text-white leading-tight">Welcome back</p>
                     <p data-account-only="create" class="text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Create a free account to open more features.</p>
                     <p data-account-only="signin" class="hidden text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Sign in to continue on this phone.</p>
-                    <p data-account-only="invalid" class="hidden text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Those details did not match. Try again, or create an account.</p>
+                    <p data-account-only="invalid" class="hidden text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Those details did not match. Try again, or create an account. If you forgot your password, please tap Forgot password.</p>
                 </div>
                 <div data-account-only="reset" class="hidden space-y-3">
                     <div class="flex gap-2" aria-hidden="true">
@@ -512,6 +560,7 @@ import { withBase } from '../lib/config.js';
                             <svg id="account-eye-closed-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542 7a9.978 9.978 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
                         </button>
                     </div>
+                    <p data-account-only="create" class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">At least 8 characters, with a letter and a number.</p>
                 </div>
 
                 <button type="button" id="account-forgot-btn" data-account-only="signin invalid" class="hidden block ml-auto text-[14px] font-semibold text-[#4C8DFF] focus:outline-none">Forgot password?</button>
@@ -717,9 +766,10 @@ import { withBase } from '../lib/config.js';
                         <span id="stat-alltime" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
                 </div>
+                <p id="telemetry-ga-detail" class="hidden mt-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200"></p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm">
-                    <span class="text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> System Errors (Today)</span>
+                    <span class="text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> Sentry today</span>
                     <span id="stat-errors" class="text-lg font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                 </div>
             </div>
@@ -738,10 +788,25 @@ import { withBase } from '../lib/config.js';
 <div id="messages-thread-modal" class="fixed inset-0 bg-white dark:bg-gray-900 z-[135] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-none w-full max-w-md h-full flex flex-col overflow-hidden border-0">
         <div id="messages-thread-header" class="flex items-center gap-1 px-1 h-12 shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" style="margin-top: env(safe-area-inset-top, 0px);">
-            <button type="button" id="messages-thread-close" class="w-10 h-10 inline-flex items-center justify-center rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-            </button>
-            <h3 class="min-w-0 truncate text-[17px] font-semibold text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
+            <div id="messages-thread-home" class="flex items-center gap-1 w-full min-w-0">
+                <button type="button" id="messages-thread-close" class="w-10 h-10 inline-flex items-center justify-center rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h3 class="min-w-0 truncate text-[17px] font-semibold text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
+            </div>
+            <div id="messages-select-bar" class="hidden items-center gap-1 w-full px-1">
+                <button type="button" id="messages-select-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Clear selection">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <span id="messages-select-count" class="text-lg font-black text-gray-900 dark:text-white tabular-nums">1</span>
+                <span class="flex-1"></span>
+                <button type="button" id="messages-select-copy" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Copy">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" stroke-width="2"></rect><path stroke-width="2" d="M4 16V6a2 2 0 012-2h10"></path></svg>
+                </button>
+                <button type="button" id="messages-select-share" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Share">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+                </button>
+            </div>
         </div>
         <div class="relative flex flex-col flex-1 min-h-0">
             <div class="nt-pack-wallpaper" aria-hidden="true"></div>
@@ -1017,6 +1082,9 @@ import { withBase } from '../lib/config.js';
     border-top: 0;
     padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   }
+  html.nt-keyboard #messages-thread-list {
+    padding-bottom: calc(var(--nt-kb-h, 0px) + var(--nt-hub-dock-h, 10.5rem));
+  }
   html.nt-keyboard #messages-thread-form {
     position: fixed;
     left: 0;
@@ -1025,7 +1093,7 @@ import { withBase } from '../lib/config.js';
     z-index: 136;
     width: 100%;
     padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
-    background-color: color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas));
+    background-color: transparent;
   }
   html.nt-keyboard #messages-thread-modal > div {
     transform: none !important;
@@ -1041,37 +1109,29 @@ import { withBase } from '../lib/config.js';
     align-items: flex-start;
     width: 100%;
   }
-  #messages-thread-modal .inbox-bubble-wrap {
-    width: 78%;
-    max-width: 78%;
-    flex: 0 0 78%;
-    min-width: 0;
-  }
+  #messages-thread-modal .inbox-bubble-wrap,
   #feedback-panel .inbox-bubble-wrap {
-    width: auto;
-    max-width: 85%;
+    position: relative;
+    width: fit-content;
+    max-width: min(88%, 32rem);
     flex: 0 1 auto;
     min-width: 0;
+    padding-bottom: 0.15rem;
   }
   #messages-thread-modal .inbox-bubble,
   #feedback-panel .inbox-bubble {
     position: relative;
     box-sizing: border-box;
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-  }
-  #messages-thread-modal .inbox-bubble {
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     overflow: hidden;
-  }
-  #feedback-panel .inbox-bubble {
-    width: auto;
-    overflow: visible;
   }
   #messages-thread-modal .inbox-bubble-own,
   #feedback-panel .inbox-bubble-own {
     background: #d9fdd3;
     color: #111827;
-    border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+    border-radius: 0.75rem 0.2rem 0.75rem 0.75rem;
   }
   html.dark #messages-thread-modal .inbox-bubble-own,
   html.dark #feedback-panel .inbox-bubble-own {
@@ -1082,7 +1142,7 @@ import { withBase } from '../lib/config.js';
   #feedback-panel .inbox-bubble-other {
     background: #ffffff;
     color: #111827;
-    border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+    border-radius: 0.2rem 0.75rem 0.75rem 0.75rem;
     border: 1px solid rgba(229, 231, 235, 0.9);
   }
   html.dark #messages-thread-modal .inbox-bubble-other,
@@ -1186,52 +1246,21 @@ import { withBase } from '../lib/config.js';
     overflow: hidden;
     margin-top: 0.15rem;
   }
-  /* WhatsApp-style tails on the admin inbox (commuter hub keeps overflow:hidden). */
-  #feedback-panel .inbox-bubble-own::after,
-  #feedback-panel .inbox-bubble-other::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    width: 8px;
-    height: 12px;
-  }
-  #feedback-panel .inbox-bubble-own::after {
-    right: -6px;
-    background: #d9fdd3;
-    clip-path: polygon(0 0, 0 100%, 100% 100%);
-  }
-  html.dark #feedback-panel .inbox-bubble-own::after {
-    background: #005c4b;
-  }
-  #feedback-panel .inbox-bubble-other::after {
-    left: -6px;
-    background: #ffffff;
-    clip-path: polygon(100% 0, 0 100%, 100% 100%);
-  }
-  html.dark #feedback-panel .inbox-bubble-other::after {
-    background: #1f2937;
-  }
   #feedback-panel .feedback-thread-chat {
     position: relative;
     background: transparent;
   }
-  /* Commuter bubbles are white; keep this darker than the bubble so text stays readable. */
+  /* Same wash as the community room, so white bubbles sit forward of the pattern. */
   #feedback-panel .feedback-thread-chat.nt-pack-wallpaper {
-    background-color: #6f8070;
-    background-image:
-      radial-gradient(circle at 14% 18%, rgba(255,255,255,0.10) 0 1.5px, transparent 2.2px),
-      radial-gradient(circle at 62% 8%, rgba(255,255,255,0.08) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 80% 42%, rgba(255,255,255,0.09) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 28% 72%, rgba(255,255,255,0.07) 0 1.2px, transparent 1.9px),
-      radial-gradient(circle at 88% 88%, rgba(255,255,255,0.08) 0 1px, transparent 1.7px),
-      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.10));
+    background-color: color-mix(in srgb, #111827 6%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)));
+    background-image: none;
   }
   html.dark #feedback-panel .feedback-thread-chat.nt-pack-wallpaper {
-    background-color: #121a14;
-    background-image:
-      radial-gradient(circle at 14% 18%, rgba(255,255,255,0.05) 0 1.5px, transparent 2.2px),
-      radial-gradient(circle at 62% 8%, rgba(255,255,255,0.04) 0 1px, transparent 1.8px),
-      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.22));
+    background-color: color-mix(in srgb, #000 8%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)));
+    background-image: none;
+  }
+  #feedback-panel .feedback-thread-chat.nt-pack-wallpaper::before {
+    opacity: 0.11;
   }
   /* .nt-pack-wallpaper is pointer-events:none and that value is inherited.
      On Alerts the decoration is an empty sibling. Here it is the chat itself,
@@ -1487,8 +1516,8 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- TRAINS NEAR YOU -->
-<div id="nt-nearby-trains-modal" class="fixed inset-0 z-[145] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 bg-gray-900/55 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="nt-nearby-title">
-    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[88dvh] flex flex-col border border-gray-200 dark:border-gray-700">
+<div id="nt-nearby-trains-modal" class="fixed inset-0 left-0 right-0 z-[145] hidden flex items-end justify-center p-0 bg-gray-900/60 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="nt-nearby-title">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 border-b-0">
         <div class="shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">

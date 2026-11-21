@@ -51,8 +51,8 @@ export async function runAuthAction() {
             form?.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 const next = password instanceof HTMLInputElement ? password.value : '';
-                if (next.length < 6) {
-                    if (copy) copy.textContent = 'Use at least 6 characters.';
+                if (next.length < 8 || !/[A-Za-z]/.test(next) || !/\d/.test(next)) {
+                    if (copy) copy.textContent = 'Use at least 8 characters, with a letter and a number.';
                     return;
                 }
                 try {

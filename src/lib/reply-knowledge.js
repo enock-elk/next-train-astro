@@ -11,6 +11,8 @@ import {
     ROUTES,
     SATURDAY_PLACEHOLDER_ROUTES,
 } from './config.js';
+import { isRealTime } from './utils.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 import {
     CORRIDOR_INSIGHTS,
     CORRIDOR_PAGE_COPY,
@@ -51,6 +53,49 @@ export function describeRoute(routeId) {
     return `${bits.join(', ')}.`;
 }
 
+function sheetHasTimes(schedule) {
+    if (!schedule?.rows?.length || !Array.isArray(schedule.headers)) return false;
+    const skip = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index', schedule.stationColumnName || 'STATION']);
+    const cols = schedule.headers.filter((header) => header && !skip.has(header));
+    if (!cols.length) return false;
+    return schedule.rows.some((row) => cols.some((col) => isRealTime(row?.[col])));
+}
+
+/**
+ * One timetable fact for a community draft. No clock times.
+ * Uses the sheet on the phone when it belongs to this room, otherwise the route config.
+ */
+export function communityScheduleFact(routeId, message, schedules) {
+    const text = String(message || '');
+    const asksSunday = /\bsunday\b/i.test(text);
+    const asksSaturday = /\b(?:saturday|weekend)\b/i.test(text);
+    if (!asksSunday && !asksSaturday) return '';
+    const id = String(routeId || '').trim();
+    const route = ROUTES[id];
+    const name = route ? displayRouteName(route) : 'This line';
+    const mine = schedules && String(schedules._routeId || '') === id ? schedules : null;
+    const bits = [];
+    if (asksSunday) {
+        const sundaySheet = !!(mine && (sheetHasTimes(mine.sunday_to_a) || sheetHasTimes(mine.sunday_to_b)));
+        const mode = route ? effectiveRouteSheetMode(route, 'sunday') : null;
+        bits.push(sundaySheet || mode === 'sunday'
+            ? `${name} has a Sunday sheet on the phone. Do not invent a departure time.`
+            : `${name} has no Sunday train service. Do not invent a Sunday time.`);
+    }
+    if (asksSaturday) {
+        if (SATURDAY_PLACEHOLDER_ROUTES.includes(id)) {
+            bits.push(`${name} has no Saturday trains.`);
+        } else if (mine && (sheetHasTimes(mine.saturday_to_a) || sheetHasTimes(mine.saturday_to_b))) {
+            bits.push(`${name} has Saturday trains on the sheet already on the phone. Do not invent a clock time.`);
+        } else if (mine) {
+            bits.push(`${name} has no Saturday times on the sheet loaded on this phone.`);
+        } else {
+            bits.push(`${name} has a Saturday sheet. Do not invent a clock time.`);
+        }
+    }
+    return bits.join(' ');
+}
+
 function fareText() {
     const bands = FARE_CONFIG.zone_km_max || {};
     const zones = FARE_CONFIG.zones_detailed || {};
@@ -66,7 +111,7 @@ function fareText() {
         return `${code} (${km}): single ${zar(price.single)}, return ${zar(price.return)}, weekly Mon-Fri ${zar(price.weekly_mon_fri)}, weekly Mon-Sat ${zar(price.weekly_mon_sat)}, monthly ${zar(price.monthly)}.`;
     });
     return [
-        'Fares are the adult cash prices in Next Train, effective 1 August 2025. Tickets are bought with cash at the station. The app does not sell tickets.',
+        'Fares are the adult cash prices in Next Train. Monthly fares apply from 1 December 2026. Single, return, and weekly fares are unchanged until a further increase covering all ticket types, expected no earlier than 1 April 2027. Tickets are bought with cash at the station. The app does not sell tickets.',
         'The price shown for a trip is often the maximum for that line, terminus to terminus. A shorter trip can cost less at the station.',
         ...rows,
         'Off-peak is weekdays only, trains departing from 09:30 to 14:30. It is not 09:00 to 14:00. No off-peak discount on Saturday, Sunday, or a public holiday.',

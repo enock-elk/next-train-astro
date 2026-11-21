@@ -19,7 +19,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
-    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES,
+    resolvePlannerStationInput, plannerStationDisplayName, commuterStationName, sheetStationTitle, masterListHasStation, stationQueryHits,
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
@@ -168,12 +168,12 @@ const resolveTripDisruptions = (routeId, stops) => {
     return fn(routeId, stops, day) || [];
 };
 const stripStationSuffix = (name) => String(name || '').replace(/ STATION/gi, '').trim();
-const bareStationName = (name) => stripStationSuffix(name);
+const bareStationName = (name) => commuterStationName(stripStationSuffix(name));
 
 function plannerHistoryStationLabel(name) {
     const masterList = getMasterStationList();
     const resolved = resolvePlannerStationInput(name, masterList) || name;
-    return stripStationSuffix(resolved).toUpperCase();
+    return commuterStationName(stripStationSuffix(resolved));
 }
 
 /** Reject sheet header / "Last Updated" rows that leaked into station lists. */
@@ -607,9 +607,25 @@ function plannerFareVoteInput(trip, { km, crowKm, zone, fare } = {}, extra = {})
     };
 }
 
+function releasePlannerFareTicketPreview() {
+    const wrap = document.getElementById('planner-fare-vote');
+    const url = wrap?.dataset.fareTicketPreview || '';
+    if (url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+    }
+}
+
 function showPlannerFareVoteThanks(wrap) {
     if (!wrap) return;
+    wrap.dataset.fareHold = '1';
+    const preview = wrap.dataset.fareTicketPreview || '';
     wrap.innerHTML = '<p class="text-sm font-semibold text-gray-700 dark:text-gray-200">Thanks. That helps us check the fare.</p>';
+    if (!preview) return;
+    const img = document.createElement('img');
+    img.src = preview;
+    img.alt = 'Ticket photo';
+    img.className = 'mt-3 w-full max-h-56 object-contain rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900';
+    wrap.appendChild(img);
 }
 
 async function uploadPlannerFareTicket(voteId, file) {
@@ -643,6 +659,7 @@ function showPlannerFareTicketPrompt(wrap, voteId) {
             <button type="button" id="planner-fare-ticket-add" class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Add photo</button>
             <button type="button" id="planner-fare-ticket-skip" class="inline-flex items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Skip</button>
         </div>
+        <img id="planner-fare-ticket-preview" alt="Ticket photo" class="mt-3 hidden w-full max-h-56 object-contain rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900" />
         <input id="planner-fare-ticket-file" type="file" accept="image/*" capture="environment" class="hidden" />
     `;
     const fileInput = document.getElementById('planner-fare-ticket-file');
@@ -661,15 +678,34 @@ function showPlannerFareTicketPrompt(wrap, voteId) {
     fileInput?.addEventListener('change', async () => {
         const file = fileInput.files && fileInput.files[0];
         if (!file) return;
+        wrap.dataset.fareHold = '1';
+        const preview = document.getElementById('planner-fare-ticket-preview');
+        const previous = wrap.dataset.fareTicketPreview || '';
+        if (previous.startsWith('blob:')) {
+            try { URL.revokeObjectURL(previous); } catch { /* ignore */ }
+        }
+        const objectUrl = URL.createObjectURL(file);
+        wrap.dataset.fareTicketPreview = objectUrl;
+        if (preview) {
+            preview.src = objectUrl;
+            preview.classList.remove('hidden');
+        }
+        const note = wrap.querySelector('p');
+        if (note) note.textContent = 'Adding photo…';
         addBtn.disabled = true;
         skipBtn.disabled = true;
         try {
             const ticketUrl = await uploadPlannerFareTicket(voteId, file);
             await putFareTicketPhoto(voteId, { ticketUrl });
+            showPlannerFareVoteThanks(wrap);
+            const thanks = wrap.querySelector('p');
+            if (thanks) thanks.textContent = 'Thanks. Photo added.';
         } catch (e) {
+            if (note) note.textContent = 'Thanks. Add a photo of your ticket? Optional.';
+            if (addBtn) addBtn.disabled = false;
+            if (skipBtn) skipBtn.disabled = false;
             if (typeof showToast === 'function') showToast(e.message || 'Could not attach photo.', 'info', 2500);
         }
-        showPlannerFareVoteThanks(wrap);
     });
 }
 
@@ -723,6 +759,7 @@ function bindPlannerFareVote(trip, detail) {
     noBtn?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        wrap.dataset.fareHold = '1';
         paintFareChoice('no');
         correct?.classList.remove('hidden');
         ticketTypeEl?.focus();
@@ -749,6 +786,7 @@ function bindPlannerFareVote(trip, detail) {
 function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
+    releasePlannerFareTicketPreview();
     fare = applyApprovedPlannerFare(fare, trip) || fare;
     lastPlannerFareContext = { trip, km, crowKm, zone, fare };
     const fareOdStation = (s) => String(s || '')
@@ -854,6 +892,11 @@ async function refreshOpenPlannerFare() {
     const fare = applyApprovedPlannerFare(computeZoneFareForTrip(zone, ctx.trip), ctx.trip);
     if (!fare) return;
     if (sheet && !sheet.classList.contains('hidden')) {
+        const vote = document.getElementById('planner-fare-vote');
+        if (vote?.dataset.fareHold === '1') {
+            hydratePlannerFareButton(ctx.trip);
+            return;
+        }
         fillPlannerFareBreakdown(ctx.trip, { ...ctx, zone, fare });
     }
     hydratePlannerFareButton(ctx.trip);
@@ -2358,7 +2401,7 @@ export async function openTripMapRenderer(routeData) {
             .custom-div-icon { background: transparent; border: none; }
             .dark .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
             .tooltip-dynamic { transition: opacity 0.3s ease, font-size 0.2s ease; font-family: inherit; opacity: 0; }
-            .leaflet-tooltip.tooltip-halo { background: transparent !important; border: none !important; box-shadow: none !important; white-space: nowrap; color: #1f2937; text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff; }
+            .leaflet-tooltip.tooltip-halo { background: transparent !important; border: none !important; box-shadow: none !important; white-space: nowrap; color: #1f2937; text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff; pointer-events: none !important; }
             .dark .leaflet-tooltip.tooltip-halo { color: #ffffff !important; text-shadow: -1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.9) !important; }
             .leaflet-tooltip.tooltip-halo::before { display: none !important; }
             .disruption-line-overlay { animation: ntDashPulse 1.5s linear infinite; }
@@ -2596,6 +2639,25 @@ export async function openTripMapRenderer(routeData) {
                     if (tOut) return `${clean} · ${tOut}`;
                     return clean;
                 };
+                const escapeTripHtml = (value) => String(value || '').replace(/[&<>"']/g, (c) => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+                }[c]));
+                const tripStationPopup = (role, name, time, timeOut = null) => {
+                    const title = escapeTripHtml(String(name || '').replace(/ STATION/gi, ''));
+                    let when = '';
+                    if (tripMapShowStationTimes) {
+                        const tIn = time && time !== '---' ? formatTimeDisplay(time) : '';
+                        const tOut = timeOut && timeOut !== '---' ? formatTimeDisplay(timeOut) : '';
+                        if (tIn && tOut && tIn !== tOut) when = `${tIn} → ${tOut}`;
+                        else when = tIn || tOut || '';
+                    }
+                    const roleHtml = role ? `<div class="text-[10px] uppercase tracking-wide text-gray-500">${escapeTripHtml(role)}</div>` : '';
+                    const timeHtml = when ? `<div class="text-[10px] font-normal text-gray-600">${escapeTripHtml(when)}</div>` : '';
+                    return `<div class="text-xs font-bold text-center text-gray-900">${roleHtml}<div>${title}</div>${timeHtml}</div>`;
+                };
+                const bindTripStation = (marker, role, name, time, timeOut = null) => marker
+                    .bindPopup(tripStationPopup(role, name, time, timeOut), { maxWidth: 220 })
+                    .on('click', function () { this.openPopup(); });
 
                 tripMapMarkers = [];
                 const majorStops = tripMajorStationNames();
@@ -2611,7 +2673,8 @@ export async function openTripMapRenderer(routeData) {
                                 fillOpacity: 1
                             }).bindTooltip(stationLabel(stop.name, stop.time, stop.timeOut), {
                                 permanent: true, direction: 'top', offset: [0, -5], className: major ? majorLabelClass : minorLabelClass
-                            }).addTo(routeLayerGroup);
+                            });
+                            bindTripStation(m, 'Stop', stop.name, stop.time, stop.timeOut).addTo(routeLayerGroup);
                             tripMapMarkers.push(m);
                         }
                     });
@@ -2628,15 +2691,27 @@ export async function openTripMapRenderer(routeData) {
                     ? currentValidStops[currentValidStops.length - 1]
                     : null;
 
-                L.marker(startLatLng, { icon: createDot('#22c55e', 14) })
-                    .bindTooltip(`<b>Start:</b> ${stationLabel(currentOrigin, startStop?.time, startStop?.timeOut)}`, {
-                        permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
-                    }).addTo(routeLayerGroup);
+                bindTripStation(
+                    L.marker(startLatLng, { icon: createDot('#22c55e', 14) })
+                        .bindTooltip(`<b>Start:</b> ${stationLabel(currentOrigin, startStop?.time, startStop?.timeOut)}`, {
+                            permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
+                        }),
+                    'Start',
+                    currentOrigin,
+                    startStop?.time,
+                    startStop?.timeOut
+                ).addTo(routeLayerGroup);
 
-                L.marker(endLatLng, { icon: createDot('#ef4444', 14) })
-                    .bindTooltip(`<b>End:</b> ${stationLabel(currentDest, endStop?.time, endStop?.timeOut)}`, {
-                        permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
-                    }).addTo(routeLayerGroup);
+                bindTripStation(
+                    L.marker(endLatLng, { icon: createDot('#ef4444', 14) })
+                        .bindTooltip(`<b>End:</b> ${stationLabel(currentDest, endStop?.time, endStop?.timeOut)}`, {
+                            permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
+                        }),
+                    'End',
+                    currentDest,
+                    endStop?.time,
+                    endStop?.timeOut
+                ).addTo(routeLayerGroup);
 
                 const activeDisruptions = routeData.globalDisruptions || {};
                 if (currentValidStops.length > 0) {
@@ -3068,11 +3143,7 @@ export const PlannerRenderer = {
         return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
     },
 
-    applyUIIntercepts: (stationName) => {
-        if (!stationName) return "";
-        let name = stationName.replace(' STATION', '').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-        return name;
-    },
+    applyUIIntercepts: (stationName) => sheetStationTitle(stationName),
 
     buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, variant = 'transfer' }) => {
         let iconBg = 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400';
@@ -3201,7 +3272,7 @@ export const PlannerRenderer = {
                     <div class="absolute rounded-full ${depDotClass}"></div>
                     <div class="flex flex-col">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="font-bold ${depTextClass} text-sm">Depart ${subFrom.replace(' STATION', '')}</span>
+                            <span class="font-bold ${depTextClass} text-sm">Depart ${commuterStationName(subFrom)}</span>
                             <span class="font-mono font-bold ${depTextClass} text-sm">${formatTimeDisplay(stops[0].time)}</span>
                         </div>
                         <div class="text-xs ${depTrainClass} font-medium mb-2">
@@ -3228,7 +3299,7 @@ export const PlannerRenderer = {
                     innerHtml += `
                         <div class="flex justify-between text-xs py-1.5 relative pl-5">
                             <div class="absolute -left-[5px] top-2 w-3 h-3 rounded-full ${dotClass}"></div>
-                            <span class="${textClass}">${stop.station.replace(' STATION', '')}</span>
+                            <span class="${textClass}">${commuterStationName(stop.station)}</span>
                             <span class="font-mono ${textClass}">${formatTimeDisplay(stop.time)}</span>
                         </div>
                     `;
@@ -3263,9 +3334,9 @@ export const PlannerRenderer = {
             const arrTextClass = isSevered ? "text-gray-400 dark:text-gray-500 opacity-50 grayscale font-bold" : "text-gray-900 dark:text-white font-bold";
             const arrBorderClass = subIsFinalDest ? "border-l-2 border-transparent" : "border-l-2 border-gray-300 dark:border-gray-600";
             
-            let arrLabel = subIsFinalDest ? subTo.replace(' STATION', '') : 'Arrive ' + subTo.replace(' STATION', '');
+            let arrLabel = subIsFinalDest ? commuterStationName(subTo) : 'Arrive ' + commuterStationName(subTo);
             if (isSevered) {
-                arrLabel = `${subTo.replace(' STATION', '')}`;
+                arrLabel = `${commuterStationName(subTo)}`;
             }
 
             html += `
@@ -3574,15 +3645,13 @@ export const PlannerRenderer = {
             }
 
             const changeLabel = plannerChangeLabel(transferCount);
-            const waitMins = plannerLongestWaitMins(opt);
-            const waitBit = waitMins ? ` · ${escapeHTML(PlannerRenderer.formatDuration(waitMins))} wait` : '';
             if (opt.dayLabel) label = ` · ${escapeHTML(compactPlannerDayLabel(opt.dayLabel, opt))}`;
             else if (midnightRollover) label = ' · Tomorrow';
             const clockLine = `${plannerClock24(opt.depTime)} → ${plannerClock24(opt.arrTime)}`;
-            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${waitBit}${label}`;
+            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${label}`;
             const isSelected = (idx === selectedIndex);
             if (isSelected) {
-                selectedText = `<span class="block truncate">${clockLine}</span><span class="block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${detailLine}</span>`;
+                selectedText = `<span class="block truncate">${clockLine}</span><span class="block truncate text-right text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${detailLine}</span>`;
             }
             const rowTone = isSelected
                 ? 'bg-blue-600 text-white hover:bg-blue-700 border-transparent'
@@ -3594,7 +3663,7 @@ export const PlannerRenderer = {
             return `
                 <li onclick="if(typeof window._selectCustomTrip === 'function') window._selectCustomTrip(${idx})" class="px-3.5 py-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm font-medium transition-colors ${rowTone}">
                     <span class="block font-bold tabular-nums">${clockLine}</span>
-                    <span class="block text-[11px] font-semibold mt-0.5 ${detailTone}">${detailLine}</span>
+                    <span class="block text-right text-[11px] font-semibold mt-0.5 ${detailTone}">${detailLine}</span>
                 </li>
             `;
         }).join('');
@@ -3612,7 +3681,7 @@ export const PlannerRenderer = {
                 </style>
                 <label class="text-[9px] uppercase font-black text-gray-400 mb-1.5 block tracking-widest pl-1">Departure Time</label>
                 <div onclick="this.classList.remove('planner-gentle-pulse'); if(typeof window._toggleCustomTimeDropdown === 'function') window._toggleCustomTimeDropdown(event)" class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg p-3 focus:outline-none font-bold shadow-sm cursor-pointer flex justify-between items-center transition-colors hover:border-blue-400 group planner-gentle-pulse">
-                    <span id="custom-time-display" class="min-w-0 pr-2 leading-tight">${selectedText}</span>
+                    <span id="custom-time-display" class="block min-w-0 flex-1 pr-2 leading-tight">${selectedText}</span>
                     <svg class="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0 transform transition-transform" id="custom-time-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
                 <ul id="custom-time-list" class="absolute z-[200] w-full left-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-64 overflow-y-auto hidden mt-1 custom-scrollbar flex flex-col text-left">
@@ -3961,7 +4030,10 @@ export function initPlanner() {
     const resetBtn = document.getElementById('planner-reset-btn');
     const locateBtn = document.getElementById('planner-locate-btn');
     const backBtn = document.getElementById('planner-back-btn');
-    const closeFareSheet = () => closeSmoothModal('planner-fare-breakdown-sheet');
+    const closeFareSheet = () => {
+        releasePlannerFareTicketPreview();
+        closeSmoothModal('planner-fare-breakdown-sheet');
+    };
     document.getElementById('planner-fare-breakdown-close')?.addEventListener('click', closeFareSheet);
     document.getElementById('planner-fare-breakdown-done')?.addEventListener('click', closeFareSheet);
     document.getElementById('planner-fare-breakdown-sheet')?.addEventListener('click', (ev) => {
@@ -4140,7 +4212,7 @@ export function initPlanner() {
                         fromSelect.value = nearest.stationName;
                         const fromInputSearch = document.getElementById('planner-from-search');
                         if (fromInputSearch) {
-                            fromInputSearch.value = nearest.stationName.replace(' STATION', '');
+                            fromInputSearch.value = plannerStationDisplayName(nearest.stationName);
                             fromInputSearch.dataset.resolvedValue = nearest.stationName;
                         }
                         
@@ -4539,7 +4611,7 @@ export function setupAutocomplete(inputId, selectId) {
             if (!select.querySelector(`option[value="${station}"]`)) {
                 const opt = document.createElement('option');
                 opt.value = station;
-                opt.textContent = station;
+                opt.textContent = commuterStationName(station);
                 select.appendChild(opt);
             }
             select.value = station;
@@ -4572,25 +4644,15 @@ export function setupAutocomplete(inputId, selectId) {
             oppositeValue = (fromInput && fromInput.dataset.resolvedValue) ? fromInput.dataset.resolvedValue : "";
         }
 
-        const valNorm = normalizeStationName(rawFilter);
-        const aliasCanon = new Set();
-        if (valNorm) {
-            if (STATION_ALIASES[valNorm]) aliasCanon.add(STATION_ALIASES[valNorm]);
-            if (valNorm.length >= 5) {
-                Object.entries(STATION_ALIASES).forEach(([k, v]) => {
-                    if (k === valNorm || k.startsWith(valNorm)) aliasCanon.add(v);
-                });
-            }
-        }
         let matches = val.length === 0
             ? masterList
-            : masterList.filter((s) => s.includes(val) || aliasCanon.has(normalizeStationName(s)));
+            : masterList.filter((s) => stationQueryHits(s, rawFilter));
         if (oppositeValue) matches = matches.filter((s) => s !== oppositeValue);
 
         // Ghosts only when the user is typing a name (not in the full browse list)
         let ghostMatches = [];
         if (val.length > 0) {
-            ghostMatches = ghostList.filter((s) => s.includes(val) && s !== oppositeValue);
+            ghostMatches = ghostList.filter((s) => stationQueryHits(s, rawFilter) && s !== oppositeValue);
             // Prefer prefix hits (QUEE → Queenswood) over weaker contains-only ghosts
             ghostMatches.sort((a, b) => {
                 const ba = bareStationName(a).toUpperCase();
@@ -4752,11 +4814,7 @@ export async function applyPlannerDeepLink() {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast('Still opening this link');
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // SEO / share planner handoffs skip Welcome — clear nt-onboarding so the bottom bar shows.
     import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
@@ -4764,7 +4822,7 @@ export async function applyPlannerDeepLink() {
     const targetRegion = (link.region && ['GP', 'WC', 'KZN', 'EC'].includes(link.region))
         ? link.region
         : ($userRegion.get() || 'GP');
-    const pinned = ensureRoutePinnedForRegion(targetRegion);
+    const pinned = ensureRoutePinnedForRegion(targetRegion, { persistRegion: false });
     if (!pinned) {
         slowToast.cancel();
         showToast('Could not load trip data for this region.', 'error');
@@ -4778,6 +4836,7 @@ export async function applyPlannerDeepLink() {
 
     if (typeof switchTab === 'function') switchTab('trip-planner');
     else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    import('./deeplink.js').then((m) => m.noteDeeplinkSurface?.('planner', { loadDefaults: false })).catch(() => {});
 
     stripShareParamsFromUrl();
 
@@ -5317,11 +5376,11 @@ export function planFromAlternateOrigin(newOrigin, dest) {
     if (fromSelect) fromSelect.value = fullFrom;
     if (toSelect) toSelect.value = fullTo;
     if (fromInput) {
-        fromInput.value = fullFrom.replace(/ STATION/gi, '');
+        fromInput.value = plannerStationDisplayName(fullFrom);
         fromInput.dataset.resolvedValue = fullFrom;
     }
     if (toInput) {
-        toInput.value = fullTo.replace(/ STATION/gi, '');
+        toInput.value = plannerStationDisplayName(fullTo);
         toInput.dataset.resolvedValue = fullTo;
     }
     executeTripPlan(fullFrom, fullTo);
@@ -5358,30 +5417,6 @@ function plannerTripDurationLabel(step) {
     if (!Number.isFinite(mins)) return '';
     if (mins < 0) mins += 1440;
     return PlannerRenderer.formatDuration(mins);
-}
-
-/** Longest changeover. Short connections stay off the row. */
-function plannerLongestWaitMins(step) {
-    if (!step) return 0;
-    let max = 0;
-    const consider = (arr, dep) => {
-        if (!arr || !dep) return;
-        let wait = Math.floor((timeToSeconds(dep) - timeToSeconds(arr)) / 60);
-        if (!Number.isFinite(wait)) return;
-        if (wait < 0) wait += 1440;
-        if (wait > max) max = wait;
-    };
-    if (step.type === 'TRANSFER') consider(step.leg1?.arrTime, step.leg2?.depTime);
-    if (step.type === 'DOUBLE_TRANSFER') {
-        consider(step.leg1?.arrTime, step.leg2?.depTime);
-        consider(step.leg2?.arrTime, step.leg3?.depTime);
-    }
-    if (step.type === 'MULTI_TRANSFER' && Array.isArray(step.legs)) {
-        for (let i = 0; i < step.legs.length - 1; i++) {
-            consider(step.legs[i]?.arrTime, step.legs[i + 1]?.depTime);
-        }
-    }
-    return max >= 20 ? max : 0;
 }
 
 function plannerDepartureMenuOpen() {

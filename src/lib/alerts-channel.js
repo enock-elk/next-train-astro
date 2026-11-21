@@ -7,10 +7,17 @@ import { fetchLinkPreview, hydrateLinkPreviews, linkPreviewMarkup } from './link
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
 import { isPublicPreviewUrl } from './link-preview.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { showCopyToast, showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { alertSharePath } from './share-links.js';
+import { embedCommunityShareCards, stripCommunityShareUrls } from './share-chips.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { $account } from './account.js';
 import { $currentRouteId, $userRegion } from '../store.js';
-import { loadAlertImageBlob, pruneExpiredAlertImages } from './alert-image-cache.js';
+import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
+import { pictureWasShown, picturesWaitForTap, posterLoadPlan, rememberPicture, heldPictureAskInnerHtml, settleHeldPicture, loadPicturePreview } from './data-saver.js';
+import { armGifPlayers, isGifUrl } from './gif-play.js';
+import { imageMetaForUrl, sanitizePicturePreview, tinyJpegFromBlob, imageMetaKey, imageMetaRow } from './picture-preview.js';
+import { groupScheduleSheets, scheduleRouteTitle, scheduleSheetRowLabel } from './schedule-sheet-list.js';
 import {
     ALERTS_PAGE_SIZE,
     ALERT_PIN_SVG,
@@ -18,6 +25,7 @@ import {
     ALERT_REACTION_EMOJI,
     buildAlertReactionBreakdown,
     noticeTimestamp,
+    isNoticeLive,
     noticeScopeKeys as scopeKeysFor,
     parseNoticeBucket,
     mergeUnionNotices,
@@ -31,12 +39,17 @@ import {
     sanitizeAlertImageUrl,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
+    sanitizeAlertPdfUrl,
     alertVideoEmbedUrl,
     alertVideoKind,
     renderAlertVideoMarkup,
+    renderAlertPdfMarkup,
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
+    layoutMessageMedia,
+    messageWithLegacyAlertImages,
+    noticeForInstalledPhones,
     alertCopyNeedsSeeMore,
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
@@ -125,7 +138,10 @@ export function pickAutoOpenNotice(notices) {
 
 export function resolveAlertImageSrc(path) {
     const clean = sanitizeAlertImageUrl(path);
-    if (clean) return withBase(clean.replace(/^\//, ''));
+    if (clean) {
+        if (/^https:\/\//i.test(clean)) return clean;
+        return withBase(clean.replace(/^\//, ''));
+    }
     return sanitizeInlineAlertImageUrl(path) || '';
 }
 
@@ -248,16 +264,26 @@ function renderPosterHtml(urls, notice = null) {
     return renderLazyPosterHtml(urls, notice);
 }
 
+function previewDataAttrs(notice, path) {
+    const row = imageMetaForUrl(notice?.imageMeta, path);
+    let attrs = '';
+    if (row.preview) attrs += ` data-nt-preview="${escapeHTML(row.preview)}"`;
+    if (row.bytes > 0) attrs += ` data-nt-bytes="${row.bytes}"`;
+    return attrs;
+}
+
 export function renderLazyPosterHtml(urls, notice = null) {
     if (!urls.length) return '';
     const spinner = `<svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
     const noticeId = escapeHTML(String(notice?.id || ''));
     const expiresAt = escapeHTML(String(notice?.expiresAt || ''));
+    let photo = 0;
     const cells = urls.map((path) => {
         const href = resolveAlertImageSrc(path);
         if (!href) return '';
+        photo += 1;
         const src = escapeHTML(href);
-        return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
+        return `<button type="button" data-alert-lightbox="${src}" data-alert-photo="${photo}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}"${previewDataAttrs(notice, path)} class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
             <img alt="" referrerpolicy="no-referrer" draggable="false" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
@@ -272,9 +298,13 @@ function bindAlertVideoPlayers(root) {
         if (img.dataset.ntVideoPosterBound === '1') return;
         img.dataset.ntVideoPosterBound = '1';
         const page = img.getAttribute('data-alert-video-page') || '';
+        if (picturesWaitForTap() && !pictureWasShown(page)) return;
         const kind = alertVideoKind(page);
         const paint = (thumb) => {
-            if (thumb && isPublicPreviewUrl(thumb) && img.isConnected) img.src = thumb;
+            if (thumb && isPublicPreviewUrl(thumb) && img.isConnected) {
+                rememberPicture(page);
+                img.src = thumb;
+            }
         };
         if (kind === 'vimeo') {
             const endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(page)}`;
@@ -334,10 +364,74 @@ function bindAlertVideoPlayers(root) {
     });
 }
 
+function holdPosterForTap(host, startLoad) {
+    if (!host || host.dataset.ntPosterHeld === '1') return;
+    host.dataset.ntPosterHeld = '1';
+    host.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+    let ask = host.querySelector('[data-nt-poster-ask]');
+    if (!ask) {
+        ask = document.createElement('span');
+        ask.setAttribute('data-nt-poster-ask', '1');
+        ask.className = 'nt-picture-hold-ask absolute inset-0 overflow-hidden bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-300';
+        ask.innerHTML = heldPictureAskInnerHtml();
+        host.appendChild(ask);
+    }
+    const previewUrl = host.getAttribute('data-alert-lightbox') || '';
+    settleHeldPicture(host, previewUrl);
+    const onTap = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        host.removeEventListener('click', onTap, true);
+        delete host.__ntPosterHoldTap;
+        ask.remove();
+        delete host.dataset.ntPosterHeld;
+        host.querySelector('.nt-alert-poster-loading')?.classList.remove('hidden');
+        startLoad();
+    };
+    host.__ntPosterHoldTap = onTap;
+    host.addEventListener('click', onTap, true);
+}
+
+function releaseHeldPosters(root) {
+    root?.querySelectorAll?.('[data-nt-poster-held]').forEach((host) => {
+        if (host.__ntPosterHoldTap) {
+            host.removeEventListener('click', host.__ntPosterHoldTap, true);
+            delete host.__ntPosterHoldTap;
+        }
+        host.querySelector('[data-nt-poster-ask]')?.remove();
+        delete host.dataset.ntPosterHeld;
+        const img = host.querySelector('img.nt-alert-poster-img');
+        if (img) {
+            delete img.dataset.ntPosterBound;
+            delete img.dataset.ntPosterStarted;
+        }
+        host.querySelector('.nt-alert-poster-loading')?.classList.remove('hidden');
+    });
+}
+
+export function renderSharedMediaHtml(text, extraUrls = []) {
+    const laid = layoutMessageMedia(text, extraUrls);
+    const posters = laid.imageUrls.length ? renderLazyPosterHtml(laid.imageUrls) : '';
+    return {
+        ...laid,
+        media: `${posters}${renderAlertVideoMarkup(laid.videoUrls)}${renderAlertPdfMarkup(laid.pdfUrls)}`,
+    };
+}
+
 export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
     if (!root?.querySelectorAll) return;
     watchAlertPosterHydration(root);
     bindAlertVideoPlayers(root);
+    root.querySelectorAll('[data-alert-pdf]').forEach((btn) => {
+        if (btn.dataset.ntPdfBound === '1') return;
+        btn.dataset.ntPdfBound = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openAlertPdf(btn.getAttribute('data-alert-pdf'));
+        });
+    });
     root.querySelectorAll('[data-alert-lightbox] img.nt-alert-poster-img').forEach((img) => {
         if (img.dataset.ntPosterBound === '1') return;
         img.dataset.ntPosterBound = '1';
@@ -346,40 +440,61 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
         if (!originalSrc) return;
-        const rememberObjectUrl = (blob) => {
-            if (!blob || !host) return '';
-            try {
-                const prev = host.getAttribute('data-alert-object-url') || '';
-                const obj = URL.createObjectURL(blob);
-                host.setAttribute('data-alert-object-url', obj);
-                if (prev && prev.startsWith('blob:') && prev !== obj) {
-                    try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
-                }
-                return obj;
-            } catch {
-                return '';
-            }
-        };
-        loadAlertImageBlob(originalSrc, {
-            expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
-            noticeId: host?.getAttribute('data-alert-notice-id') || '',
-        }).then((blob) => {
-            const obj = rememberObjectUrl(blob);
-            img.setAttribute('fetchpriority', 'high');
-            if (obj) {
-                img.src = obj;
-                if (window._isLightboxMode && typeof window.ntPaintAlertLightbox === 'function') {
-                    const full = document.getElementById('alert-image-lightbox-img');
-                    if (full && !String(full.getAttribute('src') || '').startsWith('blob:')) {
-                        window.ntPaintAlertLightbox(obj);
+        if (isGifUrl(originalSrc)) img.dataset.ntGifSrc = originalSrc;
+        const startLoad = () => {
+            if (img.dataset.ntPosterStarted === '1') return;
+            img.dataset.ntPosterStarted = '1';
+            rememberPicture(originalSrc);
+            const rememberObjectUrl = (blob) => {
+                if (!blob || !host) return '';
+                try {
+                    const prev = host.getAttribute('data-alert-object-url') || '';
+                    const obj = URL.createObjectURL(blob);
+                    host.setAttribute('data-alert-object-url', obj);
+                    if (prev && prev.startsWith('blob:') && prev !== obj) {
+                        try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
                     }
+                    return obj;
+                } catch {
+                    return '';
                 }
-                return;
-            }
-            if (!img.getAttribute('src')) img.src = originalSrc;
-        }).catch(() => {
-            if (!img.getAttribute('src')) img.src = originalSrc;
-        });
+            };
+            loadAlertImageBlob(originalSrc, {
+                expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
+                noticeId: host?.getAttribute('data-alert-notice-id') || '',
+            }).then((blob) => {
+                const obj = rememberObjectUrl(blob);
+                img.setAttribute('fetchpriority', 'high');
+                if (obj) {
+                    img.src = obj;
+                    if (window._isLightboxMode && typeof window.ntPaintAlertLightbox === 'function') {
+                        const full = document.getElementById('alert-image-lightbox-img');
+                        if (full && !String(full.getAttribute('src') || '').startsWith('blob:')) {
+                            window.ntPaintAlertLightbox(obj);
+                        }
+                    }
+                    return;
+                }
+                if (!img.getAttribute('src')) img.src = originalSrc;
+            }).catch(() => {
+                if (!img.getAttribute('src')) img.src = originalSrc;
+            });
+        };
+        if (posterLoadPlan(originalSrc) === 'show') {
+            startLoad();
+        } else if (host) {
+            host.dataset.ntPosterChecking = '1';
+            resolveCachedAlertImage(originalSrc).then((cached) => {
+                if (!img.isConnected) return;
+                delete host.dataset.ntPosterChecking;
+                if (posterLoadPlan(originalSrc, { cached: !!cached }) === 'show') startLoad();
+                else holdPosterForTap(host, startLoad);
+            }).catch(() => {
+                if (!img.isConnected) return;
+                delete host.dataset.ntPosterChecking;
+                holdPosterForTap(host, startLoad);
+            });
+        }
         const reveal = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
             if (!(img.naturalWidth > 0)) return;
@@ -387,6 +502,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             img.classList.remove('opacity-0');
             img.classList.add('opacity-100');
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+            armGifPlayers(host || img);
             host?.setAttribute('data-alert-ready', '1');
             const live = img.currentSrc || img.src || '';
             if (live.startsWith('blob:')) host?.setAttribute('data-alert-object-url', live);
@@ -429,6 +545,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             setTimeout(kick, 4000);
         }
     });
+    armGifPlayers(root);
 }
 
 function watchAlertPosterHydration(root) {
@@ -709,6 +826,7 @@ function openAlertReactionBreakdown(notice) {
                 <div class="flex justify-center mb-3"><span class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></span></div>
                 <p class="text-base font-black text-gray-900 dark:text-white mb-3" data-breakdown-title>Reactions</p>
                 <div class="flex flex-wrap gap-2" data-breakdown-chips></div>
+                <div class="mt-1 hidden max-h-64 overflow-y-auto" data-alert-react-people></div>
             </div>`;
         document.body.appendChild(sheet);
         sheet.querySelector('[data-breakdown-scrim]')?.addEventListener('click', hideAlertReactionBreakdown);
@@ -736,6 +854,12 @@ function openAlertReactionBreakdown(notice) {
                 : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
         )).join('');
     }
+    const people = sheet.querySelector('[data-alert-react-people]');
+    if (people) {
+        people.classList.add('hidden');
+        people.innerHTML = '';
+        if (isAdminAuthed()) void paintAlertReactionPeople(people, notice);
+    }
     sheet.classList.remove('hidden');
     if (!reactionBreakdownPushed) {
         reactionBreakdownPushed = true;
@@ -749,18 +873,21 @@ function renderPostCard(notice, opts = {}) {
     const chrome = severityChrome(severity);
     const layout = layoutAlertPost(notice);
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
-    const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
+    const communityPreview = linkPreviewMarkup(notice).includes('nt-community-share-card');
+    const body = communityPreview
+        ? stripCommunityShareUrls(prepareRichHtml(stripAlertSignoffHtml(layout.body)))
+        : embedCommunityShareCards(prepareRichHtml(stripAlertSignoffHtml(layout.body)));
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${linkedPlainHtml(layout.title)}</h3>`
         : '';
-    const mediaHtml = `${renderPosterHtml(layout.imageUrls, notice)}${renderAlertVideoMarkup(layout.videoUrls)}`;
+    const mediaHtml = `${renderPosterHtml(layout.imageUrls, notice)}${renderAlertVideoMarkup(layout.videoUrls)}${renderAlertPdfMarkup(layout.pdfUrls)}`;
     const bodyHtml = body
         ? (alertCopyNeedsSeeMore(body)
             ? buildAlertSeeMoreMarkup(body, { className: mediaHtml ? 'mt-3' : '' })
             : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';
-    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl)) {
+    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl) && !sanitizeAlertPdfUrl(notice.ctaUrl)) {
         extra += `<a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800">${escapeHTML(notice.ctaText)}</a>`;
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
@@ -820,7 +947,14 @@ function renderPostCard(notice, opts = {}) {
 
 function htmlToPlainSnippet(html, maxWords = 8) {
     if (!html) return '';
-    const spaced = String(html)
+    // Cap first. An image-only notice can carry a multi-megabyte data URL, and
+    // parsing that freezes the phone. Copy is the words, not the picture.
+    let spaced = String(html);
+    if (spaced.length > 12000) spaced = spaced.slice(0, 12000);
+    spaced = spaced
+        .replace(/<img\b[^>]*>/gi, ' ')
+        .replace(/<video\b[^>]*>[\s\S]*?<\/video>/gi, ' ')
+        .replace(/\bdata:[^,\s]{0,80},[a-z0-9+/=\s]{40,}/gi, ' ')
         .replace(/<\s*br\s*\/?>/gi, ' ')
         .replace(/<\/\s*(h[1-6]|p|div|li|tr|section|article)\s*>/gi, ' ')
         .replace(/<\s*(h[1-6]|p|div|li|tr|section|article)(\s[^>]*)?>/gi, ' ');
@@ -964,10 +1098,20 @@ export function closeAlertsChannel() {
     if (typeof window !== 'undefined') window.__ntAlertsParkHome = true;
     closeSmoothModal('alerts-channel');
     if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
+    clearAlertSelection();
+    let linkSurface = '';
+    try { linkSurface = sessionStorage.getItem('nt_deeplink_surface') || ''; } catch { /* ignore */ }
+    if (linkSurface === 'alerts') {
+        import('./deeplink.js').then((m) => m.finishDeeplinkVisit?.()).catch(() => {});
+    }
 }
 
 export function openAlertsChannel(opts = {}) {
-    const notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
+    let notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
+    const pinned = opts.pinNotice;
+    if (pinned?.id && !notices.some((n) => String(n.id) === String(pinned.id))) {
+        notices = [pinned, ...notices];
+    }
     if (opts.resetVisible !== false) visibleCount = ALERTS_PAGE_SIZE;
     highlightNoticeId = opts.highlightId || null;
     const focusTop = !!opts.focusTop && !!highlightNoticeId;
@@ -994,7 +1138,7 @@ export function openAlertsChannel(opts = {}) {
     setTimeout(align, 280);
     bindAlertsChannelOnce();
     // Opening Alerts always revalidates notices (idle poll may be 2–3 min).
-    if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
+    if (!opts.skipReload && typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
         try { window.checkServiceAlerts({ force: true }); } catch { /* ignore */ }
     }
 }
@@ -1020,7 +1164,7 @@ export function applyBellFromNotices(notices) {
     const unseenCritical = unseen.some((n) => (n.severity || '') === 'critical');
 
     // Lab header is brand-left with an inline bell — do not force SPA absolute chrome.
-    let bellClass = 'relative shrink-0 p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
+    let bellClass = 'relative shrink-0 p-2 rounded-full shadow-sm focus:outline-none ';
     let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
     if (severity === 'critical') {
         bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
@@ -1072,6 +1216,61 @@ async function ensureReactAuthToken() {
     return '';
 }
 
+function alertPeopleKey(path) {
+    return String(path || '').replace(/[.#$/[\]]/g, '_').slice(0, 180);
+}
+
+async function writeAlertReactionPerson(path, emoji, token, removing) {
+    const user = window.firebaseAuth?.currentUser;
+    const acct = $account.get();
+    if (!user || user.isAnonymous || acct?.status !== 'signed-in' || !user.uid || !token) return;
+    const url = `${DYNAMIC_BASE_URL}alert_reaction_people/${encodeURIComponent(alertPeopleKey(path))}/${encodeURIComponent(user.uid)}.json?auth=${encodeURIComponent(token)}`;
+    try {
+        if (removing) {
+            await fetch(url, { method: 'DELETE' });
+            return;
+        }
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emoji,
+                name: String(acct.displayName || 'Passenger').slice(0, 80),
+                at: Date.now(),
+            }),
+        });
+    } catch { /* the count is already saved; names appear after the rules deploy */ }
+}
+
+async function paintAlertReactionPeople(host, notice) {
+    if (!host || !isAdminAuthed()) return;
+    const token = await ensureReactAuthToken();
+    if (!token) return;
+    const path = notice._reactPath || `${notice._sourceKey}/${notice.id}`;
+    let data = null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}alert_reaction_people/${encodeURIComponent(alertPeopleKey(path))}.json?auth=${encodeURIComponent(token)}`);
+        if (!res.ok) return;
+        data = await res.json();
+    } catch {
+        return;
+    }
+    if (!data || typeof data !== 'object') return;
+    const rows = Object.values(data).filter((row) => row && ALERT_REACTION_EMOJI[row.emoji]);
+    if (!rows.length) return;
+    host.innerHTML = rows.map((row) => {
+        const name = escapeHTML(String(row.name || 'Passenger').slice(0, 80));
+        const letter = escapeHTML((String(row.name || 'P').trim().charAt(0) || 'P').toUpperCase());
+        const emoji = ALERT_REACTION_EMOJI[row.emoji] || '';
+        return `<div class="flex items-center gap-3 px-1 py-2">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">${letter}</span>
+            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${name}</span>
+            <span class="text-lg leading-none" aria-hidden="true">${emoji}</span>
+        </div>`;
+    }).join('');
+    host.classList.remove('hidden');
+}
+
 async function writeAlertReactionCount(path, emoji, token, delta) {
     const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
     const curRes = await fetch(url);
@@ -1119,7 +1318,10 @@ export async function submitAlertReaction(notice, emoji) {
             if (wrap) wrap.outerHTML = renderReactionsHtml(notice);
         }
         paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
+        await writeAlertReactionPerson(path, emoji, token, removing);
         triggerHaptic();
+        hideAlertReactionPicker();
+        clearAlertSelection();
         return true;
     } catch (e) {
         console.warn('Alert reaction failed', e);
@@ -1300,6 +1502,297 @@ function bindLightboxReactionClicks() {
     });
 }
 
+let selectedAlert = null;
+
+function shareOrigin() {
+    if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) return location.origin;
+    return 'https://nexttrain.co.za';
+}
+
+function alertShareUrl(notice, photo = 0) {
+    return `${shareOrigin()}${alertSharePath(notice?._sourceKey || 'all', notice?.id || '', photo)}`;
+}
+
+function alertCaptionText(notice) {
+    if (!notice) return '';
+    try {
+        const laid = layoutAlertPost(notice);
+        const title = String(laid?.title || notice.title || '').trim();
+        const body = htmlToPlainSnippet(laid?.body || '', 800);
+        const text = [title, body].filter(Boolean).join('\n').trim();
+        if (text) return text.slice(0, 4000);
+    } catch { /* the raw message is still worth a copy */ }
+    return htmlToPlainSnippet(notice.message || notice.text || '', 800).slice(0, 4000);
+}
+
+function syncAlertCopyButton() {
+    const btn = document.getElementById('alerts-select-copy');
+    if (!btn) return;
+    const hasText = alertCaptionText(selectedAlert).length > 0;
+    btn.classList.toggle('hidden', !hasText);
+    btn.disabled = !hasText;
+    btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+    btn.classList.remove('opacity-40', 'pointer-events-none');
+}
+
+function clearAlertSelection() {
+    selectedAlert = null;
+    document.querySelectorAll('.nt-alert-card.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    document.getElementById('alerts-channel-home')?.classList.remove('hidden');
+    const bar = document.getElementById('alerts-select-bar');
+    bar?.classList.add('hidden');
+    bar?.classList.remove('flex');
+    document.getElementById('alerts-select-menu')?.classList.add('hidden');
+    syncAlertCopyButton();
+}
+
+function selectAlertNotice(notice) {
+    if (!notice?.id) return;
+    selectedAlert = notice;
+    document.querySelectorAll('.nt-alert-card.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    document.getElementById(`alert-post-${notice.id}`)?.classList.add('is-selected');
+    document.getElementById('alerts-channel-home')?.classList.add('hidden');
+    const bar = document.getElementById('alerts-select-bar');
+    bar?.classList.remove('hidden');
+    bar?.classList.add('flex');
+    document.getElementById('alerts-select-menu')?.classList.add('hidden');
+    syncAlertMenuButton();
+    syncAlertCopyButton();
+}
+
+async function copyText(text) {
+    const value = String(text || '').trim().slice(0, 4000);
+    if (!value) return false;
+    const write = async () => {
+        if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+        await Promise.race([
+            navigator.clipboard.writeText(value),
+            new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 1500); }),
+        ]);
+    };
+    try {
+        await write();
+        showCopyToast();
+        return true;
+    } catch {
+        try {
+            const area = document.createElement('textarea');
+            area.value = value;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand('copy');
+            area.remove();
+            if (ok) {
+                showCopyToast();
+                return true;
+            }
+        } catch { /* the selection bar stays up */ }
+        showToast('Could not copy.', 'error');
+        return false;
+    }
+}
+
+async function shareLink(url) {
+    const link = String(url || '').trim();
+    if (!link) return;
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ url: link });
+            return;
+        } catch (e) {
+            if (e?.name === 'AbortError') return;
+            try {
+                await navigator.share({ text: link });
+                return;
+            } catch (err) {
+                if (err?.name === 'AbortError') return;
+            }
+        }
+    }
+    await copyText(link);
+}
+
+function alertMenuActions(notice) {
+    if (!isAdminAuthed() || !notice) return [];
+    return [
+        { action: 'pin', label: isNoticePinned(notice) ? 'Unpin' : 'Pin' },
+        { action: 'delete', label: 'Delete' },
+    ];
+}
+
+function syncAlertMenuButton() {
+    const btn = document.getElementById('alerts-select-menu-btn');
+    const menu = document.getElementById('alerts-select-menu');
+    const actions = alertMenuActions(selectedAlert);
+    if (!actions.length) {
+        btn?.classList.add('hidden');
+        menu?.classList.add('hidden');
+        if (menu) menu.innerHTML = '';
+        return;
+    }
+    btn?.classList.remove('hidden');
+}
+
+function paintAlertSelectMenu() {
+    const menu = document.getElementById('alerts-select-menu');
+    const notice = selectedAlert;
+    const actions = alertMenuActions(notice);
+    syncAlertMenuButton();
+    if (!menu || !notice || !actions.length) return;
+    const row = (action, label) => `<button type="button" class="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none" data-alert-menu="${action}" role="menuitem">${label}</button>`;
+    menu.innerHTML = actions.map((item) => row(item.action, item.label)).join('');
+    menu.classList.remove('hidden');
+}
+
+const PDF_MAX_BYTES = 8 * 1024 * 1024;
+let pdfOpening = false;
+
+function ensurePdfSheet() {
+    let sheet = document.getElementById('alert-pdf-sheet');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'alert-pdf-sheet';
+    sheet.className = 'fixed inset-0 z-[170] hidden flex-col bg-gray-100 dark:bg-gray-950';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-label', 'PDF');
+    sheet.innerHTML = `<div class="flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
+        <p class="text-sm font-bold text-gray-900 dark:text-white">PDF</p>
+        <button type="button" data-alert-pdf-close class="flex h-11 w-11 items-center justify-center rounded-full focus:outline-none" aria-label="Close">
+            <svg class="h-6 w-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+    <div id="alert-pdf-pages" class="min-h-0 flex-1 overflow-y-auto px-3 py-3"></div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('[data-alert-pdf-close]')?.addEventListener('click', () => {
+        sheet.classList.add('hidden');
+        sheet.classList.remove('flex');
+        const pages = sheet.querySelector('#alert-pdf-pages');
+        if (pages) pages.innerHTML = '';
+    });
+    return sheet;
+}
+
+/** Fetch and paint a PDF only after a tap. Scripting stays off. No preview download. */
+async function openAlertPdf(raw) {
+    const url = sanitizeAlertPdfUrl(raw);
+    if (!url) {
+        showToast('This PDF cannot be opened', 'error');
+        return;
+    }
+    if (pdfOpening) return;
+    pdfOpening = true;
+    const sheet = ensurePdfSheet();
+    const pages = sheet.querySelector('#alert-pdf-pages');
+    if (pages) pages.textContent = 'Opening PDF';
+    sheet.classList.remove('hidden');
+    sheet.classList.add('flex');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+        const res = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctrl.signal });
+        const finalUrl = sanitizeAlertPdfUrl(res.url || url);
+        if (!res.ok || !finalUrl) throw new Error('pdf');
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength < 5 || buf.byteLength > PDF_MAX_BYTES) throw new Error('pdf');
+        const head = new TextDecoder('latin1').decode(buf.slice(0, 5));
+        if (head !== '%PDF-') throw new Error('pdf');
+        const pdfjs = await import('pdfjs-dist');
+        if (!pdfjs.GlobalWorkerOptions.workerPort) {
+            const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker')).default;
+            pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
+        }
+        const doc = await pdfjs.getDocument({
+            data: new Uint8Array(buf),
+            isEvalSupported: false,
+            enableScripting: false,
+        }).promise;
+        if (pages) pages.innerHTML = '';
+        const count = Math.min(doc.numPages || 0, 12);
+        for (let i = 1; i <= count; i += 1) {
+            const page = await doc.getPage(i);
+            const viewport = page.getViewport({ scale: 1.2 });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            canvas.className = 'mx-auto mb-3 block h-auto max-w-full bg-white';
+            pages?.appendChild(canvas);
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+        if (!count) throw new Error('pdf');
+    } catch {
+        if (pages) pages.innerHTML = '';
+        sheet.classList.add('hidden');
+        sheet.classList.remove('flex');
+        showToast('This PDF cannot be opened', 'error');
+    } finally {
+        clearTimeout(timer);
+        pdfOpening = false;
+    }
+}
+
+const ALERT_SHARE_TOKEN = /^[A-Za-z0-9_-]{1,80}$/;
+
+async function fetchNoticeRecord(source, id) {
+    if (!ALERT_SHARE_TOKEN.test(source) || !ALERT_SHARE_TOKEN.test(id)) return null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}notices/${encodeURIComponent(source)}/${encodeURIComponent(id)}.json`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+        return { ...data, id: data.id || id, _sourceKey: source };
+    } catch {
+        return null;
+    }
+}
+
+function openSharedAlertPhoto(id, photo) {
+    const index = Number(photo);
+    if (!Number.isInteger(index) || index < 1) return;
+    const tryOpen = (left) => {
+        const card = document.getElementById(`alert-post-${id}`);
+        const btn = card?.querySelector(`[data-alert-photo="${index}"]`);
+        const src = btn?.getAttribute('data-alert-lightbox') || '';
+        if (btn && src && typeof window.openLightbox === 'function') {
+            btn.setAttribute('data-alert-ready', '1');
+            window.openLightbox(src, btn);
+            return;
+        }
+        if (left > 0) requestAnimationFrame(() => tryOpen(left - 1));
+    };
+    requestAnimationFrame(() => tryOpen(8));
+}
+
+/** Open one shared notice. Returns opened or gone. Does not prefetch a PDF. */
+export async function focusSharedAlert(id, source = '', photo = 0) {
+    const cleanId = String(id || '').trim();
+    const cleanSource = String(source || '').trim();
+    if (!ALERT_SHARE_TOKEN.test(cleanId)) return 'gone';
+    try {
+        const hub = await import('./hub.js');
+        await hub.checkServiceAlerts?.({ force: true });
+    } catch { /* the last list may still hold it */ }
+    let notice = cachedLiveNotices.find((n) => String(n.id) === cleanId && (!cleanSource || String(n._sourceKey) === cleanSource))
+        || cachedLiveNotices.find((n) => String(n.id) === cleanId)
+        || null;
+    if (!notice && ALERT_SHARE_TOKEN.test(cleanSource)) {
+        notice = await fetchNoticeRecord(cleanSource, cleanId);
+    }
+    if (!notice || notice.deleted || notice.hidden || !isNoticeLive(notice)) return 'gone';
+    openAlertsChannel({
+        notices: cachedLiveNotices,
+        pinNotice: notice,
+        highlightId: cleanId,
+        focusTop: true,
+        skipReload: true,
+    });
+    openSharedAlertPhoto(cleanId, photo);
+    return 'opened';
+}
+
 function bindAlertsChannelOnce() {
     if (channelBound) return;
     const root = document.getElementById('alerts-channel');
@@ -1310,8 +1803,59 @@ function bindAlertsChannelOnce() {
         e.preventDefault();
         closeAlertsChannel();
     };
+    root.addEventListener('click', (e) => {
+        const pdfBtn = e.target?.closest?.('[data-alert-pdf]');
+        if (!pdfBtn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openAlertPdf(pdfBtn.getAttribute('data-alert-pdf'));
+    });
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
+    document.getElementById('alerts-select-back')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        clearAlertSelection();
+    });
+    document.getElementById('alerts-select-copy')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!selectedAlert) return;
+        const text = alertCaptionText(selectedAlert);
+        if (!text) return;
+        const ok = await copyText(text);
+        if (ok) clearAlertSelection();
+    });
+    document.getElementById('alerts-select-share')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!selectedAlert) return;
+        shareLink(alertShareUrl(selectedAlert));
+    });
+    document.getElementById('alerts-select-menu-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const menu = document.getElementById('alerts-select-menu');
+        if (menu && !menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+            return;
+        }
+        paintAlertSelectMenu();
+    });
+    document.getElementById('alerts-select-menu')?.addEventListener('click', async (e) => {
+        const btn = e.target.closest?.('[data-alert-menu]');
+        if (!btn || !selectedAlert) return;
+        e.preventDefault();
+        const action = btn.getAttribute('data-alert-menu');
+        const notice = selectedAlert;
+        document.getElementById('alerts-select-menu')?.classList.add('hidden');
+        if (action === 'pin') {
+            await toggleAlertPinned(notice);
+            clearAlertSelection();
+            return;
+        }
+        if (action === 'delete') {
+            await deleteAlertForEveryone(notice);
+            clearAlertSelection();
+        }
+    });
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {
         triggerHaptic();
@@ -1344,7 +1888,10 @@ function bindAlertsChannelOnce() {
             const src = card.getAttribute('data-alert-src');
             const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
             clearAlertTextSelection();
-            if (notice) openAlertReactionPicker(notice, card);
+            if (notice) {
+                openAlertReactionPicker(notice, card);
+                selectAlertNotice(notice);
+            }
             card.classList.remove('is-pressing');
             [40, 120, 280, 500].forEach((ms) => setTimeout(clearAlertTextSelection, ms));
         }, 400);
@@ -1383,7 +1930,10 @@ function bindAlertsChannelOnce() {
         const id = card.getAttribute('data-alert-id');
         const src = card.getAttribute('data-alert-src');
         const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
-        if (notice) openAlertReactionPicker(notice, card);
+        if (notice) {
+            openAlertReactionPicker(notice, card);
+            selectAlertNotice(notice);
+        }
     });
     document.getElementById('alerts-channel-scroll')?.addEventListener('scroll', hideAlertReactionPicker, { passive: true });
     document.addEventListener('pointerdown', (e) => {
@@ -1395,13 +1945,20 @@ function bindAlertsChannelOnce() {
 
     root.addEventListener('click', (e) => {
         if (!longFired) return;
+        longFired = false;
+        if (e.target.closest?.('#alerts-select-bar, #alerts-select-menu, #alerts-channel-footer, #alerts-reaction-picker')) return;
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        longFired = false;
     }, true);
 
     root.addEventListener('click', (e) => {
+        const selectedCard = e.target.closest?.('.nt-alert-card.is-selected');
+        if (selectedCard && !e.target.closest('button, a, [data-alert-lightbox]')) {
+            e.preventDefault();
+            clearAlertSelection();
+            return;
+        }
         const seeMore = e.target.closest?.('[data-alert-see-more]');
         if (seeMore) {
             e.preventDefault();
@@ -1417,6 +1974,7 @@ function bindAlertsChannelOnce() {
         }
         const lightbox = e.target.closest?.('[data-alert-lightbox]');
         if (lightbox) {
+            if (lightbox.dataset.ntPosterHeld === '1' || lightbox.dataset.ntPosterChecking === '1') return;
             e.preventDefault();
             const src = lightbox.getAttribute('data-alert-lightbox');
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
@@ -1488,20 +2046,45 @@ export function initAlertsChannel() {
     bindLightboxReactionClicks();
     if (typeof window === 'undefined') return;
     window.openAlertsChannel = openAlertsChannel;
+    window.focusSharedAlert = focusSharedAlert;
     window.__ntHideAlertReactionBreakdown = hideAlertReactionBreakdown;
     window.closeAlertsChannel = closeAlertsChannel;
     window.renderAlertsChannel = renderAlertsChannel;
     window.renderLazyPosterHtml = renderLazyPosterHtml;
+    window.renderSharedMediaHtml = renderSharedMediaHtml;
+    window.openAlertPdf = openAlertPdf;
     window.hydrateAlertPosterImages = hydrateAlertPosterImages;
     window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
+    window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
+    window.noticeForInstalledPhones = noticeForInstalledPhones;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
+    window.tinyJpegFromBlob = tinyJpegFromBlob;
+    window.imageMetaKey = imageMetaKey;
+    window.imageMetaRow = imageMetaRow;
+    window.sanitizePicturePreview = sanitizePicturePreview;
+    window.loadPicturePreview = loadPicturePreview;
+    window.groupScheduleSheets = groupScheduleSheets;
+    window.scheduleRouteTitle = scheduleRouteTitle;
+    window.scheduleSheetRowLabel = scheduleSheetRowLabel;
     window.parseNoticeBucket = parseNoticeBucket;
     window.buildNoticesMeta = buildNoticesMeta;
     window.listNoticesInTarget = listNoticesInTarget;
 }
 
 if (typeof window !== 'undefined') {
+    window.addEventListener('ntdatasaver', () => {
+        const channel = document.getElementById('alerts-channel');
+        const channelOpen = channel && !channel.classList.contains('hidden');
+        if (!picturesWaitForTap()) {
+            releaseHeldPosters(document);
+            document.querySelectorAll('[data-alert-video-poster-pending]').forEach((img) => {
+                if (!img.getAttribute('src')) delete img.dataset.ntVideoPosterBound;
+            });
+            if (!channelOpen) hydrateAlertPosterImages(document);
+        }
+        if (channelOpen) renderAlertsChannel();
+    });
     window.addEventListener('nt-alert-lightbox', (event) => {
         bindLightboxReactionClicks();
         paintLightboxReactions(event?.detail || null);
@@ -1509,7 +2092,19 @@ if (typeof window !== 'undefined') {
     window.withBase = window.withBase || withBase;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
+    window.tinyJpegFromBlob = tinyJpegFromBlob;
+    window.imageMetaKey = imageMetaKey;
+    window.imageMetaRow = imageMetaRow;
+    window.sanitizePicturePreview = sanitizePicturePreview;
+    window.loadPicturePreview = loadPicturePreview;
+    window.groupScheduleSheets = groupScheduleSheets;
+    window.scheduleRouteTitle = scheduleRouteTitle;
+    window.scheduleSheetRowLabel = scheduleSheetRowLabel;
     window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
+    window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
+    window.noticeForInstalledPhones = noticeForInstalledPhones;
     window.renderLazyPosterHtml = renderLazyPosterHtml;
+    window.renderSharedMediaHtml = renderSharedMediaHtml;
+    window.openAlertPdf = openAlertPdf;
     window.hydrateAlertPosterImages = hydrateAlertPosterImages;
 }

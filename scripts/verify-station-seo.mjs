@@ -91,6 +91,32 @@ ok(cards[0]?.weekday?.towardB?.title === 'Walker Street → Pienaarspoort', 'Wal
 ok(cards[0]?.weekday?.towardA?.trains?.length > 5, 'Walker Street has weekday trains toward Pretoria');
 ok(cards[0]?.weekday?.towardB?.trains?.some((t) => t.badge === 'direct' || t.badge === 'short'), 'Walker Street trains carry Direct/short badges');
 
+const west = getSeoStationBySlug('pretoria-west');
+ok(!!west, 'Pretoria West is in the catalog');
+const westCards = buildStationCorridorTimetables(west);
+const westHub = westCards.filter((card) => card.weekday.towardA.trains.length && /pretoria/i.test(card.weekday.towardA.toward || ''));
+ok(westHub.length === 1, 'Pretoria West toward Pretoria is one shared list');
+const westTrains = westHub[0]?.weekday?.towardA?.trains || [];
+ok(westTrains.some((t) => t.sourceRouteId === 'pta-dewildt' && t.badge === 'from' && /From De Wildt/i.test(t.badgeLabel)), 'Pretoria West list labels a De Wildt train From De Wildt');
+ok(westTrains.some((t) => t.sourceRouteId === 'pta-mabopane' && t.badge === 'from' && /From Mabopane/i.test(t.badgeLabel)), 'Pretoria West list includes From Mabopane');
+ok(westTrains.some((t) => t.sourceRouteId === 'pta-saul' && t.badge === 'from' && /From Saulsville/i.test(t.badgeLabel)), 'Pretoria West list includes From Saulsville');
+ok(!westTrains.some((t) => t.badge === 'direct' && /To Pretoria/i.test(t.badgeLabel)), 'Pretoria West toward Pretoria has no unlabelled To Pretoria row');
+const westOut = westCards.filter((card) => card.weekday.towardB.trains.length);
+ok(westOut.length === 1, 'Pretoria West outbound trains share one list');
+ok(westOut[0].weekday.towardB.title === 'Pretoria West → De Wildt, Mabopane & more', 'outbound heading names two ends then & more');
+const westSpoke = westOut[0].weekday.towardB.trains;
+ok(westSpoke.some((t) => /To De Wildt/i.test(t.badgeLabel)), 'outbound list includes To De Wildt');
+ok(westSpoke.some((t) => /To Mabopane/i.test(t.badgeLabel)), 'outbound list includes To Mabopane');
+ok(westSpoke.some((t) => /To Saulsville/i.test(t.badgeLabel)), 'outbound list includes To Saulsville');
+const westSat = westCards.filter((card) => card.saturday.towardA.trains.length && /pretoria/i.test(card.saturday.towardA.toward || ''));
+ok(westSat.length === 1, 'Pretoria West Saturday toward Pretoria is one shared list');
+ok(westSat[0].saturday.towardA.trains.some((t) => t.sourceRouteId === 'pta-dewildt' && /From De Wildt/i.test(t.badgeLabel)), 'Saturday list includes From De Wildt');
+ok(westSat[0].saturday.towardA.trains.some((t) => t.badge === 'from' && /Mabopane/i.test(t.badgeLabel)), 'Saturday list includes From Mabopane');
+ok(westSat[0].saturday.towardA.trains.some((t) => t.badge === 'from' && /Saulsville/i.test(t.badgeLabel)), 'Saturday list includes From Saulsville');
+const departuresSrc = readFileSync(new URL('../src/components/SeoStationDepartures.astro', import.meta.url), 'utf8');
+ok(departuresSrc.includes("t.badge === 'from'"), 'station pages paint the purple From pill');
+ok(departuresSrc.includes("t.badge === 'divergent'"), 'station pages paint the red warning pill');
+
 const pretoria = getSeoStationBySlug('pretoria');
 ok((pretoria?.routeIds?.length || 0) >= 5, 'Pretoria hub lists multiple routes');
 const ptaCards = buildStationCorridorTimetables(pretoria);
@@ -100,9 +126,10 @@ ok(
   'Pretoria terminus does not list arrivals as Pretoria → Pretoria departures',
 );
 ok(
-  ptaCards.every((c) => c.weekday.towardB.trains.length > 0),
-  'Pretoria hub lists outbound weekday trains on each corridor',
+  ptaCards.some((c) => c.weekday.towardB.trains.length > 0 && new Set(c.weekday.towardB.trains.map((t) => t.sourceRouteId)).size >= 2),
+  'Pretoria hub outbound trains share one labelled list',
 );
+ok(westCards.length >= 3, 'Pretoria West keeps a corridor card for each shared route');
 
 ok(stationHasPublicPage('walker-street'), 'Walker Street has a public page');
 ok(!stationHasPublicPage('wolseley'), 'Wolseley (out of network) has no public page');
@@ -111,6 +138,7 @@ const pageSrc = readFileSync(new URL('../src/pages/stations/[slug].astro', impor
 ok(pageSrc.includes('robots={indexable ? \'index, follow\' : \'noindex, follow\'}'), 'station page gates robots on allowlist');
 ok(pageSrc.includes('isStationIndexable(station.slug) || !!station.listedWithoutTimes'), 'a ghost station page is indexable');
 ok(pageSrc.includes('SeoStationDepartures'), 'station page renders departure lists');
+ok(pageSrc.includes('seoIntroParagraphs(aboutText)'), 'station about is one sentence per paragraph');
 ok(pageSrc.includes('Neighbouring stations'), 'station page shows neighbours');
 ok(pageSrc.includes('SeoStationMap'), 'station page embeds Leaflet GPS map');
 ok(pageSrc.includes('About this station'), 'station page has About this station');
@@ -218,8 +246,8 @@ ok(rules.includes('"station_reviews_public"'), 'RTDB rules expose station_review
 ok(rules.includes("!data.exists() && newData.child('status').val() === 'pending'"), 'anonymous creates stay pending');
 
 const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
-ok(gridHandoff.includes('SEO cold launch seeds a pin only when none exists'), 'SEO handoff soft-pins defaults');
-ok(gridHandoff.includes('if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId)'), 'SEO handoff keeps existing route pins');
+ok(gridHandoff.includes('A saved region and route stay in storage'), 'a timetable link does not overwrite a saved route');
+ok(gridHandoff.includes('persistRegion: false'), 'a timetable link does not write userRegion');
 
 const routePage = readFileSync(new URL('../src/pages/routes/[slug].astro', import.meta.url), 'utf8');
 ok(routePage.includes('stationHasPublicPage'), 'route SEO pages link to station landings');

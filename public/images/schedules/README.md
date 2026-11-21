@@ -76,8 +76,8 @@ Refresh this list when new posters land. Live Firebase may already have times fo
 
 Not gaps: `ec-berlin` and `herc-koed` Saturday (no Saturday service by design).
 
-## Alerts (later)
+## Alerts
 
-Catalog safety posters stay in `public/images/alerts/`. Schedule sheets are allowlisted under `/images/schedules/` so a notice can use them once the compose picker lists this manifest.
+Catalog safety posters stay in `public/images/alerts/`. The alert composer lists those on Posters, and these sheets on Timetables, in board route order. Choosing a sheet opens the image. Add to this alert posts `/images/schedules/...` on the notice.
 
 Do not copy schedule JPGs into `alerts/` (duplicate bytes and drift). Point at `/images/schedules/...` instead.

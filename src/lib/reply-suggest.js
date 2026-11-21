@@ -5,6 +5,7 @@
  */
 
 import { classifyAttachmentUrl, sanitizeAttachmentDisplayUrl, sniffAttachmentBytes } from './attachments.js';
+import { sanitizeAlertImageUrl, sanitizeAlertPdfUrl } from './alerts-feed.js';
 import { describeRoute, replyKnowledgeText } from './reply-knowledge.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
 
@@ -456,7 +457,7 @@ export function buildSuggestPayload(items, options = {}) {
         note: options.note || '',
         draftContext: options.draftContext || '',
         greeting,
-        files: collectThreadFiles(list),
+        files: sanitizeThreadFiles([...(collectThreadFiles(list) || []), ...(options.noticeFiles || [])]),
         appVersion: [...list].reverse().map((item) => item?.appVersion).find(Boolean) || '',
     });
 }
@@ -466,6 +467,7 @@ export function sanitizeSuggestPayload(input) {
     const thread = Array.isArray(source.thread) ? source.thread : [];
     const similar = Array.isArray(source.similar) ? source.similar : [];
     return {
+        surface: source.surface === 'community' ? 'community' : 'feedback',
         deviceId: clip(source.deviceId, 80),
         alias: clip(redactEmails(source.alias), 80),
         region: normalizeSuggestRegion(source.region),
@@ -506,8 +508,43 @@ function htmlFileUrls(value) {
     return found;
 }
 
-/** Firebase Storage photos and PDFs already on this thread. Other hosts are dropped. */
+const SUGGEST_SITE = 'https://nexttrain.co.za';
+
+/** A catalog poster or a notice PDF the reply worker is allowed to fetch. */
+export function suggestPublicMediaUrl(raw) {
+    const poster = sanitizeAlertImageUrl(String(raw || '').trim());
+    if (poster) {
+        if (/^https:\/\//i.test(poster)) return poster;
+        if (poster.startsWith('/')) return `${SUGGEST_SITE}${poster}`;
+    }
+    const pdf = sanitizeAlertPdfUrl(String(raw || '').trim());
+    return pdf || '';
+}
+
+/** Poster and PDF files on a quoted alert. The reply worker fetches these. */
+export function noticeMediaFiles(notice) {
+    const urls = [];
+    const push = (value) => {
+        const url = suggestPublicMediaUrl(value);
+        if (url && !urls.includes(url)) urls.push(url);
+    };
+    const images = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+        ? notice.imageUrls
+        : (notice?.imageUrl ? [notice.imageUrl] : []);
+    images.forEach(push);
+    push(notice?.pdfUrl);
+    push(notice?.ctaUrl);
+    htmlFileUrls(`${notice?.message || ''} ${notice?.text || ''}`).forEach(push);
+    return urls.slice(0, SUGGEST_MAX_FILES).map((url) => ({
+        url,
+        from: 'admin',
+        kind: classifyAttachmentUrl(url) === 'pdf' || /\.pdf($|\?)/i.test(url) ? 'pdf' : 'image',
+    }));
+}
+
+/** Firebase Storage photos and PDFs, plus a Next Train alert poster or PDF. */
 export function isThreadFileUrl(url) {
+    if (suggestPublicMediaUrl(url)) return true;
     const safe = sanitizeAttachmentDisplayUrl(url);
     if (!safe || !/^https:\/\//i.test(safe)) return false;
     let parsed;
@@ -548,14 +585,13 @@ export function collectThreadFiles(items) {
         else if (many && typeof many === 'object') Object.values(many).forEach(push);
         htmlFileUrls(item?.text || item?.message || '').forEach(push);
         for (const url of urls) {
-            if (!isThreadFileUrl(url)) continue;
-            const safe = sanitizeAttachmentDisplayUrl(url);
-            if (!safe || seen.has(safe)) continue;
+            const safe = suggestPublicMediaUrl(url) || sanitizeAttachmentDisplayUrl(url);
+            if (!safe || seen.has(safe) || !isThreadFileUrl(safe)) continue;
             seen.add(safe);
             files.push({
                 url: safe,
                 from,
-                kind: classifyAttachmentUrl(safe) === 'pdf' ? 'pdf' : 'image',
+                kind: classifyAttachmentUrl(safe) === 'pdf' || /\.pdf($|\?)/i.test(safe) ? 'pdf' : 'image',
             });
         }
     }
@@ -567,13 +603,14 @@ function sanitizeThreadFiles(files) {
     const seen = new Set();
     const kept = [];
     for (const file of list) {
-        const url = sanitizeAttachmentDisplayUrl(file?.url || file);
+        const raw = file?.url || file;
+        const url = suggestPublicMediaUrl(raw) || sanitizeAttachmentDisplayUrl(raw);
         if (!url || seen.has(url) || !isThreadFileUrl(url)) continue;
         seen.add(url);
         kept.push({
             url,
             from: file?.from === 'admin' ? 'admin' : 'commuter',
-            kind: classifyAttachmentUrl(url) === 'pdf' ? 'pdf' : 'image',
+            kind: classifyAttachmentUrl(url) === 'pdf' || /\.pdf($|\?)/i.test(url) ? 'pdf' : 'image',
         });
         if (kept.length >= SUGGEST_MAX_FILES) break;
     }
@@ -591,7 +628,7 @@ function bytesToBase64(bytes) {
 
 /** Download one allowlisted thread photo or PDF. A bad file is skipped. */
 export async function loadSuggestFile(entry, fetchImpl = globalThis.fetch) {
-    const url = String(entry?.url || '').trim();
+    const url = suggestPublicMediaUrl(entry?.url) || String(entry?.url || '').trim();
     if (!isThreadFileUrl(url)) return null;
     const res = await fetchImpl(url, { redirect: 'follow' });
     if (!res?.ok) return null;
@@ -715,6 +752,82 @@ export function knowledgeBase() {
     ].join('\n');
 }
 
+/** Community room. No inbox summary and no "Thank you for using Next Train." */
+export function communityStyleRules() {
+    return [
+        'You draft a short reply an operator can post in a Next Train community room.',
+        'Answer only the one message in the thread.',
+        'Write like a person in that room. Short paragraphs. No email greeting. Do not open with Hi there, or Dear.',
+        'Do not summarise their message. Do not open with "Thank you for your message where you\'re asking about".',
+        'Do not end with "Thank you for using Next Train."',
+        'Do not add a sign-off or the operator\'s name.',
+        'Do not write a long independence speech. If they want a train added, or a Sunday or Saturday service, say what the sheet shows first. The schedule fact in the note is that fact. Do not invent a departure time.',
+        'After that fact, if they want PRASA to change the service, one short sentence and the regional desk. Do not open with the independence sentence when the timetable fact answers the question.',
+        'If they want Next Train to fix a train, a delay, or a station and the sheet does not answer it, one short sentence is enough, then the useful part.',
+        'Use station names. Do not show a route key.',
+        'Do not invent a departure time, a fare, a ticket rule, or a date.',
+        'If the answer is not in the knowledge base, the message, the shared note, or the operator note, action is halt.',
+        'Return JSON only. action is "draft" or "halt". draft.reply is only the words to post.',
+    ].join('\n');
+}
+
+/** Style lines only. Region phones and the knowledge base are added after this. */
+export function feedbackStyleRules() {
+    const full = liaisonRules('GP');
+    const at = full.indexOf('\nKnowledge base.');
+    return (at > 0 ? full.slice(0, at) : full).trim();
+}
+
+export function systemInstructionFor({ region, surface = 'feedback', stylePrompt = '', extraKnowledge = '' } = {}) {
+    const custom = String(stylePrompt || '').trim();
+    const extra = String(extraKnowledge || '').trim();
+    const knowledge = extra ? `${knowledgeBase()}\n${extra}` : knowledgeBase();
+    const contacts = contactBlockForRegion(region);
+    if (surface === 'community') {
+        return [custom || communityStyleRules(), knowledge, contacts].join('\n\n');
+    }
+    if (custom) return [custom, knowledge, contacts].join('\n\n');
+    return extra ? `${liaisonRules(region)}\n${extra}` : liaisonRules(region);
+}
+
+export const CHIRP_VOICES = [
+    ['en-US-Chirp3-HD-Achernar', 'Achernar, US'],
+    ['en-US-Chirp3-HD-Aoede', 'Aoede, US'],
+    ['en-US-Chirp3-HD-Charon', 'Charon, US'],
+    ['en-US-Chirp3-HD-Fenrir', 'Fenrir, US'],
+    ['en-US-Chirp3-HD-Kore', 'Kore, US'],
+    ['en-US-Chirp3-HD-Leda', 'Leda, US'],
+    ['en-US-Chirp3-HD-Orus', 'Orus, US'],
+    ['en-US-Chirp3-HD-Puck', 'Puck, US'],
+    ['en-US-Chirp3-HD-Zephyr', 'Zephyr, US'],
+    ['en-GB-Chirp3-HD-Aoede', 'Aoede, UK'],
+    ['en-GB-Chirp3-HD-Charon', 'Charon, UK'],
+    ['en-GB-Chirp3-HD-Fenrir', 'Fenrir, UK'],
+    ['en-GB-Chirp3-HD-Kore', 'Kore, UK'],
+    ['en-GB-Chirp3-HD-Leda', 'Leda, UK'],
+    ['en-GB-Chirp3-HD-Puck', 'Puck, UK'],
+];
+
+export function normalizeVoicePrefs(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const known = CHIRP_VOICES.some((row) => row[0] === src.voice);
+    const voice = known ? src.voice : 'en-US-Chirp3-HD-Achernar';
+    let speakingRate = Number(src.speakingRate);
+    if (!Number.isFinite(speakingRate)) speakingRate = 1;
+    speakingRate = Math.min(2, Math.max(0.25, Math.round(speakingRate * 20) / 20));
+    let volumeGainDb = Number(src.volumeGainDb);
+    if (!Number.isFinite(volumeGainDb)) volumeGainDb = 0;
+    volumeGainDb = Math.min(6, Math.max(-6, Math.round(volumeGainDb)));
+    const pause = src.pause === 'short' || src.pause === 'medium' || src.pause === 'long' ? src.pause : 'off';
+    return {
+        voice,
+        languageCode: voice.slice(0, 5),
+        speakingRate,
+        volumeGainDb,
+        pause,
+    };
+}
+
 export function liaisonRules(region) {
     return [
         'You are Melmoth, the communications assistant for Metrorail Next Train (nexttrain.co.za). You draft replies in Enock\'s voice, as the person who looks after the app.',
@@ -727,7 +840,7 @@ export function liaisonRules(region) {
         'When a fare on Next Train does not match what the station charged, thank them, ask for a clear photo of the ticket if they have not sent one, and say you will check and update. Do not invent the correct price.',
         'Each thread line is labeled ADMIN or COMMUTER. ADMIN is Next Train. COMMUTER is the person you are replying to. Do not swap those speakers.',
         'Only Next Train can post an alert, an advisory, or an incident notice. A commuter cannot post one. They can only reply to one.',
-        'An ADMIN ALERT line is a notice Next Train already posted. The COMMUTER line after it is their reply to that notice. Use the whole alert so you know what they are answering. Thank them for the reply. If the alert is a poll, a call for responses, or a call to action, put a thank-you for replying to the poll on its own line at the top of the body (right after the greeting and the two blank lines), for example "Thank you for replying to our poll." Then continue. Do not thank them for sharing, posting, or announcing the alert. Do not write as if they told you the news in the alert.',
+        'An ADMIN ALERT line is a notice Next Train already posted. The COMMUTER line after it is their reply to that notice. Use the whole alert, including a photo or a PDF that follows, so you know what they are answering. Thank them for the reply. Only if that alert text has a Poll: line, put "Thank you for replying to our poll." on its own line at the top of the body (right after the greeting and the two blank lines). A photo, a PDF, a text alert, a call for responses, or a call to action is not a poll. Do not say they replied to a poll. Do not thank them for sharing, posting, or announcing the alert. Do not write as if they told you the news in the alert.',
         'A short [ALERT:…] chip inside an older example is also a Next Train alert they replied to. The words after "Their words, not the alert" are the only words they wrote.',
         'Return JSON only. action is "draft" or "halt". draft.reply is only the commuter-facing message. The operator will edit it, then send. Do not send it yourself.',
         'Do not put the device id, thread labels, or code fences inside draft.reply.',
@@ -870,7 +983,7 @@ export function normalizeSuggestImages(images) {
     return kept;
 }
 
-export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, filesMissed = 0 } = {}) {
+export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, filesMissed = 0, stylePrompt = '', extraKnowledge = '' } = {}) {
     const clean = sanitizeSuggestPayload(payload);
     const parts = [{ text: buildSuggestUserText(clean, sharedNote) }];
     const attached = Array.isArray(threadFiles) ? threadFiles : [];
@@ -894,7 +1007,12 @@ export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, f
         parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
     }
     return {
-        systemInstruction: { parts: [{ text: liaisonRules(clean.region) }] },
+        systemInstruction: { parts: [{ text: systemInstructionFor({
+            region: clean.region,
+            surface: clean.surface,
+            stylePrompt,
+            extraKnowledge,
+        }) }] },
         contents: [{ role: 'user', parts }],
         generationConfig: {
             maxOutputTokens: 2048,
@@ -996,9 +1114,18 @@ export function rewriteAskingThanks(reply) {
         );
 }
 
+/** A non-poll alert must not be thanked as a poll. */
+export function stripFalsePollThanks(reply) {
+    return String(reply || '')
+        .replace(/thank you(?: so much)? for replying to (?:our|the|this) poll\.?/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+}
+
 /** Poll thank-you is its own line at the top of the body, after the greeting. */
 export function ensurePollThanks(reply) {
-    const text = String(reply || '').trim();
+    const text = stripFalsePollThanks(reply);
     if (!text) return `${POLL_THANKS_LINE}`;
     const escaped = POLL_THANKS_LINE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const without = text
@@ -1014,7 +1141,7 @@ export function ensurePollThanks(reply) {
 }
 
 /** Write the region's desk into a handoff draft instead of asking the operator for it. */
-export function ensureRegionalDesk(reply, region) {
+export function ensureRegionalDesk(reply, region, closing = 'Thank you for using Next Train.') {
     const text = String(reply || '').trim();
     const lines = primaryDeskLines(region);
     const desks = deskDigitsForRegion(normalizeSuggestRegion(region));
@@ -1023,8 +1150,7 @@ export function ensureRegionalDesk(reply, region) {
     const digits = phoneDigits(text);
     if (desks.some((phone) => phone && digits.includes(phone))) return text;
     const block = `${lines.join('\n')}\nPlease ask for a reference number.`;
-    const closing = 'Thank you for using Next Train.';
-    if (text.includes(closing)) {
+    if (closing && text.includes(closing)) {
         return text.replace(closing, `${block}\n\n${closing}`);
     }
     return `${text}\n\n${block}`;
@@ -1081,21 +1207,33 @@ export function guardDraft(reply, region) {
     return { ok: true };
 }
 
-export function applyDraftGuard(result, region, thread) {
+export function applyDraftGuard(result, region, thread, options = {}) {
+    const surface = options.surface === 'community' ? 'community' : 'feedback';
     const base = result && result.action ? result : parseSuggestResult(result);
     if (base.action !== 'draft') return { ...base, reply: '' };
     let reply = commuterFacingReply(base.reply || '');
     if (!reply) {
         return { action: 'halt', reply: '', reason: 'The model returned an empty draft.', questions: [] };
     }
-    reply = rewriteAskingThanks(reply);
+    if (surface === 'community') {
+        reply = reply
+            .replace(/\n*Thank you for using Next Train\.\s*$/i, '')
+            .replace(/^Thank you for your message where you're asking about[^\n]*\n+/i, '')
+            .trim();
+    } else {
+        reply = rewriteAskingThanks(reply);
+    }
     if (threadAnswersPoll(thread)) reply = ensurePollThanks(reply);
+    else reply = stripFalsePollThanks(reply);
+    if (!reply) {
+        return { action: 'halt', reply: '', reason: 'The model returned an empty draft.', questions: [] };
+    }
     const early = guardDraft(reply, region);
     // A wrong-region number still halts. A missing desk is filled from the contact block.
     if (!early.ok && !/desk number/.test(early.reason || '')) {
         return { action: 'halt', reply: '', reason: early.reason, questions: early.questions };
     }
-    reply = ensureRegionalDesk(reply, region);
+    reply = ensureRegionalDesk(reply, region, surface === 'community' ? '' : 'Thank you for using Next Train.');
     const guard = guardDraft(reply, region);
     if (!guard.ok) {
         return { action: 'halt', reply: '', reason: guard.reason, questions: guard.questions };

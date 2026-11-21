@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_11.07.13";
+export const APP_VERSION = "V10_11.21.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -74,8 +74,7 @@ export const GITHUB_SCHEDULE_CDN = "https://cdn.jsdelivr.net/gh/enock-elk/next-t
 /**
  * Cache worker on our own zone. Campus networks often drop *.workers.dev
  * while nexttrain.co.za, Firebase, and jsDelivr still answer. The hostname
- * is unused until a proxied DNS record routes it at the existing
- * nexttrain-cache worker. The app skips it quickly until then.
+ * is a custom domain on the nexttrain-cache worker. workers.dev stays the fallback.
  */
 export const CACHE_EDGE_URL = 'https://cache.nexttrain.co.za/';
 /** Same cache worker on the public workers.dev host. Fallback only. */
@@ -895,10 +894,13 @@ export const ROUTES = {
 };
 
 // 4. Refresh Settings
-export const REFRESH_CONFIG = { standardInterval: 5 * 60 * 1000, activeInterval: 60 * 1000, nightModeStart: 21, nightModeEnd: 4 };
+export const REFRESH_CONFIG = { standardInterval: 20 * 60 * 1000, activeInterval: 60 * 1000, nightModeStart: 21, nightModeEnd: 4 };
 
-// 5. Smart Pricing — PRASA Metrorail (Aug 2025 fare adjustment + TravelOffPeak)
-// Zone km bands and ticket prices from PRASA 2025 Fare Adjustment (effective 1 Aug 2025).
+// 5. Smart Pricing — PRASA Metrorail.
+// Zone km bands stay the Aug 2025 distances (Z3 through 135 km). Changing them
+// would reprice singles, which this phase does not do.
+// Monthly Mon-Sat passes change on 1 December 2026 (PRASA phase 1).
+// Singles, returns, and weeklies stay until a later phase, no earlier than 1 April 2027.
 // Off-peak window 09:30–14:30 on weekdays only (no weekend / public-holiday off-peak).
 export const FARE_CONFIG = {
     offPeakStart: 9.5,  // 09:30
@@ -924,12 +926,12 @@ export const FARE_CONFIG = {
         "Z4": 15.00
     },
 
-    // Detailed ticket table. Monthly amounts are the V5 zone table.
+    // Detailed ticket table. Monthly amounts are the 1 December 2026 PRASA phase 1 table.
     zones_detailed: {
-        "Z1": { single: 10.00, return: 20.00, weekly_mon_fri: 60.00, weekly_mon_sat: 75.00, monthly: 180.00 },
-        "Z2": { single: 12.00, return: 24.00, weekly_mon_fri: 70.00, weekly_mon_sat: 80.00, monthly: 220.00 },
-        "Z3": { single: 14.00, return: 28.00, weekly_mon_fri: 80.00, weekly_mon_sat: 100.00, monthly: 250.00 },
-        "Z4": { single: 15.00, return: 30.00, weekly_mon_fri: 90.00, weekly_mon_sat: 120.00, monthly: 280.00 }
+        "Z1": { single: 10.00, return: 20.00, weekly_mon_fri: 60.00, weekly_mon_sat: 75.00, monthly: 215.00 },
+        "Z2": { single: 12.00, return: 24.00, weekly_mon_fri: 70.00, weekly_mon_sat: 80.00, monthly: 266.00 },
+        "Z3": { single: 14.00, return: 28.00, weekly_mon_fri: 80.00, weekly_mon_sat: 100.00, monthly: 291.00 },
+        "Z4": { single: 15.00, return: 30.00, weekly_mon_fri: 90.00, weekly_mon_sat: 120.00, monthly: 322.00 }
     },
 
     profiles: {
@@ -994,6 +996,66 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V10_11.20.3",
+        title: "Monthly fares",
+        date: "20 Nov 2026",
+        forceShow: false,
+        features: [
+            "Monthly passes are R215, R266, R291, and R322 from 1 December 2026.",
+            "Pretoria to Irene timetables list the Irene stops."
+        ]
+    },
+    {
+        id: "V10_11.10.13",
+        title: "Map region",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "The map region choice uses the same look as the welcome screen."
+        ]
+    },
+    {
+        id: "V10_11.10.12",
+        title: "Map region",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "The network map asks which region to open when this phone has not chosen one yet.",
+            "Back from that choice opens Next Train."
+        ]
+    },
+    {
+        id: "V10_11.10.7",
+        title: "Refresh and sign in",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "Pull down further to refresh. A circle fills in as you pull, and it completes when the refresh is ready.",
+            "If a password does not match, the message tells you to tap Forgot password."
+        ]
+    },
+    {
+        id: "V10_11.10.6",
+        title: "Picture preview",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "A picture that is waiting to download shows a blurred preview and the file size.",
+            "Tap that picture when you want the full photo."
+        ]
+    },
+    {
+        id: "V10_11.10.2",
+        title: "Data saving",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "Data saving starts off. Pictures load on their own until you change that.",
+            "You can make a picture wait until you tap it. A picture already saved on this phone still shows.",
+            "Link previews can stay off. The timetable still loads."
+        ]
+    },
     {
         id: "V10_11.01.1",
         title: "Terminus labels and fares",

@@ -1,5 +1,6 @@
 // --- METRORAIL NEXT TRAIN UTILITIES (V7 06.17 - Guardian Edition) ---
 // Pure, stateless helper functions shared across the application.
+import { effectiveRouteSheetMode, extraSheetKey } from './route-sheets.js';
 
 /** True when admin time-sim is pinned to a specific calendar date (not Weekday/Sat/Sun). */
 export function simUsesSpecificDate() {
@@ -112,9 +113,16 @@ export function normalizeScheduleSheetDay(dayType, region) {
     return resolveScheduleSheetFamily(dayType, region);
 }
 
-/** Cache slot on the per-route schedules object: weekday_to_a | saturday_to_b | pub_to_a | … */
-export function scheduleCacheSlot(dayType, region, ab = 'a') {
+/**
+ * Cache slot on the per-route schedules object: weekday_to_a | saturday_to_b | pub_to_a | special_to_a | sunday_to_b.
+ * Pass the route when a Sunday or Special sheet may replace that route only.
+ */
+export function scheduleCacheSlot(dayType, region, ab = 'a', route = null, asOf = null) {
     const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
+    if (route) {
+        const mode = effectiveRouteSheetMode(route, dayType, asOf);
+        if (mode === 'special' || mode === 'sunday') return `${mode}_to_${dir}`;
+    }
     const family = resolveScheduleSheetFamily(dayType, region);
     if (family === 'public_holiday') return `pub_to_${dir}`;
     if (family === 'saturday') return `saturday_to_${dir}`;
@@ -130,10 +138,19 @@ export function schedulesBelongToRoute(schedules, routeId) {
     return String(schedules._routeId || '') === String(routeId);
 }
 
-/** Firebase / sheetKeys key for a route direction on the given day type. */
-export function routeSheetKeyForDay(route, dayType, ab = 'a') {
+/**
+ * Firebase / sheetKeys key for a route direction on the given day type.
+ * Sunday with no enabled Sunday or Special sheet returns null, so a bare Sunday
+ * does not borrow the weekday tab. Weekday, Saturday, and public-holiday keys are unchanged.
+ */
+export function routeSheetKeyForDay(route, dayType, ab = 'a', asOf = null) {
     const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
     const keys = route?.sheetKeys || {};
+    const mode = route ? effectiveRouteSheetMode(route, dayType, asOf) : null;
+    if (mode === 'special' || mode === 'sunday') {
+        return extraSheetKey(route, mode, dir) || null;
+    }
+    if (dayType === 'sunday') return null;
     const family = resolveScheduleSheetFamily(dayType, route?.region);
     if (family === 'public_holiday') {
         return keys[`pub_to_${dir}`] || keys[`saturday_to_${dir}`] || null;
@@ -396,6 +413,8 @@ export function expandJhbLabel(text) {
     return String(text ?? '').replace(/\bJHB\b/g, 'Johannesburg');
 }
 
+const fittedLabels = new WeakMap();
+
 /**
  * Paint the long label only when it stays on one line inside `el`.
  * Otherwise keep the short label. Nowrap stays only when that short
@@ -405,6 +424,17 @@ export function applyFittedLabel(el, shortValue, longValue, asHtml = false) {
     if (!el) return;
     const short = shortValue == null ? '' : String(shortValue);
     const long = longValue == null ? short : String(longValue);
+    const read = () => (asHtml ? el.innerHTML : el.textContent);
+    // Every board refresh refits the same route labels, and a fit forces two
+    // to four layouts. Skip it while the text, the box and the rendered width
+    // (font, pack) are where the last fit left them.
+    const last = fittedLabels.get(el);
+    if (last && last.short === short && last.long === long && last.asHtml === asHtml
+        && el.style.whiteSpace === 'nowrap' && el.style.overflow === 'hidden' && last.out === read()
+        && last.width === el.clientWidth && last.scroll === el.scrollWidth) {
+        return;
+    }
+    fittedLabels.delete(el);
     const write = (value) => {
         if (asHtml) el.innerHTML = value;
         else el.textContent = value;
@@ -416,47 +446,113 @@ export function applyFittedLabel(el, shortValue, longValue, asHtml = false) {
         const display = window.getComputedStyle(el).display;
         if (display === 'inline') el.style.display = 'inline-block';
     }
-    const fits = () => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+    let width = 0;
+    let scroll = 0;
+    const fits = () => {
+        width = el.clientWidth;
+        scroll = el.scrollWidth;
+        return width > 0 && scroll <= width + 1;
+    };
     const release = () => {
         el.style.whiteSpace = '';
         el.style.overflow = '';
     };
-    if (!long || long === short || el.clientWidth <= 0) {
+    // Only a one-line fit with nothing longer left to try is kept. A short
+    // fallback must retry the long label: a narrower font or pack, or a box
+    // that was unmeasured, can let it fit without the box changing width.
+    const remember = () => {
+        fittedLabels.set(el, { short, long, asHtml, out: read(), width, scroll });
+    };
+    const onlyShort = !long || long === short;
+    if (onlyShort || el.clientWidth <= 0) {
         write(short);
         if (!fits()) release();
+        else if (onlyShort) remember();
         return;
     }
     write(long);
-    if (fits()) return;
+    if (fits()) {
+        remember();
+        return;
+    }
     write(short);
     if (!fits()) release();
+}
+
+/**
+ * applyFittedLabel for a whole list ({ el, short, long, asHtml }), with every
+ * read batched between writes. Per node it forced 2–4 layouts, so a route menu
+ * cost dozens of reflows on open. Only for nodes that each sit on their own
+ * row: a sibling's label must not change the width another is measured in.
+ */
+export function applyFittedLabels(items) {
+    if (!items.length) return;
+    const write = (it, value) => {
+        if (it.asHtml) it.el.innerHTML = value;
+        else it.el.textContent = value;
+    };
+    const fits = (el) => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+    const release = (el) => {
+        el.style.whiteSpace = '';
+        el.style.overflow = '';
+    };
+    items.forEach(({ el }) => {
+        el.style.whiteSpace = 'nowrap';
+        el.style.overflow = 'hidden';
+        el.style.maxWidth = '100%';
+    });
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+        const inline = items.filter(({ el }) => window.getComputedStyle(el).display === 'inline');
+        inline.forEach(({ el }) => { el.style.display = 'inline-block'; });
+    }
+    const tryLong = items.map((it) => !!it.long && it.long !== it.short && it.el.clientWidth > 0);
+    items.forEach((it, i) => write(it, tryLong[i] ? it.long : it.short));
+    const firstFits = items.map(({ el }) => fits(el));
+    const retryShort = [];
+    items.forEach((it, i) => {
+        if (firstFits[i]) return;
+        if (tryLong[i]) {
+            write(it, it.short);
+            retryShort.push(it);
+        } else {
+            release(it.el);
+        }
+    });
+    const shortFits = retryShort.map(({ el }) => fits(el));
+    retryShort.forEach((it, i) => {
+        if (!shortFits[i]) release(it.el);
+    });
 }
 
 /** Route-name nodes marked with data-route-raw. */
 export function fitRouteNameNodes(root) {
     if (!root || typeof root.querySelectorAll !== 'function') return;
+    const items = [];
     root.querySelectorAll('[data-route-raw]').forEach((el) => {
         const raw = el.getAttribute('data-route-raw') || '';
-        applyFittedLabel(
+        items.push({
             el,
-            formatRouteLabelHtml(raw),
-            formatRouteLabelHtml(expandJhbLabel(raw)),
-            true
-        );
+            short: formatRouteLabelHtml(raw),
+            long: formatRouteLabelHtml(expandJhbLabel(raw)),
+            asHtml: true,
+        });
     });
+    applyFittedLabels(items);
 }
 
 /** Plain-text nodes marked with data-jhb-short / data-jhb-long. */
 export function fitJhbNodes(root) {
     if (!root || typeof root.querySelectorAll !== 'function') return;
+    const items = [];
     root.querySelectorAll('[data-jhb-long]').forEach((el) => {
-        applyFittedLabel(
+        items.push({
             el,
-            el.getAttribute('data-jhb-short') || '',
-            el.getAttribute('data-jhb-long') || '',
-            false
-        );
+            short: el.getAttribute('data-jhb-short') || '',
+            long: el.getAttribute('data-jhb-long') || '',
+            asHtml: false,
+        });
     });
+    applyFittedLabels(items);
 }
 
 /** True for timetable clock cells (rejects notes like "Monte", dashes, blanks). */
@@ -717,6 +813,7 @@ export const STATION_ALIASES = Object.freeze({
     'PTA NORTH': 'PRETORIA N',
     'PRETORIA WEST': 'PRETORIA WES',
     'PTA WEST': 'PRETORIA WES',
+    'WALTLOO': 'WALTOO',
 });
 
 export function resolveStationAlias(raw) {
@@ -725,9 +822,91 @@ export function resolveStationAlias(raw) {
     return STATION_ALIASES[norm] || '';
 }
 
-/** Strip “ STATION” for labels. Aliases are for matching only — keep board caps. */
+/**
+ * Dump keys commuters should not read. Lookup values stay PRETORIA-N / PRETORIA WES.
+ * Other names stay as stored (board caps). SEO title case is stationLabel.
+ */
+const COMMUTER_STATION_LABELS = Object.freeze({
+    'PRETORIA-N': 'PRETORIA NORTH',
+    'PRETORIA N': 'PRETORIA NORTH',
+    'PRETORIA NORTH': 'PRETORIA NORTH',
+    'PRETORIA WES': 'PRETORIA WEST',
+    'PRETORIA WEST': 'PRETORIA WEST',
+    WALTOO: 'WALTLOO',
+    WALTLOO: 'WALTLOO',
+});
+
+export function commuterStationName(raw) {
+    const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return '';
+    return COMMUTER_STATION_LABELS[cleaned.toUpperCase()] || cleaned;
+}
+
+/**
+ * Title case for the full train sheet and the other lists that already
+ * title-case every stop. Pretoria North and Pretoria West follow the same
+ * case as Belle-Ombre. Board pickers stay on commuterStationName.
+ */
+export function sheetStationTitle(raw) {
+    const named = commuterStationName(raw);
+    if (!named) return '';
+    return named.toLowerCase().replace(/(^|[^A-Za-z0-9])([a-z])/g, (_all, sep, ch) => sep + ch.toUpperCase());
+}
+
+/**
+ * In-app timetable and the downloaded sheet. Rows are stored in capitals.
+ * A corrected spelling (Waltloo, Pretoria North) stays in those capitals.
+ * A mixed dump name such as kwaMASHU is left as stored.
+ */
+export function timetableStationName(raw) {
+    const cleaned = String(raw || '').replace(/\s+STATION$/i, '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return '';
+    const named = commuterStationName(cleaned);
+    if (cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) return named.toUpperCase();
+    return named;
+}
+
+/** Visible station text. Same capitals as the rest of the board list. */
 export function plannerStationDisplayName(canonical) {
-    return String(canonical || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
+    return commuterStationName(canonical);
+}
+
+/**
+ * The board shows PRETORIA WEST while the timetable key stays PRETORIA WES.
+ * A pick is the same station when either form matches.
+ */
+export function stationLabelsMatch(shown, stored) {
+    const a = normalizeStationName(shown);
+    const b = normalizeStationName(String(stored || '').replace(/ STATION/gi, ''));
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const canon = (name) => {
+        const alias = STATION_ALIASES[name];
+        return alias ? normalizeStationName(alias) : name;
+    };
+    const ca = canon(a);
+    const cb = canon(b);
+    if (ca === cb || ca === b || a === cb) return true;
+    const da = normalizeStationName(commuterStationName(shown));
+    const db = normalizeStationName(commuterStationName(stored));
+    return !!(da && db && (da === db || da === b || a === db || da === cb || ca === db));
+}
+
+/** True when a typed or tapped label finds this timetable station. */
+export function stationQueryHits(storedName, rawFilter) {
+    const val = String(rawFilter || '').trim().toUpperCase();
+    if (!val) return true;
+    const valNorm = normalizeStationName(rawFilter);
+    if (String(storedName || '').toUpperCase().includes(val)) return true;
+    const display = normalizeStationName(commuterStationName(storedName));
+    if (display && (display.includes(val) || (valNorm && display.includes(valNorm)))) return true;
+    if (valNorm && stationLabelsMatch(rawFilter, storedName)) return true;
+    if (valNorm.length >= 5) {
+        return Object.entries(STATION_ALIASES).some(([key, canon]) =>
+            (key === valNorm || key.startsWith(valNorm)) && stationLabelsMatch(canon, storedName)
+        );
+    }
+    return false;
 }
 
 /**
@@ -948,6 +1127,18 @@ export function newestUnappliedKillswitchTimestamp(remote, pending, applied) {
     return newest > normalizeKillswitchTimestamp(applied) ? newest : 0;
 }
 
+/**
+ * A first visit (no controlling worker, no keys from an earlier run, nothing
+ * pending or applied) has no older shell to retire, so the current killswitch
+ * is recorded as applied instead of restarting a page that just loaded.
+ */
+export function shouldSeedFreshKillswitch({ freshProfile, pending, applied, target }) {
+    return freshProfile === true
+        && !normalizeKillswitchTimestamp(pending)
+        && !normalizeKillswitchTimestamp(applied)
+        && normalizeKillswitchTimestamp(target) > 0;
+}
+
 /** Small FIFO promise mutex used to serialize destructive maintenance work. */
 export function createAsyncMutex() {
     let tail = Promise.resolve();
@@ -1006,6 +1197,8 @@ export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'authUid',
     'activeTab',
     'ntPrefsAccordionOpen',
+    'ntDataSaver',
+    'ntDataSaverSeen',
     'ntLabEmberSeededV1',
     'ntProdClassicPackV1',
     'analytics_ignore',
@@ -1311,7 +1504,7 @@ function writeDidCookie(id) {
     } catch { /* ignore */ }
 }
 
-function applyCanonicalDeviceId(id) {
+export function applyCanonicalDeviceId(id) {
     if (!id) return;
     safeStorage.setItem('next_train_device_id', id);
     writeDidCookie(id);
@@ -1383,6 +1576,7 @@ export function restoreDeviceIdentity() {
             : (ls || idb || cookie || '');
         if (stable) applyCanonicalDeviceId(stable);
         try { await withTimeout(safeStorage.getResilientItem('ntInboxLocalV1'), 1500, null); } catch { /* optional */ }
+        try { await withTimeout(safeStorage.getResilientItem('ntInboxAcknowledgedV1'), 1500, null); } catch { /* optional */ }
         return stable;
     })();
     return restoreDevicePromise;

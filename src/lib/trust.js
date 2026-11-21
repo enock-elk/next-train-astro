@@ -300,6 +300,17 @@ export function rememberBody(text) {
     safeStorage.setItem(RECENT_BODIES_KEY, JSON.stringify(arr.slice(-20)));
 }
 
+/** Drop one remembered copy. A deleted message can be sent again. */
+export function forgetBody(text) {
+    const norm = normalizeBody(text);
+    if (!norm) return;
+    const arr = getRecentBodies(20);
+    const idx = arr.lastIndexOf(norm);
+    if (idx < 0) return;
+    arr.splice(idx, 1);
+    safeStorage.setItem(RECENT_BODIES_KEY, JSON.stringify(arr));
+}
+
 export function isDuplicateBody(text, recentBodies = getRecentBodies()) {
     const norm = normalizeBody(text);
     if (!norm || norm.length < 4) return false;

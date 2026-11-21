@@ -15,12 +15,18 @@ import {
     splitAlertTitleAndBody,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
+    legacyInstalledAlertImages,
+    messageWithLegacyAlertImages,
+    noticeForInstalledPhones,
+    LEGACY_ALERT_IMAGE_MAX,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
     alertVideoKind,
     alertVideoPosterUrl,
     alertVideoEmbedUrl,
     renderAlertVideoMarkup,
+    sanitizeAlertPdfUrl,
+    renderAlertPdfMarkup,
     preferSavedPosterSrc,
     shouldIgnoreAlertLongPress,
     shouldForceOpen,
@@ -126,11 +132,21 @@ const now = 1_700_000_000_000;
     assert(sanitizeAlertImageUrl('/images/alerts/../icons/x.png') === null, 'traversal blocked');
     assert(sanitizeAlertImageUrl('https://evil.example/images/alerts/x.png') === '/images/alerts/x.png', 'host stripped, path kept if alerts');
     assert(sanitizeAlertImageUrl('https://evil.example/etc/passwd') === null, 'foreign path blocked');
+    assert(sanitizeAlertImageUrl('https://evil.example/alerts/x.png') === null, 'foreign alert host blocked');
+    assert(
+        sanitizeAlertImageUrl('https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg') === 'https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg',
+        'community worker poster URL kept'
+    );
+    assert(
+        sanitizeAlertImageUrl('https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg?x=1') === 'https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg',
+        'community worker poster query stripped'
+    );
+    const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'].map((id) => `/images/alerts/${id}.png`);
     const urls = collectNoticeImageUrls({
         imageUrl: '/images/alerts/legacy.png',
-        imageUrls: ['/images/alerts/a.png', '/images/alerts/b.png', '/images/alerts/c.png', '/tmp/x.png'],
+        imageUrls: [...many, '/tmp/x.png'],
     });
-    assert(urls.length === 2 && urls[0] === '/images/alerts/a.png' && urls[1] === '/images/alerts/b.png', `max 2 posters ${urls}`);
+    assert(urls.length === 10 && urls[0] === '/images/alerts/a.png' && urls[9] === '/images/alerts/j.png', `max 10 posters ${urls.length}`);
     const legacy = collectNoticeImageUrls({ imageUrl: '/images/alerts/legacy.png' });
     assert(legacy.length === 1 && legacy[0] === '/images/alerts/legacy.png', 'legacy imageUrl fallback');
 }
@@ -213,6 +229,34 @@ const now = 1_700_000_000_000;
     assert(sanitizeInlineAlertImageUrl('https://192.168.1.8/x.png') === null, 'private image host blocked');
     const internetLaid = layoutAlertPost({ message: `<p>Poster</p><img src="${imgur}">` });
     assert(internetLaid.imageUrls[0] === imgur, 'internet image file is shown on the alert');
+    assert(LEGACY_ALERT_IMAGE_MAX === 4, 'installed phones show four photos');
+    const workerPhotos = [1, 2, 3, 4].map((n) => `https://nexttrain-community.enock.workers.dev/alerts/img_${n}.jpg`);
+    const postersOnly = { message: '<p>Delays on the line.</p>', imageUrls: workerPhotos, imageUrl: null };
+    assert(legacyInstalledAlertImages(postersOnly).length === 0, 'installed phones drop worker addresses stored only as posters');
+    const shaped = noticeForInstalledPhones(postersOnly);
+    const seenByInstalled = legacyInstalledAlertImages(shaped);
+    assert(seenByInstalled.length === 4, `installed phones show all four photos, got ${seenByInstalled.length}`);
+    assert(seenByInstalled.every((url, i) => url === workerPhotos[i]), `installed photo order ${seenByInstalled.join(',')}`);
+    assert(seenByInstalled.every((url) => !url.includes('token=')), 'photo address has no token');
+    const current = layoutAlertPost(shaped);
+    assert(current.imageUrls.length === 4 && current.imageUrls.every((url, i) => url === workerPhotos[i]), 'current phones show each photo once');
+    assert(!current.body.includes('<img'), 'current phones lift the photos out of the text');
+    const withSheet = noticeForInstalledPhones({
+        message: '<p>Delays on the line.</p>',
+        imageUrls: ['/images/alerts/fare.png', ...workerPhotos],
+    });
+    const mixedInstalled = legacyInstalledAlertImages(withSheet);
+    assert(mixedInstalled.length === 4 && mixedInstalled.every((url) => url.includes('/alerts/img_')), `uploaded photos keep the four installed slots ${mixedInstalled.join(',')}`);
+    const mixedCurrent = layoutAlertPost(withSheet);
+    assert(mixedCurrent.imageUrls.includes('/images/alerts/fare.png') && mixedCurrent.imageUrls.length === 5, 'current phones still show the catalog sheet');
+    const catalogOnly = noticeForInstalledPhones({ message: '<p>Fare</p>', imageUrls: ['/images/alerts/fare.png'] });
+    assert(catalogOnly.message === '<p>Fare</p>' && catalogOnly.imageUrls[0] === '/images/alerts/fare.png', 'catalog poster stays on imageUrls');
+    assert(legacyInstalledAlertImages(catalogOnly)[0] === '/images/alerts/fare.png', 'installed phones still show a catalog poster');
+    const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(adminJs.includes('noticeForInstalledPhones'), 'posting shapes the notice for installed phones');
+    assert(adminJs.includes('accept="image/*,.pdf" multiple'), 'Media can take several files in one pick');
+    assert(adminJs.includes('id="alert-poster-upload" accept="image/jpeg,image/png,image/webp,image/gif" multiple'), 'poster upload can take several photos');
+    assert(!messageWithLegacyAlertImages('<p>Hi</p>', ['/images/alerts/fare.png']).includes('<img'), 'catalog path is not copied into the text');
     assert(sanitizeInlineAlertImageUrl('https://firebasestorage.googleapis.com/v0/b/app/o/x.png') === 'https://firebasestorage.googleapis.com/v0/b/app/o/x.png', 'firebase storage allowed');
     assert(sanitizeInlineAlertImageUrl('https://user:pass@firebasestorage.googleapis.com/v0/b/app/o/x.png') === null, 'storage URL with credentials blocked');
 
@@ -272,6 +316,22 @@ const now = 1_700_000_000_000;
     assert(!/autoplay/i.test(videoHtml), 'video markup does not autoplay');
     assert(!/<video\b[^>]*\ssrc=/i.test(videoHtml), 'player has no address until play');
     assert(videoHtml.includes('data-alert-video-src="https://cdn.example.com/briefing/ucv-update.mp4"'), 'play control keeps the address');
+    const pdf = 'https://nexttrain.co.za/images/alerts/notice.pdf';
+    assert(sanitizeAlertPdfUrl(pdf) === pdf, 'a Next Train PDF is allowed');
+    assert(sanitizeAlertPdfUrl('https://evil.example/notice.pdf') === null, 'a PDF on another host is refused');
+    assert(sanitizeAlertPdfUrl('http://nexttrain.co.za/images/alerts/notice.pdf') === null, 'a plain http PDF is refused');
+    const withPdf = layoutAlertPost({
+        message: `<p>Read the notice ${pdf} today.</p>`,
+        imageUrls: [pdf],
+    });
+    assert(withPdf.pdfUrls[0] === pdf, 'PDF is lifted onto the alert');
+    assert(!withPdf.imageUrls.includes(pdf), 'PDF is not treated as a poster');
+    assert(!withPdf.body.includes(pdf), 'PDF address is not left in the text');
+    const pdfHtml = renderAlertPdfMarkup(withPdf.pdfUrls);
+    assert(pdfHtml.includes('data-alert-pdf='), 'PDF control keeps the address for a tap');
+    assert(pdfHtml.includes('Open PDF'), 'PDF control is labeled Open PDF');
+    assert(!/<a\b/i.test(pdfHtml), 'PDF control is not a link');
+    assert(!/download/i.test(pdfHtml), 'PDF control does not download on its own');
     assert(preferSavedPosterSrc('blob:poster', 'https://i.ibb.co/x.png', 'https://i.ibb.co/x.png') === 'blob:poster', 'full view reuses the saved poster');
     assert(imageMimeForUrl('https://i.ibb.co/hR3kQ1p/ucv.png') === 'image/png', 'saved poster keeps a png type');
     const cacheSrc = readFileSync(new URL('../src/lib/alert-image-cache.js', import.meta.url), 'utf8');
@@ -403,6 +463,49 @@ const now = 1_700_000_000_000;
         message: 'See https://nexttrain.co.za/guide.html and https://www.prasa.com/ today.',
     });
     assert((many.match(/data-link-preview-url=/g) || []).length === 2, 'every url in an alert is crawled');
+    const communityPreview = linkPreviewMarkup({
+        message: 'See https://nexttrain.co.za/og/c/jhb-germiston/cp_mwn84zjm_4cze9f',
+    });
+    assert(communityPreview.includes('nt-community-share-card'), 'a community message link in an alert is a text card');
+    assert(communityPreview.includes('data-community-share-post="cp_mwn84zjm_4cze9f"'), 'the alert card keeps the message id');
+    assert(!communityPreview.includes('nt-link-preview-media'), 'a community message preview does not use a picture');
+    assert(!communityPreview.includes('data-link-preview-url='), 'a community message link is not crawled as a page preview');
+    const whatsapp = linkPreviewMarkup({
+        linkPreview: {
+            url: 'https://www.whatsapp.com/channel/0029VaExample',
+            title: 'Metrorail Region Updates',
+            description: 'Our commuter safety is important.',
+            site: 'whatsapp.com',
+        },
+        sourceUrl: 'https://whatsapp.com/channel/0029VaExample',
+        message: 'Update https://whatsapp.com/channel/0029VaExample/',
+    });
+    assert((whatsapp.match(/data-link-preview-state=/g) || []).length === 1, 'www and bare host are one preview');
+    const decoded = linkPreviewMarkup({
+        linkPreview: {
+            url: 'https://whatsapp.com/channel/0029VaExample',
+            title: 'Tshwane Metro Train Commuters',
+            description: 'Channel &#x2022; 277 followers',
+            image: 'https://example.com/logo.png',
+            site: 'whatsapp.com',
+        },
+    });
+    assert(decoded.includes('Channel • 277 followers'), 'hex entities in a link card decode');
+    assert(decoded.includes('nt-link-preview-media'), 'a ready link card keeps the picture frame');
+    const keptOther = linkPreviewMarkup({
+        suppressedPreviewUrls: ['https://whatsapp.com/channel/0029VaExample'],
+        linkPreview: {
+            url: 'https://www.whatsapp.com/channel/0029VaExample',
+            title: 'Metrorail Region Updates',
+            description: 'Our commuter safety is important.',
+            site: 'whatsapp.com',
+        },
+        message: 'Also https://example.com/service-update',
+    });
+    assert(!/whatsapp\.com\/channel/i.test(keptOther), 'a dismissed url stays off the preview');
+    assert((keptOther.match(/data-link-preview-url=/g) || []).length === 1, 'removing one url leaves the other');
+    const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(adminJs.includes('armPreviewLinkDismiss'), 'admin preview puts an X on each link card');
     const tiktok = 'https://www.tiktok.com/@metrorail/video/1234567890123456789';
     assert(sanitizeAlertVideoUrl(tiktok) === tiktok, 'a TikTok video is a video, not only YouTube');
     const fb = 'https://www.facebook.com/watch/?v=123456789012345';
@@ -424,7 +527,7 @@ const now = 1_700_000_000_000;
     assert(hub.includes('paintAlertsForCurrentRoute'), 'open alerts drop the previous route immediately');
     assert(hub.includes('noticesPromise'), 'notice fetch does not wait on inbox');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
-    assert(hub.includes('whenSettledForAutoNotices'), 'force-open Alerts waits until the phone has settled');
+    assert(hub.includes('whenIdleForAutoNotices(() => {'), 'force-open Alerts waits until the phone has settled and gone idle');
     assert(ui.includes('isSettledForAutoNotices'), 'auto-open home notices require settled updates and ads');
     const stability = readFileSync(new URL('../src/lib/session-stability.js', import.meta.url), 'utf8');
     assert(stability.includes('isAdInjectionPending'), 'auto-open reads in-flight ad inject without changing ads');
@@ -441,6 +544,8 @@ const now = 1_700_000_000_000;
     assert(ui.includes('lbDismissY') && ui.includes('closeLightbox()'), 'a downward swipe closes the image preview');
     assert(ui.includes('collectChannelSlides') && ui.includes('[data-alert-lightbox], [data-alert-video]'), 'full view walks posters and video previews on the channel');
     assert(ui.includes('if (index < 0 || index >= lbSlides.length) return'), 'full view moves one picture at a time and does not wrap');
+    assert(ui.includes('alert-image-lightbox-strip') && ui.includes('primeLightboxNeighbors'), 'a sideways swipe already has the next picture in the stage');
+    assert(ui.includes('adoptLightboxNeighbor'), 'settling a swipe keeps the picture that was already on screen');
     assert(ui.includes('videoPreviewStill') && !ui.includes('alertVideoEmbedUrl'), 'a swiped video stays on its preview still');
     assert(js.includes("!e.target.closest?.('[data-alert-video-play-chip]')"), 'tapping the preview still opens full view');
     assert(js.includes('window.openLightbox(\'\', host)'), 'the preview still opens without starting playback');
@@ -462,13 +567,16 @@ const now = 1_700_000_000_000;
     assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(appearance.includes('#alert-image-lightbox-next { left: 100%; }'), 'the next picture sits one stage width off to the side');
+    assert(appearance.includes('background-color: #e7eef8 !important;'), 'admin text fields use a fill that is not the hub page');
+    assert(appearance.includes('background-color: #243044 !important;'), 'admin text fields stay separate in dark mode');
     assert(appearance.includes('html.nt-keyboard #alert-image-lightbox-dock'), 'the photo reply lifts with the keyboard');
     assert(appearance.includes('bottom: var(--nt-kb-h, 0px);'), 'the photo reply docks to the keyboard height');
     assert(/\.nt-poll\s*\{[\s\S]*?background:\s*color-mix/.test(appearance), 'poll well uses pack tokens');
     assert(appearance.includes('.nt-poll-row.is-mine'), 'your-vote row is a padded highlight, not a ring');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
     assert(/#alerts-channel header\s*\{[\s\S]*?background-color:\s*var\(--nt-chrome-header\)/.test(appearance), 'alerts header uses the chrome colour, not the card surface');
-    assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
+    assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn,[\s\S]*?\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
     assert(/#planner-train-sheet-fare\s*\{[\s\S]*?background-color:\s*#ffffff/.test(appearance), 'train-sheet fare chip stays white on the blue header');
     assert(/\.nt-planner-map-btn\s*\{[\s\S]*?color:\s*var\(--nt-text\)/.test(appearance), 'View trip plan on map uses body ink');
     assert(/\.nt-alert-reply\s*\{[\s\S]*?color:\s*var\(--nt-primary\) !important/.test(appearance), 'Reply uses primary outline ink');
@@ -725,6 +833,22 @@ const now = 1_700_000_000_000;
     assert(channelJs.includes('nt-alert-force-flash'), 'force open highlight is a brief flash');
     assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');
     assert(channelJs.includes('reactionBreakdownPushed') && channelJs.includes("__ntHideAlertReactionBreakdown"), 'back closes the reaction counts sheet before the alerts page');
+    assert(channelJs.includes('alerts-select-copy') && channelJs.includes('alerts-select-share'), 'a selected alert uses the header for copy and share');
+    assert(channelJs.includes('showCopyToast') && channelJs.includes("btn.classList.toggle('hidden', !hasText)") && channelJs.includes('if (ok) clearAlertSelection()'), 'copying an alert with text confirms, then clears the highlight');
+    assert(channelJs.includes("#alerts-select-bar, #alerts-select-menu, #alerts-channel-footer, #alerts-reaction-picker"), 'a tap on the alerts selection bar is not eaten by the long-press');
+    const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+    assert(communityJs.includes('showCopyToast') && communityJs.includes('syncCommunityCopyButton') && communityJs.includes('if (ok) clearCommunitySelection()'), 'copying a community message with text confirms, then clears the highlight');
+    assert(communityJs.includes('data-quote-post') && communityJs.includes('jumpToQuotedCommunityPost') && communityJs.includes('nt-quote-flash'), 'a quoted community message jumps to that message');
+    assert(hubJs.includes('showCopyToast') && hubJs.includes('syncInboxCopyButton') && hubJs.includes('if (ok) clearInboxSelection()'), 'copying a Feedback Hub message with text confirms, then clears the highlight');
+    const uiSource = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiSource.includes('export function showCopyToast') && uiSource.includes("showToast('Copied', 'success'"), 'copy shows a short Copied toast');
+    assert(channelJs.includes('navigator.share({ url: link })'), 'alert share sends the link alone');
+    assert(!channelJs.includes('text: body || heading'), 'alert share does not attach the notice text');
+    assert(!channelJs.includes("type: 'alert'"), 'an alert is not reported back to admins');
+    assert(channelJs.includes('alertMenuActions'), 'the alert menu is only there when an admin can pin or delete');
+    const alertsMarkup = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
+    assert(alertsMarkup.includes('id="alerts-select-bar"') && alertsMarkup.includes('id="alerts-select-menu"'), 'the alerts header has a selection bar');
+    assert(alertsMarkup.includes('relative z-20 shrink-0') && alertsMarkup.includes('id="alerts-select-menu"'), 'Pin and Delete sit above the alert cards');
     const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     assert(uiJs.includes('__ntHideAlertReactionBreakdown'), 'history back asks the reaction sheet to close');
     const pollJs = readFileSync(new URL('../src/lib/alert-poll.js', import.meta.url), 'utf8');

@@ -13,7 +13,19 @@ import {
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
 import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays, buildGridOrderWriteRecord, viaCodesFromGridOrderRecord } from './utils.js';
+import {
+    clearTrainTime,
+    displaySheetClock,
+    fillTrainColumn,
+    formatSheetClock,
+    isGridStationName,
+    parseSheetClock,
+    removeTrainFromRows,
+    stationRowIndexes,
+} from './grid-column-edit.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
+import { speakOperatorCopy, stopOperatorSpeech, pauseOperatorSpeech, resumeOperatorSpeech, restartOperatorSpeech, operatorSpeechState } from './operator-speech.js';
+import { extraSheetKey, suggestedSheetTab, normalizeRouteSheetDates } from './route-sheets.js';
 import {
     applyDraftGuard,
     buildSuggestPayload,
@@ -27,9 +39,18 @@ import {
     SUGGEST_MAX_IMAGE_BYTES,
     SUGGEST_MAX_IMAGES,
     whatsappReplyUrl,
+    noticeMediaFiles,
 } from './reply-suggest.js';
 import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
-import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
+import {
+    adSpanForLabels,
+    alignAdSeries,
+    equivalentPeriodTrend,
+    equivalentViewability,
+    seriesTrend,
+    viewabilityTrend,
+} from '../../workers/nexttrain-telemetry/chart-math.js';
+import { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl } from './link-preview.js';
 import {
     alertDraftFromBriefCard,
     briefDismissed,
@@ -49,11 +70,12 @@ import {
     lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
 } from './ui.js';
 import {
-    loadAllSchedules, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
+    loadAllSchedules, pendingScheduleLoad, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
 import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
-import { ADMIN_CHANGELOG, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
+import { ADMIN_CHANGELOG, adminBuildSnapshot, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
+import { formatFeedbackDiagLine, stationChoiceLabel } from './feedback-diag-line.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 import { applyAdminAuthedChrome } from './admin-chrome.js';
@@ -90,7 +112,9 @@ import {
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
 import {
+    inboxMessageMatchesAdmin,
     inboxReactionActorId,
+    inboxReactionNeedsAdminAttention,
     renderInboxReactionChips,
     renderInboxReactionPickerHtml,
     submitInboxReaction,
@@ -143,9 +167,12 @@ export function exposeAdminGlobals() {
         SUGGEST_MAX_IMAGES,
         whatsappReplyUrl,
         noticeQuotePlain,
+        noticeMediaFiles,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
-    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
+    window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, equivalentPeriodTrend, equivalentViewability, seriesTrend, viewabilityTrend };
+    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl };
+    window.samePreviewUrl = samePreviewUrl;
     window.ntOperatorBrief = {
         alertDraftFromBriefCard,
         briefDismissed,
@@ -168,9 +195,22 @@ export function exposeAdminGlobals() {
     window.FARE_CONFIG = FARE_CONFIG;
     window.withBase = withBase;
     window.SPECIAL_DATES = SPECIAL_DATES;
+    window.extraSheetKey = extraSheetKey;
+    window.suggestedSheetTab = suggestedSheetTab;
+    window.normalizeRouteSheetDates = normalizeRouteSheetDates;
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;
     window.normalizeStationName = normalizeStationName;
+    window.ntGridColumnEdit = {
+        clearTrainTime,
+        displaySheetClock,
+        fillTrainColumn,
+        formatSheetClock,
+        isGridStationName,
+        parseSheetClock,
+        removeTrainFromRows,
+        stationRowIndexes,
+    };
     window.flattenPublicHolidays = flattenPublicHolidays;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
@@ -178,6 +218,12 @@ export function exposeAdminGlobals() {
     window.formatAppTime = formatAppTime;
     window.formatThreadDateLabel = formatThreadDateLabel;
     window.parseFeedbackAlertQuote = parseFeedbackAlertQuote;
+    window.ntSpeakOperatorCopy = speakOperatorCopy;
+    window.ntStopOperatorSpeech = stopOperatorSpeech;
+    window.ntPauseOperatorSpeech = pauseOperatorSpeech;
+    window.ntResumeOperatorSpeech = resumeOperatorSpeech;
+    window.ntRestartOperatorSpeech = restartOperatorSpeech;
+    window.ntOperatorSpeechState = operatorSpeechState;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;
@@ -187,6 +233,7 @@ export function exposeAdminGlobals() {
     window.bindPasswordReveal = bindPasswordReveal;
     window.fillAdminPasswordFromDevice = fillAdminPasswordFromDevice;
     window.loadAllSchedules = loadAllSchedules;
+    window.ntPendingScheduleLoad = pendingScheduleLoad;
     window.parseJSONSchedule = parseJSONSchedule;
     window.updateTime = updateTime;
     window.executeRegionSwap = executeRegionSwap;
@@ -198,9 +245,12 @@ export function exposeAdminGlobals() {
     window.DEFAULT_ZONE_KM_BANDS = DEFAULT_ZONE_KM_BANDS;
     window.ZONE_KM_RANGE_LABELS = ZONE_KM_RANGE_LABELS;
     window.ADMIN_CHANGELOG = ADMIN_CHANGELOG;
+    window.adminBuildSnapshot = adminBuildSnapshot;
     window.lookupAdminChangelog = lookupAdminChangelog;
     window.listAdminChangelogVersions = listAdminChangelogVersions;
     window.normalizeAdminChangelogKey = normalizeAdminChangelogKey;
+    window.formatFeedbackDiagLine = formatFeedbackDiagLine;
+    window.stationChoiceLabel = stationChoiceLabel;
     window.getGridOrderManifest = getGridOrderManifest;
     window.getRuntimeGridOrderRecord = getRuntimeGridOrderRecord;
     window.normalizeGridOrder = normalizeGridOrder;
@@ -209,6 +259,8 @@ export function exposeAdminGlobals() {
     window.buildGridOrderWriteRecord = buildGridOrderWriteRecord;
     window.viaCodesFromGridOrderRecord = viaCodesFromGridOrderRecord;
     window.inboxReactionActorId = inboxReactionActorId;
+    window.inboxMessageMatchesAdmin = inboxMessageMatchesAdmin;
+    window.inboxReactionNeedsAdminAttention = inboxReactionNeedsAdminAttention;
     window.renderInboxReactionChips = renderInboxReactionChips;
     window.renderInboxReactionPickerHtml = renderInboxReactionPickerHtml;
     window.submitInboxReaction = submitInboxReaction;

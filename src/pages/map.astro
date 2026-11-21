@@ -27,10 +27,26 @@ const regionSeoSlugs = Object.fromEntries(
       try {
         var dark = document.documentElement.classList.contains('dark');
         var bg = dark ? '#111827' : '#f3f4f6';
-        document.documentElement.style.backgroundColor = bg;
-        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         var q = new URLSearchParams(location.search);
         if (q.get('station')) document.documentElement.classList.add('nt-map-station-focus');
+        var known = ['GP', 'WC', 'KZN', 'EC'];
+        var needs = !document.documentElement.classList.contains('nt-map-embedded')
+          && q.get('embed') !== '1'
+          && !String(q.get('station') || '').trim()
+          && known.indexOf(String(q.get('region') || '').toUpperCase()) < 0;
+        if (needs) {
+          var saved = '';
+          var session = '';
+          try { saved = localStorage.getItem('userRegion') || ''; } catch (e) {}
+          try { session = sessionStorage.getItem('nt_mapViewRegion') || ''; } catch (e) {}
+          if (known.indexOf(saved) >= 0 || known.indexOf(session) >= 0) needs = false;
+        }
+        if (needs) {
+          document.documentElement.classList.add('nt-map-needs-region');
+          bg = dark ? '#000' : '#fff';
+        }
+        document.documentElement.style.backgroundColor = bg;
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
       } catch (e) {}
     })();
   </script>
@@ -254,6 +270,99 @@ const regionSeoSlugs = Object.fromEntries(
         z-index: 50; transition: opacity 0.5s ease;
       }
       html.dark #map-placeholder { background-color: #111827; }
+      /* First visit: same sheet as Welcome. Ask before any province map is drawn. */
+      html.nt-map-needs-region #map-placeholder,
+      html.nt-map-needs-region #region-picker,
+      html.nt-map-needs-region #legend-container,
+      html.nt-map-needs-region #custom-locate-btn,
+      html.nt-map-needs-region #nt-track-editor-toggle,
+      html.nt-map-needs-region .map-theme-stack { display: none !important; }
+      html.nt-map-needs-region #map-region-gate { display: block !important; }
+      html.nt-map-needs-region #map-back-wrap {
+        height: 2.5rem;
+        max-height: none;
+        overflow: visible;
+      }
+      html.nt-map-needs-region #map-back-link {
+        width: 2.5rem !important;
+        min-width: 2.5rem !important;
+        height: 2.5rem !important;
+        max-height: 2.5rem !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        color: #111827;
+        font-size: 0 !important;
+        gap: 0;
+      }
+      html.dark.nt-map-needs-region #map-back-link { color: #fff; }
+      html.nt-map-needs-region #map-back-link svg { width: 1.5rem; height: 1.5rem; }
+      #map-region-gate {
+        position: absolute; inset: 0; z-index: 80;
+        display: none; overflow: auto;
+        background: #fff; color: #111827;
+      }
+      html.dark #map-region-gate { background: #000; color: #fff; }
+      .map-region-gate-sheet {
+        position: relative;
+        width: 100%; max-width: 28rem; min-height: 100%;
+        margin: 0 auto;
+        display: flex; flex-direction: column; justify-content: center;
+        text-align: center;
+        padding: max(4.5rem, calc(env(safe-area-inset-top, 0px) + 3.25rem)) 1.25rem 2rem;
+      }
+      .map-region-gate-glow {
+        pointer-events: none;
+        position: absolute; left: 50%; bottom: 0.25rem;
+        width: 18rem; height: 10rem; transform: translateX(-50%);
+        border-radius: 999px;
+        background: radial-gradient(ellipse at center, rgba(76, 141, 255, 0.22), transparent 70%);
+      }
+      html.dark .map-region-gate-glow {
+        background: radial-gradient(ellipse at center, rgba(76, 141, 255, 0.16), transparent 70%);
+      }
+      .map-region-gate-mark {
+        position: relative;
+        width: 3.5rem; height: 3.5rem; margin: 0 auto 0.85rem;
+        border-radius: 16px; padding: 1px;
+        background: linear-gradient(to bottom right, rgba(76, 141, 255, 0.25), rgba(76, 141, 255, 0.05));
+        box-shadow: 0 10px 28px rgba(76, 141, 255, 0.22);
+      }
+      .map-region-gate-mark img { width: 100%; height: 100%; border-radius: 15px; display: block; }
+      #map-region-gate-title {
+        position: relative; margin: 0;
+        font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;
+        text-wrap: balance;
+      }
+      .map-region-gate-sheet > p {
+        position: relative; margin: 0.4rem 0 1.35rem;
+        font-size: 14px; font-weight: 400; line-height: 1.4; color: #6b7280;
+      }
+      html.dark .map-region-gate-sheet > p { color: #9ca3af; }
+      .map-region-gate-grid {
+        position: relative;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+      }
+      .map-region-gate-grid button {
+        min-height: 6.4rem; margin: 0; padding: 0.95rem 0.9rem;
+        display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+        text-align: left; font: inherit; color: inherit; cursor: pointer;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 1.25rem;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      }
+      .map-region-gate-grid button:active { transform: scale(0.98); }
+      html.dark .map-region-gate-grid button {
+        background: #1c1c1e; border-color: rgba(255, 255, 255, 0.1); box-shadow: none;
+      }
+      .map-region-gate-code {
+        font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #4C8DFF;
+      }
+      .map-region-gate-name {
+        font-size: 17px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15;
+      }
       /* Station SEO isolate: quiet loader — no network copy. */
       html.nt-map-station-focus #map-placeholder [data-map-loading-extra] { display: none !important; }
       html.nt-map-station-focus #map-placeholder h3 { font-size: 1rem; margin-bottom: 0.75rem; }
@@ -763,6 +872,45 @@ const regionSeoSlugs = Object.fromEntries(
         if (!document.documentElement.classList.contains('nt-map-station-focus')) return;
         var title = document.getElementById('map-loading-title');
         if (title) title.textContent = 'Loading map';
+      } catch (e) {}
+    })();
+  </script>
+
+  <div id="map-region-gate" class="hidden" role="dialog" aria-modal="true" aria-labelledby="map-region-gate-title">
+    <div class="map-region-gate-sheet">
+      <div class="map-region-gate-mark">
+        <div class="map-region-gate-glow" aria-hidden="true"></div>
+        <img src={withBase('icons/icon-192.png')} alt="" width="56" height="56">
+      </div>
+      <h2 id="map-region-gate-title">Which region do you want to view?</h2>
+      <p>Choose a province to open its network map.</p>
+      <div class="map-region-gate-grid">
+        <button type="button" data-region="GP"><span class="map-region-gate-code">GP</span><span class="map-region-gate-name">Gauteng</span></button>
+        <button type="button" data-region="WC"><span class="map-region-gate-code">WC</span><span class="map-region-gate-name">Western Cape</span></button>
+        <button type="button" data-region="KZN"><span class="map-region-gate-code">KZN</span><span class="map-region-gate-name">KwaZulu-Natal</span></button>
+        <button type="button" data-region="EC"><span class="map-region-gate-code">EC</span><span class="map-region-gate-name">Eastern Cape</span></button>
+      </div>
+    </div>
+  </div>
+  <script is:inline>
+    (function () {
+      try {
+        if (document.documentElement.classList.contains('nt-map-embedded')) return;
+        var q = new URLSearchParams(location.search);
+        if (q.get('embed') === '1' || String(q.get('station') || '').trim()) return;
+        var known = ['GP', 'WC', 'KZN', 'EC'];
+        var region = String(q.get('region') || '').toUpperCase();
+        if (known.indexOf(region) >= 0) return;
+        var saved = '';
+        var session = '';
+        try { saved = localStorage.getItem('userRegion') || ''; } catch (e) {}
+        try { session = sessionStorage.getItem('nt_mapViewRegion') || ''; } catch (e) {}
+        if (known.indexOf(saved) >= 0 || known.indexOf(session) >= 0) return;
+        document.documentElement.classList.add('nt-map-needs-region');
+        var gate = document.getElementById('map-region-gate');
+        if (gate) gate.classList.remove('hidden');
+        var placeholder = document.getElementById('map-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
       } catch (e) {}
     })();
   </script>

@@ -12,6 +12,11 @@
  * GET  /context   shared operator note
  * PUT  /context   { note }  (both allowlisted operators)
  *
+ * POST /speak     same operator token
+ *   Body: { text }  max 900 characters
+ *   Returns audio/mpeg from Chirp 3 HD. The Cloud key stays on the worker.
+ *   Secret: GOOGLE_TTS_API_KEY, or GEMINI_API_KEY if that key can call Text-to-Speech.
+ *
  * Secret: GEMINI_API_KEY
  * Var: FIREBASE_WEB_API_KEY
  * KV: REPLY_CONTEXT (optional until the namespace id is set)
@@ -32,8 +37,11 @@
 import {
     applyDraftGuard,
     buildGeminiRequest,
+    communityStyleRules,
+    feedbackStyleRules,
     geminiText,
     loadSuggestFiles,
+    normalizeVoicePrefs,
     parseSuggestResult,
     sanitizeSuggestPayload,
     SUGGEST_NOTE_MAX,
@@ -56,6 +64,11 @@ const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com
 /** New API keys cannot call 2.5 Flash-Lite. 3.5 Flash-Lite is the current low-cost fit. */
 const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const NOTE_KEY = 'shared-note';
+const KNOWLEDGE_KEY = 'prompt-knowledge';
+const FEEDBACK_KEY = 'prompt-feedback';
+const COMMUNITY_KEY = 'prompt-community';
+const PROMPT_MAX = 12000;
+const DEFAULT_VOICE = 'en-US-Chirp3-HD-Achernar';
 
 /** @type {Map<string, number[]>} */
 const rateBuckets = new Map();
@@ -166,6 +179,61 @@ async function writeSharedNote(env, note, { clear = false } = {}) {
     return true;
 }
 
+async function readPrompt(env, key) {
+    if (!env?.REPLY_CONTEXT) return '';
+    return String(await env.REPLY_CONTEXT.get(key) || '').slice(0, PROMPT_MAX);
+}
+
+async function writePrompt(env, key, value, clear) {
+    if (!env?.REPLY_CONTEXT) return false;
+    if (clear) {
+        await env.REPLY_CONTEXT.delete(key);
+        return true;
+    }
+    const text = String(value || '').trim().slice(0, PROMPT_MAX);
+    if (!text) {
+        await env.REPLY_CONTEXT.delete(key);
+        return true;
+    }
+    await env.REPLY_CONTEXT.put(key, text);
+    return true;
+}
+
+async function readOperatorContext(env) {
+    return {
+        note: await readSharedNote(env),
+        knowledge: await readPrompt(env, KNOWLEDGE_KEY),
+        feedbackPrompt: await readPrompt(env, FEEDBACK_KEY),
+        communityPrompt: await readPrompt(env, COMMUNITY_KEY),
+        defaults: {
+            feedbackPrompt: feedbackStyleRules(),
+            communityPrompt: communityStyleRules(),
+        },
+    };
+}
+
+function voiceKey(user) {
+    const uid = String(user?.uid || 'operator').replace(/[^\w.-]/g, '').slice(0, 80);
+    return `tts:prefs:${uid || 'operator'}`;
+}
+
+async function readVoicePrefs(env, user) {
+    let raw = {};
+    if (env?.REPLY_CONTEXT) {
+        try { raw = JSON.parse(await env.REPLY_CONTEXT.get(voiceKey(user)) || '{}'); } catch { raw = {}; }
+    }
+    return normalizeVoicePrefs(raw);
+}
+
+async function writeVoicePrefs(env, request, user) {
+    if (!env?.REPLY_CONTEXT) return json(env, request, 503, { error: 'Voice storage is not configured.' });
+    let body = {};
+    try { body = await request.json(); } catch { body = {}; }
+    const prefs = normalizeVoicePrefs(body);
+    await env.REPLY_CONTEXT.put(voiceKey(user), JSON.stringify(prefs));
+    return json(env, request, 200, { ok: true, ...prefs, defaultVoice: DEFAULT_VOICE });
+}
+
 export async function handleRequest(request, env) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') {
@@ -177,7 +245,7 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/unfurl' && request.method === 'GET') {
         return unfurlLink(request, env, url);
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft') {
+    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft' && url.pathname !== '/speak' && url.pathname !== '/voice') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -185,24 +253,55 @@ export async function handleRequest(request, env) {
     if (auth.error) return json(env, request, auth.status, { error: auth.error });
 
     if (url.pathname === '/context' && request.method === 'GET') {
-        return json(env, request, 200, { note: await readSharedNote(env) });
+        return json(env, request, 200, await readOperatorContext(env));
+    }
+    if (url.pathname === '/voice' && request.method === 'GET') {
+        return json(env, request, 200, await readVoicePrefs(env, auth.user));
+    }
+    if (url.pathname === '/voice' && request.method === 'PUT') {
+        return writeVoicePrefs(env, request, auth.user);
     }
     if (url.pathname === '/context' && request.method === 'PUT') {
         let body = {};
         try { body = await request.json(); } catch { body = {}; }
         const clear = body?.clear === true;
         const text = String(body?.note || '').trim();
-        if (!clear && !text) {
+        const touchesNote = clear || Object.prototype.hasOwnProperty.call(body, 'note');
+        const touchesPrompt = ['knowledge', 'feedbackPrompt', 'communityPrompt'].some((key) => Object.prototype.hasOwnProperty.call(body, key))
+            || body?.clearKnowledge === true
+            || body?.clearFeedback === true
+            || body?.clearCommunity === true;
+        if (touchesNote && !clear && !text && !touchesPrompt) {
             return json(env, request, 400, { error: 'Type a note before saving. A blank note is not saved.' });
         }
-        const saved = await writeSharedNote(env, text, { clear });
-        if (!saved) {
+        if (!touchesNote && !touchesPrompt) {
+            return json(env, request, 400, { error: 'Type a note before saving. A blank note is not saved.' });
+        }
+        if (!env?.REPLY_CONTEXT) {
             return json(env, request, 503, { error: 'Shared note storage is not configured.' });
+        }
+        if (touchesNote && (clear || text)) {
+            const saved = await writeSharedNote(env, text, { clear });
+            if (!saved) return json(env, request, 503, { error: 'Shared note storage is not configured.' });
+        }
+        if (touchesPrompt) {
+            if (Object.prototype.hasOwnProperty.call(body, 'knowledge') || body?.clearKnowledge === true) {
+                await writePrompt(env, KNOWLEDGE_KEY, body.knowledge, body?.clearKnowledge === true);
+            }
+            if (Object.prototype.hasOwnProperty.call(body, 'feedbackPrompt') || body?.clearFeedback === true) {
+                await writePrompt(env, FEEDBACK_KEY, body.feedbackPrompt, body?.clearFeedback === true);
+            }
+            if (Object.prototype.hasOwnProperty.call(body, 'communityPrompt') || body?.clearCommunity === true) {
+                await writePrompt(env, COMMUNITY_KEY, body.communityPrompt, body?.clearCommunity === true);
+            }
         }
         return json(env, request, 200, { ok: true, cleared: clear });
     }
     if (url.pathname === '/suggest' && request.method === 'POST') {
         return suggestReply(request, env);
+    }
+    if (url.pathname === '/speak' && request.method === 'POST') {
+        return speakText(request, env, auth.user);
     }
     if (url.pathname === '/edit' && request.method === 'POST') {
         return editText(request, env);
@@ -217,6 +316,98 @@ export async function handleRequest(request, env) {
         return writeDraft(env, request, auth.user);
     }
     return json(env, request, 405, { error: 'Method not allowed' });
+}
+
+const SPEAK_MAX = 900;
+const SPEAK_HOUR_CHARS = 8000;
+const SPEAK_DAY_CHARS = 40000;
+
+function plainSpeech(value) {
+    return String(value || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&(?:#x[0-9a-f]+|#\d+|[a-z]+);/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, SPEAK_MAX);
+}
+
+function audioResponse(env, request, b64) {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return new Response(bytes, {
+        status: 200,
+        headers: {
+            ...corsHeaders(env, request),
+            'Content-Type': 'audio/mpeg',
+            'Cache-Control': 'private, max-age=3600',
+        },
+    });
+}
+
+function speechInput(text, pause) {
+    if (pause === 'off') return { text };
+    const tag = pause === 'short' ? '[pause short]' : pause === 'long' ? '[pause long]' : '[pause]';
+    return { markup: text.replace(/([.!?])\s+/g, `$1 ${tag} `) };
+}
+
+/** Chirp 3 HD. Operator token already checked. The key stays on the worker. */
+async function speakText(request, env, user) {
+    let body = {};
+    try { body = await request.json(); } catch { body = {}; }
+    const text = plainSpeech(body.text);
+    if (text.length < 2) return json(env, request, 400, { error: 'Nothing to read.' });
+    const key = env.GOOGLE_TTS_API_KEY || env.GEMINI_API_KEY;
+    if (!key) return json(env, request, 503, { error: 'Voice is not configured.' });
+    const saved = await readVoicePrefs(env, user);
+    const prefs = body.preview && typeof body.preview === 'object' ? normalizeVoicePrefs(body.preview) : saved;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chirp3:${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${text}`));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const cacheKey = `tts:audio:${hex}`;
+    if (env.REPLY_CONTEXT) {
+        const hit = await env.REPLY_CONTEXT.get(cacheKey);
+        if (hit) return audioResponse(env, request, hit);
+        const hour = new Date().toISOString().slice(0, 13);
+        const day = hour.slice(0, 10);
+        const usedHour = Number(await env.REPLY_CONTEXT.get(`tts:hour:${hour}`)) || 0;
+        const usedDay = Number(await env.REPLY_CONTEXT.get(`tts:day:${day}`)) || 0;
+        if (usedHour + text.length > SPEAK_HOUR_CHARS || usedDay + text.length > SPEAK_DAY_CHARS) {
+            return json(env, request, 429, { error: 'Voice is paused for this hour.' });
+        }
+    }
+    let res;
+    try {
+        res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': key,
+            },
+            body: JSON.stringify({
+                input: speechInput(text, prefs.pause),
+                voice: { languageCode: prefs.languageCode, name: prefs.voice || DEFAULT_VOICE },
+                audioConfig: {
+                    audioEncoding: 'MP3',
+                    speakingRate: prefs.speakingRate,
+                    volumeGainDb: prefs.volumeGainDb,
+                },
+            }),
+        });
+    } catch {
+        return json(env, request, 502, { error: 'Could not reach voice.' });
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.audioContent) {
+        return json(env, request, 502, { error: 'Could not play that.' });
+    }
+    if (env.REPLY_CONTEXT) {
+        const hour = new Date().toISOString().slice(0, 13);
+        const day = hour.slice(0, 10);
+        const usedHour = Number(await env.REPLY_CONTEXT.get(`tts:hour:${hour}`)) || 0;
+        const usedDay = Number(await env.REPLY_CONTEXT.get(`tts:day:${day}`)) || 0;
+        await env.REPLY_CONTEXT.put(`tts:hour:${hour}`, String(usedHour + text.length), { expirationTtl: 60 * 60 * 3 });
+        await env.REPLY_CONTEXT.put(`tts:day:${day}`, String(usedDay + text.length), { expirationTtl: 60 * 60 * 48 });
+        await env.REPLY_CONTEXT.put(cacheKey, data.audioContent, { expirationTtl: 60 * 60 * 24 * 14 });
+    }
+    return audioResponse(env, request, data.audioContent);
 }
 
 function draftIdOk(value) {
@@ -396,19 +587,22 @@ async function suggestReply(request, env) {
     }
     let geminiBody;
     try {
+        const operatorContext = await readOperatorContext(env);
         geminiBody = buildGeminiRequest({
             payload,
-            sharedNote: await readSharedNote(env),
+            sharedNote: operatorContext.note,
             images: body?.images,
             threadFiles: loaded.files,
             filesMissed: loaded.missed,
+            stylePrompt: payload.surface === 'community' ? operatorContext.communityPrompt : operatorContext.feedbackPrompt,
+            extraKnowledge: operatorContext.knowledge,
         });
     } catch (err) {
         return json(env, request, 400, { error: err.message || 'Could not read those images.' });
     }
     const gemini = await callGemini(env, geminiBody);
     if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
-    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread);
+    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread, { surface: payload.surface });
     return json(env, request, 200, {
         action: parsed.action,
         reply: parsed.action === 'draft' ? parsed.reply : '',

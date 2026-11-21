@@ -11,8 +11,8 @@
  * goes to the zone origin and does not re-enter this Worker.
  */
 import catalog from './catalog.json';
-import { isSocialCrawler, parseShareIntent, parseLiveSharePath, parseLiveTrainImagePath, dayLabel, stationLabel, decodeDay } from './parse.js';
-import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
+import { isSocialCrawler, parseShareIntent, parseLiveSharePath, parseLiveTrainImagePath, parseAlertSharePath, parseCommunitySharePath, dayLabel, stationLabel, decodeDay } from './parse.js';
+import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, buildContentOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
 import { extractGridPreview, loadRegionDb, loadRegionGridOrder } from './schedule.js';
 import { timetablePng, plannerPng, liveTrainPng, buildTimetableSvg, buildPlannerSvg, buildLiveTrainSvg } from './og-images.js';
 
@@ -22,7 +22,133 @@ function siteBase(env, requestUrl) {
 
 function isOgSharePath(pathname) {
   if (pathname === '/og/share' || pathname.endsWith('/og/share')) return true;
+  if (parseAlertSharePath(pathname) || parseCommunitySharePath(pathname)) return true;
   return !!parseLiveSharePath(pathname);
+}
+
+function plainBits(html, max = 180) {
+  return String(html || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+function imageTypeForPath(path) {
+  if (/\.gif$/i.test(path)) return 'image/gif';
+  if (/\.png$/i.test(path)) return 'image/png';
+  if (/\.webp$/i.test(path)) return 'image/webp';
+  return 'image/jpeg';
+}
+
+function safePreviewImage(raw, site) {
+  const text = String(raw || '').trim();
+  if (text.startsWith('/') && !text.startsWith('//')) {
+    const pathOnly = text.split('?')[0];
+    if (!/^\/(?:images|icons)\//.test(pathOnly)) return '';
+    if (/\.pdf$/i.test(pathOnly) || !/\.(jpe?g|png|gif|webp)$/i.test(pathOnly)) return '';
+    const base = String(site || 'https://nexttrain.co.za').replace(/\/$/, '');
+    return { href: `${base}${pathOnly}`, imageType: imageTypeForPath(pathOnly) };
+  }
+  try {
+    const u = new URL(text);
+    if (u.protocol !== 'https:' || u.username || u.password) return '';
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    const allowed = host === 'nexttrain.co.za'
+      || host.endsWith('.nexttrain.co.za')
+      || host === 'nexttrain-community.enock.workers.dev'
+      || host === 'firebasestorage.googleapis.com'
+      || host === 'storage.googleapis.com'
+      || host.endsWith('.firebasestorage.app')
+      || host.endsWith('.googleusercontent.com');
+    if (!allowed) return '';
+    const path = decodeURIComponent(u.pathname || '');
+    if (/\.pdf($|\?)/i.test(path)) return '';
+    if (!/\.(jpe?g|png|gif|webp)$/i.test(path) && !/google|firebasestorage/.test(host)) return '';
+    return { href: u.href, imageType: imageTypeForPath(path) };
+  } catch {
+    return '';
+  }
+}
+
+function previewImages(node, site) {
+  const list = Array.isArray(node?.imageUrls) ? node.imageUrls : [];
+  const candidates = list.slice();
+  if (node?.imageUrl) candidates.push(node.imageUrl);
+  const attachments = Array.isArray(node?.attachments) ? node.attachments : [];
+  attachments.forEach((item) => candidates.push(item?.url || item));
+  const html = String(node?.message || node?.text || node?.body || '');
+  const re = /<img\b[^>]*\bsrc=["']([^"']+)["']/gi;
+  let match;
+  while ((match = re.exec(html))) candidates.push(match[1]);
+  const out = [];
+  const seen = new Set();
+  for (const raw of candidates) {
+    const image = safePreviewImage(raw, site);
+    if (!image || seen.has(image.href)) continue;
+    seen.add(image.href);
+    out.push(image);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+function pickedImage(node, site, photo) {
+  const images = previewImages(node, site);
+  const index = Number(photo) || 0;
+  if (index >= 1 && images[index - 1]) return images[index - 1];
+  return images[0] || null;
+}
+
+async function readRtdb(env, path) {
+  const base = String(env.SCHEDULE_BASE || 'https://metrorail-next-train-default-rtdb.firebaseio.com/').replace(/\/?$/, '/');
+  const res = await fetch(`${base}${path}.json`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function loadContentPreview(env, intent) {
+  const site = siteBase(env, new URL(String(env.PUBLIC_SITE || 'https://nexttrain.co.za')));
+  if (intent.kind === 'alert') {
+    const source = intent.source || 'all';
+    const node = await readRtdb(env, `notices/${encodeURIComponent(source)}/${encodeURIComponent(intent.id)}`);
+    if (!node || typeof node !== 'object' || node.deleted || node.hidden) {
+      return { title: 'Service update', description: 'This update is no longer available.' };
+    }
+    const exp = Number(node.expiresAt || 0);
+    if (exp && exp <= Date.now()) {
+      return { title: 'Service update', description: 'This update is no longer available.' };
+    }
+    const title = plainBits(node.title, 80) || 'Service update';
+    const description = plainBits(node.message || node.text, 180) || 'Open this update in Next Train.';
+    const image = pickedImage(node, site, intent.photo);
+    const photo = Number(intent.photo) || 0;
+    const photoNote = photo >= 1 ? `Photo ${photo}` : '';
+    return {
+      title,
+      description: photoNote && description ? `${photoNote}. ${description}` : (photoNote || description),
+      image: image?.href || '',
+      imageType: image?.imageType || 'image/png',
+    };
+  }
+  const node = await readRtdb(env, `route_community/${encodeURIComponent(intent.routeId)}/posts/${encodeURIComponent(intent.postId)}`);
+  if (!node || typeof node !== 'object' || node.deleted || node.hidden || node.removed) {
+    return { title: 'Community message', description: 'This message is no longer available.' };
+  }
+  const description = plainBits(node.body, 180) || 'Open this message in Next Train.';
+  const image = pickedImage(node, site, 0);
+  const rawName = plainBits(node.displayName || node.fromName || '', 60);
+  const name = rawName && !/^(you|passenger)$/i.test(rawName) ? rawName : '';
+  return {
+    title: name || 'Community message',
+    description,
+    image: image?.href || '',
+    imageType: image?.imageType || 'image/png',
+  };
 }
 
 function ogHtmlHeaders() {
@@ -149,6 +275,19 @@ async function handleBotShare(url, env, ctx) {
   const intent = parseShareIntent(url);
   if (!intent) return null;
   const site = siteBase(env, url);
+
+  if (intent.kind === 'alert' || intent.kind === 'community') {
+    let detail = {};
+    try { detail = await loadContentPreview(env, intent); } catch (e) {
+      console.warn('OG content load failed', e.message || e);
+      detail = {
+        title: intent.kind === 'community' ? 'Community message' : 'Service update',
+        description: 'Open this in Next Train.',
+      };
+    }
+    const meta = buildContentOgMeta(intent, site, detail);
+    return new Response(renderOgHtml(meta), { headers: ogHtmlHeaders() });
+  }
 
   if (intent.kind === 'live') {
     const meta = buildLiveTrainOgMeta(intent, site);

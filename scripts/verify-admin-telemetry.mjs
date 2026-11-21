@@ -12,12 +12,32 @@ import {
     fillYearMonthSeries,
     sliceChartWindow,
     enumerateYearMonths,
+    isoWeekKey,
+    adSpanForLabels,
+    alignAdSeries,
+    equivalentPeriodTrend,
+    equivalentViewability,
+    seriesTrend,
+    viewabilityTrend,
 } from '../workers/nexttrain-telemetry/chart-math.js';
+import {
+    assignReportingDevice,
+    countsForDay,
+    hashDeviceId,
+    johannesburgDay,
+    parsePresenceBody,
+    presenceOriginAllowed,
+    retentionFloorDay,
+    sentryStatusFromResult,
+} from '../workers/nexttrain-telemetry/region-presence.js';
+import { handleRegionPresence, readRegionalSplit, resolveRegionalDay } from '../workers/nexttrain-telemetry/region-store.js';
+import { formatFeedbackDiagLine, stationChoiceLabel } from '../src/lib/feedback-diag-line.js';
 import {
     computeDeployPhase,
     dispatchProductionDeploy,
     shaMatches,
 } from '../workers/nexttrain-telemetry/deploy-github.js';
+import { cleverWindows, mergeCleverParts } from '../workers/nexttrain-telemetry/clever-ads.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -77,6 +97,23 @@ ok(intraView.counts[37] === null, 'hours after latest available stay unplotted (
 
 ok(!workerJs.includes('lagBuffer'), 'worker no longer applies a 3h lagBuffer');
 ok(workerJs.includes('clipIntradayCutoff'), 'worker clips INTRADAY to latest GA4 bucket');
+ok(workerJs.includes('GA_REPORT_HANG_MS = 25000') && !workerJs.includes('AbortSignal.timeout(call.ms)'), 'a GA4 report is allowed to finish, and a hung socket still releases the batch');
+ok(!workerJs.includes('ms: 6000') && !workerJs.includes('ms: 12000'), 'the 6 and 12 second GA4 cutoffs are gone');
+ok(workerJs.includes('async function gaReport') && workerJs.includes('No second try'), 'a GA4 report is not sent again');
+ok(workerJs.includes('s-maxage=30') && workerJs.includes('telemetry${url.search}'), 'the finished GA4 reply is cached for 30 seconds');
+ok(workerJs.includes("X-Cache-Status': 'HIT'"), 'the next open returns that cached reply');
+ok(workerJs.includes('gaPayloadUseful'), 'a reply with no GA4 numbers is not cached');
+ok(!workerJs.includes('telemetry-v17/tile/') && !workerJs.includes('telemetry_snapshot'), 'GA4 is not split into short tiles or read from D1');
+ok(workerJs.includes('function keepStoredTile'), 'one failed GA4 report leaves the numbers that arrived');
+ok(adminJs.includes('setInterval(Admin.refreshTelemetry, 10000)'), 'Live Telemetry asks again every 10 seconds');
+ok(adminJs.includes('_telemetryInFlight'), 'a GA4 batch already running is not asked again');
+ok(adminJs.includes('}, 28000);'), 'the phone waits for that GA4 batch to finish');
+ok(workerJs.includes('minuteRanges'), '5-minute GA4 tile uses a realtime minute range');
+ok(workerJs.includes('gaParts'), 'one rejected GA4 query does not blank the other tiles');
+ok(workerJs.includes('startDate: "7daysAgo"') && !workerJs.includes('metricAggregations'), '7-day card is the one-row report again');
+ok(!workerJs.includes('int64Value'), 'the minutesAgo numeric filter is gone');
+ok(readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8').includes('telemetry-ga-detail'), 'Live Telemetry shows the GA4 error');
+ok(readFileSync(join(ROOT, 'src/components/HubModals.astro'), 'utf8').includes('id="telemetry-ga-detail"'), 'telemetry panel has a GA4 error line');
 ok(workerJs.includes("fillYearMonthSeries(rowMap, '202601'"), 'worker fills ALL months from Jan 2026');
 ok(workerJs.includes("{ name: \"sessions\" }"), 'worker fetches sessions alongside unique users');
 
@@ -131,7 +168,7 @@ ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads'
 ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
 ok(adminJs.includes('commuter-peek-feedback'), 'feedback tile opens the thread');
 ok(adminJs.includes('Last activity:'), 'user sheet shows latest activity');
-ok(adminJs.includes("Admin.startFeedbackChat(did, '')"), 'grey feedback tile can start a chat');
+ok(adminJs.includes('Admin.startFeedbackChat(chatId'), 'grey feedback tile can start a chat');
 ok(adminJs.includes('commuter-peek-trips'), 'trip plans tile opens plans');
 ok(!adminJs.includes('commuter-peek-chat'), 'user sheet has no Open chat button');
 ok(adminJs.includes('ut-tab-deletions') && adminJs.includes('ut-pane-deletions'), 'deletion requests live in User Trust');
@@ -156,7 +193,7 @@ ok(!/bindDeSwipe\(\s*document\.getElementById\('de-list'\)\s*\)/.test(adminJs), 
 ok(adminJs.includes('fetchDiagJson:'), 'Admin.fetchDiagJson is hoisted');
 ok(adminJs.includes('normalizeStationName'), 'Deep Scan dest checks use normalizeStationName');
 ok(adminJs.includes('Expected — no Saturday service'), 'placeholder Saturday sheets are expected, not errors');
-ok(adminJs.includes("metricRow('Joined'") && adminJs.includes("metricRow('Last activity'") && adminJs.includes('joinedLabel'), 'device lookup splits joined and last activity');
+ok(adminJs.includes("infoRow('Joined'") && adminJs.includes("infoRow('Last activity'") && adminJs.includes('joinedLabel'), 'device lookup splits joined and last activity');
 ok(adminJs.includes("'Linked devices'"), 'device lookup lists linked device ids');
 ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users index');
 ok(adminJs.includes('feedbackDeviceHasTripPlans'), 'feedback list can mark devices that have trip plans');
@@ -182,11 +219,35 @@ ok(adminJs.includes("Admin.icon('map', 'w-3 h-3')"), 'trip-plans indicator is th
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
-ok(adminJs.includes('Users and sessions by region on the hit'), 'regional modal names users and sessions on the hit');
-ok(adminJs.includes('People today:'), 'regional modal calls the total people, not a unique split');
-ok(adminJs.includes('No region on the hit'), 'missing region is hits with no region, not people with no region');
-ok(adminJs.includes('The cards are not a split of people today.'), 'regional note says the cards overlap');
-ok(workerJs.includes('unsetUsers'), 'worker keeps hits with no region separate from unrecognised values');
+ok(adminJs.includes('Reporting devices by selected region'), 'regional modal names reporting devices');
+ok(adminJs.includes('Reporting devices today:'), 'regional modal total is reporting devices');
+ok(adminJs.includes('id="region-day-prev"') && adminJs.includes('/admin/region-split'), 'regional modal can open a previous Johannesburg day');
+ok(adminJs.includes('id="ut-accounts-region"') && adminJs.includes('break-words'), 'account list filters by region and keeps the full name');
+ok(adminJs.includes('id="event-tab-sheets"') && !adminJs.includes('id="route-sheet-panel"'), 'route sheets live inside the special event panel');
+ok(adminJs.includes('People today (Analytics):'), 'Analytics people stay beside the exact split');
+ok(!adminJs.includes('No region on the hit'), 'regional modal no longer shows an overlapping unset bucket');
+ok(adminJs.includes('hideRegionNote'), 'an exact Worker split clears the overlapping-region warning');
+ok(adminJs.includes('previous overlapping region report'), 'a legacy Worker payload still explains the old cards');
+ok(adminJs.includes("stationChoiceLabel") || adminJs.includes("(${autoFlag ? 'Auto' : 'man'})"), 'build notes name the station as (man) or (auto)');
+{
+    const hubJs = readFileSync(join(ROOT, 'src/lib/hub.js'), 'utf8');
+    const stationSpreads = hubJs.split('...await messagePlaceFields()').length - 1;
+    ok(stationSpreads >= 5, 'feedback form, Feedback Hub, and the inbox copy store the closest station');
+    ok(hubJs.includes('captureSenderStation') && hubJs.includes('getBoardStationContext'), 'a missing GPS fix still stores the home-board station');
+    ok(adminJs.includes('item.station = hit.msg.station'), 'an inbox copy can fill a feedback row that has no station');
+    ok(adminJs.includes('station: msg.station'), 'an inbox-only message keeps the home-board station');
+}
+ok(adminJs.includes("data.metric !== 'reportingDevices'"), 'old overlapping Worker payloads are not labelled as an exact split');
+ok(workerJs.includes('readRegionalSplit'), 'worker reads the exact regional split');
+ok(workerJs.includes("pathname === '/region-presence'"), 'worker accepts the region presence beacon');
+ok(workerJs.includes('sentryStatusFromResult'), 'worker separates Sentry status from the count');
+ok(!/dimensions:\s*\[\{\s*name:\s*"customUser:crm_region"/.test(workerJs), 'regional cards no longer come from overlapping GA rows');
+ok(adminJs.includes('SENTRY TODAY'), 'error tile is Sentry today');
+ok(adminJs.includes('App diagnostics, last 24h'), 'Firebase diagnostics stay a separate 24h list');
+ok(!adminJs.includes('est. @ sample'), 'Firebase rows are not presented as a Sentry sample estimate');
+ok(adminJs.includes('id="admin-changelog-diag"'), 'build notes modal has a diagnostics line');
+ok(adminJs.includes('data-cl-diag='), 'version chip carries the diagnostics line');
+ok(!adminJs.includes('diagHtml'), 'feedback card no longer repeats the diagnostics line');
 ok(adminJs.includes("chartPanel.id = 'telemetry-chart-panel'"), 'telemetry chart is an admin drill subview');
 ok(adminJs.includes("Admin.deepLinkToPanel('telemetry-chart-panel')"), 'chart enters through history-aware admin navigation');
 ok(adminJs.includes("chartPanel.dataset.adminSubview = 'true'"), 'analytics subview is excluded from the admin tile grid');
@@ -207,6 +268,7 @@ ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM 
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');
 ok(adminJs.includes('collapseSystemControlAccordions'), 'System Control reopens with every accordion closed');
 ok(adminJs.includes("'exp-features-body'"), 'experimental features accordion is included in the collapse set');
+ok(adminJs.includes("'community-body'") && adminJs.includes('id="community-body" class="hidden'), 'Community in System Controls opens collapsed');
 ok(adminJs.includes(".exp-feat-body") || adminJs.includes('.exp-feat-body'), 'nested feature accordions collapse with System Control');
 ok(adminJs.includes('bindGsmSwipe'), 'Global State Monitor binds swipe between tabs');
 ok(adminJs.includes("bindGsmSwipe(document.getElementById('gsm-list'))"), 'GSM swipe works on the item list');
@@ -225,6 +287,14 @@ ok(adminJs.includes('sys_logs/fare_votes'), 'admin reads fare_votes');
 ok(adminJs.includes('smoothKm') && adminJs.includes('abKm'), 'Fares tab exports smooth and A-B km');
 ok(!adminJs.includes('· A-B '), 'Fares list does not show straight-line A-B');
 ok(adminJs.includes('Saved corrections'), 'Fares tab keeps a saved corrections section');
+ok(adminJs.includes('>Refuted ('), 'Fares tab has a refuted accordion');
+ok(adminJs.includes("row.review !== 'refuted'"), 'refuted fare votes stay out of the accuracy percentage');
+ok(adminJs.includes('User Accounts &amp; Bans'), 'the accounts panel is titled User Accounts & Bans');
+ok(adminJs.indexOf('id="ut-tab-accounts"') < adminJs.indexOf('id="ut-tab-lookup"') && adminJs.indexOf('id="ut-tab-lookup"') < adminJs.indexOf('id="ut-tab-bans"') && adminJs.indexOf('id="ut-tab-bans"') < adminJs.indexOf('id="ut-tab-deletions"'), 'account tabs run Account, Lookup, Bans, Deletions');
+ok(adminJs.indexOf('id="ut-pane-bans"') < adminJs.indexOf('id="shadow-ban-default-body"') && adminJs.indexOf('id="shadow-ban-default-body"') < adminJs.indexOf('id="ut-pane-deletions"'), 'default ban mode sits on the Bans tab');
+ok(adminJs.includes('id="ut-accounts-count"'), 'account list shows a total');
+ok(adminJs.includes('ut-community-max'), 'lookup can raise a community send limit');
+ok(adminJs.indexOf('id="holiday-approvals-body"') < adminJs.indexOf('id="sched-override-header"') && adminJs.indexOf('id="sched-override-header"') < adminJs.indexOf('id="holiday-approvals-list"') + 2500, 'force schedule type sits in Holiday Notices');
 ok(adminJs.includes("review: 'saved'"), 'saving a fare correction files it as saved');
 ok(adminJs.includes('Admin.approvePlannerFare'), 'Fares tab can approve a correction');
 ok(adminJs.includes('config/planner_fares/'), 'Approve writes config/planner_fares/$key');
@@ -340,6 +410,192 @@ ok(adminJs.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURICompo
 ok(adminJs.includes("from: 'admin'"), 'admin send tags from admin');
 ok(adminJs.includes("String(msg.from || '') !== 'commuter'"), 'inbox fold does not swallow untagged admin replies');
 ok(!adminJs.includes("icon('more'"), 'feedback Options dropped the more icon');
+
+ok(johannesburgDay(Date.UTC(2026, 10, 6, 21, 59)) === '2026-11-06', '21:59 UTC is still 6 Nov in Johannesburg');
+ok(johannesburgDay(Date.UTC(2026, 10, 6, 22, 0)) === '2026-11-07', '22:00 UTC rolls to 7 Nov in Johannesburg');
+ok(retentionFloorDay(Date.UTC(2026, 10, 7, 10, 0), 35) === '2026-10-03', 'presence rows older than 35 Johannesburg days are eligible for deletion');
+ok(parsePresenceBody(JSON.stringify({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'gp' })).region === 'GP', 'presence region is canonical');
+ok(parsePresenceBody('{"region":"ALL","deviceId":"usr_abc12xyz9_1700000000000"}').ok === false, 'unknown region is rejected');
+ok(parsePresenceBody('{"region":"GP","deviceId":"K"}').ok === false, 'short device id is rejected');
+ok(presenceOriginAllowed('https://nexttrain.co.za') === true, 'production origin can report');
+ok(presenceOriginAllowed('https://preview-1.next-train-lab.pages.dev') === true, 'lab preview origin can report');
+ok(presenceOriginAllowed('https://evil.example') === false, 'foreign origin cannot report');
+{
+    const hashA = await hashDeviceId('usr_abc12xyz9_1700000000000', 'pepper-a');
+    const hashB = await hashDeviceId('usr_abc12xyz9_1700000000000', 'pepper-b');
+    ok(hashA.length === 64 && hashA !== hashB, 'device hash is a peppered digest');
+    ok(!hashA.includes('usr_abc12xyz9_1700000000000'), 'device hash does not keep the browser id');
+}
+{
+    const now = Date.UTC(2026, 10, 7, 8, 0);
+    const day = johannesburgDay(now);
+    let rows = assignReportingDevice(new Map(), {
+        day, deviceHash: 'h1', region: 'GP', now, retentionFloor: '2026-10-03',
+    });
+    rows = assignReportingDevice(rows, {
+        day, deviceHash: 'h1', region: 'WC', now: now + 1000, retentionFloor: '2026-10-03',
+    });
+    rows = assignReportingDevice(rows, {
+        day: '2026-09-01', deviceHash: 'old', region: 'EC', now, retentionFloor: '2026-10-03',
+    });
+    const counts = countsForDay(rows, day);
+    ok(counts.GP === 0 && counts.WC === 1 && counts.total === 1, 'a region change moves the device instead of double counting');
+    ok(!rows.has('2026-09-01\0old'), 'assignment helper drops rows before the retention floor');
+}
+{
+    const zero = sentryStatusFromResult({ configured: true, ok: true, count: 0 });
+    const missing = sentryStatusFromResult({ configured: false });
+    const failed = sentryStatusFromResult({ configured: true, ok: false, detail: 'Bearer secret-token rejected' });
+    ok(zero.sentryStatus === 'zero' && zero.todayErrors === '0', 'a real Sentry zero stays zero');
+    ok(missing.sentryStatus === 'unconfigured' && missing.todayErrors === '--', 'missing Sentry config is not a zero');
+    ok(failed.sentryStatus === 'error' && !failed.sentryErrorDetail.includes('secret-token'), 'Sentry error detail redacts bearer tokens');
+}
+ok(stationChoiceLabel('PRETORIA', false) === 'Pretoria (man)', 'a manual station is Pretoria (man)');
+ok(stationChoiceLabel('LENZ', true) === 'Lenz (Auto)', 'an auto-located station is Lenz (Auto)');
+ok(stationChoiceLabel('', false) === '', 'a missing station is not called Manual station');
+ok(formatFeedbackDiagLine({
+    phone: 'K', network: 'mobile', signal: 'weak', viewport: '384x748',
+}) === 'Mobile network · Weak signal · 384 × 748', 'one-letter handset token is left off and the rest is readable');
+ok(formatFeedbackDiagLine({
+    phone: 'iPhone', network: 'wifi', signal: 'excellent', viewport: '390x844',
+}) === 'iPhone · Wi-Fi · Excellent signal · 390 × 844', 'a real handset name stays on the diagnostics line');
+{
+    function memoryPresenceDb() {
+        const rows = new Map();
+        return {
+            prepare(sql) {
+                let args = [];
+                const stmt = {
+                    bind(...bound) { args = bound; return stmt; },
+                    async run() {
+                        if (sql.startsWith('INSERT')) {
+                            const [day, deviceHash, region, firstSeen, lastSeen] = args;
+                            const key = `${day}\0${deviceHash}`;
+                            const prev = rows.get(key);
+                            rows.set(key, prev ? { ...prev, region, lastSeen } : { day, deviceHash, region, firstSeen, lastSeen });
+                        } else if (sql.startsWith('DELETE')) {
+                            const floor = args[0];
+                            for (const [key, row] of rows) if (row.day < floor) rows.delete(key);
+                        }
+                        return { success: true };
+                    },
+                    async all() {
+                        const day = args[0];
+                        const counts = new Map();
+                        for (const row of rows.values()) {
+                            if (row.day !== day) continue;
+                            counts.set(row.region, (counts.get(row.region) || 0) + 1);
+                        }
+                        return { results: [...counts].map(([region, n]) => ({ region, n })) };
+                    },
+                };
+                return stmt;
+            },
+            batch(statements) { return Promise.all(statements.map((s) => s.run())); },
+        };
+    }
+    const now = Date.UTC(2026, 10, 7, 8, 0);
+    const db = memoryPresenceDb();
+    const env = { REGION_PRESENCE_DB: db, REGION_PRESENCE_PEPPER: 'test-pepper' };
+    const post = (body, origin = 'https://nexttrain.co.za') => handleRegionPresence(new Request('https://nexttrain-telemetry.enock.workers.dev/region-presence', {
+        method: 'POST',
+        headers: { Origin: origin, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    }), env, now);
+    const first = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'GP' });
+    const moved = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'WC' });
+    const other = await post({ deviceId: 'usr_otherdevice_1700000000001', region: 'KZN' });
+    const blocked = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'GP' }, 'https://evil.example');
+    const invalid = await post({ deviceId: 'nope', region: 'GP' });
+    const split = await readRegionalSplit(db, now);
+    const yesterday = resolveRegionalDay(now, '2026-11-06');
+    const future = resolveRegionalDay(now, '2026-11-08');
+    const pastSplit = await readRegionalSplit(db, now, '2026-11-06');
+    ok(yesterday.ok === true && yesterday.day === '2026-11-06', 'a stored Johannesburg day can be read');
+    ok(future.ok === false, 'a future day is refused');
+    ok(pastSplit.day === '2026-11-06' && pastSplit.reportingDevices === 0 && pastSplit.exact === true, 'an earlier day does not reuse today\'s cards');
+    ok(first.status === 200 && moved.status === 200 && other.status === 200, 'valid presence reports are stored');
+    ok(blocked.status === 403, 'presence route rejects a foreign origin');
+    ok(invalid.status === 400, 'presence route rejects a bad device id');
+    ok(split.GP === 0 && split.WC === 1 && split.KZN === 1 && split.EC === 0 && split.reportingDevices === 2, 'stored cards are a partition of reporting devices');
+    const body = await moved.json();
+    ok(body.ok === true && !JSON.stringify(body).includes('usr_abc'), 'presence response does not echo the device id');
+    const unconfigured = await readRegionalSplit(null, now);
+    ok(unconfigured.status === 'unconfigured' && unconfigured.exact === false, 'missing D1 binding is not shown as an exact zero split');
+}
+const storeJs = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/region-store.js'), 'utf8');
+ok(storeJs.includes('ON CONFLICT(day, device_hash)'), 'daily region upsert moves a device instead of inserting another row');
+const prefsJs = readFileSync(join(ROOT, 'src/lib/prefs.js'), 'utf8');
+ok(prefsJs.includes('region-presence-client.js'), 'selected region changes report the exact daily assignment');
+
+const adWindows = cleverWindows('2026-04-30', '2026-11-10');
+ok(adWindows.length >= 3, 'ad history from the first hit is more than one Clever window');
+ok(adWindows.every((w) => w.start <= w.end), 'each ad window has a start and end');
+ok(adWindows[0].start === '2026-04-30' && adWindows[adWindows.length - 1].end === '2026-11-10', 'stitched ad windows cover the whole search');
+const spanDays = (w) => (Date.parse(`${w.end}T00:00:00Z`) - Date.parse(`${w.start}T00:00:00Z`)) / 86400000;
+ok(adWindows.every((w) => spanDays(w) < 92), 'each ad window stays inside the 3 month cap');
+function adPart(hits, value, day, desktop, mobile) {
+    return {
+        payload: {
+            globalPerformance: { hits, value, coin: 'USD', dealType: 'CPM', firstHit: '2026-04-30' },
+            browsers: { dataset: { label: ['Desktop', 'Mobile'], series: [{ data: [desktop, mobile] }] } },
+            visitors: { dataset: { label: [day], series: { hits: [hits] } } },
+            countries: { dataset: { label: ['ZA'], series: { value: [hits] } } },
+        },
+    };
+}
+const mergedAds = mergeCleverParts([
+    adPart(100, 1.5, '2026-04-30', 10, 90),
+    adPart(50, 0.25, '2026-08-01', 0, 100),
+]);
+ok(mergedAds.hits === 150 && mergedAds.revenue === 1.75, 'stitched ad windows add hits and revenue');
+ok(mergedAds.series.length === 2 && mergedAds.geos[0].hits === 150, 'stitched ad windows keep daily hits and geos');
+ok(!workerJs.includes('ZmI0MWI3') && !workerJs.includes('cleverwebserver.com/dashboard'), 'the Clever dashboard token is not in the worker');
+ok(workerJs.includes("url.pathname === '/admin/ads'") && workerJs.includes('CLEVER_SCRIPT_ID'), 'ad stats are an admin route that reads the worker secret');
+ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('loadAdRevenue'), 'live telemetry draws its own ad revenue search');
+ok(adminJs.includes('$4 CPM') && adminJs.includes('api.frankfurter.dev') && adminJs.includes('open.er-api.com'), 'revenue and the $4 CPM deal convert with an open dollar rate');
+ok(adminJs.includes('trend-ads-btn') && adminJs.includes('alignAdSeries') && adminJs.includes('showAdOverlay'), 'the user graph can draw ad counts for the same buckets');
+ok(adminJs.includes('openGraphStats') && adminJs.includes('equivalentViewability') && adminJs.includes('telemetry-stats-export'), 'graph statistics compare equal finished periods and can export');
+ok(adminJs.includes('offerChartExport') && adminJs.includes("label: 'Excel (.csv)'") && adminJs.includes('exportAdRevenueSheet'), 'ad revenue and telemetry graphs export a graph or a spreadsheet');
+ok(adminJs.includes('openGraphLandscape') && adminJs.includes('_telemetryExportFrame(1100') && adminJs.includes('wide: true'), 'telemetry graphs open landscape and export that wide frame');
+ok(adminJs.includes("adChart.id = 'ad-impressions-panel'") && adminJs.includes('openAdImpressions'), 'the impressions graph opens full screen');
+ok(adminJs.includes("showToast(Admin._telemetryLoadToast") && adminJs.includes('untilDismiss: true') && adminJs.includes('hideToastIfMessage(Admin._telemetryLoadToast)'), 'telemetry load shows a dismissible toast and clears it on success');
+const bridgeJs = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
+const toastJs = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
+ok(bridgeJs.includes('window.ntAdChartAlign'), 'the chart align helpers are on the admin bridge');
+ok(toastJs.includes('options.untilDismiss') && toastJs.includes('untilDismiss'), 'a loading toast can stay until it is dismissed');
+ok(isoWeekKey('2026-01-01') === '202601', '1 Jan 2026 is ISO week 202601');
+const week = isoWeekKey('2026-11-10');
+const dailyAds = new Map([['2026-11-09', 10], ['2026-11-10', 5], ['2026-11-11', 7], ['2026-11-16', 100]]);
+ok(alignAdSeries([week], 'WAU', dailyAds)[0] === 22, 'a week of ad counts is the sum of those days');
+ok(alignAdSeries(['20261110', ''], 'DAU', dailyAds)[0] === 5 && alignAdSeries(['20261110', ''], 'DAU', dailyAds)[1] === null, 'a day uses that day and a pad stays empty');
+ok(alignAdSeries(['202611'], 'MAU', dailyAds)[0] === 122, 'a month sums every daily ad count in it');
+const dauSpan = adSpanForLabels(['20261104', '20261110'], 'DAU');
+ok(dauSpan.start === '2026-11-04' && dauSpan.end === '2026-11-10', 'the ad search covers the days on the DAU graph');
+const down = seriesTrend([100, 80]);
+ok(down.trend === 'Down' && down.pct === -20, 'the user trend is the change from the first point to the last');
+const rate = viewabilityTrend([100, 50], [10, 20]);
+ok(rate.avg === 0.25 && rate.trend === 'Growing', 'viewability is viewable impressions per active user');
+const dauLabels = [];
+const dauValues = [];
+for (let day = 28; day <= 31; day += 1) dauLabels.push(`202610${String(day).padStart(2, '0')}`);
+for (let day = 1; day <= 11; day += 1) dauLabels.push(`202611${String(day).padStart(2, '0')}`);
+dauLabels.forEach(() => dauValues.push(10));
+dauValues[dauValues.length - 1] = 1;
+const fair = equivalentPeriodTrend(dauLabels, dauValues, 'DAU', { openKey: '20261111', endLabel: '20261111' });
+ok(fair && fair.trend === 'Flat' && fair.width === 7 && fair.current.label.includes('4 Nov') && fair.previous.label.includes('28 Oct'), 'DAU stats compare the last 7 finished days with the 7 before them');
+ok(fair.current.sum === 70 && fair.previous.sum === 70, 'today is left out of both DAU periods');
+const growingDays = dauValues.slice();
+for (let i = growingDays.length - 8; i < growingDays.length - 1; i += 1) growingDays[i] = 20;
+const grew = equivalentPeriodTrend(dauLabels, growingDays, 'DAU', { openKey: '20261111', endLabel: '20261111' });
+ok(grew && grew.trend === 'Growing' && grew.current.sum === 140 && grew.previous.sum === 70, 'a stronger finished week is Growing even when today is small');
+const weeks = equivalentPeriodTrend(['202642', '202643', '202644'], [80, 120, 5], 'WAU', { openKey: '202644', endLabel: '202644' });
+ok(weeks && weeks.trend === 'Growing' && weeks.current.sum === 120 && weeks.previous.sum === 80, 'WAU compares the last full week with the full week before it');
+const seen = equivalentViewability(
+    { current: { sum: 100 }, previous: { sum: 50 }, versus: 'versus the previous 7 days' },
+    { current: { sum: 50 }, previous: { sum: 50 } },
+);
+ok(seen && seen.current === 0.5 && seen.previous === 1 && seen.trend === 'Down', 'viewability compares the two finished periods');
 
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));

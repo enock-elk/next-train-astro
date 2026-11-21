@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexttrain-cache",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-10",
+  "workers_dev": true,
+  // Custom domain creates the proxied DNS record. workers.dev stays as the fallback.
+  "routes": [
+    { "pattern": "cache.nexttrain.co.za", "custom_domain": true }
+  ]
+}

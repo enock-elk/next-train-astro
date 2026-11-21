@@ -1,12 +1,13 @@
 /**
- * Next Train — community write bouncer, scheduled alerts + 24h TTL janitor
+ * Next Train — community write bouncer, scheduled alerts, and room-depth trim
  *
  * POST /community/post
  *   Authorization: Bearer <Firebase ID token>
  *   Body: { routeId, body, displayName?, photoURL?, deviceId?, category?, replyTo?, postId? }
  *
  * Cron (every 5 minutes): publish due scheduled alerts.
- * Cron (hourly): wipe route_community posts older than POST_TTL_MS (default 24h).
+ * The phone listens to the newest 80 messages. Community Monitor pages the full log, so the hourly job does not delete messages.
+ * POST /community/message  { op:'delete', routeId, postId, replyId?, mode:'tombstone'|'purge', as?:'author'|'admin' }
  *
  * Secrets: FIREBASE_PRIVATE_KEY (PEM; \n escaped OK)
  * Vars: FIREBASE_WEB_API_KEY, FIREBASE_DATABASE_URL, FIREBASE_CLIENT_EMAIL, …
@@ -17,12 +18,23 @@ import {
     findDisallowedUrls,
 } from '../../src/lib/content-safety-core.js';
 import { sanitizeCommunityPhotoUrl } from '../../src/lib/community-photo.js';
+import { sanitizeAlertImageUrl } from '../../src/lib/alerts-feed.js';
+import {
+    COMMUNITY_ADMIN_BODY_MAX,
+    COMMUNITY_BODY_MAX,
+    COMMUNITY_BUCKET_DEPTH,
+    communityTombstonePatch,
+    sanitizeCommunityAttachments,
+    sanitizeCommunityBucketImageUrl,
+    sanitizeCommunityImageUrl,
+    sanitizeCommunityLinkUrl,
+} from '../../src/lib/community-policy.js';
+import { jpegThumbnail } from './jpeg-thumb.js';
 
-const BODY_MAX = 280;
+const BODY_MAX = COMMUNITY_BODY_MAX;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
 const JOHANNESBURG_OFFSET_MS = 2 * 60 * 60 * 1000;
 const ALERT_CRON = '*/5 * * * *';
-const TTL_CRON = '0 * * * *';
 const DEFAULT_CLAIM_LEASE_MS = 2 * 60 * 1000;
 
 /** @type {Map<string, number[]>} */
@@ -84,6 +96,23 @@ function stripHtml(text) {
         .trim();
 }
 
+/** Operator posts keep paragraph breaks. A run of blank lines stops at two. */
+function stripAdminHtml(text) {
+    return String(text || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(?:p|div|li|h[1-6])>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&amp;/gi, '&')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{4,}/g, '\n\n\n')
+        .trim();
+}
+
 /** Keep nexttrain.co.za links; refuse other URLs, scam packs, and profanity at the edge. */
 export function sanitizeBody(raw) {
     const text = stripHtml(raw);
@@ -98,17 +127,42 @@ export function sanitizeBody(raw) {
     if (safety.block.length) {
         return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
     }
+    if (text.length > BODY_MAX) {
+        return { ok: false, verdict: 'block', error: `Max ${BODY_MAX} characters.` };
+    }
     if (safety.review.length || scam.review.length) {
-        const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
         return {
             ok: false,
             verdict: 'review',
-            text: clipped.trim(),
+            text: text.trim(),
             error: 'We’re checking this message. It won’t appear until an admin approves it.',
         };
     }
-    const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
-    return { ok: true, verdict: 'allow', text: clipped.trim() };
+    return { ok: true, verdict: 'allow', text: text.trim() };
+}
+
+/** Operators may post links. Severe language and scam packs still block. */
+export function sanitizeAdminBody(raw) {
+    const text = stripAdminHtml(raw);
+    const scam = classifyScamContent(text);
+    if (scam.block.length) {
+        return { ok: false, verdict: 'block', error: "Couldn't post that." };
+    }
+    const safety = classifyUnsafeLanguage(text);
+    if (safety.block.length) {
+        return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
+    }
+    if (text.length > COMMUNITY_ADMIN_BODY_MAX) {
+        return { ok: false, verdict: 'block', error: `Max ${COMMUNITY_ADMIN_BODY_MAX} characters.` };
+    }
+    return { ok: true, verdict: 'allow', text: text.trim() };
+}
+
+/** A quote is a snapshot. Keep a link that was already on the message. Drop a forged slur. */
+function quoteSnapshot(raw) {
+    const text = stripHtml(String(raw || '')).slice(0, 120);
+    if (classifyUnsafeLanguage(text).block.length) return '';
+    return text.trim();
 }
 
 function checkRate(key, windowMs, max) {
@@ -128,12 +182,12 @@ function toBase64Url(obj) {
     return btoa(s).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-async function getGoogleAccessToken(clientEmail, privateKey) {
+async function getGoogleAccessToken(clientEmail, privateKey, scope) {
     const header = { alg: 'RS256', typ: 'JWT' };
     const now = Math.floor(Date.now() / 1000);
     const payload = {
         iss: clientEmail,
-        scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
+        scope: scope || 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
         aud: 'https://oauth2.googleapis.com/token',
         exp: now + 3600,
         iat: now,
@@ -205,6 +259,30 @@ export function hasFirebaseAdminEnv(env) {
     );
 }
 
+function communityDiagnostics(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const phone = String(raw.phone || '').trim().slice(0, 60);
+    const network = String(raw.network || '').trim().slice(0, 24);
+    const signal = String(raw.signal || '').trim().slice(0, 24);
+    const viewport = String(raw.viewport || '').trim().slice(0, 24);
+    const out = {};
+    if (phone) out.phone = phone;
+    if (network) out.network = network;
+    if (signal) out.signal = signal;
+    if (/^\d{2,5}x\d{2,5}$/i.test(viewport)) out.viewport = viewport.toLowerCase();
+    if (raw.captive === true) out.captive = true;
+    return Object.keys(out).length ? out : null;
+}
+
+async function rtdbUserRequest(env, path, idToken, init) {
+    const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
+    if (!base) throw new Error('FIREBASE_DATABASE_URL missing');
+    if (!idToken) throw new Error('Missing auth token');
+    const clean = String(path || '').replace(/^\//, '');
+    const url = `${base}/${clean}.json?auth=${encodeURIComponent(idToken)}`;
+    return fetch(url, init);
+}
+
 async function rtdbWriteWithUserToken(env, path, value, idToken) {
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!base) throw new Error('FIREBASE_DATABASE_URL missing');
@@ -273,12 +351,20 @@ async function rtdbUpdate(env, updates) {
 }
 
 async function rtdbGet(env, path) {
+    return rtdbQuery(env, path);
+}
+
+async function rtdbQuery(env, path, params = {}) {
     const email = env.FIREBASE_CLIENT_EMAIL;
     const key = env.FIREBASE_PRIVATE_KEY;
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!email || !key || !base) throw new Error('Firebase Admin env incomplete');
     const token = await getGoogleAccessToken(email, key);
-    const res = await fetch(rtdbJsonUrl(base, path, token));
+    const url = new URL(rtdbJsonUrl(base, path, token));
+    Object.entries(params || {}).forEach(([name, value]) => {
+        if (value != null && value !== '') url.searchParams.set(name, String(value));
+    });
+    const res = await fetch(url.toString());
     if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
     return res.json();
 }
@@ -1119,6 +1205,646 @@ function newId(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const ALERT_IMAGE_MAX = 4 * 1024 * 1024;
+const MEDIA_FILE_MAX = 5 * 1024 * 1024;
+
+function sniffAlertImage(bytes) {
+    if (!bytes || bytes.length < 12) return null;
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { ext: 'jpg', type: 'image/jpeg' };
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return { ext: 'png', type: 'image/png' };
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return { ext: 'gif', type: 'image/gif' };
+    if (
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+        && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) {
+        return { ext: 'webp', type: 'image/webp' };
+    }
+    return null;
+}
+
+async function handleAlertImageUpload(request, env) {
+    if (!env.ALERT_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Alert image storage is not ready yet.' });
+    }
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return json(env, request, 403, { ok: false, error: 'Operators only.' });
+    }
+    const declared = Number(request.headers.get('Content-Length') || 0);
+    if (declared > ALERT_IMAGE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'Photo is too large. Max 4MB.' });
+    }
+    const buf = new Uint8Array(await request.arrayBuffer());
+    if (!buf.length || buf.length > ALERT_IMAGE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'Photo is too large. Max 4MB.' });
+    }
+    const sniff = sniffAlertImage(buf);
+    if (!sniff) {
+        return json(env, request, 400, { ok: false, error: 'Use a JPEG, PNG, GIF, or WebP photo.' });
+    }
+    const file = `${newId('img')}.${sniff.ext}`;
+    await env.ALERT_IMAGES.put(`alerts/${file}`, buf, {
+        httpMetadata: { contentType: sniff.type },
+    });
+    const origin = new URL(request.url).origin;
+    return json(env, request, 200, { ok: true, url: `${origin}/alerts/${file}` });
+}
+
+async function requireOperator(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return { response: json(env, request, 401, { ok: false, error: 'Missing Authorization' }) };
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return { response: json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' }) };
+    }
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return { response: json(env, request, 403, { ok: false, error: 'Operators only.' }) };
+    }
+    return { user };
+}
+
+async function readImageBytes(response) {
+    const declared = Number(response.headers.get('content-length') || 0);
+    if (declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared };
+    const buf = new Uint8Array(await response.arrayBuffer());
+    if (!buf.length || buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared || buf.length };
+    return { buf, type: response.headers.get('content-type') || '' };
+}
+
+async function readOwnStoredImage(env, target) {
+    let url;
+    try { url = new URL(String(target || '')); } catch { return null; }
+    if (previewHostKind(url.hostname) !== 'r2') return null;
+    const communityFile = url.pathname.match(/^\/community-images\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+    if (communityFile) {
+        if (!env.COMMUNITY_IMAGES) return { missing: true };
+        const obj = await env.COMMUNITY_IMAGES.get(communityFile[1]);
+        if (!obj) return { missing: true };
+        const buf = new Uint8Array(await obj.arrayBuffer());
+        return { buf, type: obj.httpMetadata?.contentType || '', size: obj.size || buf.length };
+    }
+    const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+    if (alertFile) {
+        if (!env.ALERT_IMAGES) return { missing: true };
+        const obj = await env.ALERT_IMAGES.get(`alerts/${alertFile[1]}`);
+        if (!obj) return { missing: true };
+        const buf = new Uint8Array(await obj.arrayBuffer());
+        return { buf, type: obj.httpMetadata?.contentType || '', size: obj.size || buf.length };
+    }
+    return null;
+}
+
+async function storeCommunityImageBytes(env, request, buf) {
+    if (!env.COMMUNITY_IMAGES) return '';
+    const sniff = sniffAlertImage(buf);
+    if (!sniff || !buf.length || buf.length > ALERT_IMAGE_MAX) return '';
+    const file = `${newId('img')}.${sniff.ext}`;
+    await env.COMMUNITY_IMAGES.put(file, buf, {
+        httpMetadata: { contentType: sniff.type },
+    });
+    const origin = new URL(request.url).origin;
+    return `${origin}/community-images/${file}`;
+}
+
+/**
+ * Community photos live in nexttrain-community-images.
+ * Catalog posters and alert-bucket photos stay where they already are.
+ * Any other public image is copied into the community bucket.
+ */
+async function placeCommunityImage(env, request, raw) {
+    const clean = sanitizeCommunityImageUrl(raw);
+    if (!clean) return '';
+    const stored = sanitizeCommunityBucketImageUrl(clean);
+    if (stored) return stored;
+    const owned = sanitizeAlertImageUrl(clean);
+    if (owned && (owned.startsWith('/images/') || owned.includes('/alerts/'))) return owned;
+    if (!env.COMMUNITY_IMAGES) return '';
+    let remote;
+    try { remote = new URL(clean); } catch { return ''; }
+    if (remote.protocol !== 'https:' || previewHostIsPrivate(remote.hostname)) return '';
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`community-image:${ip}`, 60_000, 20)) return '';
+    let res;
+    try { res = await fetch(clean, { redirect: 'follow' }); } catch { return ''; }
+    if (!res.ok) return '';
+    try {
+        if (previewHostIsPrivate(new URL(res.url).hostname)) return '';
+    } catch { return ''; }
+    const got = await readImageBytes(res);
+    if (!got.buf) return '';
+    return storeCommunityImageBytes(env, request, got.buf);
+}
+
+async function handleCommunityImageUpload(request, env) {
+    const gate = await requireOperator(request, env);
+    if (gate.response) return gate.response;
+    if (!env.COMMUNITY_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Community photo storage is not ready yet.' });
+    }
+    const declared = Number(request.headers.get('Content-Length') || 0);
+    if (declared > ALERT_IMAGE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'Photo is too large. Max 4MB.' });
+    }
+    const buf = new Uint8Array(await request.arrayBuffer());
+    const url = await storeCommunityImageBytes(env, request, buf);
+    if (!url) return json(env, request, 400, { ok: false, error: 'Use a JPEG, PNG, GIF, or WebP photo.' });
+    return json(env, request, 200, { ok: true, url });
+}
+
+async function handleCommunityImageImport(request, env) {
+    const gate = await requireOperator(request, env);
+    if (gate.response) return gate.response;
+    if (!env.COMMUNITY_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Community photo storage is not ready yet.' });
+    }
+    let body;
+    try { body = await request.json(); } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const url = await placeCommunityImage(env, request, body?.url || '');
+    if (!url) return json(env, request, 400, { ok: false, error: 'Could not store that photo on Next Train.' });
+    return json(env, request, 200, { ok: true, url });
+}
+
+const PREVIEW_SITE_HOSTS = new Set([
+    'nexttrain.co.za',
+    'www.nexttrain.co.za',
+    'lab.nexttrain.co.za',
+    'enock-elk.github.io',
+    'enockelk.github.io',
+]);
+const PREVIEW_IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
+const PREVIEW_SITE_PATH = /^\/images\/(?:alerts\/[A-Za-z0-9._-]+|schedules\/[a-z0-9]+\/[A-Za-z0-9._-]+\.jpe?g)$/i;
+
+function previewHostIsPrivate(host) {
+    const name = String(host || '').toLowerCase().replace(/\.$/, '');
+    if (!name || name === 'localhost' || name.endsWith('.local') || name.endsWith('.internal')) return true;
+    if (name === 'metadata.google.internal' || name === 'metadata.google.com') return true;
+    const ip = name.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!ip) return false;
+    const parts = ip.slice(1).map(Number);
+    if (parts.some((n) => n > 255)) return true;
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+}
+
+function previewHostKind(hostname) {
+    const host = String(hostname || '').toLowerCase();
+    if (PREVIEW_SITE_HOSTS.has(host) || host.endsWith('.next-train-lab.pages.dev')) return 'site';
+    if (host === 'nexttrain-community.enock.workers.dev' || /^nexttrain-community\.[a-z0-9-]+\.workers\.dev$/.test(host)) return 'r2';
+    return 'public';
+}
+
+function canonicalPreviewTarget(raw) {
+    let url;
+    try { url = new URL(String(raw || '')); } catch { return ''; }
+    if (url.protocol !== 'https:' || url.username || url.password) return '';
+    if (url.href.length > 2000) return '';
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (previewHostIsPrivate(host)) return '';
+    const path = url.pathname || '';
+    if (path.includes('..') || path.includes('//')) return '';
+    const kind = previewHostKind(host);
+    if (kind === 'site') {
+        if (!PREVIEW_SITE_PATH.test(path)) return '';
+        return `${url.origin}${path}`;
+    }
+    if (kind === 'r2') {
+        if (!/^\/(?:alerts|community-images)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(path)) return '';
+        return `${url.origin}${path}`;
+    }
+    if (!PREVIEW_IMAGE_EXT.test(path)) return '';
+    return url.href.split('#')[0];
+}
+
+function previewResponseHeaders(env, request, bytes, contentType) {
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Access-Control-Expose-Headers', 'X-Nt-Bytes');
+    headers.set('Cache-Control', 'public, max-age=604800');
+    headers.set('X-Nt-Bytes', String(bytes > 0 ? Math.round(bytes) : 0));
+    if (contentType) headers.set('Content-Type', contentType);
+    return headers;
+}
+
+async function bytesForPreview(env, target) {
+    const own = await readOwnStoredImage(env, target);
+    if (own?.buf) {
+        if (!own.buf.length || own.buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: own.size || own.buf.length };
+        return { bytes: own.buf, size: own.size || own.buf.length, type: own.type || '' };
+    }
+    if (own?.missing) return null;
+    let fullSize = 0;
+    try {
+        const head = await fetch(target, { method: 'HEAD', redirect: 'follow' });
+        const declared = Number(head.headers.get('content-length') || 0);
+        if (head.ok && declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared };
+        if (head.ok) fullSize = declared;
+    } catch { /* the GET still has the picture */ }
+    let buf = null;
+    let type = '';
+    try {
+        const resized = await fetch(target, {
+            redirect: 'follow',
+            cf: { image: { width: 24, quality: 45, format: 'jpeg', fit: 'scale-down' } },
+        });
+        if (resized.ok) {
+            const declared = Number(resized.headers.get('content-length') || 0);
+            if (declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: fullSize || declared };
+            const got = new Uint8Array(await resized.arrayBuffer());
+            type = resized.headers.get('content-type') || '';
+            if (got.length && got.length <= 8000 && got[0] === 0xff && got[1] === 0xd8) {
+                return { thumb: got, size: fullSize };
+            }
+            if (got.length && got.length <= ALERT_IMAGE_MAX && sniffAlertImage(got)) {
+                buf = got;
+                if (!fullSize) fullSize = got.length;
+            }
+        }
+    } catch { /* image resizing is off; read the file itself */ }
+    if (!buf) {
+        const res = await fetch(target, { redirect: 'follow' });
+        if (!res.ok) return null;
+        const declared = Number(res.headers.get('content-length') || 0);
+        if (declared > ALERT_IMAGE_MAX) return { error: 'too-large', size: declared };
+        buf = new Uint8Array(await res.arrayBuffer());
+        type = res.headers.get('content-type') || type;
+        if (!fullSize) fullSize = declared || buf.length;
+    }
+    if (!buf.length || buf.length > ALERT_IMAGE_MAX) return { error: 'too-large', size: fullSize || buf.length };
+    return { bytes: buf, size: fullSize || buf.length, type };
+}
+
+async function rememberPreview(cacheKey, response) {
+    try { await caches.default.put(cacheKey, response.clone()); } catch { /* the phone still has this answer */ }
+    return response;
+}
+
+async function handleMediaPreview(request, env) {
+    const target = canonicalPreviewTarget(new URL(request.url).searchParams.get('u') || '');
+    if (!target) return json(env, request, 400, { ok: false, error: 'That picture cannot be previewed.' });
+    const cacheKey = new Request(`https://nexttrain-community.enock.workers.dev/media/preview?u=${encodeURIComponent(target)}`, { method: 'GET' });
+    try {
+        const hit = await caches.default.match(cacheKey);
+        if (hit) return hit;
+    } catch { /* a cache miss still builds the preview */ }
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`preview:${ip}`, 60_000, 80)) {
+        return json(env, request, 429, { ok: false, error: 'Slow down a moment.' });
+    }
+    let source;
+    try {
+        source = await bytesForPreview(env, target);
+    } catch {
+        return json(env, request, 502, { ok: false, error: 'Preview unavailable.' });
+    }
+    if (!source) return json(env, request, 404, { ok: false, error: 'Preview unavailable.' });
+    const size = Number(source.size) || 0;
+    if (source.error) {
+        return rememberPreview(cacheKey, new Response(JSON.stringify({ ok: false, bytes: size }), {
+            status: 200,
+            headers: previewResponseHeaders(env, request, size, 'application/json; charset=utf-8'),
+        }));
+    }
+    const thumb = source.thumb || jpegThumbnail(source.bytes);
+    if (!thumb) {
+        return rememberPreview(cacheKey, new Response(JSON.stringify({ ok: true, bytes: size }), {
+            status: 200,
+            headers: previewResponseHeaders(env, request, size, 'application/json; charset=utf-8'),
+        }));
+    }
+    return rememberPreview(cacheKey, new Response(thumb, {
+        status: 200,
+        headers: previewResponseHeaders(env, request, size, 'image/jpeg'),
+    }));
+}
+
+/** The full picture, for the in-app save button. Same address rules as the preview. */
+async function handleMediaFile(request, env) {
+    const target = canonicalPreviewTarget(new URL(request.url).searchParams.get('u') || '');
+    if (!target) return json(env, request, 400, { ok: false, error: 'That picture cannot be saved.' });
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`mediafile:${ip}`, 60_000, 40)) {
+        return json(env, request, 429, { ok: false, error: 'Slow down a moment.' });
+    }
+    const own = await readOwnStoredImage(env, target);
+    if (own?.buf && own.buf.length && own.buf.length <= MEDIA_FILE_MAX) {
+        const sniffed = sniffAlertImage(own.buf);
+        if (!sniffed) return json(env, request, 415, { ok: false, error: 'That file is not a picture.' });
+        const headers = new Headers(corsHeaders(env, request));
+        headers.set('Content-Type', sniffed.type);
+        headers.set('Cache-Control', 'private, max-age=300');
+        headers.set('X-Content-Type-Options', 'nosniff');
+        return new Response(own.buf, { status: 200, headers });
+    }
+    if (own?.missing) return json(env, request, 404, { ok: false, error: 'That picture cannot be saved.' });
+    let upstream;
+    try {
+        upstream = await fetch(target, { redirect: 'follow' });
+    } catch {
+        return json(env, request, 502, { ok: false, error: 'That picture cannot be saved.' });
+    }
+    if (!upstream.ok) return json(env, request, 404, { ok: false, error: 'That picture cannot be saved.' });
+    const declared = Number(upstream.headers.get('content-length') || 0);
+    if (declared > MEDIA_FILE_MAX) return json(env, request, 413, { ok: false, error: 'That picture is too large to save.' });
+    const buf = new Uint8Array(await upstream.arrayBuffer());
+    if (!buf.length || buf.length > MEDIA_FILE_MAX) {
+        return json(env, request, 413, { ok: false, error: 'That picture is too large to save.' });
+    }
+    const sniffed = sniffAlertImage(buf);
+    if (!sniffed) return json(env, request, 415, { ok: false, error: 'That file is not a picture.' });
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Content-Type', sniffed.type);
+    headers.set('Cache-Control', 'private, max-age=300');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    return new Response(buf, { status: 200, headers });
+}
+
+async function handleAlertImageGet(request, env, file) {
+    if (!env.ALERT_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Alert image storage is not ready yet.' });
+    }
+    const obj = await env.ALERT_IMAGES.get(`alerts/${file}`);
+    if (!obj) return json(env, request, 404, { ok: false, error: 'Not found' });
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return new Response(obj.body, { status: 200, headers });
+}
+
+async function handleCommunityImageGet(request, env, file) {
+    if (!env.COMMUNITY_IMAGES) {
+        return json(env, request, 503, { ok: false, error: 'Community photo storage is not ready yet.' });
+    }
+    const obj = await env.COMMUNITY_IMAGES.get(file);
+    if (!obj) return json(env, request, 404, { ok: false, error: 'Not found' });
+    const headers = new Headers(corsHeaders(env, request));
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return new Response(obj.body, { status: 200, headers });
+}
+
+function saCommunityDayKey(now = Date.now()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Johannesburg',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(new Date(now));
+    const pick = (type) => parts.find((part) => part.type === type)?.value || '';
+    const key = `${pick('year')}-${pick('month')}-${pick('day')}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : '1970-01-01';
+}
+
+function tierForCommunityPoints(points) {
+    const n = Number(points) || 0;
+    if (n >= 600) return 'platinum';
+    if (n >= 250) return 'gold';
+    if (n >= 80) return 'silver';
+    return 'bronze';
+}
+
+/**
+ * One public total. First accepted message is 5 + 2. A later message on a new
+ * South African day is 2. The same event id does not add twice. A phone that
+ * already published a higher total is left alone.
+ */
+export function communityPublicPointsNext(profile, input = {}) {
+    const current = profile && typeof profile === 'object' ? profile : {};
+    const eventId = String(input.eventId || '').slice(0, 80);
+    const have = Number(current.points);
+    const base = Number.isFinite(have) ? have : 0;
+    if (eventId && current.lastCommunityPostId === eventId) {
+        return { points: base, changed: false, tier: current.tier || tierForCommunityPoints(base) };
+    }
+    const requested = String(input.dayKey || '');
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : saCommunityDayKey(input.now);
+    let delta = 0;
+    if (current.communityFirst !== true) delta += 5;
+    if (current.communityDay !== day) delta += 2;
+    const snap = Number(input.snapshotPoints);
+    const fromSnap = Number.isFinite(snap) ? snap + delta : base + delta;
+    const points = Math.max(0, Math.min(100000, Math.max(base, fromSnap)));
+    return {
+        points,
+        changed: true,
+        tier: tierForCommunityPoints(points),
+        communityFirst: true,
+        communityDay: day,
+        lastCommunityPostId: eventId,
+    };
+}
+
+async function applyCommunityPublicPoints(env, { uid, eventId, snapshotPoints, dayKey }) {
+    if (!uid || !isSafeRtdbKey(uid) || !hasFirebaseAdminEnv(env)) return null;
+    const profile = await rtdbGet(env, `public_profile/${uid}`);
+    const next = communityPublicPointsNext(profile, { eventId, snapshotPoints, dayKey });
+    if (!next.changed) return next.points;
+    const updates = {
+        [`public_profile/${uid}/points`]: next.points,
+        [`public_profile/${uid}/tier`]: next.tier,
+        [`public_profile/${uid}/updatedAt`]: Date.now(),
+        [`public_profile/${uid}/communityFirst`]: true,
+        [`public_profile/${uid}/communityDay`]: next.communityDay,
+    };
+    if (next.lastCommunityPostId) {
+        updates[`public_profile/${uid}/lastCommunityPostId`] = next.lastCommunityPostId;
+    }
+    await rtdbUpdate(env, updates);
+    return next.points;
+}
+
+/** Lift a public total up to a number already stored on a message. Does not add a new award. */
+async function raiseSeenPublicPoints(env, uid, points) {
+    if (!hasFirebaseAdminEnv(env)) return null;
+    const nextPoints = Math.max(0, Math.min(100000, Math.floor(Number(points) || 0)));
+    if (!nextPoints) return null;
+    const profile = await rtdbGet(env, `public_profile/${uid}`);
+    const have = Number(profile?.points);
+    const base = Number.isFinite(have) ? have : 0;
+    if (base >= nextPoints && profile?.communityFirst === true) return base;
+    const stored = Math.max(base, nextPoints);
+    await rtdbUpdate(env, {
+        [`public_profile/${uid}/points`]: stored,
+        [`public_profile/${uid}/tier`]: tierForCommunityPoints(stored),
+        [`public_profile/${uid}/updatedAt`]: Date.now(),
+        [`public_profile/${uid}/communityFirst`]: true,
+    });
+    return stored;
+}
+
+/** Google or Facebook name from Auth. A custom display name does not replace providerUserInfo. */
+async function lookupAuthAccountName(env, uid) {
+    if (!hasFirebaseAdminEnv(env)) return null;
+    const token = await getGoogleAccessToken(
+        env.FIREBASE_CLIENT_EMAIL,
+        env.FIREBASE_PRIVATE_KEY,
+        'https://www.googleapis.com/auth/identitytoolkit'
+    );
+    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ localId: [uid] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return null;
+    const user = data.users?.[0];
+    if (!user) return null;
+    const providers = Array.isArray(user.providerUserInfo) ? user.providerUserInfo : [];
+    const google = providers.find((row) => row?.providerId === 'google.com' && row.displayName);
+    const facebook = providers.find((row) => row?.providerId === 'facebook.com' && row.displayName);
+    const picked = google || facebook || null;
+    return {
+        providerName: String(picked?.displayName || '').trim().slice(0, 80),
+        providerId: String(picked?.providerId || providers[0]?.providerId || '').slice(0, 40),
+        email: String(user.email || '').trim().slice(0, 160),
+    };
+}
+
+async function handleAdminAccountName(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return json(env, request, 403, { ok: false, error: 'Not allowed' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const uid = String(body.uid || '').slice(0, 128);
+    if (!uid || /[.#$[\]/\s]/.test(uid)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid rider' });
+    }
+    try {
+        const account = await lookupAuthAccountName(env, uid);
+        return json(env, request, 200, account || { providerName: '', providerId: '', email: '' });
+    } catch {
+        return json(env, request, 200, { providerName: '', providerId: '', email: '' });
+    }
+}
+
+async function handleCommunityPointsSeen(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const uid = String(body.uid || '').slice(0, 80);
+    if (!isSafeRtdbKey(uid)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid rider' });
+    }
+    const email = String(user.email || '').trim().toLowerCase();
+    if (user.uid !== uid && !ADMIN_EMAILS.has(email)) {
+        return json(env, request, 403, { ok: false, error: 'Not allowed' });
+    }
+    try {
+        const points = await raiseSeenPublicPoints(env, uid, body.points);
+        return json(env, request, 200, { ok: true, points });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Points update failed' });
+    }
+}
+
+async function handleCommunityPoints(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    let user;
+    try {
+        user = await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const eventId = String(body.eventId || '').slice(0, 80);
+    if (!isSafeRtdbKey(eventId)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid event' });
+    }
+    try {
+        const points = await applyCommunityPublicPoints(env, {
+            uid: user.uid,
+            eventId,
+            snapshotPoints: body.snapshotPoints,
+            dayKey: body.dayKey,
+        });
+        return json(env, request, 200, { ok: true, points });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Points update failed' });
+    }
+}
+
+function isOwnTrainHost(value) {
+    const href = sanitizeCommunityLinkUrl(value);
+    if (!href) return false;
+    try {
+        const host = new URL(href).hostname.toLowerCase().replace(/\.$/, '');
+        return /^(?:www\.|lab\.)?nexttrain\.co\.za$/.test(host)
+            || host === 'enock-elk.github.io'
+            || host.endsWith('.next-train-lab.pages.dev');
+    } catch {
+        return false;
+    }
+}
+
+function communityLinkPreview(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const url = sanitizeCommunityLinkUrl(raw.url);
+    if (!url || isOwnTrainHost(url)) return null;
+    const title = String(raw.title || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    const description = String(raw.description || '').replace(/\s+/g, ' ').trim().slice(0, 220);
+    const image = sanitizeCommunityLinkUrl(raw.image) || '';
+    const site = String(raw.site || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!title && !description && !image) return null;
+    return { url, title, description, image, site };
+}
+
 async function handlePost(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -1132,16 +1858,31 @@ async function handlePost(request, env) {
         return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
     }
 
-    const windowMs = Number(env.RATE_WINDOW_MS || 60_000);
-    const max = Number(env.RATE_MAX || 4);
+    let windowMs = Number(env.RATE_WINDOW_MS || 60_000);
+    let max = Number(env.RATE_MAX || 4);
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const isAdminPoster = ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase());
-    if (!isAdminPoster && (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, max * 2))) {
+    if (!isAdminPoster) {
+        try {
+            const allowance = await rtdbGet(env, `users/${user.uid}/communityAllowance`);
+            const raised = Number(allowance?.max);
+            if (Number.isFinite(raised) && raised > 8 && raised <= 200) {
+                windowMs = 30 * 60 * 1000;
+                max = Math.floor(raised);
+            }
+        } catch {
+            /* a missing allowance keeps the short cooldown */
+        }
+    }
+    if (!isAdminPoster && (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, Math.max(max * 2, max)))) {
+        const raisedWindow = windowMs > 120000;
         return json(env, request, 429, {
             ok: false,
-            error: `Please wait ${Math.ceil(windowMs / 1000)} seconds before you can send another message.`,
+            error: raisedWindow
+                ? 'You have used your messages for now. Try again later.'
+                : `Please wait ${Math.ceil(windowMs / 1000)} seconds before you can send another message.`,
             retryAfterMs: windowMs,
-            reason: 'cooldown',
+            reason: raisedWindow ? 'quota' : 'cooldown',
         });
     }
 
@@ -1157,7 +1898,18 @@ async function handlePost(request, env) {
         return json(env, request, 400, { ok: false, error: 'Invalid routeId' });
     }
 
-    const cleaned = sanitizeBody(body.body || '');
+    const requestedAttachments = sanitizeCommunityAttachments(body.attachments, { admin: isAdminPoster });
+    const storedAttachments = [];
+    for (const url of requestedAttachments) {
+        const placed = await placeCommunityImage(env, request, url);
+        if (!placed) {
+            return json(env, request, 400, { ok: false, error: 'Could not store that photo on Next Train.' });
+        }
+        if (!storedAttachments.includes(placed)) storedAttachments.push(placed);
+    }
+    const attachments = storedAttachments;
+    const linkUrl = isAdminPoster ? sanitizeCommunityLinkUrl(body.linkUrl) : '';
+    const cleaned = isAdminPoster ? sanitizeAdminBody(body.body || '') : sanitizeBody(body.body || '');
     if (!cleaned.ok && cleaned.verdict === 'block') {
         return json(env, request, 400, {
             ok: false,
@@ -1165,9 +1917,9 @@ async function handlePost(request, env) {
             blocked: true,
         });
     }
-    const heldForReview = cleaned.verdict === 'review';
+    const heldForReview = !isAdminPoster && cleaned.verdict === 'review';
     const text = cleaned.text;
-    if (text.length < 2) {
+    if (text.length < 2 && !attachments.length && !linkUrl) {
         return json(env, request, 400, { ok: false, error: 'Write a short message.' });
     }
 
@@ -1208,17 +1960,37 @@ async function handlePost(request, env) {
         email: String(body.email || user.email || '').slice(0, 120) || null,
         deviceId: String(body.deviceId || 'unknown').slice(0, 120),
         timestamp: Date.now(),
+        ...(String(body.station || '').replace(/\s+STATION\s*$/i, '').trim()
+            ? {
+                station: String(body.station || '').replace(/\s+STATION\s*$/i, '').trim().slice(0, 80),
+                stationAutoLocated: body.stationAutoLocated === true || body.stationAutoLocated === '1' || body.stationAutoLocated === 1,
+            }
+            : {}),
         hidden: false,
         replyCount: 0,
         appVersion: String(body.appVersion || '').slice(0, 40) || null,
         via: 'community_worker',
     };
+    const defaultRouteId = String(body.defaultRouteId || '').trim().slice(0, 40);
+    if (defaultRouteId && isSafeRtdbKey(defaultRouteId)) payload.defaultRouteId = defaultRouteId;
+    const diagnostics = communityDiagnostics(body.diagnostics);
+    if (diagnostics) payload.diagnostics = diagnostics;
+    if (attachments.length) {
+        payload.attachments = attachments.map((url) => ({ kind: 'image', url }));
+    }
+    if (linkUrl) payload.linkUrl = linkUrl;
+    if (isAdminPoster) {
+        const card = communityLinkPreview(body.linkPreview);
+        if (card) payload.linkPreview = card;
+    }
     if (body.replyTo && typeof body.replyTo === 'object') {
+        const quoteUid = String(body.replyTo.uid || '').slice(0, 80);
         payload.replyTo = {
             postId: String(body.replyTo.postId || '').slice(0, 80),
             displayName: String(body.replyTo.displayName || '').slice(0, 80),
-            body: (sanitizeBody(String(body.replyTo.body || '')).text || '').slice(0, 120),
+            body: quoteSnapshot(body.replyTo.body),
         };
+        if (quoteUid && isSafeRtdbKey(quoteUid)) payload.replyTo.uid = quoteUid;
     }
 
     try {
@@ -1267,41 +2039,219 @@ async function handlePost(request, env) {
                 await rtdbWriteWithUserToken(env, `community_activity/${routeId}/${postId}`, activity, idToken);
             } catch { /* index is optional when Admin is unset */ }
         }
-        return json(env, request, 200, { ok: true, post: payload });
+        let publicPoints = null;
+        try {
+            publicPoints = await applyCommunityPublicPoints(env, {
+                uid: user.uid,
+                eventId: postId,
+                snapshotPoints: body.snapshotPoints,
+                dayKey: body.dayKey,
+            });
+        } catch (pointsError) {
+            console.error('Community public points update failed', pointsError);
+        }
+        return json(env, request, 200, { ok: true, post: payload, publicPoints });
     } catch (e) {
         return json(env, request, 500, { ok: false, error: e.message || 'Write failed' });
     }
 }
 
-async function wipeStalePosts(env) {
-    const ttl = Number(env.POST_TTL_MS || 86_400_000);
-    const cut = Date.now() - ttl;
-    const tree = await rtdbGet(env, 'route_community');
-    if (!tree || typeof tree !== 'object') return { deleted: 0 };
+/**
+ * Drop messages past the fixed room depth.
+ * Shallow keys, then limitToLast for the kept window, then a short page of
+ * older rows. This does not download every room in one response.
+ * Quotes already stored on newer messages are separate fields and stay.
+ */
+async function trimRouteBuckets(env) {
+    const shallow = await rtdbQuery(env, 'route_community', { shallow: 'true' });
+    if (!shallow || typeof shallow !== 'object') return { deleted: 0 };
     let deleted = 0;
-    for (const [routeId, routeNode] of Object.entries(tree)) {
-        const posts = routeNode?.posts;
-        if (!posts || typeof posts !== 'object') continue;
-        for (const [postId, post] of Object.entries(posts)) {
-            const ts = Number(post?.timestamp || 0);
-            if (ts && ts < cut) {
-                try {
-                    const updates = {
-                        [`route_community/${routeId}/posts/${postId}`]: null,
-                        [`community_activity/${routeId}/${postId}`]: null,
-                    };
-                    Object.keys(post?.replies || {}).forEach((replyId) => {
-                        updates[`community_activity/${routeId}/${replyId}`] = null;
-                    });
-                    await rtdbUpdate(env, updates);
-                    deleted += 1;
-                } catch {
-                    /* continue */
-                }
+    const depth = COMMUNITY_BUCKET_DEPTH;
+    for (const routeId of Object.keys(shallow)) {
+        if (!isSafeRtdbKey(routeId)) continue;
+        let windowPosts;
+        try {
+            windowPosts = await rtdbQuery(env, `route_community/${routeId}/posts`, {
+                orderBy: '"timestamp"',
+                limitToLast: String(depth),
+            });
+        } catch {
+            continue;
+        }
+        const keptEntries = windowPosts && typeof windowPosts === 'object' ? Object.entries(windowPosts) : [];
+        if (keptEntries.length < depth) continue;
+        let cutoff = Infinity;
+        keptEntries.forEach(([, post]) => {
+            const ts = Number(post?.timestamp) || 0;
+            if (ts && ts < cutoff) cutoff = ts;
+        });
+        if (!Number.isFinite(cutoff)) continue;
+        const keptIds = new Set(keptEntries.map(([id]) => id));
+        for (let page = 0; page < 4; page += 1) {
+            let stale;
+            try {
+                stale = await rtdbQuery(env, `route_community/${routeId}/posts`, {
+                    orderBy: '"timestamp"',
+                    endAt: String(cutoff),
+                    limitToFirst: '20',
+                });
+            } catch {
+                break;
             }
+            const rows = stale && typeof stale === 'object'
+                ? Object.entries(stale).filter(([id]) => !keptIds.has(id) && isSafeRtdbKey(id))
+                : [];
+            if (!rows.length) break;
+            const updates = {};
+            rows.forEach(([postId, post]) => {
+                updates[`route_community/${routeId}/posts/${postId}`] = null;
+                updates[`route_community/${routeId}/post_reactions/${postId}`] = null;
+                updates[`community_activity/${routeId}/${postId}`] = null;
+                Object.keys(post?.replies || {}).forEach((replyId) => {
+                    if (isSafeRtdbKey(replyId)) updates[`community_activity/${routeId}/${replyId}`] = null;
+                });
+            });
+            await rtdbUpdate(env, updates);
+            deleted += rows.length;
+            if (rows.length < 20) break;
         }
     }
     return { deleted };
+}
+
+/** Rewrite an operator's own post. Body only. No edited flag. */
+async function handleCommunityEdit(env, request, user, idToken, body) {
+    if (!ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase())) {
+        return json(env, request, 403, { ok: false, error: 'Operators only.' });
+    }
+    if (!checkRate(`edit:${user.uid}`, 60_000, 20)) {
+        return json(env, request, 429, { ok: false, error: 'Please wait a moment.' });
+    }
+    const routeId = String(body.routeId || '').trim();
+    const postId = String(body.postId || '').trim();
+    if (!isSafeRtdbKey(routeId) || !isSafeRtdbKey(postId)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid message.' });
+    }
+    const clean = sanitizeAdminBody(body.body);
+    if (!clean.ok) return json(env, request, 400, { ok: false, error: clean.error || 'Could not save that message.' });
+    if (clean.text.length < 2) return json(env, request, 400, { ok: false, error: 'Write a short message.' });
+    const path = `route_community/${routeId}/posts/${postId}`;
+    let current;
+    try {
+        current = await rtdbGet(env, path);
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not read that message.' });
+    }
+    if (!current || typeof current !== 'object') {
+        return json(env, request, 404, { ok: false, error: 'That message is gone.' });
+    }
+    if (String(current.uid || '') !== user.uid) {
+        return json(env, request, 403, { ok: false, error: 'You can only edit your own message.' });
+    }
+    const patched = await rtdbUserRequest(env, path, idToken, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: clean.text }),
+    });
+    if (!patched.ok) {
+        const t = await patched.text();
+        return json(env, request, 500, { ok: false, error: `Could not save that message (${patched.status}): ${t.slice(0, 160)}` });
+    }
+    return json(env, request, 200, { ok: true, body: clean.text });
+}
+
+async function handleCommunityDelete(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return json(env, request, 401, { ok: false, error: 'Missing Authorization' });
+    }
+    const idToken = authHeader.slice(7).trim();
+    let user;
+    try {
+        user = await verifyIdToken(env, idToken);
+    } catch (e) {
+        return json(env, request, 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    if (body.op === 'edit') return handleCommunityEdit(env, request, user, idToken, body);
+    const routeId = String(body.routeId || '').trim();
+    const postId = String(body.postId || '').trim();
+    const replyId = String(body.replyId || '').trim();
+    const mode = body.mode === 'purge' ? 'purge' : 'tombstone';
+    if (!isSafeRtdbKey(routeId) || !isSafeRtdbKey(postId) || (replyId && !isSafeRtdbKey(replyId))) {
+        return json(env, request, 400, { ok: false, error: 'Invalid message.' });
+    }
+    const isAdmin = ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase());
+    if (!isAdmin && mode === 'purge') {
+        return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
+    }
+    if (!isAdmin && !checkRate(`del:${user.uid}`, 60_000, 12)) {
+        return json(env, request, 429, { ok: false, error: 'Please wait a moment before deleting another message.' });
+    }
+    const path = replyId
+        ? `route_community/${routeId}/posts/${postId}/replies/${replyId}`
+        : `route_community/${routeId}/posts/${postId}`;
+    let current;
+    try {
+        current = await rtdbGet(env, path);
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not read that message.' });
+    }
+    if (!current || typeof current !== 'object') {
+        return json(env, request, 200, { ok: true, missing: true });
+    }
+    if (!isAdmin && String(current.uid || '') !== user.uid) {
+        return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
+    }
+    const actor = !isAdmin || body.as === 'author' ? 'author' : 'admin';
+    try {
+        if (isAdmin) {
+            if (mode === 'purge') {
+                const removed = await rtdbUserRequest(env, path, idToken, { method: 'DELETE' });
+                if (!removed.ok && removed.status !== 404) {
+                    const t = await removed.text();
+                    throw new Error(`RTDB delete failed (${removed.status}): ${t.slice(0, 200)}`);
+                }
+                const extras = replyId
+                    ? [`community_activity/${routeId}/${replyId}`]
+                    : [
+                        `route_community/${routeId}/post_reactions/${postId}`,
+                        `community_activity/${routeId}/${postId}`,
+                        ...Object.keys(current.replies || {}).filter((id) => isSafeRtdbKey(id)).map((id) => `community_activity/${routeId}/${id}`),
+                    ];
+                await Promise.all(extras.map((extra) => rtdbUserRequest(env, extra, idToken, { method: 'DELETE' }).catch(() => {})));
+                return json(env, request, 200, { ok: true, mode: 'purge' });
+            }
+            const patch = communityTombstonePatch(actor);
+            const patched = await rtdbUserRequest(env, path, idToken, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!patched.ok) {
+                const t = await patched.text();
+                throw new Error(`RTDB update failed (${patched.status}): ${t.slice(0, 200)}`);
+            }
+            return json(env, request, 200, { ok: true, mode: 'tombstone', deletedBy: actor, body: patch.body });
+        }
+        if (mode === 'purge') {
+            return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
+        }
+        const patch = communityTombstonePatch(actor);
+        const updates = {};
+        Object.entries(patch).forEach(([key, value]) => {
+            updates[`${path}/${key}`] = value;
+        });
+        await rtdbUpdate(env, updates);
+        return json(env, request, 200, { ok: true, mode: 'tombstone', deletedBy: actor, body: patch.body });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not delete that message.' });
+    }
 }
 
 export default {
@@ -1313,8 +2263,41 @@ export default {
         if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
             return json(env, request, 200, { ok: true, service: 'nexttrain-community' });
         }
+        if (request.method === 'POST' && url.pathname === '/alerts/image') {
+            return handleAlertImageUpload(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/image') {
+            return handleCommunityImageUpload(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/image-from-url') {
+            return handleCommunityImageImport(request, env);
+        }
+        if (request.method === 'GET' && url.pathname === '/media/preview') {
+            return handleMediaPreview(request, env);
+        }
+        if (request.method === 'GET' && url.pathname === '/media/file') {
+            return handleMediaFile(request, env);
+        }
+        if (request.method === 'GET') {
+            const alertFile = url.pathname.match(/^\/alerts\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+            if (alertFile) return handleAlertImageGet(request, env, alertFile[1]);
+            const communityFile = url.pathname.match(/^\/community-images\/([A-Za-z0-9][A-Za-z0-9._-]{0,80})$/);
+            if (communityFile) return handleCommunityImageGet(request, env, communityFile[1]);
+        }
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/points') {
+            return handleCommunityPoints(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/points-seen') {
+            return handleCommunityPointsSeen(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/admin/account-name') {
+            return handleAdminAccountName(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/community/message') {
+            return handleCommunityDelete(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/admin/notifications/send') {
             return handlePushNotificationsAdmin(request, env);
@@ -1347,23 +2330,16 @@ export default {
             }
         }
         if (request.method === 'POST' && url.pathname === '/community/ttl-wipe') {
-            // Manual ops trigger (protect with shared secret if set)
-            const secret = env.TTL_WIPE_SECRET;
-            if (secret && request.headers.get('X-TTL-Secret') !== secret) {
-                return json(env, request, 401, { ok: false, error: 'Unauthorized' });
-            }
-            try {
-                const result = await wipeStalePosts(env);
-                return json(env, request, 200, { ok: true, ...result });
-            } catch (e) {
-                return json(env, request, 500, { ok: false, error: e.message });
-            }
+            return json(env, request, 200, {
+                ok: true,
+                deleted: 0,
+                kept: 'Community Monitor keeps the full log',
+            });
         }
         return json(env, request, 404, { ok: false, error: 'Not found' });
     },
 
-    async scheduled(event, env, ctx) {
-        const cron = String(event.cron || '');
+    async scheduled(event, env) {
         // Always publish due alerts on every cron tick. Do not require an exact
         // `event.cron === '*/5 * * * *'` match — Cloudflare can normalize the
         // expression, and a no-op here leaves Monday 00:00 jobs sitting in the queue.
@@ -1371,15 +2347,6 @@ export default {
             console.error('Scheduled alerts skipped: FIREBASE_PRIVATE_KEY / Admin env incomplete');
             return;
         }
-        const tasks = [
-            runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e)),
-        ];
-        const hourly = cron === TTL_CRON || cron === '0 * * * *' || /^0 \* \* \* \*$/.test(cron);
-        if (hourly) {
-            tasks.push(
-                wipeStalePosts(env).catch((e) => console.error('TTL wipe failed', e))
-            );
-        }
-        await Promise.all(tasks);
+        await runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e));
     },
 };

@@ -15,7 +15,10 @@ import {
     safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
+import { rememberPicture, profilePhotosOn, shouldHoldPicture } from './data-saver.js';
+import { imageMetaForUrl } from './picture-preview.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
+import { embedCommunityShareCards, renderTextWithShareChips, stripCommunityShareUrls } from './share-chips.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -25,31 +28,39 @@ import {
     INBOX_REPLY_ACKS_KEY,
     addInboxReplyAcks,
     inboxReplyAckToken,
+    inboxReplyIsAcknowledged,
     inboxReplyStillVisible,
     parseInboxReplyAcks,
 } from './inbox-replies.js';
 import {
     inboxEntriesFromMap,
+    isAdminInboxMessage,
     markInboxDelivered,
     markInboxRead,
     patchInboxMessageFields,
 } from './inbox-receipts.js';
 import {
+    collapseViewerGuestReaction,
+    INBOX_REACTION_EMOJI,
+    inboxMessageMatchesAdmin,
     inboxReactionActorId,
+    inboxReactionPeople,
     renderInboxReactionChips,
     renderInboxReactionPickerHtml,
     submitInboxReaction,
 } from './inbox-reactions.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { bindKeyboardThread } from './keyboard-thread.js';
+import { showPhotoInAlerts } from './rider-marks.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref, linkedPlainHtml } from './rich-text.js';
-import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
+import { hydrateLinkPreviews, linkPreviewMarkup, storedLinkPreviewMarkup } from './link-preview.js';
 import {
-    showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
+    showCopyToast, showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
-import { whenSettledForAutoNotices } from './session-stability.js';
+import { whenIdleForAutoNotices } from './session-stability.js';
 import {
     fetchUnionNotices,
     setCachedLiveNotices,
@@ -68,13 +79,14 @@ import {
 } from './alerts-channel.js';
 import {
     layoutAlertPost,
-    hoistAlertImagesFromHtml,
+    layoutMessageMedia,
     ALERT_PIN_SVG,
     isNoticePinned,
     alertCopyNeedsSeeMore,
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
     renderAlertVideoMarkup,
+    renderAlertPdfMarkup,
     sanitizeAlertVideoUrl,
 } from './alerts-feed.js';
 import {
@@ -108,7 +120,7 @@ import {
     unstickStaleServiceWorker,
 } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
-import { getBoardStationContext } from './auto-locate.js';
+import { captureSenderStation, getBoardStationContext } from './auto-locate.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
     sniffAttachmentFile,
@@ -116,9 +128,6 @@ import {
     ATTACHMENT_MAX_FILES,
     lightboxOnclickJs,
     attachmentRejectMessage,
-    sanitizeAttachmentDisplayUrl,
-    classifyAttachmentUrl,
-    attachmentPreviewHtml,
 } from './attachments.js';
 
 const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
@@ -422,6 +431,7 @@ function bindFeedbackViewportHandling() {
         [0, 80, 200, 500, 1000].forEach((ms) => setTimeout(settleHubAfterKeyboard, ms));
     });
     syncFeedbackModalViewport();
+    bindKeyboardThread();
 }
 
 function checkFeedbackRate() {
@@ -607,6 +617,9 @@ export function closeAppHub(skipHistory = false) {
 }
 
 export function openAppHub() {
+    const account = document.getElementById('account-modal');
+    if (account && !account.classList.contains('hidden')) return;
+    if (document.documentElement.classList.contains('nt-full-overlay')) return;
     triggerHaptic();
     try { window.cancelPendingGridOpen?.(); } catch { /* ignore */ }
     // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
@@ -894,11 +907,23 @@ function deleteIndexedDatabase(name) {
     });
 }
 
-/** Wipe this phone back to welcome. Keeps next_train_device_id. Does not delete the account. */
+/** Wipe this phone back to welcome. Keeps next_train_device_id and which admin replies were already viewed. Does not delete the account. */
 export async function resetPhoneKeepDeviceId() {
     const keep = safeStorage.getItem('next_train_device_id')
         || (typeof window !== 'undefined' ? window.NEXT_TRAIN_DEVICE_ID : '')
         || '';
+    const keptInboxViewed = {};
+    try {
+        const rememberViewed = (key) => {
+            if (!key || key !== INBOX_REPLY_ACKS_KEY) return;
+            const value = safeStorage.getItem(key);
+            if (value) keptInboxViewed[key] = value;
+        };
+        rememberViewed(INBOX_REPLY_ACKS_KEY);
+        if (typeof localStorage !== 'undefined') {
+            for (let i = 0; i < localStorage.length; i++) rememberViewed(localStorage.key(i));
+        }
+    } catch { /* the viewed set stays empty and the wipe still runs */ }
     try { await signOutAccount(); } catch { /* the account stays on the server */ }
     try { sessionStorage.clear(); } catch { /* ignore */ }
     try { localStorage.clear(); } catch { /* ignore */ }
@@ -917,6 +942,10 @@ export async function resetPhoneKeepDeviceId() {
     await deleteIndexedDatabase('GuardianIdentityDB');
     if (keep) {
         try { await safeStorage.setResilientItem('next_train_device_id', keep); } catch { /* local copy remains */ }
+    }
+    for (const [key, value] of Object.entries(keptInboxViewed)) {
+        try { localStorage.setItem(key, value); } catch { /* ignore */ }
+        try { await safeStorage.setResilientItem(key, value); } catch { /* local copy remains */ }
     }
     try {
         if (typeof caches !== 'undefined') {
@@ -1168,7 +1197,7 @@ async function submitFeedback(opts = {}) {
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         diagnostics: feedbackDiagnostics(),
-                        ...getBoardStationContext(),
+                        ...await messagePlaceFields(),
                         ...chatScopeFields(),
                     },
                 },
@@ -1251,7 +1280,7 @@ async function submitFeedback(opts = {}) {
             isPWA: isStandalone,
             quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
             diagnostics: feedbackDiagnostics(),
-            ...getBoardStationContext(),
+            ...await messagePlaceFields(),
             ...chatScopeFields(),
         };
 
@@ -1568,9 +1597,20 @@ function signedInUid() {
 
 function chatScopeFields() {
     if (accountNeedsEmailVerify()) return { chatScope: 'guest', sentSignedOut: true };
+    const acct = $account.get();
     const uid = signedInUid();
-    if (uid) return { accountUid: uid, chatScope: 'account' };
+    const name = String(acct?.displayName || '').trim().slice(0, 80);
+    const named = name && !/^(passenger|you|admin)$/i.test(name) ? { displayName: name } : {};
+    if (uid) return { accountUid: uid, chatScope: 'account', ...named };
     return { chatScope: 'guest', sentSignedOut: true };
+}
+
+async function messagePlaceFields() {
+    try {
+        const place = await captureSenderStation();
+        if (place?.station) return place;
+    } catch { /* the board station still rides along */ }
+    return getBoardStationContext();
 }
 
 /** Signed-out view is a new chat on the same device id. Never-signed-in guests still see history. */
@@ -1724,29 +1764,15 @@ function bindChatAccountListener() {
 }
 
 function inboxMediaFromHtml(html, extraUrls = []) {
-    const hoisted = hoistAlertImagesFromHtml(html || '');
-    const images = [];
-    const files = [];
-    const add = (u) => {
-        const safe = sanitizeAttachmentDisplayUrl(u);
-        if (!safe) return;
-        const kind = classifyAttachmentUrl(safe);
-        if (kind === 'image') {
-            if (!images.includes(safe)) images.push(safe);
-        } else if (!files.includes(safe)) {
-            files.push(safe);
-        }
-    };
-    (hoisted.urls || []).forEach(add);
-    extraUrls.forEach(add);
-    let media = renderLazyPosterHtml(images);
-    files.forEach((url, idx) => {
-        media += attachmentPreviewHtml(url, {
-            pdfLabel: `View attached PDF${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
-            fileLabel: `View file${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
-        });
-    });
-    return { body: hoisted.body || '', media };
+    const laid = layoutMessageMedia(html || '', extraUrls);
+    let media = `${laid.imageUrls.length ? renderLazyPosterHtml(laid.imageUrls) : ''}${renderAlertVideoMarkup(laid.videoUrls)}${renderAlertPdfMarkup(laid.pdfUrls)}`;
+    if (media && laid.imageUrls.length) {
+        media = media.replace(
+            /class="[^"]*"(\s+data-alert-media)/,
+            `class="community-msg-images${laid.imageUrls.length === 1 ? ' is-single' : ''}"$1`,
+        );
+    }
+    return { body: laid.body || '', media, imageCount: laid.imageUrls.length };
 }
 
 function stripAdminSignoff(html) {
@@ -1769,6 +1795,165 @@ function inboxClock(ts) {
     const d = new Date(ts || Date.now());
     if (Number.isNaN(d.getTime())) return '--:--';
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function inboxDayLabel(ts) {
+    const date = new Date(ts || 0);
+    if (Number.isNaN(date.getTime())) return '';
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function inboxNameColor(seed) {
+    const s = String(seed || 'x');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+    return `var(--nt-name-${Math.abs(h) % 10})`;
+}
+
+function viewerInboxIdentity() {
+    if (!isAdminAuthed()) return null;
+    const acct = $account.get();
+    if (!acct || acct.status !== 'signed-in' || !acct.uid) return null;
+    const email = String(acct.email || '').toLowerCase();
+    const short = email.includes('enock') ? 'Enock' : (email.includes('thandeka') ? 'Thandeka' : '');
+    const name = String(acct.displayName || '').trim() || short || 'Admin';
+    let photo = '';
+    if (showPhotoInAlerts()) {
+        const url = String(acct.photoURL || '').trim();
+        if (/^https:\/\//i.test(url)) photo = url.slice(0, 500);
+    }
+    return { uid: acct.uid, name: name.slice(0, 80), photo, short };
+}
+
+function rememberAdminIdentity(list, ident) {
+    if (!ident) return;
+    const deviceId = getThreadDeviceId();
+    (list || []).forEach((m) => {
+        if (!m?.id || !deviceId || !inboxMessageMatchesAdmin(m, ident)) return;
+        const patch = {};
+        if ((m.fromName || '') !== ident.name) patch.fromName = ident.name;
+        if ((m.fromUid || '') !== ident.uid) patch.fromUid = ident.uid;
+        if (ident.photo && (m.fromPhoto || '') !== ident.photo) patch.fromPhoto = ident.photo;
+        if (!Object.keys(patch).length) return;
+        m.fromName = ident.name;
+        m.fromUid = ident.uid;
+        if (patch.fromPhoto) m.fromPhoto = ident.photo;
+        patchInboxMessageFields(deviceId, m.id, patch).catch(() => {});
+    });
+}
+
+function inboxAvatarHtml(name, seed, photoUrl) {
+    const ink = inboxNameColor(seed || name);
+    const ch = Array.from(String(name || '').trim())[0] || '';
+    const letter = /^[\p{L}\p{N}]$/u.test(ch) ? ch.toLocaleUpperCase() : '';
+    const mark = letter
+        ? `<span class="community-avatar-letter" style="color:${ink}">${escapeHTML(letter)}</span>`
+        : `<span class="community-avatar-mark" style="background:${ink}" aria-hidden="true"></span>`;
+    const disc = `<span class="community-avatar-disc w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0" style="--nt-avatar:${ink}">${mark}</span>`;
+    const photo = profilePhotosOn() && /^https:\/\//i.test(String(photoUrl || '')) ? String(photoUrl) : '';
+    if (!photo) return disc;
+    return `<span class="relative inline-flex w-8 h-8 shrink-0"><img src="${escapeHTML(photo)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');var f=this.parentElement&amp;&amp;this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/><span class="avatar-fallback hidden absolute inset-0">${disc}</span></span>`;
+}
+
+function inboxPlainText(entry) {
+    return String(entry?.message || entry?.text || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 4000);
+}
+
+let inboxSelectedId = '';
+let inboxReactionGuardUntil = 0;
+
+function clearInboxSelection() {
+    inboxSelectedId = '';
+    document.querySelectorAll('#messages-thread-list .community-post-row.is-selected, #messages-thread-list .community-post-row.is-pressing')
+        .forEach((el) => el.classList.remove('is-selected', 'is-pressing'));
+    document.getElementById('messages-thread-home')?.classList.remove('hidden');
+    const bar = document.getElementById('messages-select-bar');
+    bar?.classList.add('hidden');
+    bar?.classList.remove('flex');
+    document.getElementById('inbox-reaction-tray')?.classList.add('hidden');
+    syncInboxCopyButton(null);
+}
+
+if (typeof window !== 'undefined') {
+    window.__ntClearInboxSelection = () => clearInboxSelection();
+    window.__ntInboxSelectionOpen = () => {
+        const modal = document.getElementById('messages-thread-modal');
+        const bar = document.getElementById('messages-select-bar');
+        return !!(modal && !modal.classList.contains('hidden') && bar && !bar.classList.contains('hidden'));
+    };
+}
+
+function selectedInboxEntry(host) {
+    const list = host?._ntInboxList || [];
+    return list.find((m) => String(m.id) === String(inboxSelectedId)) || null;
+}
+
+function syncInboxCopyButton(entry) {
+    const btn = document.getElementById('messages-select-copy');
+    if (!btn) return;
+    const hasText = inboxPlainText(entry).length > 0;
+    btn.classList.toggle('hidden', !hasText);
+    btn.disabled = !hasText;
+    btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+}
+
+async function copyInboxSelection(host) {
+    const text = inboxPlainText(selectedInboxEntry(host));
+    if (!text) return false;
+    const write = async () => {
+        if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+        await Promise.race([
+            navigator.clipboard.writeText(text),
+            new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 1500); }),
+        ]);
+    };
+    try {
+        await write();
+        showCopyToast();
+        return true;
+    } catch {
+        try {
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand('copy');
+            area.remove();
+            if (ok) {
+                showCopyToast();
+                return true;
+            }
+        } catch { /* the highlight stays so they can try again */ }
+        if (typeof showToast === 'function') showToast('Could not copy.', 'error');
+        return false;
+    }
+}
+
+async function shareInboxSelection(host) {
+    const text = inboxPlainText(selectedInboxEntry(host));
+    if (!text) return;
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ title: 'Next Train', text });
+            return;
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+        }
+    }
+    await copyInboxSelection(host);
 }
 
 async function fetchRemoteInbox() {
@@ -1832,98 +2017,352 @@ async function fetchInboxThread() {
 function renderMessagesThread(list) {
     const host = document.getElementById('messages-thread-list');
     if (!host) return;
+    hideInboxReactionsModal();
+    clearInboxSelection();
+    const ident = viewerInboxIdentity();
+    rememberAdminIdentity(list, ident);
+    const actorForRepair = inboxReactionActorId(getThreadDeviceId());
+    const deviceForRepair = getThreadDeviceId();
+    (list || []).forEach((m) => {
+        const collapsed = collapseViewerGuestReaction(m, actorForRepair, deviceForRepair);
+        if (!collapsed || !m?.id || !deviceForRepair) return;
+        m.reactions = collapsed.reactions;
+        m.reactedBy = collapsed.reactedBy;
+        patchInboxMessageFields(deviceForRepair, m.id, collapsed).catch(() => {});
+    });
     if (!list.length) {
         host.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-400 text-center py-8 px-4">No messages yet. Send one below - you and the team will see the full chat here.</p>';
+        host._ntInboxList = list;
         return;
     }
-    host.innerHTML = list.map((m) => {
+    const actor = inboxReactionActorId(getThreadDeviceId());
+    let html = '';
+    let lastDay = '';
+    let prevKey = '';
+    list.forEach((m) => {
         const mine = isCommuterInboxMsg(m);
+        const dayKey = new Date(m.timestamp || 0).toDateString();
+        if (dayKey && dayKey !== lastDay) {
+            html += `<div class="flex justify-center w-full my-3"><span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/70 dark:bg-gray-800/70 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">${escapeHTML(inboxDayLabel(m.timestamp))}</span></div>`;
+            lastDay = dayKey;
+            prevKey = '';
+        }
+        const matched = !mine && ident && inboxMessageMatchesAdmin(m, ident);
+        const name = mine ? 'You' : (matched ? ident.name : adminBubbleName(m, m.message || m.text || ''));
+        const senderKey = mine ? 'me' : (matched ? ident.uid : (m.fromUid || name));
+        const grouped = !!(senderKey && prevKey && senderKey === prevKey);
+        prevKey = senderKey;
         const raw = m.message || m.text || '';
         const extraUrls = [];
         if (m.attachmentUrl) extraUrls.push(m.attachmentUrl);
         if (Array.isArray(m.attachmentUrls)) extraUrls.push(...m.attachmentUrls.filter(Boolean));
         const laid = mine
-            ? inboxMediaFromHtml('', extraUrls)
+            ? inboxMediaFromHtml(commuterFeedbackText(raw), extraUrls)
             : inboxMediaFromHtml(sanitizeHTML(stripAdminSignoff(raw)), extraUrls);
         const body = mine
-            ? escapeHTML(commuterFeedbackText(raw))
+            ? renderTextWithShareChips(laid.body)
             : (laid.body || '');
-        const media = laid.media || '';
+        const imageCount = laid.imageCount || 0;
+        const media = `${laid.media
+            ? laid.media.replace(
+                /class="[^"]*"(\s+data-alert-media)/,
+                `class="community-msg-images${imageCount === 1 ? ' is-single' : ''}"$1`,
+            )
+            : ''}${m.suppressLinkPreview ? '' : storedLinkPreviewMarkup(m.linkPreview)}`;
         const clock = inboxClock(m.timestamp);
-        const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
+        const photo = matched ? (ident.photo || '') : (m.fromPhoto || '');
+        const seed = matched ? ident.uid : (m.fromUid || name);
         const avatar = mine
             ? ''
-            : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;
-        const actor = inboxReactionActorId(getThreadDeviceId());
-        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
+            : grouped
+                ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
+                : `<div class="community-avatar">${inboxAvatarHtml(name, seed, photo)}</div>`;
+        const nameHtml = grouped
+            ? ''
+            : `<div class="community-bubble-name-row" style="color:${mine ? 'var(--nt-name-own)' : inboxNameColor(seed)}"><span class="community-bubble-name truncate">${escapeHTML(name)}</span></div>`;
+        const bubbleCls = mine ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
+        html += `<div class="community-post-row inbox-row ${mine ? 'justify-end' : 'justify-start gap-1'}${grouped ? ' is-grouped' : ''}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
       ${avatar}
-      <div class="inbox-bubble-wrap">
-        <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}" data-inbox-react-host="1">
-          <div class="inbox-bubble-name-row">${who}</div>
-          <div class="inbox-bubble-body">
-            <div class="inbox-msg-text">${media}${body}<span class="inbox-msg-time">${clock}</span></div>
+      <div class="community-bubble-wrap">
+        <div class="${bubbleCls}" data-inbox-react-host="1">
+          ${nameHtml}
+          <div class="community-bubble-body">
+            ${media}
+            <div class="community-msg-text">${body}<span class="community-msg-time">${clock}</span></div>
           </div>
         </div>
-        ${renderInboxReactionChips(m, actor)}
+        ${renderInboxReactionChips(m, actor, mine)}
       </div>
     </div>`;
-    }).join('');
+    });
+    host.innerHTML = html;
     host._ntInboxList = list;
     bindInboxThreadReactions(host);
     hydrateAlertPosterImages(host);
+    hydrateLinkPreviews(host, REPLY_WORKER_URL);
     host.scrollTop = host.scrollHeight;
 }
 
-function hideInboxReactionPicker() {
-    document.getElementById('inbox-reaction-picker')?.classList.add('hidden');
+function ensureInboxReactionTray() {
+    let tray = document.getElementById('inbox-reaction-tray');
+    if (tray) return tray;
+    tray = document.createElement('div');
+    tray.id = 'inbox-reaction-tray';
+    tray.className = 'fixed z-[160] hidden w-max max-w-[min(92vw,20rem)]';
+    tray.innerHTML = `<div class="flex items-center gap-0.5 rounded-full border border-white/10 bg-gray-950/95 px-1.5 py-1 text-white shadow-2xl">${renderInboxReactionPickerHtml().replaceAll('hover:bg-gray-100 dark:hover:bg-gray-700', 'hover:bg-white/10')}</div>`;
+    tray.style.userSelect = 'none';
+    tray.style.webkitUserSelect = 'none';
+    document.body.appendChild(tray);
+    tray.addEventListener('contextmenu', (e) => e.preventDefault());
+    return tray;
 }
 
-function showInboxReactionPicker(anchor, onPick) {
-    let picker = document.getElementById('inbox-reaction-picker');
-    if (!picker) {
-        picker = document.createElement('div');
-        picker.id = 'inbox-reaction-picker';
-        picker.className = 'hidden fixed z-[160] px-2 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl flex items-center gap-0.5';
-        picker.innerHTML = renderInboxReactionPickerHtml();
-        document.body.appendChild(picker);
+let inboxReactFilter = 'all';
+const inboxReactorProfiles = new Map();
+
+function hideInboxReactionsModal() {
+    const sheet = document.getElementById('inbox-reactions-modal');
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    sheet.classList.add('hidden');
+    if ((location.hash || '') === '#inbox-reactions') {
+        try { history.replaceState({ modal: 'messages-thread-modal' }, '', '#messages'); } catch { /* Back already moved */ }
     }
-    picker.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
-        btn.onclick = (e) => {
+}
+
+function inboxReactorLabel(actor, profile) {
+    const mine = inboxReactionActorId(getThreadDeviceId());
+    if (actor && actor === mine) {
+        const named = String($account.get()?.displayName || '').trim();
+        if (named) return named;
+        const ident = viewerInboxIdentity();
+        if (ident?.name) return ident.name;
+        return 'You';
+    }
+    const stored = String(profile?.name || '').trim();
+    if (stored) return stored;
+    return 'Passenger';
+}
+
+async function loadInboxReactorProfiles(actors) {
+    const uids = [...new Set((actors || [])
+        .filter((id) => String(id).startsWith('uid_'))
+        .map((id) => String(id).slice(4))
+        .filter(Boolean))];
+    await Promise.all(uids.map(async (uid) => {
+        const key = `uid_${uid}`;
+        if (inboxReactorProfiles.has(key)) return;
+        try {
+            const res = await fetch(`${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(uid)}.json`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const name = String(data?.displayName || '').trim();
+            const photo = /^https:\/\//i.test(String(data?.photoURL || '')) ? String(data.photoURL).slice(0, 500) : '';
+            if (name || photo) inboxReactorProfiles.set(key, { name: name.slice(0, 80), photo });
+        } catch { /* Passenger stays */ }
+    }));
+}
+
+function ensureInboxReactionsModal() {
+    let sheet = document.getElementById('inbox-reactions-modal');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'inbox-reactions-modal';
+    sheet.className = 'fixed inset-0 z-[160] hidden flex flex-col justify-end bg-black/50';
+    sheet.innerHTML = `
+        <div class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl transform transition-transform duration-300 scale-95 dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
+            <p class="px-4 pb-2 pt-3 text-base font-black text-gray-900 dark:text-white" data-inbox-react-title>Reactions</p>
+            <div class="flex gap-2 overflow-x-auto px-4 pb-2" data-inbox-react-totals></div>
+            <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3" data-inbox-react-list></div>
+        </div>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', (e) => {
+        if (e.target === sheet) {
+            closeSmoothModal('inbox-reactions-modal');
+            return;
+        }
+        const choose = e.target.closest?.('[data-inbox-react-choose]');
+        if (choose && sheet.contains(choose)) {
             e.preventDefault();
-            e.stopPropagation();
-            hideInboxReactionPicker();
-            onPick(btn.getAttribute('data-inbox-react-pick'));
-        };
+            const messageId = sheet.dataset.messageId || '';
+            closeSmoothModal('inbox-reactions-modal');
+            const row = document.querySelector(`#messages-thread-list [data-inbox-msg-id="${CSS.escape(messageId)}"]`);
+            if (row) selectInboxMessage(row, { x: choose.getBoundingClientRect().left, y: choose.getBoundingClientRect().top });
+            return;
+        }
+        const chip = e.target.closest?.('[data-inbox-react-filter]');
+        if (!chip || !sheet.contains(chip)) return;
+        e.preventDefault();
+        const next = chip.getAttribute('data-inbox-react-filter') || 'all';
+        inboxReactFilter = inboxReactFilter === next ? 'all' : next;
+        paintInboxReactionsModal(sheet.dataset.messageId || '');
     });
-    const rect = anchor.getBoundingClientRect();
-    picker.classList.remove('hidden');
-    const top = Math.max(12, rect.top - 52);
-    const left = Math.max(12, Math.min(window.innerWidth - picker.offsetWidth - 12, rect.left));
-    picker.style.top = `${top}px`;
-    picker.style.left = `${left}px`;
+    return sheet;
+}
+
+function paintInboxReactionsModal(messageId) {
+    const sheet = document.getElementById('inbox-reactions-modal');
+    const host = document.getElementById('messages-thread-list');
+    if (!sheet || sheet.dataset.messageId !== String(messageId)) return;
+    const entry = (host?._ntInboxList || []).find((m) => String(m.id) === String(messageId));
+    const people = inboxReactionPeople(entry).map((row) => ({
+        ...row,
+        profile: inboxReactorProfiles.get(row.actor) || null,
+    }));
+    const counts = {};
+    people.forEach((row) => { counts[row.emoji] = (counts[row.emoji] || 0) + 1; });
+    const total = people.length;
+    const title = sheet.querySelector('[data-inbox-react-title]');
+    if (title) title.textContent = total === 1 ? '1 reaction' : `${total} reactions`;
+    const chipClass = (on) => `inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${
+        on
+            ? 'border-gray-300 bg-gray-200 text-gray-900 dark:border-gray-500 dark:bg-gray-600 dark:text-white'
+            : 'border-gray-200 bg-gray-100 text-gray-900 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white'
+    }`;
+    const totals = sheet.querySelector('[data-inbox-react-totals]');
+    if (totals) {
+        const faces = Object.keys(INBOX_REACTION_EMOJI)
+            .filter((key) => counts[key])
+            .sort((a, b) => counts[b] - counts[a]);
+        totals.innerHTML = [
+            `<button type="button" data-inbox-react-choose="1" class="${chipClass(false)}" aria-label="Choose a reaction"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14.2c1.1 1.3 2.4 2 4 2s2.9-.7 4-2"/><circle cx="9" cy="10" r="0.8" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="0.8" fill="currentColor" stroke="none"/></svg></button>`,
+            ...faces.map((key) => {
+                const on = inboxReactFilter === key;
+                return `<button type="button" data-inbox-react-filter="${escapeHTML(key)}" class="${chipClass(on)}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${INBOX_REACTION_EMOJI[key]} ${counts[key]}"><span aria-hidden="true">${INBOX_REACTION_EMOJI[key]}</span><span class="tabular-nums">${counts[key]}</span></button>`;
+            }),
+        ].join('');
+    }
+    const shown = inboxReactFilter === 'all' ? people : people.filter((row) => row.emoji === inboxReactFilter);
+    const list = sheet.querySelector('[data-inbox-react-list]');
+    if (!list) return;
+    list.innerHTML = shown.map((row) => {
+        const name = inboxReactorLabel(row.actor, row.profile);
+        const photo = row.actor === inboxReactionActorId(getThreadDeviceId())
+            ? (viewerInboxIdentity()?.photo || row.profile?.photo || '')
+            : (row.profile?.photo || '');
+        return `<div class="flex items-center gap-3 px-2 py-2">
+            ${inboxAvatarHtml(name, row.actor, photo)}
+            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${escapeHTML(name)}</span>
+            <span class="text-xl leading-none" aria-hidden="true">${INBOX_REACTION_EMOJI[row.emoji] || ''}</span>
+        </div>`;
+    }).join('');
+}
+
+function openInboxReactionsModal(row, list) {
+    const messageId = row?.getAttribute('data-inbox-msg-id') || '';
+    if (!messageId) return;
+    const entry = (list || []).find((m) => String(m.id) === String(messageId));
+    if (!entry || !inboxReactionPeople(entry).length) return;
+    inboxReactFilter = 'all';
+    const sheet = ensureInboxReactionsModal();
+    sheet.dataset.messageId = String(messageId);
+    const wasHidden = sheet.classList.contains('hidden');
+    paintInboxReactionsModal(messageId);
+    if (wasHidden) openSmoothModal('inbox-reactions-modal');
+    triggerHaptic();
+    const actors = inboxReactionPeople(entry).map((person) => person.actor);
+    loadInboxReactorProfiles(actors).then(() => {
+        if (sheet.dataset.messageId === String(messageId) && !sheet.classList.contains('hidden')) {
+            paintInboxReactionsModal(messageId);
+        }
+    }).catch(() => {});
+}
+
+function placeInboxReactionTray(point) {
+    const tray = ensureInboxReactionTray();
+    if (tray.parentElement !== document.body) document.body.appendChild(tray);
+    tray.classList.remove('hidden');
+    if (!point && tray.style.left) return;
+    const width = tray.offsetWidth || 280;
+    const height = tray.offsetHeight || 48;
+    const at = point || { x: window.innerWidth / 2, y: 180 };
+    let left = at.x - (width / 2);
+    left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
+    const gap = 10;
+    const chrome = document.getElementById('messages-thread-header');
+    const floor = (chrome?.getBoundingClientRect().bottom || 56) + 4;
+    let top = at.y - height - gap;
+    if (top < floor) top = at.y + gap;
+    const bottomLimit = window.innerHeight - height - 64;
+    if (top > bottomLimit) top = Math.max(floor, Math.min(bottomLimit, at.y - height - gap));
+    tray.style.left = `${left}px`;
+    tray.style.top = `${top}px`;
+}
+
+function selectInboxMessage(row, point) {
+    const host = document.getElementById('messages-thread-list');
+    const id = row?.getAttribute('data-inbox-msg-id') || '';
+    if (!id) return;
+    inboxSelectedId = id;
+    inboxReactionGuardUntil = Date.now() + 700;
+    try { window.getSelection()?.removeAllRanges(); } catch { /* the tray must not sit inside a text selection */ }
+    host?.querySelectorAll('.community-post-row').forEach((el) => {
+        el.classList.toggle('is-selected', el === row);
+        el.classList.remove('is-pressing');
+    });
+    document.getElementById('messages-thread-home')?.classList.add('hidden');
+    const bar = document.getElementById('messages-select-bar');
+    bar?.classList.remove('hidden');
+    bar?.classList.add('flex');
+    const entry = selectedInboxEntry(host);
+    const mine = inboxReactionActorId(row.getAttribute('data-inbox-device-id') || '');
+    const mineKey = entry ? (entry.reactedBy && entry.reactedBy[mine]) : '';
+    const tray = ensureInboxReactionTray();
+    tray.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
+        const key = btn.getAttribute('data-inbox-react-pick');
+        btn.classList.toggle('bg-white/15', key && key === mineKey);
+        btn.classList.toggle('ring-1', key && key === mineKey);
+        btn.classList.toggle('ring-white/40', key && key === mineKey);
+    });
+    placeInboxReactionTray(point);
+    syncInboxCopyButton(entry);
+    triggerHaptic();
 }
 
 function bindInboxThreadReactions(host) {
     if (!host || host.dataset.inboxReactBound === '1') return;
     host.dataset.inboxReactBound = '1';
     let longTimer = null;
+    let pressPoint = null;
+    let pressRow = null;
+    let holdFired = false;
     const clearLong = () => {
         if (longTimer) clearTimeout(longTimer);
         longTimer = null;
+        pressRow?.classList.remove('is-pressing');
     };
     const listOf = () => host._ntInboxList || [];
     host.addEventListener('pointerdown', (e) => {
+        if (e.button) return;
         const bubble = e.target.closest?.('[data-inbox-react-host]');
-        if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
+        if (!bubble || e.target.closest?.('[data-inbox-react], [data-alert-lightbox], [data-alert-video], [data-alert-pdf], [data-nt-gif-replay], .nt-link-preview')) return;
         const row = bubble.closest('[data-inbox-msg-id]');
         if (!row) return;
+        holdFired = false;
+        pressRow = row;
+        pressPoint = { x: e.clientX, y: e.clientY };
+        row.classList.add('is-pressing');
         longTimer = setTimeout(() => {
-            showInboxReactionPicker(bubble, (emoji) => applyThreadInboxReaction(row, listOf(), emoji));
+            holdFired = true;
+            selectInboxMessage(row, pressPoint);
         }, 420);
     });
     host.addEventListener('pointerup', clearLong);
     host.addEventListener('pointercancel', clearLong);
+    host.addEventListener('pointermove', (e) => {
+        if (!longTimer || !pressPoint) return;
+        if (Math.abs(e.clientX - pressPoint.x) + Math.abs(e.clientY - pressPoint.y) > 12) clearLong();
+    });
+    host.addEventListener('contextmenu', (e) => {
+        if (e.target.closest?.('[data-inbox-react-host]')) e.preventDefault();
+    });
     host.addEventListener('click', (e) => {
+        if (holdFired) {
+            holdFired = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         const poster = e.target.closest?.('[data-alert-lightbox]');
         if (poster && host.contains(poster)) {
             e.preventDefault();
@@ -1931,31 +2370,56 @@ function bindInboxThreadReactions(host) {
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
             return;
         }
+        const pdfBtn = e.target.closest?.('[data-alert-pdf]');
+        if (pdfBtn && host.contains(pdfBtn)) {
+            e.preventDefault();
+            if (typeof window.openAlertPdf === 'function') window.openAlertPdf(pdfBtn.getAttribute('data-alert-pdf'));
+            return;
+        }
         const chip = e.target.closest?.('[data-inbox-react]');
         if (!chip) return;
+        e.preventDefault();
         const row = chip.closest('[data-inbox-msg-id]');
         if (!row) return;
-        applyThreadInboxReaction(row, listOf(), chip.getAttribute('data-inbox-react'));
+        openInboxReactionsModal(row, listOf());
     });
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest?.('#inbox-reaction-picker')) hideInboxReactionPicker();
+    const tray = ensureInboxReactionTray();
+    tray.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-inbox-react-pick]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const row = host.querySelector(`[data-inbox-msg-id="${CSS.escape(inboxSelectedId)}"]`);
+        if (!row) return;
+        applyThreadInboxReaction(row, listOf(), btn.getAttribute('data-inbox-react-pick'));
     });
+    if (!document.documentElement.dataset.inboxSelectAway) {
+        document.documentElement.dataset.inboxSelectAway = '1';
+        document.addEventListener('pointerdown', (e) => {
+            if (!inboxSelectedId) return;
+            if (Date.now() < inboxReactionGuardUntil) return;
+            if (e.target.closest?.('#messages-thread-list .is-selected, #inbox-reaction-tray, #messages-select-bar')) return;
+            clearInboxSelection();
+        });
+    }
 }
 
 async function applyThreadInboxReaction(row, list, emoji) {
     const messageId = row.getAttribute('data-inbox-msg-id');
     const deviceId = row.getAttribute('data-inbox-device-id') || getThreadDeviceId();
     const entry = (list || []).find((m) => String(m.id) === String(messageId));
-    if (!messageId || !deviceId || !entry) return;
-    const next = await submitInboxReaction({ deviceId, messageId, entry, emoji });
+    if (!messageId || !deviceId || !entry || !emoji) return;
+    const notifyAdmin = isAdminInboxMessage(entry, messageId) && !isAdminAuthed();
+    const next = await submitInboxReaction({ deviceId, messageId, entry, emoji, notifyAdmin });
     if (!next) {
         if (typeof showToast === 'function') showToast('Could not save reaction.', 'error');
         return;
-    };
+    }
     Object.assign(entry, next);
-    const wrap = row.querySelector('.inbox-bubble-wrap');
-    const chips = wrap?.querySelector('[data-inbox-react-chips]');
-    if (chips) chips.outerHTML = renderInboxReactionChips(entry, inboxReactionActorId(deviceId));
+    const chips = row.querySelector('[data-inbox-react-chips]');
+    const actor = inboxReactionActorId(deviceId);
+    if (chips) chips.outerHTML = renderInboxReactionChips(entry, actor, row.classList.contains('justify-end'));
+    if (inboxSelectedId === String(messageId)) selectInboxMessage(row, null);
 }
 
 async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmentUrl, attachmentUrls }) {
@@ -1976,6 +2440,10 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmen
         timestamp: Date.now(),
         type: feedbackType || 'general',
         read: true,
+        appVersion: APP_VERSION,
+        routeId: $currentRouteId.get() || 'none',
+        diagnostics: feedbackDiagnostics(),
+        ...await messagePlaceFields(),
         ...chatScopeFields(),
     };
     if (feedbackId) payload.feedbackId = String(feedbackId);
@@ -2130,6 +2598,13 @@ export function renderServiceAlertModal(notice, options = {}) {
             const href = resolveAlertImageSrc(path);
             if (!href) return '';
             const src = escapeHTML(href);
+            if (shouldHoldPicture(href)) {
+                const row = imageMetaForUrl(notice?.imageMeta, path);
+                const previewAttr = row.preview ? ` data-nt-preview="${escapeHTML(row.preview)}"` : '';
+                const bytesAttr = row.bytes > 0 ? ` data-nt-bytes="${row.bytes}"` : '';
+                return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${escapeHTML(String(notice.id || ''))}" data-alert-expires="${escapeHTML(String(notice.expiresAt || ''))}"${previewAttr}${bytesAttr} class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true"><span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></span></span><img alt="" referrerpolicy="no-referrer" class="nt-alert-poster-img w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900 opacity-0"></button>`;
+            }
+            rememberPicture(href);
             const onclick = lightboxOnclickJs(href);
             if (!onclick) return '';
             return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><img src="${src}" alt="" referrerpolicy="no-referrer" class="w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900"></button>`;
@@ -2138,6 +2613,8 @@ export function renderServiceAlertModal(notice, options = {}) {
         posterHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
     const mediaHtml = `${posterHtml}${renderAlertVideoMarkup(layout.videoUrls)}`;
+    if (linkPreviewMarkup(notice).includes('nt-community-share-card')) formattedMsg = stripCommunityShareUrls(formattedMsg);
+    else formattedMsg = embedCommunityShareCards(formattedMsg);
     content.innerHTML = `${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}`;
     ensureLightboxPlusBadges(content);
 
@@ -2157,6 +2634,16 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     hydrateAlertPosterImages(content);
     hydrateLinkPreviews(content, REPLY_WORKER_URL);
+    if (content.dataset.ntModalPoster !== '1') {
+        content.dataset.ntModalPoster = '1';
+        content.addEventListener('click', (event) => {
+            const lightbox = event.target.closest?.('[data-alert-lightbox]');
+            if (!lightbox || lightbox.dataset.ntPosterHeld === '1' || lightbox.dataset.ntPosterChecking === '1') return;
+            event.preventDefault();
+            const src = lightbox.getAttribute('data-alert-lightbox');
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
+        });
+    }
 
     if (timestamp) {
         if (options.timestampHtml) {
@@ -2399,7 +2886,7 @@ export async function checkServiceAlerts(opts = {}) {
                         const unreadKeys = Object.keys(inboxData).filter((k) => {
                             const entry = inboxData[k];
                             if (!inboxMessageInScope({ ...entry, id: k })) return false;
-                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, entry, k));
+                            const locallyAcknowledged = inboxReplyIsAcknowledged(localAcknowledgements, deviceId, entry, k);
                             return inboxReplyStillVisible(entry, Date.now(), locallyAcknowledged);
                         });
                         syncInboxBadges(unreadKeys.length);
@@ -2445,7 +2932,7 @@ export async function checkServiceAlerts(opts = {}) {
         const autoNotice = pickAutoOpenNotice(validNotices);
         if (autoNotice && !window._alertsChannelOpening) {
             window._alertsChannelOpening = true;
-            whenSettledForAutoNotices(() => {
+            whenIdleForAutoNotices(() => {
                 if (!canAutoOpenHomeNotices()) {
                     window._alertsChannelOpening = false;
                     return;
@@ -3116,7 +3603,26 @@ export function initHub() {
         trackAnalyticsEvent('open_feedback_modal', { location: 'settings' });
         openMessagesThread();
     });
-    document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    document.getElementById('messages-thread-close')?.addEventListener('click', () => {
+        clearInboxSelection();
+        closeSmoothModal('messages-thread-modal');
+    });
+    document.getElementById('messages-select-back')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        clearInboxSelection();
+    });
+    document.getElementById('messages-select-copy')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const host = document.getElementById('messages-thread-list');
+        if (!inboxPlainText(selectedInboxEntry(host))) return;
+        const ok = await copyInboxSelection(host);
+        if (ok) clearInboxSelection();
+    });
+    document.getElementById('messages-select-share')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        shareInboxSelection(document.getElementById('messages-thread-list'));
+    });
     const contactToggle = document.getElementById('messages-thread-contact-toggle');
     const toggleThreadContact = () => {
         setThreadContactOpen(contactToggle?.getAttribute('aria-expanded') !== 'true');
@@ -3193,6 +3699,7 @@ export function initHub() {
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         diagnostics: feedbackDiagnostics(),
+                        ...await messagePlaceFields(),
                         ...chatScopeFields(),
                     },
                 },
@@ -3239,6 +3746,7 @@ export function initHub() {
                 deviceId: getThreadDeviceId() || 'unknown',
                 isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
                 diagnostics: feedbackDiagnostics(),
+                ...await messagePlaceFields(),
                 ...chatScopeFields(),
             };
             const authParam = authToken ? `?auth=${authToken}` : '';

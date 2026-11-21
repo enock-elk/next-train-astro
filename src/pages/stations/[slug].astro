@@ -47,9 +47,16 @@ const routesIndexHref = withBase('routes.html');
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
 const neighbourHeadline = buildStationNeighbourHeadline(station, corridors);
 const aboutText = buildStationAbout(station, corridors);
+const aboutParagraphs = seoIntroParagraphs(aboutText);
 const quickFacts = buildStationQuickFacts(station, corridors);
 const accordionCorridors = corridors.filter((c) => (c.stopOrder || []).length > 0);
 const listedWithoutTimes = !!station.listedWithoutTimes;
+const timetableCards = corridors.filter((card) => (
+  card.weekday.towardA.trains.length
+  || card.weekday.towardB.trains.length
+  || card.saturday.towardA.trains.length
+  || card.saturday.towardB.trains.length
+));
 const introCopy = listedWithoutTimes
   ? `${station.name} is on the sheet in ${province} but has no published departures yet. The corridor and the stops on either side are below. Open Next Train for the next live departure on a station that does have times.`
   : `Weekday and Saturday Metrorail departures from ${station.name} in ${province}. Use the GPS map for this stop, then open Next Train for the next live departure & more.`;
@@ -147,9 +154,11 @@ const lineLinks = corridors.map((c) => ({
           <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-2">
             About this station
           </h2>
-          <p class="text-sm sm:text-base text-slate-800 dark:text-slate-100 leading-relaxed">
-            {aboutText}
-          </p>
+          <div class="text-sm sm:text-base text-slate-800 dark:text-slate-100 leading-relaxed space-y-3">
+            {aboutParagraphs.map((para) => (
+              <p>{para}</p>
+            ))}
+          </div>
         </section>
 
         {quickFacts.length > 0 && (
@@ -250,9 +259,9 @@ const lineLinks = corridors.map((c) => ({
         </p>
       </div>
 
-      {!listedWithoutTimes && corridors.map((card) => (
+      {!listedWithoutTimes && timetableCards.map((card) => (
         <section class="space-y-4">
-          {corridors.length > 1 && (
+          {!card.mergedDirections && timetableCards.length > 1 && (
             <h3 class="text-base font-bold text-slate-900 dark:text-white">
               {card.routeSlug ? (
                 <a href={withBase(`routes/${card.routeSlug}.html`)} class="hover:underline">
@@ -273,7 +282,7 @@ const lineLinks = corridors.map((c) => ({
           {card.hasSaturday && (
             <details class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4">
               <summary class="cursor-pointer text-sm font-bold text-slate-900 dark:text-white">
-                Saturday timetable · {card.routeName}
+                Saturday timetable{card.mergedDirections ? '' : ` · ${card.routeName}`}
               </summary>
               <div class="mt-4 grid gap-4 lg:grid-cols-2">
                 {card.saturday.towardA.trains.length > 0 && (

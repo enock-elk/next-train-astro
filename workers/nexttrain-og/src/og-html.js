@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa11';
+const OG_IMAGE_CACHE_BUST = 'wa12';
 
 function esc(s) {
   return String(s ?? '')
@@ -29,6 +29,18 @@ export function buildAppDeepLink(intent, site) {
     if (intent.region) app.searchParams.set('r', intent.region);
     return app.toString();
   }
+  if (intent.kind === 'alert') {
+    app.searchParams.set('alert', intent.id);
+    if (intent.source) app.searchParams.set('src', intent.source);
+    const photo = Number(intent.photo) || 0;
+    if (photo >= 1 && photo <= 10) app.searchParams.set('photo', String(photo));
+    return app.toString();
+  }
+  if (intent.kind === 'community') {
+    app.searchParams.set('room', intent.routeId);
+    app.searchParams.set('post', intent.postId);
+    return app.toString();
+  }
   if (intent.kind === 'live') {
     app.searchParams.set('live', intent.trainId);
     if (intent.routeId) app.searchParams.set('rt', intent.routeId);
@@ -52,6 +64,18 @@ export function buildOgShareLink(intent, site) {
     if (intent.region) share.searchParams.set('r', intent.region);
     return share.toString();
   }
+  if (intent.kind === 'alert') {
+    const source = encodeURIComponent(String(intent.source || 'all'));
+    const id = encodeURIComponent(String(intent.id || ''));
+    const photo = Number(intent.photo) || 0;
+    const suffix = photo >= 1 && photo <= 10 ? `/${photo}` : '';
+    return `${site.replace(/\/$/, '')}/og/a/${source}/${id}${suffix}`;
+  }
+  if (intent.kind === 'community') {
+    const routeId = encodeURIComponent(String(intent.routeId || ''));
+    const postId = encodeURIComponent(String(intent.postId || ''));
+    return `${site.replace(/\/$/, '')}/og/c/${routeId}/${postId}`;
+  }
   if (intent.kind === 'live') {
     const id = encodeURIComponent(String(intent.trainId || '').trim());
     const rt = encodeURIComponent(String(intent.routeId || '').trim());
@@ -71,7 +95,9 @@ export function buildOgShareLink(intent, site) {
 function withImageCacheBust(imgUrl) {
   const img = new URL(imgUrl);
   img.searchParams.set('v', OG_IMAGE_CACHE_BUST);
-  return img.toString();
+  // URLSearchParams writes spaces as '+'. Facebook's image fetch splits on that
+  // plus, so a trip between two-word stations gets a blank thumbnail.
+  return img.toString().replace(/\+/g, '%20');
 }
 
 export function buildRouteOgMeta(route, intent, site, grid = null) {
@@ -148,6 +174,25 @@ export function buildLiveTrainOgMeta(intent, site) {
   };
 }
 
+export function buildContentOgMeta(intent, site, detail = {}) {
+  const title = detail.title || (intent.kind === 'community' ? 'Community message' : 'Service update');
+  const description = detail.description || 'Open this in Next Train.';
+  const image = detail.image || `${site.replace(/\/$/, '')}/icons/loading-logo.png`;
+  const hasPhoto = !!detail.image;
+  return {
+    title,
+    description,
+    url: buildOgShareLink(intent, site),
+    appUrl: buildAppDeepLink(intent, site),
+    image,
+    imageAlt: title,
+    imageType: detail.imageType || 'image/png',
+    // A real poster is not the 3000×1575 timetable sheet. A wrong size makes WhatsApp drop the card.
+    imageWidth: hasPhoto ? '' : 512,
+    imageHeight: hasPhoto ? '' : 512,
+  };
+}
+
 export function renderOgHtml({
   title,
   description,
@@ -155,6 +200,9 @@ export function renderOgHtml({
   image,
   imageAlt,
   appUrl,
+  imageType = 'image/png',
+  imageWidth = OG_IMAGE_WIDTH,
+  imageHeight = OG_IMAGE_HEIGHT,
   siteName = 'Metrorail Next Train',
 }) {
   const openUrl = appUrl || url;
@@ -175,10 +223,8 @@ export function renderOgHtml({
 <meta property="og:url" content="${esc(url)}"/>
 <meta property="og:image" content="${esc(image)}"/>
 <meta property="og:image:secure_url" content="${esc(image)}"/>
-<meta property="og:image:type" content="image/png"/>
-<meta property="og:image:width" content="${OG_IMAGE_WIDTH}"/>
-<meta property="og:image:height" content="${OG_IMAGE_HEIGHT}"/>
-<meta property="og:image:alt" content="${esc(alt)}"/>
+<meta property="og:image:type" content="${esc(imageType)}"/>
+${imageWidth && imageHeight ? `<meta property="og:image:width" content="${esc(imageWidth)}"/>\n<meta property="og:image:height" content="${esc(imageHeight)}"/>\n` : ''}<meta property="og:image:alt" content="${esc(alt)}"/>
 <link rel="image_src" href="${esc(image)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${esc(title)}"/>

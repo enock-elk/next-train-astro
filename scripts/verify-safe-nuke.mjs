@@ -12,6 +12,7 @@ import {
     isProtectedVolatileKey,
     newestUnappliedKillswitchTimestamp,
     shouldDeleteCacheForPolicy,
+    shouldSeedFreshKillswitch,
     VOLATILE_FLUSH_PROTECTED_KEYS,
     VOLATILE_FLUSH_PROTECTED_PREFIXES,
 } from '../src/lib/utils.js';
@@ -128,7 +129,35 @@ const update = readFileSync(new URL('../src/lib/app-update.js', import.meta.url)
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(logic.includes('killswitchCheckPromise'), 'concurrent killswitch calls share one in-flight check');
 assert(logic.includes("safeStorage.setItem(KILLSWITCH_PENDING_KEY"), 'killswitch writes pending marker before cleanup');
-assert(logic.indexOf('safeStorage.setItem(KILLSWITCH_APPLIED_KEY') > logic.indexOf("performHardCacheClear('system_killswitch')"), 'killswitch marks applied only after cleanup');
+{
+    const appliedWrite = 'safeStorage.setItem(KILLSWITCH_APPLIED_KEY';
+    const cleanupAt = logic.indexOf("performHardCacheClear('system_killswitch')");
+    const seedAt = logic.indexOf('if (shouldSeedFreshKillswitch(');
+    const pendingAt = logic.indexOf('safeStorage.setItem(KILLSWITCH_PENDING_KEY');
+    const writes = [];
+    for (let at = logic.indexOf(appliedWrite); at !== -1; at = logic.indexOf(appliedWrite, at + 1)) writes.push(at);
+    assert(writes.length === 2, 'killswitch has one first-visit seed and one post-cleanup applied write');
+    assert(writes[1] > cleanupAt, 'killswitch marks applied only after cleanup');
+    assert(seedAt > -1 && writes[0] > seedAt && writes[0] < pendingAt && pendingAt < cleanupAt,
+        'the only applied write before cleanup is the first-visit seed, ahead of the pending marker');
+}
+assert(shouldSeedFreshKillswitch({ freshProfile: true, pending: null, applied: null, target: 1794268612915 }), 'first visit seeds the live killswitch');
+assert(!shouldSeedFreshKillswitch({ freshProfile: false, pending: null, applied: null, target: 1794268612915 }), 'returning profile still runs the NUKE');
+assert(!shouldSeedFreshKillswitch({ freshProfile: undefined, pending: null, applied: null, target: 1794268612915 }), 'a page without the boot snapshot still runs the NUKE');
+assert(!shouldSeedFreshKillswitch({ freshProfile: true, pending: '1794268612915', applied: null, target: 1794268612915 }), 'interrupted NUKE always resumes');
+assert(!shouldSeedFreshKillswitch({ freshProfile: true, pending: null, applied: '1794268612915', target: 1794268612999 }), 'a newer killswitch in the same session still runs the NUKE');
+assert(!shouldSeedFreshKillswitch({ freshProfile: true, pending: null, applied: null, target: 0 }), 'no target, no seed');
+{
+    const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+    const snapAt = layout.indexOf('window.__ntFreshProfile =');
+    const snap = layout.slice(snapAt, snapAt + 500);
+    assert(snapAt > -1, 'Layout snapshots a first-visit profile');
+    assert(snapAt < layout.indexOf('navigator.serviceWorker.register('), 'snapshot runs before this page registers a worker');
+    assert(snapAt < layout.indexOf("localStorage.setItem('next_train_device_id'"), 'snapshot runs before the device id is written');
+    for (const signal of ['navigator.serviceWorker.controller', "'app_installed_version'", "'next_train_device_id'", "'last_killswitch_timestamp'", "'nt_killswitch_pending_timestamp'"]) {
+        assert(snap.includes(signal), `first-visit snapshot checks ${signal}`);
+    }
+}
 assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"), 'visible online sessions check NUKE every 60s');
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still goes through the update path');

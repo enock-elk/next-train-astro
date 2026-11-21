@@ -23,7 +23,8 @@
       if (low.indexOf('tracker id not found') !== -1) return 'noise';
       if (low.indexOf('admin authenticated') !== -1 || low.indexOf('admin logged out') !== -1) return 'noise';
       if (low.indexOf('nt waterfall:') === 0 || low.indexOf('nt offlinechrome:') === 0) {
-        if (low.indexOf('fail') !== -1 || low.indexOf('timeout') !== -1 || low.indexOf('miss') !== -1
+        if (low.indexOf('net start') !== -1 || low.indexOf('probe start') !== -1) return 'flow';
+        if (low.indexOf('fail') !== -1 || /\btimeout\b/.test(low)
           || low.indexOf('unavailable') !== -1 || low.indexOf('halt') !== -1
           || low.indexOf('splash escape') !== -1 || low.indexOf('slow') !== -1
           || low.indexOf('error') !== -1 || low.indexOf('kept-painted') !== -1)

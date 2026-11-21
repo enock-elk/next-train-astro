@@ -24,7 +24,7 @@ import {
     simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet, resolveScheduleSheetFamily,
     pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
     KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
-    newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays,
+    newestUnappliedKillswitchTimestamp, shouldSeedFreshKillswitch, createAsyncMutex, flattenPublicHolidays,
     parseStationLatLon, coordsFromTimetableSheets
 } from './utils.js';
 import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
@@ -40,8 +40,26 @@ import {
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
 import { recordRouteScheduleRevision } from './schedule-revision.js';
-import { applyMapStationOverrides, fetchMapStationOverrides } from './map-overrides.js';
+import {
+    extraSheetKey,
+    fetchRouteSheets,
+    setRouteSheetAsOfReader,
+    setRouteSheetDatabaseReader,
+    effectiveRouteSheetMode,
+    routeSheetNote,
+} from './route-sheets.js';
+import { applyMapStationOverrides, fetchMapStationOverrides, readSavedMapStations } from './map-overrides.js';
 import { canonicalStationPin } from './station-pins.js';
+
+setRouteSheetDatabaseReader(() => $fullDatabase.get());
+setRouteSheetAsOfReader(() => {
+    if (typeof document === 'undefined') return null;
+    const simActive = $isSimMode.get() || (typeof window !== 'undefined' && !!window.isSimMode);
+    if (!simActive || !simUsesSpecificDate()) return null;
+    const input = document.getElementById('sim-date');
+    const value = input instanceof HTMLInputElement ? input.value : '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : null;
+});
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -156,7 +174,14 @@ export function describeHeaderDayNote({
     holidayType = null,
     satClosed = false,
     override = null,
+    sheetNote = null,
 } = {}) {
+    if (sheetNote?.title || sheetNote?.body) {
+        return {
+            title: String(sheetNote.title || '').trim() || 'Schedule',
+            body: String(sheetNote.body || '').trim() || 'This line is using a different timetable today.',
+        };
+    }
     if (override?.title || override?.body) {
         return {
             title: String(override.title || '').trim() || 'Schedule update',
@@ -231,8 +256,13 @@ export function paintHeaderDayLabel(opts = {}) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const noSatOnRoute = opts.noSaturdayOnRoute != null ? !!opts.noSaturdayOnRoute : currentRouteSaturdayClosed();
     const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
+    const pinnedRoute = ROUTES[$currentRouteId.get()] || null;
+    const sheetAsOf = (dateKey && year) ? `${year}-${dateKey}` : null;
+    const sheetMode = effectiveRouteSheetMode(pinnedRoute, dayType, sheetAsOf);
+    const sheetNote = routeSheetNote(pinnedRoute, dayType, sheetAsOf);
 
-    const noService = dayType === 'sunday' || satClosed;
+    let noService = dayType === 'sunday' || satClosed;
+    if (sheetMode === 'special' || sheetMode === 'sunday') noService = false;
     const overrideNote = appliedScheduleOverrideNote(region);
     const overrideDayName = String(overrideNote?.title || '').trim();
     let displayType = dayType === 'sunday' ? 'No service'
@@ -254,8 +284,12 @@ export function paintHeaderDayLabel(opts = {}) {
             ? `${HOLIDAY_NAMES[dateKey]} · No service`
             : (overrideDayName ? `${overrideDayName} · No service` : 'No service');
     }
+    if (sheetMode === 'special' || sheetMode === 'sunday') {
+        displayType = String(sheetNote?.title || '').trim()
+            || (sheetMode === 'special' ? 'Special' : 'Sunday Schedule');
+    }
     const typeClass = noService
-        ? 'font-semibold text-red-600 dark:text-red-400'
+        ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
     el.classList.toggle('nt-day-quiet', noService);
     const html = `${dayNames[day] || ''}<span class="${typeClass}">${displayType}</span>`;
@@ -269,10 +303,13 @@ export function paintHeaderDayLabel(opts = {}) {
         holidayType,
         satClosed,
         override: overrideNote,
+        sheetNote,
     });
     fitHeaderDayLabel();
     bindHeaderDayFit();
 }
+
+let headerDayFit = null;
 
 /** Fit #current-day to the Next Train title width. Keep the old subtitle face. */
 export function fitHeaderDayLabel() {
@@ -286,6 +323,16 @@ export function fitHeaderDayLabel() {
     const minPx = 10;
     const titleW = title ? title.scrollWidth : 0;
     const avail = titleW > 8 ? titleW : (el.closest('.header-brand-block')?.clientWidth || 0);
+    // updateTime() lands here every second and the header ResizeObserver on
+    // every resize. The search below forces a layout per step, so skip it
+    // while the label, its rendered width (pack, font) and the title are
+    // where the last fit left them.
+    const last = headerDayFit;
+    if (last && last.el === el && last.sm === sm && last.avail === avail
+        && last.html === el.innerHTML && last.fontSize === el.style.fontSize
+        && last.width === el.scrollWidth) {
+        return;
+    }
     el.style.whiteSpace = 'nowrap';
     el.style.maxWidth = 'none';
     el.style.display = 'inline-block';
@@ -294,12 +341,14 @@ export function fitHeaderDayLabel() {
     el.style.color = '';
     if (avail < 16) {
         el.style.fontSize = `${basePx}px`;
+        headerDayFit = null;
         return;
     }
     let lo = minPx;
     let hi = maxPx;
     let best = minPx;
-    for (let i = 0; i < 18; i++) {
+    // Eight halvings of the 10–13px range settle within 0.012px of font size.
+    for (let i = 0; i < 8; i++) {
         const mid = (lo + hi) / 2;
         el.style.fontSize = `${mid}px`;
         if (el.scrollWidth <= avail + 0.75) {
@@ -310,6 +359,7 @@ export function fitHeaderDayLabel() {
         }
     }
     el.style.fontSize = `${Math.max(minPx, Math.min(best, maxPx))}px`;
+    headerDayFit = { el, sm, avail, html: el.innerHTML, fontSize: el.style.fontSize, width: el.scrollWidth };
 }
 
 function bindHeaderDayFit() {
@@ -327,6 +377,9 @@ function bindHeaderDayFit() {
     }
     if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(run).catch(() => {});
+    }
+    if (document.fonts && typeof document.fonts.addEventListener === 'function') {
+        document.fonts.addEventListener('loadingdone', run);
     }
 }
 
@@ -354,11 +407,16 @@ const CACHE_EDGE_PROBE_MS = 1200;
 let loadAllSchedulesInFlight = null;
 let loadAllSchedulesInFlightKey = '';
 /** Client-side overlay stamps — skip re-downloading exclusions/disruptions when fresh. */
-const OVERLAY_TTL_MS = 3 * 60 * 1000;
+/** Match the 20-minute board refresh. An open phone must not re-read these all day. */
+const OVERLAY_TTL_MS = 20 * 60 * 1000;
+const CONFIG_BURST_MS = 20 * 60 * 1000;
 let exclusionsOverlayAt = 0;
 let exclusionsOverlayBucket = '';
 let disruptionsOverlayAt = 0;
 let disruptionsOverlayBucket = '';
+const configBurstAtByRegion = new Map();
+let schedulePaintMs = 0;
+let scheduleLoadStartedAt = 0;
 
 /** Banner/toast only after this much of the current visible session. */
 const STRUGGLE_UI_MIN_MS = 15_000;
@@ -507,6 +565,13 @@ function shortHost(url) {
     try { return new URL(url).hostname; } catch { return String(url || '').slice(0, 40); }
 }
 
+function probeErrorText(err) {
+    const name = String(err?.name || 'error');
+    const message = String(err?.message || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!message || message === name) return name;
+    return `${name}: ${message}`;
+}
+
 /** Host + path for blackbox lines. Query strings stay off the log. */
 function netLabel(url) {
     try {
@@ -616,9 +681,9 @@ export async function probeReachability(timeoutMs = 3500) {
                 if (result.answered) {
                     waterfallLog(`probe ${host} HTTP ${result.res.status} html=${result.html}`);
                 } else if (!onLine) {
-                    waterfallWarn(`OS offline — ${host} failed: ${result.err?.name || result.err?.message || 'error'}`);
+                    waterfallWarn(`OS offline — ${host} failed: ${probeErrorText(result.err)}`);
                 } else {
-                    waterfallWarn(`probe ${host} failed: ${result.err?.name || result.err?.message || 'error'}`);
+                    waterfallWarn(`probe ${host} failed: ${probeErrorText(result.err)} (no HTTP response: DNS, certificate, or CORS)`);
                 }
                 const cachesDone = urls.every((url, i) => !isCacheProbeUrl(url) || settled[i]);
                 const cacheUsable = settled.some((row) => row?.httpOk && isCacheProbeUrl(row.url));
@@ -961,6 +1026,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 
 const killswitchMutex = createAsyncMutex();
 let killswitchCheckPromise = null;
+let killswitchCheckedAt = 0;
 
 /** Nuclear safety valve: safely retire runtime caches when the remote timestamp advances. */
 async function runKillswitchCheck() {
@@ -968,6 +1034,11 @@ async function runKillswitchCheck() {
     if (typeof navigator !== 'undefined' && (!navigator.onLine || isLieFi)) return false;
 
     return killswitchMutex.runExclusive(async () => {
+        if (Date.now() - killswitchCheckedAt < 55_000) {
+            waterfallLog('killswitch skipped, already checked this minute');
+            return false;
+        }
+        killswitchCheckedAt = Date.now();
         const pending = safeStorage.getItem(KILLSWITCH_PENDING_KEY);
         const applied = safeStorage.getItem(KILLSWITCH_APPLIED_KEY);
         let remoteTimestamp = 0;
@@ -993,6 +1064,14 @@ async function runKillswitchCheck() {
         const targetTimestamp = newestUnappliedKillswitchTimestamp(remoteTimestamp, pending, applied);
         if (!targetTimestamp) {
             if (pending) safeStorage.removeItem(KILLSWITCH_PENDING_KEY);
+            return false;
+        }
+
+        // A first visit loaded this shell from the network a few seconds ago.
+        // Restarting it retires nothing and costs the commuter a second cold load.
+        if (shouldSeedFreshKillswitch({ freshProfile: window.__ntFreshProfile, pending, applied, target: targetTimestamp })) {
+            safeStorage.setItem(KILLSWITCH_APPLIED_KEY, String(targetTimestamp));
+            traceLine('log', `NUKE skipped on a first visit: killswitch ${targetTimestamp} recorded as applied.`);
             return false;
         }
 
@@ -1320,7 +1399,11 @@ export async function processRouteDataFromDBAsync(route, targetDB) {
         weekday_to_a: await getSched(route.sheetKeys.weekday_to_a),
         weekday_to_b: await getSched(route.sheetKeys.weekday_to_b),
         saturday_to_a: await getSched(route.sheetKeys.saturday_to_a),
-        saturday_to_b: await getSched(route.sheetKeys.saturday_to_b)
+        saturday_to_b: await getSched(route.sheetKeys.saturday_to_b),
+        sunday_to_a: await getSched(extraSheetKey(route, 'sunday', 'a')),
+        sunday_to_b: await getSched(extraSheetKey(route, 'sunday', 'b')),
+        special_to_a: await getSched(extraSheetKey(route, 'special', 'a')),
+        special_to_b: await getSched(extraSheetKey(route, 'special', 'b')),
     };
 
     // WC public-holiday sheets (*_pub). Missing/empty → fall back to saturday so UI never breaks.
@@ -1427,6 +1510,12 @@ export async function buildGlobalStationIndexAsync(targetDB) {
             const rank = (key) => (String(key).startsWith('weekday') ? 0 : String(key).startsWith('saturday') ? 1 : 2);
             return rank(a) - rank(b);
         });
+        ['sunday', 'special'].forEach((family) => {
+            ['a', 'b'].forEach((ab) => {
+                const dbKey = extraSheetKey(route, family, ab);
+                if (dbKey) sheetKeys.push([`${family}_to_${ab}`, dbKey]);
+            });
+        });
         sheetKeys.forEach(([, dbKey]) => {
             let sheetData = targetDB[dbKey];
             if (!sheetData) return;
@@ -1515,11 +1604,20 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         window.GHOST_STATION_INDEX = ghostIndex;
     }
 
-    try {
-        const stationOverrides = await fetchMapStationOverrides();
-        applyMapStationOverrides(tempIndex, stationOverrides);
-        applyMapStationOverrides(ghostIndex, stationOverrides);
-    } catch { /* timetable coords still stand */ }
+    applyMapStationOverrides(tempIndex, readSavedMapStations());
+    applyMapStationOverrides(ghostIndex, readSavedMapStations());
+    const indexForRefresh = tempIndex;
+    const ghostsForRefresh = ghostIndex;
+    const refreshGen = regionSwapGeneration;
+    fetchMapStationOverrides().then((fresh) => {
+        if (refreshGen !== regionSwapGeneration) return;
+        if (!fresh || !Object.keys(fresh).length) return;
+        applyMapStationOverrides(indexForRefresh, fresh);
+        applyMapStationOverrides(ghostsForRefresh, fresh);
+        if ($globalStationIndex.get() === indexForRefresh) {
+            $globalStationIndex.set({ ...indexForRefresh });
+        }
+    }).catch(() => { /* saved pins and timetable coords still stand */ });
 
     return tempIndex;
 }
@@ -1581,6 +1679,9 @@ async function loadBundledScheduleDump(signal = null) {
 
 /** Reveal + stabilize as soon as a route has usable times. Network may still refresh. */
 function markSchedulesCoreReady() {
+    if (!schedulePaintMs && scheduleLoadStartedAt) {
+        schedulePaintMs = Date.now() - scheduleLoadStartedAt;
+    }
     if (typeof window === 'undefined') return;
     if (typeof window.revealAppShell === 'function') window.revealAppShell();
     const welcomeModal = typeof document !== 'undefined' ? document.getElementById('welcome-modal') : null;
@@ -1597,6 +1698,8 @@ function markSchedulesCoreReady() {
 // --- GUARDIAN PHASE B: EAGER RENDERING PROTOCOL ---
 async function loadAllSchedulesInner(force = false) {
     const scheduleStartedAt = Date.now();
+    schedulePaintMs = 0;
+    scheduleLoadStartedAt = scheduleStartedAt;
     if (typeof window !== 'undefined' && window._suppressReloads && !force) {
         waterfallLog('schedule load skipped suppressReloads');
         return;
@@ -1681,25 +1784,25 @@ async function loadAllSchedulesInner(force = false) {
             try {
                 const proposedDB = unwrapDatabase(cachedDB.data, $userRegion.get());
                 const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, proposedDB);
-                const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
-                
+
                 if (currentGen !== regionSwapGeneration) return;
 
                 $fullDatabase.set(proposedDB);
                 $schedules.set(proposedSchedules);
-                $globalStationIndex.set(proposedStationIndex);
                 rememberRouteRevision(proposedDB, false);
-                
+
+                usedCache = true;
+                paintedFrom = 'cache';
+                waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier} paintMs=${Date.now() - scheduleStartedAt}`);
+                // The station list comes from this line's sheets. The region index
+                // and map pins follow, so the dropdown is not waiting on them.
+                markSchedulesCoreReady();
+                const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
+                if (currentGen !== regionSwapGeneration) return;
+                $globalStationIndex.set(proposedStationIndex);
                 const mList = Object.keys(proposedStationIndex).sort();
                 $masterStationList.set(mList);
                 if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
-                
-                usedCache = true;
-                paintedFrom = 'cache';
-                waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier}`);
-                // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
-                // do not hold the shell for the background network waterfall.
-                markSchedulesCoreReady();
             } catch(err) { console.error("🛡️ Guardian: Cached DB shadow-clone parsing failed.", err); }
         } else {
             const bundledDump = await loadBundledScheduleDump(fetchSignal);
@@ -1708,19 +1811,20 @@ async function loadAllSchedulesInner(force = false) {
                 try {
                     const proposedDB = unwrapDatabase(bundledDump, $userRegion.get());
                     const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, proposedDB);
-                    const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
                     if (currentGen !== regionSwapGeneration) return;
                     $fullDatabase.set(proposedDB);
                     $schedules.set(proposedSchedules);
-                    $globalStationIndex.set(proposedStationIndex);
                     rememberRouteRevision(proposedDB, false);
+                    usedCache = true;
+                    paintedFrom = 'bundled';
+                    waterfallLog(`painted from bundled same-origin dump paintMs=${Date.now() - scheduleStartedAt}`);
+                    markSchedulesCoreReady();
+                    const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
+                    if (currentGen !== regionSwapGeneration) return;
+                    $globalStationIndex.set(proposedStationIndex);
                     const mList = Object.keys(proposedStationIndex).sort();
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
-                    usedCache = true;
-                    paintedFrom = 'bundled';
-                    waterfallLog('painted from bundled same-origin dump');
-                    markSchedulesCoreReady();
                     try { await saveToLocalCache(cacheKey, bundledDump, fetchSignal); } catch { /* ignore */ }
                 } catch (err) {
                     console.error("🛡️ Guardian: Bundled schedule dump parse failed.", err);
@@ -1781,20 +1885,36 @@ async function loadAllSchedulesInner(force = false) {
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
         waterfallLog(`preflight ok to continue (reach=${reach}) — overlays then CLOUDFLARE→FIREBASE→GITHUB`);
 
-        await fetchGridOrderConfig($userRegion.get(), fetchSignal);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+        const burstRegion = $userRegion.get() || '';
+        const burstAt = configBurstAtByRegion.get(burstRegion) || 0;
+        const burstFresh = !force && burstAt > 0 && (Date.now() - burstAt) < CONFIG_BURST_MS;
+        const edgeCacheBucket = Math.floor(Date.now() / 300000);
+        if (burstFresh) {
+            waterfallLog(`config burst skipped region=${burstRegion} ageMs=${Date.now() - burstAt}`);
+        } else {
+            configBurstAtByRegion.set(burstRegion, Date.now());
+            const dropBurstIfInterrupted = () => {
+                if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                    configBurstAtByRegion.delete(burstRegion);
+                    return true;
+                }
+                return false;
+            };
+            try {
+            await fetchGridOrderConfig($userRegion.get(), fetchSignal);
+            if (dropBurstIfInterrupted()) return;
 
-        const wasKilled = await checkKillswitch(force);
-        if (wasKilled || fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+            const wasKilled = await checkKillswitch(force);
+            if (wasKilled || dropBurstIfInterrupted()) return;
 
-        await fetchSpecialEventConfig(force);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
-
-        await fetchScheduleOverride(false);
-        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+            await Promise.all([
+                fetchSpecialEventConfig(force),
+                fetchScheduleOverride(false),
+                fetchRouteSheets(false),
+            ]);
+            if (dropBurstIfInterrupted()) return;
 
         // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.
-        const edgeCacheBucket = Math.floor(Date.now() / 300000);
         const overlayNow = Date.now();
         const exclFresh = !force
             && exclusionsOverlayBucket === String(edgeCacheBucket)
@@ -1855,6 +1975,11 @@ async function loadAllSchedulesInner(force = false) {
                 console.warn('Disruptions fetch failed.');
             }
         }
+            } catch (err) {
+                configBurstAtByRegion.delete(burstRegion);
+                throw err;
+            }
+        }
         // Planner must know overlays finished loading (even empty/failed) so it
         // does not publish sinkhole-blind itineraries, then "magically" gain alerts later.
         try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
@@ -1905,10 +2030,18 @@ async function loadAllSchedulesInner(force = false) {
                                 needsDownload = false;
                             }
                         }
+                    } else if (usedCache) {
+                        needsDownload = false;
+                        waterfallLog('lastUpdated did not answer — keeping the timetable already painted');
                     }
                 }
             } catch (e) {
-                console.warn('Smart Sync Ping failed, proceeding with full data fetch.', e);
+                if (usedCache) {
+                    needsDownload = false;
+                    waterfallLog('lastUpdated did not answer — keeping the timetable already painted');
+                } else {
+                    console.warn('Smart Sync Ping failed, proceeding with full data fetch.', e);
+                }
             }
         }
 
@@ -1918,11 +2051,15 @@ async function loadAllSchedulesInner(force = false) {
             // Edge first (RTDB cost + speed), origin next, GitHub dump last (campus firewalls).
             const sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB'];
             const SOURCE_TIMEOUT_MS = { CLOUDFLARE: 5000, FIREBASE: 7000, GITHUB: 8000 };
-            const scheduleSources = preferredCacheBaseUrl
+            let scheduleSources = preferredCacheBaseUrl
                 ? sourcesToTry
                 : sourcesToTry.filter((key) => key !== 'CLOUDFLARE');
             if (!preferredCacheBaseUrl) {
                 waterfallWarn('cache edge did not answer — skipping CLOUDFLARE, Firebase next');
+            }
+            if (paintedFrom === 'cache' && !preferredCacheBaseUrl) {
+                scheduleSources = scheduleSources.filter((key) => key !== 'FIREBASE');
+                waterfallLog('cache edge missed and IndexedDB already painted this region — skipping the Firebase timetable');
             }
             /** Hard ceiling so a blackhole radio cannot sit on Loading stations for minutes. */
             const WATERFALL_BUDGET_MS = 18_000;
@@ -2039,12 +2176,12 @@ async function loadAllSchedulesInner(force = false) {
                 
                 try {
                     const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, downloadedDB);
-                    const proposedStationIndex = await buildGlobalStationIndexAsync(downloadedDB);
-                    
                     if (currentGen !== regionSwapGeneration) return;
 
                     $fullDatabase.set(downloadedDB);
                     $schedules.set(proposedSchedules);
+                    const proposedStationIndex = await buildGlobalStationIndexAsync(downloadedDB);
+                    if (currentGen !== regionSwapGeneration) return;
                     $globalStationIndex.set(proposedStationIndex);
                     
                     const mList = Object.keys(proposedStationIndex).sort();
@@ -2085,10 +2222,10 @@ async function loadAllSchedulesInner(force = false) {
         waterfallLog(
             `session summary paintedFrom=${paintedFrom} tier=${cacheTier} networkWon=${networkWon || 'none'} `
             + `chain=${sourceChain} tried=CLOUDFLARE>FIREBASE>GITHUB region=${$userRegion.get()} route=${requestedRouteId} `
-            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'} ms=${scheduleMs}`
+            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'} ms=${scheduleMs} paintMs=${schedulePaintMs || 0}`
         );
         if (scheduleMs >= 8000) {
-            waterfallWarn(`slow schedule load ${scheduleMs}ms paintedFrom=${paintedFrom} chain=${sourceChain}`);
+            waterfallWarn(`slow schedule load ${scheduleMs}ms paintMs=${schedulePaintMs || 0} paintedFrom=${paintedFrom} chain=${sourceChain}`);
         }
         if (fetchSignal && fetchSignal.aborted) return;
 
@@ -2125,6 +2262,11 @@ async function loadAllSchedulesInner(force = false) {
     }
 }
 
+/** In-flight schedule stamp check or download, or null when the radio is free. */
+export function pendingScheduleLoad() {
+    return loadAllSchedulesInFlight;
+}
+
 /** Public entry: share one in-flight load per route unless force=true. */
 export async function loadAllSchedules(force = false) {
     const routeId = $currentRouteId.get() || '';
@@ -2157,11 +2299,20 @@ export function ensureRoutePinnedForRegion(region, options = {}) {
     if (current !== target) {
         console.log(`🛡️ Guardian: Deeplink soft region pin ${current} → ${target}`);
         regionSwapGeneration++;
+        let previousRegion = '';
+        if (!persistRegion) {
+            try { previousRegion = safeStorage.getItem('userRegion') || ''; } catch { /* ignore */ }
+        }
         $userRegion.set(target);
         syncRegionDisplayDom(target);
         if (persistRegion) {
             try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
         } else {
+            // The region atom writes storage. Put the saved choice back so a link cannot replace it.
+            try {
+                if (previousRegion) safeStorage.setItem('userRegion', previousRegion);
+                else safeStorage.removeItem('userRegion');
+            } catch { /* ignore */ }
             waterfallLog(`seo handoff browses ${target} and keeps saved userRegion`);
         }
         try { window.syncCrmRegionAnalytics?.(target); } catch { /* ignore */ }
@@ -2611,17 +2762,40 @@ export function startClock() {
     }
 }
 
-const PULL_ARM_PX = 72;
+const PULL_ARM_PX = 168;
+const PULL_CLAIM_PX = 36;
+const PULL_RING_R = 16;
+const PULL_RING_C = 2 * Math.PI * PULL_RING_R;
 
-function sessionRefreshBlocked() {
+function alertsChannelOpen() {
+    const el = document.getElementById('alerts-channel');
+    return !!(el && !el.classList.contains('hidden'));
+}
+
+function pullRefreshBlocked() {
     if (typeof document === 'undefined') return true;
     if (document.body.classList.contains('sidenav-open')) return true;
-    if (document.body.classList.contains('modal-active')) return true;
+    if (document.body.classList.contains('modal-active') && !alertsChannelOpen()) return true;
+    if (document.getElementById('app-scroll')?.classList.contains('is-tab-swiping')) return true;
     const tab = safeStorage.getItem('activeTab') || 'next-train';
-    return tab !== 'next-train' && tab !== 'trip-planner' && tab !== 'community';
+    return tab === 'map' || tab === 'options';
+}
+
+function activePullSurface() {
+    if (alertsChannelOpen()) {
+        return document.getElementById('alerts-channel-scroll')
+            || document.getElementById('alerts-channel');
+    }
+    const tab = safeStorage.getItem('activeTab') || 'next-train';
+    if (tab === 'community') {
+        return document.querySelector('#view-community .community-feed-scroll')
+            || document.getElementById('app-scroll');
+    }
+    return document.getElementById('app-scroll');
 }
 
 function chainIsAtTop(start, scroller) {
+    if (!scroller) return false;
     let node = start instanceof Element ? start : null;
     while (node && node !== scroller) {
         const style = window.getComputedStyle(node);
@@ -2694,7 +2868,7 @@ function bindSheetShades() {
     });
 }
 
-/** Pull down at the top of Next Train, Trip Planner, or Community to reload this session. */
+/** Pull down at the top of every tab except Map and Options. */
 export function initSessionPullRefresh() {
     if (typeof document === 'undefined' || window.__ntPullRefreshBound) return;
     const scroller = document.getElementById('app-scroll');
@@ -2703,6 +2877,7 @@ export function initSessionPullRefresh() {
     let startY = 0;
     let startX = 0;
     let tracking = false;
+    let claimed = false;
     let armed = false;
     let hint = null;
 
@@ -2711,81 +2886,122 @@ export function initSessionPullRefresh() {
             hint = document.createElement('div');
             hint.id = 'nt-pull-refresh';
             hint.setAttribute('aria-hidden', 'true');
-            hint.style.cssText = 'height:0;overflow:hidden;text-align:center;font-size:11px;font-weight:700;line-height:56px;color:#64748b;';
-            scroller.prepend(hint);
+            hint.innerHTML = `<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+                <circle class="nt-pull-ring" cx="24" cy="24" r="${PULL_RING_R}" fill="none" stroke-width="3" stroke-linecap="round" transform="rotate(-90 24 24)"></circle>
+                <path class="nt-pull-arrow" d="M30.5 18.5a8.2 8.2 0 1 1-2.4-3.6" fill="none" stroke-width="2.2" stroke-linecap="round"></path>
+                <path class="nt-pull-arrow" d="M28 11.5v5.2h-5.2" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>`;
+            document.body.appendChild(hint);
         }
-        const height = Math.min(56, Math.max(0, px));
-        hint.style.height = height ? `${height}px` : '0';
-        hint.textContent = ready ? 'Release to refresh' : '';
+        const progress = Math.max(0, Math.min(1, px / PULL_ARM_PX));
+        if (progress <= 0) {
+            hint.hidden = true;
+            hint.classList.remove('is-ready');
+            return;
+        }
+        hint.hidden = false;
+        hint.classList.toggle('is-ready', !!ready);
+        const travel = Math.round(progress * 56);
+        hint.style.top = `calc(var(--nt-shell-top, 0px) + 3.15rem + ${travel}px)`;
+        const ring = hint.querySelector('.nt-pull-ring');
+        if (ring) {
+            ring.style.strokeDasharray = `${PULL_RING_C}`;
+            ring.style.strokeDashoffset = `${PULL_RING_C * (1 - progress)}`;
+        }
     };
 
-    scroller.addEventListener('touchstart', (event) => {
-        if (sessionRefreshBlocked()) {
-            tracking = false;
+    const refreshOpenTab = async () => {
+        if (alertsChannelOpen()) {
+            const hub = await import('./hub.js');
+            await hub.checkServiceAlerts?.({ force: true });
             return;
         }
+        const tab = safeStorage.getItem('activeTab') || 'next-train';
+        if (tab === 'community') {
+            const community = await import('./community.js');
+            const routeId = document.getElementById('community-route-select')?.value || '';
+            community.openRouteCommunity?.(routeId ? { routeId } : {});
+            return;
+        }
+        await loadAllSchedules(true);
+        if (typeof window.findNextTrains === 'function') window.findNextTrains();
+        if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+        if (tab === 'trip-planner') {
+            const results = document.getElementById('planner-results-section');
+            if (results && !results.classList.contains('hidden')) {
+                document.getElementById('planner-search-btn')?.click();
+            }
+        }
+    };
+
+    document.addEventListener('touchstart', (event) => {
+        tracking = false;
+        claimed = false;
+        armed = false;
+        if (pullRefreshBlocked()) return;
+        const surface = activePullSurface();
         const touch = event.touches?.[0];
-        if (!touch || !chainIsAtTop(event.target, scroller)) {
-            tracking = false;
-            return;
-        }
+        if (!touch || !surface || !(event.target instanceof Element) || !surface.contains(event.target)) return;
+        if (event.target.closest('input, textarea, select, a, button')) return;
+        if (!chainIsAtTop(event.target, surface)) return;
         startY = touch.clientY;
         startX = touch.clientX;
         tracking = true;
-        armed = false;
-    }, { passive: true });
+    }, { capture: true, passive: true });
 
-    scroller.addEventListener('touchmove', (event) => {
+    document.addEventListener('touchmove', (event) => {
         if (!tracking) return;
+        if (pullRefreshBlocked()) {
+            tracking = false;
+            claimed = false;
+            armed = false;
+            paintHint(0, false);
+            return;
+        }
         const touch = event.touches?.[0];
         if (!touch) return;
         const dy = touch.clientY - startY;
         const dx = Math.abs(touch.clientX - startX);
-        if (!chainIsAtTop(event.target, scroller) || dy <= 0 || dx > dy) {
-            if (dy > 8) {
-                tracking = false;
-                armed = false;
-                paintHint(0, false);
+        if (!claimed) {
+            if (dy < PULL_CLAIM_PX) {
+                if (dx > dy && dy > 12) {
+                    tracking = false;
+                    paintHint(0, false);
+                }
+                return;
             }
-            return;
+            if (dx > dy) {
+                tracking = false;
+                paintHint(0, false);
+                return;
+            }
+            claimed = true;
         }
-        if (dy < 10) return;
         if (event.cancelable) event.preventDefault();
         armed = dy >= PULL_ARM_PX;
         paintHint(dy, armed);
-    }, { passive: false });
+    }, { capture: true, passive: false });
 
     const release = async () => {
-        const go = tracking && armed && !sessionRefreshBlocked();
+        const go = tracking && claimed && armed && !pullRefreshBlocked();
         tracking = false;
+        claimed = false;
         armed = false;
         paintHint(0, false);
         if (!go || window.__ntPullRefreshing) return;
         window.__ntPullRefreshing = true;
         try {
-            const tab = safeStorage.getItem('activeTab') || 'next-train';
-            await loadAllSchedules(true);
-            if (typeof window.findNextTrains === 'function') window.findNextTrains();
-            if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
-            if (tab === 'trip-planner') {
-                const results = document.getElementById('planner-results-section');
-                if (results && !results.classList.contains('hidden')) {
-                    document.getElementById('planner-search-btn')?.click();
-                }
-            }
-            if (tab === 'community') {
-                const community = await import('./community.js');
-                community.openRouteCommunity?.();
-            }
-        } catch { /* the open tab keeps the times it already has */ }
+            await refreshOpenTab();
+        } catch { /* the open tab keeps what it already showed */ }
         finally { window.__ntPullRefreshing = false; }
     };
-    scroller.addEventListener('touchend', () => { release(); }, { passive: true });
-    scroller.addEventListener('touchcancel', () => {
+    document.addEventListener('touchend', () => { release(); }, { capture: true, passive: true });
+    document.addEventListener('touchcancel', () => {
         tracking = false;
+        claimed = false;
         armed = false;
         paintHint(0, false);
-    }, { passive: true });
+    }, { capture: true, passive: true });
 }
 
 // Attach to window namespace for backward-compatible triggers & third-party shims
@@ -2807,6 +3023,7 @@ if (typeof window !== 'undefined') {
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     window.fetchGridOrderConfig = fetchGridOrderConfig;
     window.fetchScheduleOverride = fetchScheduleOverride;
+    window.fetchRouteSheets = fetchRouteSheets;
     window.updateTime = updateTime;
     window.probeReachability = probeReachability;
     window.ensureReachabilityProbed = ensureReachabilityProbed;

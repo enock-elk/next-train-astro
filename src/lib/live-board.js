@@ -16,6 +16,7 @@ import {
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
     simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute,
+    commuterStationName, stationLabelsMatch,
     schedulesBelongToRoute, provisionalMapFromSchedule
 } from './utils.js';
 import {
@@ -34,6 +35,7 @@ import {
 } from './auto-locate.js';
 import { peekLastGeoFix, reusableGeoFix } from './geo-watch.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 import { liveBoardStaticKey, stampLiveBoardCard } from './live-board-paint.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
@@ -166,6 +168,7 @@ export function getLookaheadDayInfo(daysAhead = 1) {
         type: dayType,
         name: dayName,
         idx: dayOfWeek,
+        iso: `${baseDate.getFullYear()}-${m}-${d}`,
         isHoliday: !!(resolvedHoliday || (typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey])),
         holidayName: holidayName || null,
     };
@@ -187,15 +190,18 @@ export function simulateNextActiveService(selectedStation, destination) {
     while (daysAhead <= 7 && !firstTrain) {
         nextDayInfo = window.getLookaheadDayInfo(daysAhead);
         
-        // GUARDIAN BUGFIX: The Sunday Mirage Patch.
+        // Sunday stays dark unless this route's Sunday or Special sheet is on for that date.
         if (nextDayInfo.type === 'sunday') {
-            daysAhead++;
-            continue;
+            const sundayMode = effectiveRouteSheetMode(currentRoute, 'sunday', nextDayInfo.iso);
+            if (sundayMode !== 'sunday' && sundayMode !== 'special') {
+                daysAhead++;
+                continue;
+            }
         }
 
         // Skip Saturday/holiday sheets when this route has no weekend (or pub) timetable.
         const region = currentRoute.region || getCurrentRegion();
-        const cacheSlot = scheduleCacheSlot(nextDayInfo.type, region, isDestA ? 'a' : 'b');
+        const cacheSlot = scheduleCacheSlot(nextDayInfo.type, region, isDestA ? 'a' : 'b', currentRoute, nextDayInfo.iso);
         if (nextDayInfo.type === 'saturday' && !routeHasSaturdayService()) {
             daysAhead++;
             continue;
@@ -738,7 +744,8 @@ export function openTrainMarkSheet({ train, body, badge } = {}) {
     if (titleEl) titleEl.textContent = `Train ${trainLabel}`;
     if (bodyEl) bodyEl.textContent = note;
     if (badgeEl) {
-        badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800/50';
+        const keepCase = badgeText === 'Prov';
+        badgeEl.className = `w-full text-center text-[10px] font-black${keepCase ? '' : ' uppercase'} tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800/50`;
         badgeEl.textContent = badgeText;
     }
     if (timeEl) {
@@ -1156,10 +1163,11 @@ export function sheetsReadyForBoard(schedules = getSchedules(), routeId = getCur
     const route = routeId ? ROUTES[routeId] : null;
     if (!route || !routeId) return false;
     if (!schedulesBelongToRoute(schedules, routeId)) return false;
-    if (dayType === 'sunday') return true;
+    const mode = effectiveRouteSheetMode(route, dayType);
+    if (dayType === 'sunday' && mode !== 'sunday' && mode !== 'special') return true;
     const region = route.region || getCurrentRegion();
-    const slotA = schedules?.[scheduleCacheSlot(dayType, region, 'a')];
-    const slotB = schedules?.[scheduleCacheSlot(dayType, region, 'b')];
+    const slotA = schedules?.[scheduleCacheSlot(dayType, region, 'a', route)];
+    const slotB = schedules?.[scheduleCacheSlot(dayType, region, 'b', route)];
     const parsed = (sheet) => !!(sheet && Array.isArray(sheet.rows));
     return parsed(slotA) || parsed(slotB);
 }
@@ -1199,8 +1207,7 @@ export function selectedBoardStation() {
     const inputVisible = !!(input && !input.classList.contains('hidden'));
     if (!inputVisible) return value;
     const shown = String(input.value || '').trim();
-    const expected = value.replace(/ STATION/gi, '').trim();
-    if (value && shown && normalizeStationName(shown) === normalizeStationName(expected)) return value;
+    if (value && shown && stationLabelsMatch(shown, value)) return value;
     if (select && value) select.value = '';
     if (shown) input.value = '';
     delete input.dataset.resolvedValue;
@@ -1332,19 +1339,22 @@ export function findNextTrains(opts) {
     }
     
     if (getCurrentDayType() === 'sunday') {
-        if(typeof window.renderNoService === 'function') {
-            if (isAtStation(selectedStation, currentRoute.destA)) {
-                if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
-            } else {
-                window.renderNoService(pretoriaTimeEl(), currentRoute.destA); 
+        const sundayMode = effectiveRouteSheetMode(currentRoute, 'sunday');
+        if (sundayMode !== 'sunday' && sundayMode !== 'special') {
+            if (typeof window.renderNoService === 'function') {
+                if (isAtStation(selectedStation, currentRoute.destA)) {
+                    if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
+                } else {
+                    window.renderNoService(pretoriaTimeEl(), currentRoute.destA);
+                }
+                if (isAtStation(selectedStation, currentRoute.destB)) {
+                    if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
+                } else {
+                    window.renderNoService(pienaarspoortTimeEl(), currentRoute.destB);
+                }
             }
-            if (isAtStation(selectedStation, currentRoute.destB)) {
-                if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
-            } else {
-                window.renderNoService(pienaarspoortTimeEl(), currentRoute.destB); 
-            }
+            return;
         }
-        return;
     }
 
     // Sheets wiped on a corridor change are not an empty timetable.
@@ -1427,7 +1437,7 @@ export function findNextTrains(opts) {
         delete currentScheduleData[currentRoute.destA];
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
     } else {
-        const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'a')];
+        const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'a', currentRoute)];
         const currentSheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'a');
         const { allJourneys: currentJourneys } = findNextJourneyToDestA(selectedStation, "00:00:00", schedule, currentRoute, getCurrentDayIndex());
         
@@ -1439,6 +1449,7 @@ export function findNextTrains(opts) {
             const otherRoute = ROUTES[rId];
             if (normalizeStationName(otherRoute.destA) === normalizeStationName(currentRoute.destA)) {
                 const key = routeSheetKeyForDay(otherRoute, boardDayType, 'a');
+                if (!key) return;
                 const otherRows = getFullDatabase()[key];
                 const otherMeta = getFullDatabase()[key + "_meta"];
                 const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -1493,7 +1504,7 @@ export function findNextTrains(opts) {
         delete currentScheduleData[currentRoute.destB];
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
     } else {
-        const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'b')];
+        const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'b', currentRoute)];
         const currentSheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'b');
         const { allJourneys: currentJourneys } = findNextJourneyToDestB(selectedStation, "00:00:00", schedule, currentRoute, getCurrentDayIndex());
 
@@ -1505,6 +1516,7 @@ export function findNextTrains(opts) {
             const otherRoute = ROUTES[rId];
             
                  const key = routeSheetKeyForDay(otherRoute, boardDayType, 'b');
+                 if (!key) return;
                  const otherRows = getFullDatabase()[key];
                  const otherMeta = getFullDatabase()[key + "_meta"];
                  const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -1593,12 +1605,15 @@ export function buildMergedJourneysForDay({
     const towardA = normalizeStationName(destination) === normalizeStationName(route.destA);
     const ab = towardA ? 'a' : 'b';
     const region = route.region || getCurrentRegion();
-    const sheetKey = routeSheetKeyForDay(route, dayType, ab)
-        || (dayType === 'weekday' || dayType === 'sunday'
+    const sheetKey = routeSheetKeyForDay(route, dayType, ab);
+    if (!sheetKey && dayType === 'sunday') return [];
+    const slot = sheetKey
+        ? scheduleCacheSlot(dayType, region, ab, route)
+        : (dayType === 'weekday'
             ? `weekday_to_${ab}`
             : scheduleCacheSlot(dayType, region, ab));
-    const schedule = getSchedules()[scheduleCacheSlot(dayType, region, ab)]
-        || parseJSONSchedule(getFullDatabase()?.[sheetKey], getFullDatabase()?.[`${sheetKey}_meta`]);
+    const schedule = getSchedules()[slot]
+        || (sheetKey ? parseJSONSchedule(getFullDatabase()?.[sheetKey], getFullDatabase()?.[`${sheetKey}_meta`]) : null);
     if (!schedule) return [];
 
     const finder = towardA ? findNextJourneyToDestA : findNextJourneyToDestB;
@@ -1613,6 +1628,7 @@ export function buildMergedJourneysForDay({
         if (towardA && normalizeStationName(otherRoute.destA) !== normalizeStationName(route.destA)) return;
 
         const key = routeSheetKeyForDay(otherRoute, dayType, towardA ? 'a' : 'b');
+        if (!key) return;
         const otherRows = getFullDatabase()?.[key];
         const otherMeta = getFullDatabase()?.[`${key}_meta`];
         const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -1969,7 +1985,7 @@ export function findNearestStation(isAuto = false) {
 
                 const searchInput = document.getElementById('station-search-input');
                 if (searchInput) {
-                    searchInput.value = selectedVal.replace(/ STATION/g, '');
+                    searchInput.value = commuterStationName(selectedVal);
                     searchInput.dataset.resolvedValue = selectedVal;
                 }
 
@@ -1977,7 +1993,7 @@ export function findNearestStation(isAuto = false) {
                 disarmStartupLocateOverwrite();
                 noteAutoLocateApplied();
                 // force: Locating toast (1.2s global gap) must not swallow Found on the board.
-                showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success", 2500, '', { force: true });
+                showToast(`Found: ${commuterStationName(stationName)} (${distStr}km)`, "success", 2500, '', { force: true });
 
                 try {
                     window.dispatchEvent(new CustomEvent('nt-locate-fix', {
@@ -2089,7 +2105,7 @@ export function populateStationList() {
         if (station && !station.toLowerCase().includes('last updated')) {
             const option = document.createElement('option');
             option.value = station;
-            option.textContent = station.replace(/ STATION/g, '');
+            option.textContent = commuterStationName(station);
             stationSelectEl() && stationSelectEl().appendChild(option);
         }
     });
@@ -2099,7 +2115,7 @@ export function populateStationList() {
     if (allStations.includes(currentSelectedStation)) {
         if (stationSelectEl()) stationSelectEl().value = currentSelectedStation; 
         if (searchInput) {
-            searchInput.value = currentSelectedStation.replace(/ STATION/g, '');
+            searchInput.value = commuterStationName(currentSelectedStation);
             searchInput.dataset.resolvedValue = currentSelectedStation;
         }
     } else { 
@@ -2127,7 +2143,7 @@ export function updateLastUpdatedText() {
     
     const region = getCurrentRegion();
     const dayType = getCurrentDayType();
-    const slot = scheduleCacheSlot(dayType, region, 'a');
+    const slot = scheduleCacheSlot(dayType, region, 'a', ROUTES[getCurrentRouteId()] || null);
     const activeSched = getSchedules()?.[slot];
     if (activeSched && isValidDate(activeSched.lastUpdated)) {
         displayDate = activeSched.lastUpdated;

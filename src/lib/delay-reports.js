@@ -9,7 +9,8 @@
  *   severity (legacy map), appVersion, source
  * }
  */
-import { APP_VERSION, DYNAMIC_BASE_URL } from './config.js';
+import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 import { safeStorage, timeToSeconds, normalizeStationName, escapeHTML, formatTimeDisplay, isRealTime, usesSaturdayScheduleSheet, usesPublicHolidayScheduleSheet } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId, $schedules } from '../store.js';
 import { $account } from './account.js';
@@ -123,7 +124,12 @@ function scheduleSheetHasTrains(schedule) {
 
 /** Sunday, empty Saturday sheets, or a public holiday with no trains. */
 export function routeHasNoScheduledTrains(dayType = currentDayType(), region = $userRegion.get() || 'GP', schedules = $schedules.get() || {}) {
-    if (dayType === 'sunday') return true;
+    if (dayType === 'sunday') {
+        const route = ROUTES[$currentRouteId.get()] || null;
+        const mode = effectiveRouteSheetMode(route, 'sunday');
+        if (mode !== 'sunday' && mode !== 'special') return true;
+        return !(scheduleSheetHasTrains(schedules[`${mode}_to_a`]) || scheduleSheetHasTrains(schedules[`${mode}_to_b`]));
+    }
     const sat = scheduleSheetHasTrains(schedules.saturday_to_a) || scheduleSheetHasTrains(schedules.saturday_to_b);
     if (usesSaturdayScheduleSheet(dayType, region)) return !sat;
     if (usesPublicHolidayScheduleSheet(dayType, region)) {

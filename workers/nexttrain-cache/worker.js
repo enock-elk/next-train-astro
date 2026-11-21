@@ -50,7 +50,13 @@ export default {
         
         if (!isAllowed) {
             console.log(`🛡️ Guardian Firewall: Blocked unauthorized request from Origin: ${origin}`);
-            return new Response(JSON.stringify({ error: "Access Denied: Unauthorized Domain" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ error: "Access Denied: Unauthorized Domain" }), {
+                status: 403,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': origin,
+                },
+            });
         }
     }
 

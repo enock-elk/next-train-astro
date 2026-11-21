@@ -1,0 +1,141 @@
+/**
+ * Community room depth, deletes, and operator attachments.
+ * Run: node scripts/verify-community-bucket.mjs
+ */
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import {
+    COMMUNITY_BUCKET_DEPTH,
+    COMMUNITY_ADMIN_IMAGE_MAX,
+    COMMUNITY_BODY_MAX,
+    COMMUNITY_SEE_MORE_WINDOW,
+    clipCommunityText,
+    communityTextLength,
+    DELETED_BY_ADMIN,
+    DELETED_MESSAGE,
+    communityIdsPastBucket,
+    communityTombstonePatch,
+    isCommunityTombstone,
+    sanitizeCommunityAttachments,
+    sanitizeCommunityBucketImageUrl,
+    sanitizeCommunityLinkUrl,
+} from '../src/lib/community-policy.js';
+import { sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
+import { ALERT_POSTER_MAX, collectNoticeImageUrls, layoutAlertPost } from '../src/lib/alerts-feed.js';
+
+assert.equal(COMMUNITY_BUCKET_DEPTH, 80);
+assert.equal(ALERT_POSTER_MAX, 10);
+assert.equal(COMMUNITY_ADMIN_IMAGE_MAX, 4);
+
+const entries = Array.from({ length: 85 }, (_, i) => ({ id: `m${String(i).padStart(2, '0')}`, timestamp: 1000 + i }));
+const evicted = communityIdsPastBucket(entries);
+assert.deepEqual(evicted, ['m00', 'm01', 'm02', 'm03', 'm04']);
+assert.equal(communityIdsPastBucket(entries.slice(0, 80)).length, 0);
+
+const quote = { postId: 'm00', displayName: 'Katlego L', body: 'trains are running' };
+const patch = communityTombstonePatch('author', 5);
+assert.equal(patch.body, DELETED_MESSAGE);
+assert.equal(patch.deletedBy, 'author');
+assert.equal(patch.replyTo, null);
+assert.equal(patch.attachments, null);
+assert.ok(!Object.prototype.hasOwnProperty.call(patch, 'quotes'));
+assert.equal(quote.body, 'trains are running', 'a quote copied earlier is not rewritten by the tombstone patch');
+
+const adminPatch = communityTombstonePatch('admin', 5);
+assert.equal(adminPatch.body, DELETED_BY_ADMIN);
+assert.equal(isCommunityTombstone({ deleted: true, body: 'old' }), true);
+assert.equal(isCommunityTombstone({ body: 'still here' }), false);
+
+assert.deepEqual(
+    sanitizeCommunityAttachments(['https://i.imgur.com/abcdEFG.png', 'https://evil.example/x.html'], { admin: true }).length,
+    1,
+);
+assert.equal(sanitizeCommunityAttachments(['https://i.imgur.com/abcdEFG.png'], { admin: false }).length, 0);
+assert.equal(sanitizeCommunityAttachments(['/images/alerts/fare.png'], { admin: true })[0], '/images/alerts/fare.png');
+const communityPhoto = 'https://nexttrain-community.enock.workers.dev/community-images/img_abc.jpg';
+const alertPhoto = 'https://nexttrain-community.enock.workers.dev/alerts/img_abc.jpg';
+assert.equal(sanitizeCommunityBucketImageUrl(communityPhoto), communityPhoto);
+assert.equal(sanitizeCommunityBucketImageUrl(alertPhoto), '');
+assert.equal(sanitizeCommunityAttachments([communityPhoto], { admin: true })[0], communityPhoto);
+assert.equal(sanitizeCommunityLinkUrl('https://nexttrain.co.za/help'), 'https://nexttrain.co.za/help');
+assert.equal(sanitizeCommunityLinkUrl('http://nexttrain.co.za/help'), '');
+
+assert.equal(sanitizeBody('https://chat.whatsapp.com/abc').verdict, 'block');
+assert.equal(sanitizeAdminBody('Hi Milio,\n\nYou can also check out other options there.').text, 'Hi Milio,\n\nYou can also check out other options there.');
+assert.equal(sanitizeAdminBody('See https://www.prasa.com/ today').verdict, 'allow');
+assert.ok(sanitizeAdminBody('See https://www.prasa.com/ today').text.includes('https://www.prasa.com/'));
+assert.equal(sanitizeAdminBody('fuck').verdict, 'block');
+assert.equal(COMMUNITY_SEE_MORE_WINDOW, 764);
+assert.equal(COMMUNITY_BODY_MAX, 4000);
+const folded = `Hello\n\n${'word '.repeat(200)}`;
+assert.ok(communityTextLength(folded) > COMMUNITY_SEE_MORE_WINDOW);
+const preview = clipCommunityText(folded, COMMUNITY_SEE_MORE_WINDOW);
+assert.ok(preview.startsWith('Hello\n\n'));
+assert.ok(preview.endsWith('…'));
+assert.equal(communityTextLength(preview.slice(0, -1)), COMMUNITY_SEE_MORE_WINDOW);
+assert.equal(clipCommunityText('short note', COMMUNITY_SEE_MORE_WINDOW), 'short note');
+
+const laid = layoutAlertPost({
+    imageUrls: Array.from({ length: 12 }, (_, i) => `/images/alerts/p${i}.png`),
+});
+assert.equal(laid.imageUrls.length, 10);
+assert.equal(collectNoticeImageUrls({ imageUrls: laid.imageUrls }).length, 10);
+
+const community = await readFile(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+const keyboard = await readFile(new URL('../src/lib/keyboard-thread.js', import.meta.url), 'utf8');
+assert.match(keyboard, /leaveChatFieldIfKeyboardClosed/, 'closing the keyboard leaves the composer');
+const communityView = await readFile(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
+const worker = await readFile(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8');
+const admin = await readFile(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+const logic = await readFile(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+const rules = await readFile(new URL('../firebase-database.rules.json', import.meta.url), 'utf8');
+
+assert.match(community, /COMMUNITY_BUCKET_DEPTH/);
+assert.doesNotMatch(community, /POST_TTL_MS/);
+assert.match(community, /replyTo\.body/);
+assert.match(communityView, /data-delete-as="author"/);
+assert.match(community, /data-delete-mode="purge"/);
+assert.match(community, /Deleted by an Admin/);
+assert.match(community, /community-sheet-suggest/);
+assert.match(community, /community-sheet-edit/);
+assert.match(communityView, /id="community-select-speak"/);
+assert.match(community, /community-select-speak/);
+assert.doesNotMatch(community, /<span>Play<\/span>/);
+assert.match(community, /op: 'edit'/);
+assert.doesNotMatch(community, /editedAt/);
+assert.match(worker, /handleCommunityEdit/);
+assert.match(worker, /JSON\.stringify\(\{ body: clean\.text \}\)/);
+assert.match(community, /\/community\/message/);
+assert.match(community, /\/community\/image/);
+assert.match(community, /is-pair/, 'two community photos use a side by side frame');
+assert.match(communityView, /\.community-msg-images\.is-pair/, 'the pair frame is two columns');
+assert.match(community, /function closeCommunityAttach/, 'the attach sheet can close');
+assert.match(community, /forgetBody\(post\.body\)/, 'deleting a message forgets the duplicate check');
+assert.match(community, /adminPreviewEpoch/, 'a late link card cannot return after the message is posted');
+assert.match(communityView, /id="community-attach-file"/);
+assert.match(worker, /trimRouteBuckets/);
+assert.match(worker, /Community Monitor keeps the full log/);
+assert.doesNotMatch(worker, /Community bucket trim failed/);
+assert.match(worker, /shallow: 'true'/);
+assert.doesNotMatch(worker, /wipeStalePosts/);
+assert.match(worker, /pathname === '\/community\/message'/);
+assert.match(worker, /pathname === '\/community\/image'/);
+assert.match(worker, /env\.COMMUNITY_IMAGES/, 'community photos use their own R2 binding');
+assert.doesNotMatch(worker.slice(worker.indexOf('async function storeCommunityImageBytes'), worker.indexOf('async function placeCommunityImage')), /ALERT_IMAGES/, 'community photo bytes are not written to the alerts bucket');
+assert.match(worker, /mode === 'purge'/);
+assert.match(admin, /Maximum 10 posters/);
+assert.match(admin, /data-mode="tombstone"/);
+assert.match(admin, /tombstoneCommunityMessage/);
+assert.match(logic, /tab === 'map' \|\| tab === 'options'/);
+assert.match(logic, /community-feed-scroll/);
+assert.match(logic, /pullRefreshBlocked/);
+assert.doesNotMatch(logic, /scroller\.prepend\(hint\)/);
+assert.match(rules, /length <= 4000/);
+assert.doesNotMatch(rules, /length <= 364/);
+assert.equal(sanitizeBody('a'.repeat(4001)).verdict, 'block');
+assert.equal(sanitizeBody('a'.repeat(4000)).ok, true);
+assert.equal(sanitizeAdminBody('a'.repeat(4001)).verdict, 'block');
+assert.equal(sanitizeAdminBody('a'.repeat(4000)).ok, true);
+assert.match(rules, /!newData\.hasChild\('attachments'\)/);
+
+console.log('verify-community-bucket: ok');

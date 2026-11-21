@@ -5,9 +5,21 @@
   "compatibility_date": "2026-03-22",
   "workers_dev": true,
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
   },
-  // Plain vars (secrets GA_PRIVATE_KEY / SENTRY_AUTH_TOKEN / CF_API_TOKEN / GH_ACTIONS_TOKEN stay in the dashboard).
+  // Existing production database. Keep this binding in the file so a deploy does not drop it.
+  "d1_databases": [
+    {
+      "binding": "REGION_PRESENCE_DB",
+      "database_name": "nexttrain-region-presence",
+      "database_id": "5c461bd1-ba86-439c-8d8c-4ee2079653d5",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Plain vars (secrets GA_PRIVATE_KEY / SENTRY_AUTH_TOKEN / CF_API_TOKEN / GH_ACTIONS_TOKEN / CLEVER_SCRIPT_ID stay in the dashboard).
   "vars": {
     "GA_CLIENT_EMAIL": "nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com",
     "GA_PROPERTY_ID": "514537103",

@@ -3,9 +3,11 @@
  */
 import { cleanHttpUrl, externalVideoPageUrl, isPublicPreviewUrl } from './link-preview.js';
 export const ALERTS_PAGE_SIZE = 10;
+/** Posters on one alert. Catalog paths and internet image files share this cap. */
+export const ALERT_POSTER_MAX = 10;
 export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
-/** Printed timetable sheets that back in-app schedules; also postable on alerts later. */
+/** Printed timetable sheets. Admins post these from the Timetables tab. */
 export const SCHEDULE_IMAGE_PREFIX = '/images/schedules/';
 export const ALERT_REACTION_KEYS = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
 export const ALERT_REACTION_EMOJI = {
@@ -236,6 +238,13 @@ export function pickAutoOpenNotice(notices, isSeen = () => false) {
     return candidates[0] || null;
 }
 
+/** Public poster files served from the community worker's R2 bucket. */
+export function isNextTrainAlertImageHost(hostname) {
+    const host = String(hostname || '').toLowerCase();
+    return host === 'nexttrain-community.enock.workers.dev'
+        || /^nexttrain-community\.[a-z0-9-]+\.workers\.dev$/.test(host);
+}
+
 export function sanitizeAlertImageUrl(url) {
     if (!url || typeof url !== 'string') return null;
     let path = url.trim();
@@ -243,7 +252,17 @@ export function sanitizeAlertImageUrl(url) {
     try {
         if (/^https?:\/\//i.test(path)) {
             const u = new URL(path);
-            path = u.pathname || '';
+            if (u.username || u.password) return null;
+            const file = u.pathname || '';
+            if (
+                u.protocol === 'https:'
+                && isNextTrainAlertImageHost(u.hostname)
+                && /^\/alerts\/[A-Za-z0-9._-]+$/.test(file)
+                && !file.includes('..')
+            ) {
+                return `${u.origin}${file}`;
+            }
+            path = file;
         }
     } catch {
         return null;
@@ -271,9 +290,126 @@ export function collectNoticeImageUrls(notice) {
     const out = [];
     raw.forEach((u) => {
         const s = sanitizeAlertImageUrl(u);
-        if (s && !out.includes(s) && out.length < 2) out.push(s);
+        if (s && !out.includes(s) && out.length < ALERT_POSTER_MAX) out.push(s);
     });
     return out;
+}
+
+/**
+ * Phones that already have the app (through V10_11.09.2) show at most four
+ * photos. A worker address in imageUrls is dropped there. The same address
+ * inside the notice text is a normal image file, which those phones already lift.
+ */
+export const LEGACY_ALERT_IMAGE_MAX = 4;
+
+function legacyInstalledSanitize(url) {
+    if (!url || typeof url !== 'string') return null;
+    let path = url.trim();
+    if (!path) return null;
+    try {
+        if (/^https?:\/\//i.test(path)) path = new URL(path).pathname || '';
+    } catch {
+        return null;
+    }
+    const q = path.indexOf('?');
+    if (q >= 0) path = path.slice(0, q);
+    const hash = path.indexOf('#');
+    if (hash >= 0) path = path.slice(0, hash);
+    if (path.includes('..') || path.includes('//')) return null;
+    if (path.startsWith(ALERT_IMAGE_PREFIX)) {
+        if (!/^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(path)) return null;
+        return path;
+    }
+    if (path.startsWith(SCHEDULE_IMAGE_PREFIX)) {
+        if (!/^\/images\/schedules\/[a-z0-9]+\/[A-Za-z0-9._-]+\.jpe?g$/i.test(path)) return null;
+        return path;
+    }
+    return null;
+}
+
+/** Photos an already-installed phone will actually paint. */
+export function legacyInstalledAlertImages(notice) {
+    const images = [];
+    const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+        ? notice.imageUrls
+        : (notice?.imageUrl ? [notice.imageUrl] : []);
+    raw.forEach((u) => {
+        const s = legacyInstalledSanitize(u);
+        if (s && !images.includes(s) && images.length < LEGACY_ALERT_IMAGE_MAX) images.push(s);
+    });
+    const hoisted = hoistAlertImagesFromHtml(String(notice?.message || notice?.text || ''));
+    hoisted.urls.forEach((u) => {
+        const clean = sanitizeInlineAlertImageUrl(u);
+        if (clean && !images.includes(clean) && images.length < LEGACY_ALERT_IMAGE_MAX) images.push(clean);
+    });
+    return images;
+}
+
+function escapeAlertImgAttr(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Copy worker photo addresses into the notice text so installed phones show them.
+ * Catalog paths stay in imageUrls only. The current app lifts the same address once.
+ */
+export function messageWithLegacyAlertImages(message, imageUrls) {
+    const body = String(message || '');
+    const present = new Set();
+    hoistAlertImagesFromHtml(body).urls.forEach((u) => {
+        const clean = sanitizeInlineAlertImageUrl(u);
+        if (clean) present.add(clean);
+    });
+    const extras = [];
+    (Array.isArray(imageUrls) ? imageUrls : []).forEach((raw) => {
+        const inline = sanitizeInlineAlertImageUrl(raw);
+        if (!inline || present.has(inline) || extras.includes(inline)) return;
+        const legacyPoster = legacyInstalledSanitize(raw);
+        if (legacyPoster && !/^https:\/\//i.test(legacyPoster)) return;
+        extras.push(inline);
+    });
+    if (!extras.length) return body;
+    const tags = extras.slice(0, LEGACY_ALERT_IMAGE_MAX).map((url) => {
+        const href = escapeAlertImgAttr(url);
+        return `<img src="${href}" data-nt-src="${href}" alt="">`;
+    }).join('');
+    return `${tags}${body}`;
+}
+
+function alertImgTag(url) {
+    const href = escapeAlertImgAttr(url);
+    return `<img src="${href}" data-nt-src="${href}" alt="">`;
+}
+
+/**
+ * Save posters so an already-installed phone shows every uploaded photo (up to four).
+ * Catalog sheets fill only the slots those photos do not use. Newer phones still
+ * receive the full list.
+ */
+export function noticeForInstalledPhones(notice) {
+    const source = notice && typeof notice === 'object' ? notice : {};
+    const raw = (Array.isArray(source.imageUrls) && source.imageUrls.length)
+        ? source.imageUrls
+        : (source.imageUrl ? [source.imageUrl] : []);
+    const worker = [];
+    const catalog = [];
+    raw.forEach((entry) => {
+        const modern = sanitizeAlertImageUrl(entry);
+        if (!modern) return;
+        if (legacyInstalledSanitize(entry)) {
+            if (!catalog.includes(modern)) catalog.push(modern);
+            return;
+        }
+        if (!worker.includes(modern)) worker.push(modern);
+    });
+    const lead = worker.slice(0, LEGACY_ALERT_IMAGE_MAX);
+    const catalogRoom = Math.max(0, LEGACY_ALERT_IMAGE_MAX - lead.length);
+    const catalogKept = catalog.slice(0, catalogRoom);
+    const catalogRest = catalog.slice(catalogRoom);
+    let message = messageWithLegacyAlertImages(source.message || source.text || '', lead);
+    if (catalogRest.length) message += catalogRest.map(alertImgTag).join('');
+    const imageUrls = [...catalogKept, ...worker].slice(0, ALERT_POSTER_MAX);
+    return { ...source, message, imageUrls, imageUrl: null };
 }
 
 /**
@@ -282,7 +418,7 @@ export function collectNoticeImageUrls(notice) {
  */
 export function shouldIgnoreAlertLongPress(target) {
     if (!target || typeof target.closest !== 'function') return true;
-    if (target.closest('[data-alert-video]')) return true;
+    if (target.closest('[data-alert-video], [data-nt-gif-replay]')) return true;
     if (target.closest('[data-alert-lightbox]')) return false;
     if (target.closest('[data-alert-media]')) return false;
     if (target.closest('button[onclick*="openLightbox"]')) return false;
@@ -465,6 +601,7 @@ export function splitAlertTitleAndBody(html, explicitTitle = '') {
 
 const PUBLIC_IMAGE_FILE = /\.(jpe?g|png|gif|webp)$/i;
 const PUBLIC_VIDEO_FILE = /\.(mp4|webm|mov|m4v|ogv)$/i;
+const PUBLIC_PDF_FILE = /\.pdf$/i;
 
 function isStoredImageHost(host) {
     const name = String(host || '').toLowerCase();
@@ -587,6 +724,62 @@ export function sanitizeAlertVideoUrl(url) {
     return clean;
 }
 
+function isPdfHost(host) {
+    const name = String(host || '').toLowerCase().replace(/\.$/, '');
+    return name === 'nexttrain.co.za'
+        || name.endsWith('.nexttrain.co.za')
+        || name === 'nexttrain-community.enock.workers.dev'
+        || name === 'firebasestorage.googleapis.com'
+        || name === 'storage.googleapis.com'
+        || name.endsWith('.firebasestorage.app')
+        || name.endsWith('.googleusercontent.com');
+}
+
+/**
+ * A PDF we are willing to fetch later, only after a tap.
+ * Catalog and storage hosts only. Nothing is downloaded here.
+ */
+export function sanitizeAlertPdfUrl(url) {
+    const clean = cleanHttpUrl(String(url || '').trim().replace(/&amp;/gi, '&'));
+    if (!clean || !isPublicPreviewUrl(clean)) return null;
+    try {
+        const pub = new URL(clean);
+        if (pub.username || pub.password) return null;
+        if (!isPdfHost(pub.hostname)) return null;
+        let path = pub.pathname || '';
+        try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+        const hint = `${path} ${pub.searchParams.get('name') || ''}`.toLowerCase();
+        if (!PUBLIC_PDF_FILE.test(path) && !hint.includes('.pdf')) return null;
+        return pub.href;
+    } catch {
+        return null;
+    }
+}
+
+function pushPdfUrl(urls, raw) {
+    const clean = sanitizeAlertPdfUrl(raw);
+    if (clean && !urls.includes(clean)) urls.push(clean);
+}
+
+/** Lift PDF links out of the body. The file stays put until Open PDF is tapped. */
+export function extractAlertPdfUrls(html) {
+    const urls = [];
+    let body = String(html || '');
+    body = body.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const before = urls.length;
+        pushPdfUrl(urls, href);
+        return urls.length > before ? '' : tag;
+    });
+    body = body.replace(/https:\/\/[^\s<>"']+/gi, (raw) => {
+        const trimmed = raw.replace(/[),.;]+$/, '');
+        const before = urls.length;
+        pushPdfUrl(urls, trimmed);
+        if (urls.length === before) return raw;
+        return raw.slice(trimmed.length);
+    });
+    return { urls, body };
+}
+
 function pushVideoUrl(urls, raw) {
     const clean = sanitizeAlertVideoUrl(String(raw || '').trim().replace(/&amp;/gi, '&'));
     if (clean && !urls.includes(clean)) urls.push(clean);
@@ -614,6 +807,60 @@ export function extractAlertVideoUrls(html) {
         return raw.slice(trimmed.length);
     });
     return { urls, body };
+}
+
+function pushImageUrl(urls, raw) {
+    const clean = sanitizeInlineAlertImageUrl(String(raw || '').trim().replace(/&amp;/gi, '&'));
+    if (!clean || urls.includes(clean)) return;
+    if (sanitizeAlertVideoUrl(clean) || sanitizeAlertPdfUrl(clean)) return;
+    urls.push(clean);
+}
+
+/**
+ * Same lift as an alert card: photos (including GIFs), video files and watch pages, then PDFs.
+ * Ordinary https links stay in the body for a link card.
+ */
+export function layoutMessageMedia(text, extraUrls = []) {
+    const imageUrls = [];
+    const videoUrls = [];
+    const pdfUrls = [];
+    const take = (raw) => {
+        const value = String(raw || '').trim();
+        if (!value) return;
+        if (sanitizeAlertVideoUrl(value)) {
+            pushVideoUrl(videoUrls, value);
+            return;
+        }
+        if (sanitizeAlertPdfUrl(value)) {
+            pushPdfUrl(pdfUrls, value);
+            return;
+        }
+        pushImageUrl(imageUrls, value);
+    };
+    (Array.isArray(extraUrls) ? extraUrls : []).forEach(take);
+    const hoisted = hoistAlertImagesFromHtml(String(text || ''));
+    hoisted.urls.forEach((url) => pushImageUrl(imageUrls, url));
+    let body = hoisted.body;
+    const videos = extractAlertVideoUrls(body);
+    videos.urls.forEach((url) => pushVideoUrl(videoUrls, url));
+    body = videos.body;
+    const pdfs = extractAlertPdfUrls(body);
+    pdfs.urls.forEach((url) => pushPdfUrl(pdfUrls, url));
+    body = pdfs.body;
+    body = body.replace(/https:\/\/[^\s<>"']+/gi, (raw) => {
+        const trimmed = raw.replace(/[),.;]+$/, '');
+        const before = imageUrls.length;
+        pushImageUrl(imageUrls, trimmed);
+        if (imageUrls.length === before) return raw;
+        return raw.slice(trimmed.length);
+    });
+    body = body.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+/gi, '').replace(/(?:\s|&nbsp;|<br\s*\/?>)+$/gi, '');
+    return {
+        imageUrls: imageUrls.slice(0, 8),
+        videoUrls: videoUrls.slice(0, 2),
+        pdfUrls: pdfUrls.slice(0, 2),
+        body: body.trim(),
+    };
 }
 
 /** Pull lightbox/img tags out of the body so photos can sit above the text. */
@@ -688,11 +935,17 @@ export function layoutAlertPost(notice) {
     pushVideoUrl(videos, notice?.ctaUrl);
     const extracted = extractAlertVideoUrls(hoisted.body);
     extracted.urls.forEach((u) => pushVideoUrl(videos, u));
+    const pdfs = [];
+    rawMedia.forEach((u) => pushPdfUrl(pdfs, u));
+    pushPdfUrl(pdfs, notice?.ctaUrl);
+    const extractedPdf = extractAlertPdfUrls(extracted.body);
+    extractedPdf.urls.forEach((u) => pushPdfUrl(pdfs, u));
     return {
         title: split.title,
-        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u)).slice(0, 4),
+        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u) && !sanitizeAlertPdfUrl(u)).slice(0, ALERT_POSTER_MAX),
         videoUrls: videos.slice(0, 2),
-        body: stripAlertSignoffHtml(extracted.body),
+        pdfUrls: pdfs.slice(0, 2),
+        body: stripAlertSignoffHtml(extractedPdf.body),
     };
 }
 
@@ -704,6 +957,17 @@ const ALERT_VIDEO_PLAY_ICON = `<svg class="h-8 w-8" width="32" height="32" viewB
  */
 function escapeAlertAttr(value) {
     return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+const ALERT_PDF_ICON = `<svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M14 3v6h6"></path></svg>`;
+
+/** A button only. The PDF is not fetched until the commuter taps it. */
+export function renderAlertPdfMarkup(urls) {
+    const list = (Array.isArray(urls) ? urls : []).map((u) => sanitizeAlertPdfUrl(u)).filter(Boolean).slice(0, 2);
+    if (!list.length) return '';
+    return list.map((href) => (
+        `<button type="button" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold text-gray-900 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-white" data-alert-pdf="${escapeAlertAttr(href)}">${ALERT_PDF_ICON}<span>Open PDF</span></button>`
+    )).join('');
 }
 
 export function renderAlertVideoMarkup(urls) {
@@ -762,6 +1026,15 @@ export function listNoticesInTarget(node) {
         return [{ ...node, _key: node.id || 'legacy' }];
     }
     return [];
+}
+
+if (typeof window !== 'undefined') {
+    window.messageWithLegacyAlertImages = messageWithLegacyAlertImages;
+    window.legacyInstalledAlertImages = legacyInstalledAlertImages;
+    window.noticeForInstalledPhones = noticeForInstalledPhones;
+    window.layoutMessageMedia = layoutMessageMedia;
+    window.renderAlertVideoMarkup = renderAlertVideoMarkup;
+    window.renderAlertPdfMarkup = renderAlertPdfMarkup;
 }
 
 export function isLegacySingleNotice(node) {

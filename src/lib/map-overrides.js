@@ -6,14 +6,42 @@
 import { DYNAMIC_BASE_URL } from './config.js';
 import { normalizeStationName } from './utils.js';
 
-export async function fetchMapStationOverrides() {
+const MAP_STATIONS_KEY = 'nt_map_stations_v1';
+const MAP_STATIONS_TIMEOUT_MS = 1500;
+
+export function readSavedMapStations() {
+    if (typeof localStorage === 'undefined') return {};
     try {
-        const res = await fetch(`${DYNAMIC_BASE_URL}config/map_stations.json`, { cache: 'no-store' });
-        if (!res.ok) return {};
-        const data = await res.json();
-        return data && typeof data === 'object' ? data : {};
+        const raw = localStorage.getItem(MAP_STATIONS_KEY);
+        const data = raw ? JSON.parse(raw) : null;
+        return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     } catch {
         return {};
+    }
+}
+
+function writeSavedMapStations(data) {
+    if (typeof localStorage === 'undefined' || !data || typeof data !== 'object') return;
+    try { localStorage.setItem(MAP_STATIONS_KEY, JSON.stringify(data)); } catch { /* the timetable pins still stand */ }
+}
+
+export async function fetchMapStationOverrides() {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), MAP_STATIONS_TIMEOUT_MS) : null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}config/map_stations.json`, {
+            cache: 'no-store',
+            signal: ctrl?.signal,
+        });
+        if (!res.ok) return {};
+        const data = await res.json();
+        const clean = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+        if (Object.keys(clean).length) writeSavedMapStations(clean);
+        return clean;
+    } catch {
+        return {};
+    } finally {
+        if (timer) clearTimeout(timer);
     }
 }
 

@@ -261,7 +261,7 @@ const faqLd = {
                     </span>
                     <span class="nt-nav-label text-center">Map</span>
                 </button>
-                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
+                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
                     <span class="nt-nav-glyph relative">
                         <svg class="nt-nav-icon-line" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
                         <svg class="nt-nav-icon-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 017.5 2h9A2.5 2.5 0 0119 4.5v6A2.5 2.5 0 0116.5 13H12l-3.5 3v-3H7.5A2.5 2.5 0 015 10.5v-6z"/></svg>
@@ -340,6 +340,9 @@ const faqLd = {
         flushPendingDeeplinkIntents,
         applyMapDeepLink,
         applyLiveTrainDeepLink,
+        applyAlertDeepLink,
+        applyCommunityDeepLink,
+        holdLeaveForWelcome,
         bindLaunchQueueDeeplinks,
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
@@ -449,6 +452,7 @@ const faqLd = {
             window.closeAppHub?.();
             return;
         }
+        if (holdLeaveForWelcome('options')) return;
         window.openAppHub?.();
     });
     // Map tab wiring is idle-deferred — keeps home INP free of map-tab parse/bind.
@@ -459,14 +463,41 @@ const faqLd = {
     const hash = location.hash;
     if (hash === '#planner' || hash === '#planner-results') {
         switchTab('trip-planner');
-    } else if (hash === '#community') {
-        if (canAccessPilotSurface('community')) switchTab('community');
-        else switchTab('next-train');
-    } else if (hash === '#alerts') {
+    } else if (hash === '#community' || hash.startsWith('#community/')) {
+        const parts = hash.slice('#community'.length).split('/').filter(Boolean).map((part) => {
+            try { return decodeURIComponent(part); } catch { return part; }
+        });
+        if (canAccessPilotSurface('community')) {
+            import('../lib/community.js').then((m) => {
+                if (parts[0] && parts[1]) m.queueCommunityFocus?.(parts[0], parts[1], { announce: true });
+                else if (parts[0]) m.queueCommunityFocus?.(parts[0], '');
+                switchTab('community');
+            }).catch(() => switchTab('community'));
+        } else switchTab('next-train');
+    } else if (hash === '#alerts' || hash.startsWith('#alerts/')) {
+        const rawAlert = hash.startsWith('#alerts/') ? hash.slice('#alerts/'.length) : '';
+        const alertBits = rawAlert.split('/').filter(Boolean);
+        let noticeId = alertBits[0] || '';
+        try { noticeId = decodeURIComponent(noticeId); } catch { /* keep raw */ }
+        const photo = /^([1-9]|10)$/.test(alertBits[1] || '') ? Number(alertBits[1]) : 0;
         switchTab('next-train');
-        import('../lib/session-stability.js').then((m) => {
-            m.whenSettledForAutoNotices?.(() => window.openAlertsChannel?.());
-        }).catch(() => window.openAlertsChannel?.());
+        if (noticeId) {
+            import('../lib/alerts-channel.js').then(async (m) => {
+                const state = await m.focusSharedAlert?.(noticeId, '', photo);
+                window.showToast?.(
+                    state === 'opened' ? 'Opened service update' : 'This update is no longer available',
+                    state === 'opened' ? 'success' : 'info',
+                    state === 'opened' ? 2500 : 4000
+                );
+            }).catch(() => {
+                window.showToast?.('This update is no longer available', 'info', 4000);
+            });
+        } else {
+            const openNotice = () => window.openAlertsChannel?.({ highlightId: null, focusTop: false });
+            import('../lib/session-stability.js').then((m) => {
+                m.whenSettledForAutoNotices?.(openNotice);
+            }).catch(openNotice);
+        }
     } else if (hash === '#map') {
         if (canOpenTrackingMap()) switchTab('map');
         else switchTab('next-train');
@@ -509,6 +540,16 @@ const faqLd = {
         // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.
         try {
             bindKillswitchWatch();
+            if (await applyAlertDeepLink()) {
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
+            if (await applyCommunityDeepLink()) {
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
             if (await applyLiveTrainDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();
@@ -600,6 +641,7 @@ const faqLd = {
         }
     };
 
+    window.__ntIgniteDataEngine = igniteDataEngine;
     igniteDataEngine();
     bindLaunchQueueDeeplinks(() => { igniteDataEngine(); });
     bindWebViewDeeplinkResume(() => { igniteDataEngine(); });

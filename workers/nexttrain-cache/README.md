@@ -1,6 +1,8 @@
 # nexttrain-cache (Cloudflare Edge schedule proxy)
 
-Worker URL: `https://nexttrain-cache.enock.workers.dev/`
+Worker URL: `https://cache.nexttrain.co.za/`
+
+Same worker, fallback: `https://nexttrain-cache.enock.workers.dev/`
 
 This folder tracks the **active production worker** (origin firewall + 24h schedule cache + `/admin/purge`), with one Astro-era addition:
 

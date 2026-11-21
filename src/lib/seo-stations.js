@@ -5,7 +5,7 @@
  * upcoming-trains modal, but static full-day lists for crawlers.
  */
 import { ROUTES, getCorridorLabel } from './config.js';
-import { timeToSeconds } from './utils.js';
+import { shortSharedSourceLabel, timeToSeconds } from './utils.js';
 import {
   displayRouteName,
   gridStationLabel,
@@ -463,6 +463,7 @@ export function buildStationCorridorTimetables(station) {
       : [];
     if (listed && !stopOrder.some((n) => normalizeKey(n) === normalizeKey(name))) continue;
 
+    const stamp = (list) => list.map((train) => ({ ...train, sourceRouteId: routeId }));
     cards.push({
       routeId,
       routeSlug: routeSeedSlug(routeId),
@@ -481,32 +482,204 @@ export function buildStationCorridorTimetables(station) {
         towardA: {
           title: `${name} → ${origin}`,
           toward: origin,
-          trains: weekdayTowardA,
+          trains: stamp(weekdayTowardA),
         },
         towardB: {
           title: `${name} → ${dest}`,
           toward: dest,
-          trains: weekdayTowardB,
+          trains: stamp(weekdayTowardB),
         },
       },
       saturday: {
         towardA: {
           title: `${name} → ${origin}`,
           toward: origin,
-          trains: saturdayTowardA,
+          trains: stamp(saturdayTowardA),
         },
         towardB: {
           title: `${name} → ${dest}`,
           toward: dest,
-          trains: saturdayTowardB,
+          trains: stamp(saturdayTowardB),
         },
       },
       hasSaturday: !!(saturdayTowardA.length || saturdayTowardB.length),
+      mergedDirections: false,
     });
   }
 
+  mergeSharedCorridorCards(cards, db, station);
   cards.sort((a, b) => a.routeName.localeCompare(b.routeName));
   return cards;
+}
+
+function sheetStopKeys(db, route) {
+  const names = new Set();
+  const keys = route?.sheetKeys || {};
+  for (const key of [keys.weekday_to_a, keys.weekday_to_b, keys.saturday_to_a, keys.saturday_to_b]) {
+    if (!key) continue;
+    for (const stop of orderedNamedStops(db, key)) {
+      const name = normalizeKey(stop.name);
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
+
+function sharedStopCount(db, routeA, routeB, cache) {
+  if (!routeA || !routeB || routeA.id === routeB.id) return 0;
+  const stops = (route) => {
+    if (!cache.has(route.id)) cache.set(route.id, sheetStopKeys(db, route));
+    return cache.get(route.id);
+  };
+  const left = stops(routeA);
+  const right = stops(routeB);
+  let count = 0;
+  for (const name of left) if (right.has(name)) count += 1;
+  return count;
+}
+
+function outerEndLabel(route, hubName) {
+  const hubKey = normalizeKey(hubName);
+  const origin = stationLabel(route?.destA);
+  const dest = stationLabel(route?.destB);
+  if (normalizeKey(origin) === hubKey) return dest;
+  if (normalizeKey(dest) === hubKey) return origin;
+  return shortSharedSourceLabel(route?.name || '');
+}
+
+function spokeHeading(place, ends) {
+  const names = [...new Set((ends || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (names.length <= 1) return names.length ? `${place} → ${names[0]}` : place;
+  if (names.length === 2) return `${place} → ${names[0]}, ${names[1]}`;
+  return `${place} → ${names[0]}, ${names[1]} & more`;
+}
+
+function sortTrains(trains) {
+  return [...trains].sort((a, b) => (
+    (a.departureSec || 0) - (b.departureSec || 0) || String(a.trainId).localeCompare(String(b.trainId))
+  ));
+}
+
+function sharedComponents(cards, db) {
+  const cache = new Map();
+  const parent = new Map(cards.map((card) => [card.routeId, card.routeId]));
+  const find = (id) => {
+    let cur = id;
+    while (parent.get(cur) !== cur) {
+      parent.set(cur, parent.get(parent.get(cur)));
+      cur = parent.get(cur);
+    }
+    return cur;
+  };
+  const unite = (a, b) => {
+    const left = find(a);
+    const right = find(b);
+    if (left !== right) parent.set(right, left);
+  };
+  for (let i = 0; i < cards.length; i++) {
+    for (let j = i + 1; j < cards.length; j++) {
+      if (sharedStopCount(db, ROUTES[cards[i].routeId], ROUTES[cards[j].routeId], cache) > 1) {
+        unite(cards[i].routeId, cards[j].routeId);
+      }
+    }
+  }
+  const components = new Map();
+  for (const card of cards) {
+    const root = find(card.routeId);
+    const list = components.get(root) || [];
+    list.push(card);
+    components.set(root, list);
+  }
+  return [...components.values()].filter((members) => members.length > 1);
+}
+
+function daySlots(members, dayName) {
+  const slots = [];
+  for (const card of members) {
+    for (const side of ['towardA', 'towardB']) {
+      const slot = card[dayName]?.[side];
+      if (!slot?.trains?.length || slot.sharedTerminus) continue;
+      slots.push({ card, side, slot, dest: slot.toward || '' });
+    }
+  }
+  return slots;
+}
+
+/**
+ * A station page has no chosen route. Trains that share a terminus are
+ * labelled From their outer end. Trains that leave toward different ends
+ * share one list, named for at most two of those ends.
+ */
+function mergeSharedCorridorCards(cards, db, station) {
+  if (!cards || cards.length < 2) return;
+  const place = station?.name || 'This station';
+  const components = sharedComponents(cards, db);
+  for (const dayName of ['weekday', 'saturday']) {
+    for (const members of components) {
+      const groups = new Map();
+      for (const item of daySlots(members, dayName)) {
+        const key = normalizeKey(item.dest);
+        if (!key) continue;
+        const list = groups.get(key) || [];
+        list.push(item);
+        groups.set(key, list);
+      }
+      for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        group.sort((a, b) => a.card.routeId.localeCompare(b.card.routeId));
+        const host = group[0];
+        const hubName = host.dest;
+        const byTrain = new Map();
+        for (const item of group) {
+          const route = ROUTES[item.card.routeId];
+          for (const train of item.slot.trains) {
+            const reached = train.badge === 'direct' || normalizeKey(train.actualDestination) === normalizeKey(hubName);
+            const next = reached
+              ? {
+                ...train,
+                badge: 'from',
+                badgeLabel: `From ${outerEndLabel(route, hubName)}`,
+                sourceRouteId: item.card.routeId,
+              }
+              : {
+                ...train,
+                badge: 'short',
+                badgeLabel: `To ${train.actualDestination}`,
+                sourceRouteId: item.card.routeId,
+              };
+            byTrain.set(String(train.trainId), next);
+          }
+          if (item !== host) item.slot.trains = [];
+        }
+        host.slot.trains = sortTrains(byTrain.values());
+        host.slot.title = `${place} → ${hubName}`;
+        host.slot.toward = hubName;
+        host.slot.sharedTerminus = true;
+        host.card.mergedDirections = true;
+      }
+      const spokes = daySlots(members, dayName);
+      const spokeEnds = [...new Set(spokes.map((item) => normalizeKey(item.dest)))];
+      if (spokes.length < 2 || spokeEnds.length < 2) continue;
+      spokes.sort((a, b) => a.card.routeId.localeCompare(b.card.routeId) || a.side.localeCompare(b.side));
+      const host = spokes[0];
+      const byTrain = new Map();
+      for (const item of spokes) {
+        for (const train of item.slot.trains) {
+          byTrain.set(String(train.trainId), {
+            ...train,
+            sourceRouteId: train.sourceRouteId || item.card.routeId,
+          });
+        }
+        if (item !== host) item.slot.trains = [];
+      }
+      host.slot.trains = sortTrains(byTrain.values());
+      host.slot.title = spokeHeading(place, spokes.map((item) => item.dest));
+      host.card.mergedDirections = true;
+    }
+  }
+  for (const card of cards) {
+    card.hasSaturday = !!(card.saturday.towardA.trains.length || card.saturday.towardB.trains.length);
+  }
 }
 
 export function buildStationBoardAppPath(station) {

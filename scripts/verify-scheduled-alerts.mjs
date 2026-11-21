@@ -297,6 +297,22 @@ assert.match(cronWorkflow, /scheduled-alerts-publish-v5/);
 assert.match(cronWorkflow, /GITHUB_STEP_SUMMARY/);
 assert.doesNotMatch(cronWorkflow, /sleep 60/);
 assert.match(cronWorkflow, /timeout-minutes: 10/);
+assert.match(cronWorkflow, /failed job/);
+const rules = JSON.parse(await readFile(new URL('../firebase-database.rules.json', import.meta.url), 'utf8')).rules;
+const workerAccount = 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com';
+for (const expr of [
+    rules.notices['.write'],
+    rules.notices_meta['.write'],
+    rules.notices_scheduled['.read'],
+    rules.notices_scheduled['.write'],
+    rules.notices_scheduler_status['.read'],
+    rules.notices_scheduler_status['.write'],
+    rules.polls.$pollId._meta['.write'],
+]) {
+    assert.match(expr, /enockelk@gmail\.com/);
+    assert.match(expr, /thandeka05nxumalo@gmail\.com/);
+    assert.ok(expr.includes(workerAccount), 'scheduled alert rules allow the community worker');
+}
 assert.doesNotMatch(cronWorkflow, /Worker cron must publish on its own/);
 const workerDeploy = await readFile(new URL('../.github/workflows/deploy-community-worker.yml', import.meta.url), 'utf8');
 assert.match(workerDeploy, /wrangler deploy/);

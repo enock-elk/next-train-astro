@@ -21,13 +21,15 @@ import {
     isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel, lineSwatchClass,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
-    resolveOperatingDayType, simUsesSpecificDate
+    resolveOperatingDayType, simUsesSpecificDate, sheetStationTitle, timetableStationName
 } from './utils.js';
 
 import { 
     currentTime, currentDayType, currentDayIndex, getScheduleFromDb
 } from './logic.js';
 import { extraKempTrainIds, kempTrainIds, siblingSheetKey, withExtraTrainColumns } from './live-board.js';
+import { downloadImageFile } from './save-image.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -991,9 +993,27 @@ export const Renderer = {
 
     // --- 3. TIMETABLE DAILY MATRIX COMPILER ---
 
+    /**
+     * Irene sheets list the whole Kempton corridor, with blank cells past Irene.
+     * Drop those rows before a Kempton column is copied on, or the grafted time
+     * makes Kempton Park, Oakmoor, and the other outer stops appear.
+     */
+    _ireneRowsWithOwnTimes: (schedule) => {
+        const ownIds = (schedule?.headers || [])
+            .map((header) => String(header || '').trim())
+            .filter((header) => /^\d{4}[a-zA-Z]*$/.test(header));
+        const rows = (schedule?.rows || []).filter((row) => {
+            const station = String(row?.STATION || '');
+            if (!station || /updated/i.test(station) || isVariantStationName(station)) return true;
+            return ownIds.some((id) => isRealTime(row[id]));
+        });
+        return { ...schedule, rows };
+    },
+
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false, dayType = null) => {
         const kempIds = new Set();
         if (routeId === 'pta-irene') {
+            schedule = Renderer._ireneRowsWithOwnTimes(schedule);
             const sibKey = siblingSheetKey(routeId, sheetName);
             const db = $fullDatabase.get();
             if (sibKey && db && db[sibKey]) {
@@ -1008,6 +1028,13 @@ export const Renderer = {
                 }
             }
         }
+        // Irene toward Pretoria: a KEMP train started at Kempton Park.
+        // Pretoria toward Irene: the same train continues past Irene to Kempton Park.
+        const kempStartsAtKempton = /(?:irene_to_pta|kemp_to_pta)/.test(String(sheetName || ''));
+        const kempAria = (train) => (kempStartsAtKempton
+            ? `Train ${escapeHTML(String(train || ''))} starts at Kempton Park. Irene is not the first stop.`
+            : `Train ${escapeHTML(String(train || ''))} continues to Kempton Park. Irene is not the last stop.`);
+        const kempFromAttr = kempStartsAtKempton ? ' data-kemp-from="1"' : '';
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
         const masterStations = (typeof window !== 'undefined' && typeof window.routeGeometryStations === 'function')
             ? (window.routeGeometryStations(routeId) || [])
@@ -1124,7 +1151,7 @@ export const Renderer = {
                             const isHighlight = i === activeColIndex;
                             const viaLabel = variantByTrain[h] || '';
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx, isExport ? 'export' : 'grid');
-                            const provisional = !isExport && isTrainProvisional(h, routeId, dayIdx, schedule, 'grid');
+                            const provisional = isTrainProvisional(h, routeId, dayIdx, schedule, isExport ? 'export' : 'grid');
                             const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
                             let bgClass = '';
@@ -1167,6 +1194,10 @@ export const Renderer = {
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90';
                                     headerContent = stack(`${banIcon} NO SVC`, 'font-size:8px;color:#dc2626;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #f87171;text-underline-offset:2px;');
                                 }
+                            } else if (provisional) {
+                                headerContent = stack('Prov', noteTagStyle);
+                                bgClass = noteHeadClass;
+                                if (!isExport && isHighlight) bgClass += ' font-bold';
                             } else if (continuesToKemp) {
                                 headerContent = stack('KEMP', noteTagStyle);
                                 bgClass = noteHeadClass;
@@ -1182,16 +1213,19 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
-                            const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion)
-                                ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} continues to Kempton Park"`
+                            const provHeadAttrs = (!isExport && provisional && !paintExclusion)
+                                ? ` data-prov-open="1" data-prov-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} is provisional"`
                                 : '';
-                            const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp);
+                            const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion && !provisional)
+                                ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}"${kempFromAttr} tabindex="0" role="button" aria-label="${kempAria(h)}"`
+                                : '';
+                            const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp && !provisional);
                             const viaHeadAttrs = (!isExport && viaColumn)
                                 ? ` data-via-open="1" data-via-train="${escapeHTML(String(h || ''))}" data-via-route="${escapeHTML(viaLabel)}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} goes via the ${escapeHTML(viaLabel)} route"`
                                 : '';
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
                             const provisionalAttrs = provisional ? ' data-provisional="1"' : '';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${provisionalAttrs}${exclHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${provisionalAttrs}${exclHeadAttrs}${provHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
@@ -1204,6 +1238,7 @@ export const Renderer = {
             if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return;
             if (isVariantStationName(row.STATION)) return; 
             const cleanStation = row.STATION.replace(' STATION', '');
+            const shownStation = timetableStationName(cleanStation);
             let hasData = false;
             sortedCols.forEach(col => { if (row[col] && row[col] !== "-" && row[col] !== "") hasData = true; });
             if (!hasData) return;
@@ -1239,19 +1274,19 @@ export const Renderer = {
             if (isZebra && isExport) rowClass += ' export-zebra';
             if (shadeWholeRow && isExport) rowClass += ' export-disrupted-row';
             const disrRowAttrs = (!isExport && isDisruptedRow)
-                ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(cleanStation)}"`
+                ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(shownStation)}"`
                 : '';
 
             html += `
                 <tr class="${rowClass.trim()}"${isSelectedRow ? ' id="grid-selected-row"' : ''}${disrRowAttrs}>
-                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} ${isExport ? '' : 'nt-station-scroll-shade'} border-b text-left pl-3">${isExport ? cleanStation : `<div class="w-max max-w-[140px] truncate">${cleanStation}</div>`}</td>
+                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} ${isExport ? '' : 'nt-station-scroll-shade'} border-b text-left pl-3">${isExport ? shownStation : `<div class="w-max max-w-[140px] truncate">${shownStation}</div>`}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
                         const expressSkip = isExpressSkip(val);
                         if (expressSkip) {
                             val = isExport
                                 ? '<span class="nt-expr" style="color:#7f1d1d;">EXPR</span>'
-                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-[#7f1d1d] dark:text-red-400 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(cleanStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(cleanStation)}">EXPR</button>`;
+                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-[#7f1d1d] dark:text-red-400 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(shownStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(shownStation)}">EXPR</button>`;
                         } else if (val !== "-") {
                             if (isRealTime(val)) {
                                 val = formatTimeDisplay(val); 
@@ -1303,15 +1338,19 @@ export const Renderer = {
                         const exclCellAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                             ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(col || ''))}" data-excl-day="${Number(dayIdx)}"`
                             : '';
-                        const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion)
-                            ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"`
+                        const colProvisional = isTrainProvisional(col, routeId, dayIdx, schedule, isExport ? 'export' : 'grid');
+                        const provCellAttrs = (!isExport && colProvisional && !paintExclusion)
+                            ? ` data-prov-open="1" data-prov-train="${escapeHTML(String(col || ''))}"`
+                            : '';
+                        const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion && !colProvisional)
+                            ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"${kempFromAttr}`
                             : '';
                         const viaForCol = variantByTrain[String(col)] || '';
-                        const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)))
+                        const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)) && !colProvisional)
                             ? ` data-via-open="1" data-via-train="${escapeHTML(String(col || ''))}" data-via-route="${escapeHTML(viaForCol)}"`
                             : '';
                         
-                        return `<td class="${cellClass}"${exclCellAttrs}${kempCellAttrs}${viaCellAttrs}>${val}</td>`;
+                        return `<td class="${cellClass}"${exclCellAttrs}${provCellAttrs}${kempCellAttrs}${viaCellAttrs}>${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
@@ -1409,7 +1448,7 @@ export const Renderer = {
         let name = stationName.replace(/ STATION/gi, '').trim();
         const upperName = name.toUpperCase();
         if (upperName === 'DURBAN YARD') return 'Durban';
-        return Renderer._toTitleCase(name);
+        return sheetStationTitle(name);
     },
 
     // Public What's New list. Renders CHANGELOG_DATA. Commuter-visible
@@ -1546,9 +1585,10 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (!route) return;
 
     const selectedDay = dayType || 'weekday';
-    // Resolve weekday / saturday / pub_to_* cache slots (WC public_holiday → pub sheets).
-    const keyA = scheduleCacheSlot(selectedDay, route.region, 'a');
-    const keyB = scheduleCacheSlot(selectedDay, route.region, 'b');
+    const exportMode = effectiveRouteSheetMode(route, selectedDay);
+    // Resolve weekday / saturday / pub / sunday / special cache slots.
+    const keyA = scheduleCacheSlot(selectedDay, route.region, 'a', route);
+    const keyB = scheduleCacheSlot(selectedDay, route.region, 'b', route);
     const firebaseKeyA = routeSheetKeyForDay(route, selectedDay, 'a') || route.sheetKeys?.[keyA];
     const firebaseKeyB = routeSheetKeyForDay(route, selectedDay, 'b') || route.sheetKeys?.[keyB];
     const schedA = $schedules.get()?.[keyA];
@@ -1598,10 +1638,14 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
     const dateText = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
-    const scheduleTypeLabel = selectedDay === 'weekday' || selectedDay === 'sunday'
-        ? 'WEEKDAY'
-        : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'
-            : (selectedDay === 'saturday' ? 'SATURDAY' : 'WEEKEND'));
+    const scheduleTypeLabel = exportMode === 'special'
+        ? 'SPECIAL'
+        : (exportMode === 'sunday'
+            ? 'SUNDAY'
+            : (selectedDay === 'weekday' || selectedDay === 'sunday'
+                ? 'WEEKDAY'
+                : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'
+                    : (selectedDay === 'saturday' ? 'SATURDAY' : 'WEEKEND'))));
     const finalScheduleTypeLabel = hasExceptions ? `AMENDED ${scheduleTypeLabel}` : scheduleTypeLabel;
     
     const displayRouteName = formatRouteLabelPlain(route.name);
@@ -1860,19 +1904,22 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             const timestampStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12); 
             const fileName = `Schedule_${route.name.replace(/\s|<->/g,'_').replace(/_+/g, '_')}_${selectedDay}_${timestampStr}.png`;
             const file = new File([blob], fileName, { type: "image/png" });
-            const blobUrl = URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.download = fileName;
-            link.href = blobUrl;
-            link.click();
-            
+
             window._pendingShareFile = file;
             window._pendingShareText = `Commuter Notice: ${formatRouteLabelPlain(route.name)} (${selectedDay})`;
-            
-            const canShare = navigator.canShare && navigator.canShare({ files: [file] });
-            const shareBtnHTML = canShare 
-                ? `<button onclick="triggerNoticeShare()" class="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm hover:bg-gray-100 transition-colors whitespace-nowrap border border-gray-200"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4m0 0L8 8m4-4v12"></path></svg>Share</button>` 
+
+            try {
+                await downloadImageFile(file);
+            } catch (err) {
+                console.error(err);
+                if (typeof showToast === 'function') showToast("Snapshot failed.", "error");
+                if (document.body.contains(exportContainer)) document.body.removeChild(exportContainer);
+                return;
+            }
+
+            const canShare = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+            const shareBtnHTML = canShare
+                ? `<button onclick="triggerNoticeShare()" class="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm hover:bg-gray-100 transition-colors whitespace-nowrap border border-gray-200"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4m0 0L8 8m4-4v12"></path></svg>Share</button>`
                 : '';
 
             if (typeof showToast === 'function') {
@@ -1888,7 +1935,6 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             }
             
             document.body.removeChild(exportContainer);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000); 
         });
     } catch (e) {
         console.error(e);

@@ -4,7 +4,7 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
-import { withBase } from './config.js';
+import { withBase, ROUTES } from './config.js';
 import { clearLiveTrainFollow, setLiveTrainFollow } from './live-train-follow.js';
 import { whenSettledForAutoNotices } from './session-stability.js';
 import {
@@ -16,6 +16,9 @@ import {
     parseMapDeepLink,
     parsePlannerShortcutDeepLink,
     parseShareTargetDeepLink,
+    parseContentDeepLink,
+    parseContentQuery,
+    contentDeepLinkSearch,
     stripShareParamsFromUrl,
     isSeoAppHandoff,
 } from './share-links.js';
@@ -26,6 +29,7 @@ const LAUNCH_URL_KEY = 'nt_launch_target_url';
 
 function parseShareFromSearch(search) {
     return parseLiveTrainDeepLink(search)
+        || parseContentQuery(search)
         || parsePlannerDeepLink(search)
         || parseRouteDeepLinkParams(search)
         || parseMapDeepLink(search)
@@ -42,6 +46,8 @@ function shareFingerprint(snap) {
     if (snap.kind === 'planner-shortcut') return 'planner-shortcut';
     if (snap.kind === 'map') return 'map';
     if (snap.kind === 'share-target') return `share-target:${snap.url || ''}:${snap.text || ''}`;
+    if (snap.kind === 'alert') return `alert:${snap.id}:${snap.source || ''}`;
+    if (snap.kind === 'community') return `community:${snap.routeId}:${snap.postId}`;
     return snap.kind;
 }
 
@@ -93,6 +99,165 @@ function clearIntent() {
     } catch { /* ignore */ }
 }
 
+const DEEPLINK_SURFACE_KEY = 'nt_deeplink_surface';
+const DEEPLINK_WELCOME_KEY = 'nt_deeplink_welcome';
+
+/** A saved region and route. A link must not replace these. */
+export function readSavedDefaults() {
+    const region = safeStorage.getItem('userRegion') || '';
+    if (!['GP', 'WC', 'KZN', 'EC'].includes(region)) return null;
+    const routeId = safeStorage.getItem('defaultRoute_' + region) || '';
+    if (!routeId) return null;
+    return { region, routeId };
+}
+
+async function applySavedDefaultsToStore(saved = readSavedDefaults()) {
+    if (!saved?.routeId) return false;
+    const route = ROUTES[saved.routeId];
+    if (!route?.isActive || route.region !== saved.region) return false;
+    const { $userRegion, $currentRouteId } = await import('../store.js');
+    if ($userRegion.get() !== saved.region) $userRegion.set(saved.region);
+    if ($currentRouteId.get() !== saved.routeId) $currentRouteId.set(saved.routeId);
+    return true;
+}
+
+/**
+ * Save a corridor as this phone's home and finish Welcome.
+ * Only a shared timetable does this. Any other link opens as-is.
+ * Welcome waits until they leave that tab.
+ */
+export function adoptShareHome(routeId) {
+    const route = ROUTES[String(routeId || '')];
+    if (!route?.isActive || !['GP', 'WC', 'KZN', 'EC'].includes(route.region)) return false;
+    try {
+        safeStorage.setItem('userRegion', route.region);
+        safeStorage.setItem(`defaultRoute_${route.region}`, route.id);
+        safeStorage.setItem('welcomeSeen', 'true');
+        sessionStorage.removeItem(DEEPLINK_WELCOME_KEY);
+    } catch { /* ignore */ }
+    import('../store.js').then(({ $userRegion, $currentRouteId }) => {
+        if ($userRegion.get() !== route.region) $userRegion.set(route.region);
+        if ($currentRouteId.get() !== route.id) $currentRouteId.set(route.id);
+    }).catch(() => {});
+    import('./prefs.js').then((m) => {
+        m.syncInAppChrome?.();
+        m.applyReturningUserChrome?.();
+    }).catch(() => {});
+    return true;
+}
+
+/** Kind of the inbound share, from the frozen snapshot or the current URL. */
+export function inboundShareKind() {
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap?.kind) return snap.kind;
+    if (typeof location === 'undefined') return '';
+    const fromSearch = parseShareFromSearch(location.search);
+    if (fromSearch?.kind) return fromSearch.kind;
+    const content = parseContentDeepLink({
+        search: location.search,
+        hash: location.hash,
+        pathname: location.pathname,
+    });
+    return content?.kind || '';
+}
+
+function surfaceHomeTab(surface) {
+    if (surface === 'planner') return 'trip-planner';
+    if (surface === 'community') return 'community';
+    if (surface === 'map') return 'map';
+    if (surface === 'home') return 'next-train';
+    return '';
+}
+
+/**
+ * A new visitor may look at the shared trip, message, or alert.
+ * Leaving that tab opens Welcome instead, and remembers where they were going.
+ * Returns true when the navigation should wait.
+ */
+export function holdLeaveForWelcome(destination) {
+    if (typeof window === 'undefined' || !destination) return false;
+    if (safeStorage.getItem('welcomeSeen') === 'true') return false;
+    let surface = '';
+    let needsWelcome = false;
+    try {
+        surface = sessionStorage.getItem(DEEPLINK_SURFACE_KEY) || '';
+        needsWelcome = sessionStorage.getItem(DEEPLINK_WELCOME_KEY) === '1';
+    } catch { return false; }
+    if (!surface || !needsWelcome) return false;
+    if (surface === 'alerts') {
+        if (destination === 'next-train') return false;
+    } else if (destination === surfaceHomeTab(surface)) {
+        return false;
+    }
+    try { sessionStorage.setItem('nt_welcome_then_tab', destination); } catch { /* ignore */ }
+    if (surface === 'alerts') {
+        import('./alerts-channel.js').then((m) => m.closeAlertsChannel?.()).catch(() => {});
+        return true;
+    }
+    finishDeeplinkVisit();
+    return true;
+}
+
+/**
+ * Remember which surface the link opened.
+ * A visitor with a saved route keeps that route.
+ * A new visitor sees the link first. Welcome waits until they leave.
+ */
+export function noteDeeplinkSurface(surface, { loadDefaults = true } = {}) {
+    if (typeof window === 'undefined' || !surface) return;
+    try { sessionStorage.setItem(DEEPLINK_SURFACE_KEY, surface); } catch { /* ignore */ }
+    const saved = readSavedDefaults();
+    if (saved) {
+        try { sessionStorage.removeItem(DEEPLINK_WELCOME_KEY); } catch { /* ignore */ }
+        if (loadDefaults) {
+            applySavedDefaultsToStore(saved).then((ok) => {
+                if (!ok) return;
+                import('./logic.js').then((m) => m.loadAllSchedules?.(false)).catch(() => {});
+            }).catch(() => {});
+        }
+    } else if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        try { sessionStorage.setItem(DEEPLINK_WELCOME_KEY, '1'); } catch { /* ignore */ }
+        try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    }
+    import('./prefs.js').then((m) => m.syncInAppChrome?.()).catch(() => {});
+}
+
+/** Leave the linked surface. Restore a saved route, or open Welcome for a new visitor. */
+export function finishDeeplinkVisit() {
+    if (typeof window === 'undefined') return;
+    let surface = '';
+    let needsWelcome = false;
+    try {
+        surface = sessionStorage.getItem(DEEPLINK_SURFACE_KEY) || '';
+        needsWelcome = sessionStorage.getItem(DEEPLINK_WELCOME_KEY) === '1';
+        sessionStorage.removeItem(DEEPLINK_SURFACE_KEY);
+        sessionStorage.removeItem(DEEPLINK_WELCOME_KEY);
+    } catch { /* ignore */ }
+    if (!surface) return;
+    const saved = readSavedDefaults();
+    if (saved) {
+        applySavedDefaultsToStore(saved).then((ok) => {
+            if (!ok) return;
+            import('./logic.js').then((m) => m.loadAllSchedules?.(false)).catch(() => {});
+        }).catch(() => {});
+        import('./prefs.js').then((m) => m.syncInAppChrome?.()).catch(() => {});
+        return;
+    }
+    const storedRegion = safeStorage.getItem('userRegion') || '';
+    const showWelcome = () => {
+        if (needsWelcome && safeStorage.getItem('welcomeSeen') !== 'true') {
+            try { window.dispatchEvent(new CustomEvent('nt-show-welcome')); } catch { /* ignore */ }
+        }
+    };
+    if (!['GP', 'WC', 'KZN', 'EC'].includes(storedRegion)) {
+        showWelcome();
+        return;
+    }
+    import('../store.js').then(({ $userRegion }) => {
+        if ($userRegion.get() !== storedRegion) $userRegion.set(storedRegion);
+    }).catch(() => {}).finally(showWelcome);
+}
+
 function stripHashKeepQuery() {
     try {
         history.replaceState(history.state || {}, '', location.pathname + location.search);
@@ -100,18 +265,38 @@ function stripHashKeepQuery() {
 }
 
 /** Capture legacy + short share links before any UI mutates location.search. */
-export function snapshotShareDeeplink(searchOverride) {
+export function snapshotShareDeeplink(searchOverride, opts = {}) {
     if (typeof window === 'undefined') return null;
     try {
+        if (searchOverride == null && typeof location !== 'undefined') {
+            const located = parseContentDeepLink({
+                search: location.search,
+                hash: location.hash,
+                pathname: location.pathname,
+            });
+            const hashLink = location.hash.startsWith('#alerts/') || location.hash.startsWith('#community/');
+            const pathLink = /\/og\/[ac]\//i.test(location.pathname);
+            if (located && (hashLink || pathLink)) {
+                const destSearch = contentDeepLinkSearch(located);
+                try {
+                    const next = withBase('/') + destSearch;
+                    if ((location.pathname + location.search + location.hash) !== next) {
+                        history.replaceState(history.state || {}, '', next);
+                    }
+                } catch { /* ignore */ }
+                searchOverride = destSearch;
+            }
+        }
         const search = searchOverride != null
             ? searchOverride
             : (typeof location !== 'undefined' ? location.search : '');
         const snap = parseShareFromSearch(search);
+        if (snap && opts.prefer) snap.prefer = true;
         const existing = peekShareDeeplinkSnapshot();
         if (snap) {
-            // First Facebook/IAB hop is often `/` with no params; a later launch
-            // URL must be allowed to replace that empty/stale snapshot.
-            if (shareFingerprint(existing) !== shareFingerprint(snap)) {
+            // A chip click always wins, even when an older snapshot has the same link.
+            // A later launch URL still replaces an empty Facebook hop.
+            if (opts.prefer || shareFingerprint(existing) !== shareFingerprint(snap)) {
                 sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
             }
             return snap;
@@ -186,6 +371,18 @@ export function ingestLaunchTargetUrl(targetURL) {
     }
     if (url.origin !== location.origin) return null;
 
+    const content = parseContentDeepLink({ search: url.search, hash: url.hash, pathname: url.pathname });
+    if (content && (content.kind === 'alert' || content.kind === 'community')) {
+        const destSearch = contentDeepLinkSearch(content);
+        snapshotShareDeeplink(destSearch, { prefer: true });
+        try {
+            const next = withBase('/') + destSearch;
+            const cur = location.pathname + location.search + location.hash;
+            if (next !== cur) history.replaceState(history.state || {}, '', next);
+        } catch { /* ignore */ }
+        return content;
+    }
+
     const search = liveShareSearchFromUrl(url) || url.search;
     const pathLive = parseLiveSharePath(url.pathname);
     const snap = snapshotShareDeeplink(search);
@@ -213,6 +410,8 @@ export function hasInboundShareIntent(search = typeof location !== 'undefined' ?
         || snap.kind === 'planner-shortcut'
         || snap.kind === 'map'
         || snap.kind === 'share-target'
+        || snap.kind === 'alert'
+        || snap.kind === 'community'
     ));
 }
 
@@ -348,12 +547,9 @@ export async function applyPlannerShortcutDeepLink() {
     if (!link || link.kind !== 'planner-shortcut') return false;
     if (snap && snap.kind === 'planner-shortcut') consumeShareDeeplinkSnapshot();
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    noteDeeplinkSurface('planner');
     return true;
 }
 
@@ -373,13 +569,9 @@ export async function applyShareTargetDeepLink() {
     if (!link || link.kind !== 'share-target') return false;
     if (snap && snap.kind === 'share-target') consumeShareDeeplinkSnapshot();
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
-
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    noteDeeplinkSurface('planner');
 
     const hint = [link.text, link.title, link.url].filter(Boolean).join(' — ').slice(0, 120);
     if (hint && typeof window.showToast === 'function') {
@@ -402,20 +594,23 @@ export async function applyLiveTrainDeepLink() {
     lockShareBoot();
     const slowToast = armSlowDeeplinkToast('Still opening this link');
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
-
     const { ROUTES } = await import('./config.js');
     const { $currentRouteId, $userRegion } = await import('../store.js');
     const route = link.routeId ? ROUTES[link.routeId] : null;
-    if (route?.isActive) {
-        const region = route.region || $userRegion.get() || 'GP';
-        $userRegion.set(region);
-        const defaultKey = 'defaultRoute_' + region;
-        if (!safeStorage.getItem(defaultKey)) safeStorage.setItem(defaultKey, route.id);
+    const saved = readSavedDefaults();
+    if (saved) {
+        await applySavedDefaultsToStore(saved);
+    } else if (route?.isActive) {
+        const nextRegion = route.region || $userRegion.get() || 'GP';
+        if ($userRegion.get() !== nextRegion) {
+            let previousRegion = '';
+            try { previousRegion = safeStorage.getItem('userRegion') || ''; } catch { /* ignore */ }
+            $userRegion.set(nextRegion);
+            try {
+                if (previousRegion) safeStorage.setItem('userRegion', previousRegion);
+                else safeStorage.removeItem('userRegion');
+            } catch { /* ignore */ }
+        }
         $currentRouteId.set(route.id);
     }
 
@@ -448,6 +643,7 @@ export async function applyLiveTrainDeepLink() {
                 region_id: route?.region || '',
             });
         }
+        noteDeeplinkSurface('home', { loadDefaults: false });
         return true;
     }
 
@@ -459,6 +655,7 @@ export async function applyLiveTrainDeepLink() {
     if (typeof window.switchTab === 'function') {
         window.switchTab('map');
     }
+    noteDeeplinkSurface('map', { loadDefaults: false });
     try {
         const map = await import('./map-tab.js');
         await map.focusTrainOnMap?.(link.trainId, {
@@ -485,6 +682,83 @@ export async function applyLiveTrainDeepLink() {
     return true;
 }
 
+function contentLinkFromPage() {
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap && (snap.kind === 'alert' || snap.kind === 'community')) return snap;
+    if (typeof location === 'undefined') return null;
+    return parseContentDeepLink({ search: location.search, hash: location.hash, pathname: location.pathname });
+}
+
+function armContentEntry(surface) {
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
+    stripShareParamsFromUrl();
+    noteDeeplinkSurface(surface);
+    return slowToast;
+}
+
+/** Open the notice a shared alert link points at, and say so. */
+export async function applyAlertDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const link = contentLinkFromPage();
+    if (!link || link.kind !== 'alert') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap && snap.kind === 'alert') consumeShareDeeplinkSnapshot();
+    if (typeof window.switchTab === 'function') window.switchTab('next-train');
+    const slowToast = armContentEntry('alerts');
+    let state = 'gone';
+    try {
+        const alerts = await import('./alerts-channel.js');
+        state = await alerts.focusSharedAlert?.(link.id, link.source || '', link.photo || 0);
+    } catch { /* gone */ }
+    slowToast.cancel();
+    if (state !== 'opened') noteDeeplinkSurface('home', { loadDefaults: false });
+    if (typeof window.showToast === 'function') {
+        window.showToast(
+            state === 'opened' ? 'Opened service update' : 'This update is no longer available',
+            state === 'opened' ? 'success' : 'info',
+            state === 'opened' ? 2500 : 4000
+        );
+    }
+    return true;
+}
+
+/** Open the community message a shared link points at. The room toasts if it is gone. */
+export async function applyCommunityDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const link = contentLinkFromPage();
+    if (!link || link.kind !== 'community') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    if (snap && snap.kind === 'community') consumeShareDeeplinkSnapshot();
+    const slowToast = armContentEntry('community');
+    let allowed = false;
+    try {
+        const chrome = await import('./admin-chrome.js');
+        allowed = chrome.canAccessPilotSurface?.('community') !== false;
+    } catch { allowed = true; }
+    if (!allowed) {
+        slowToast.cancel();
+        noteDeeplinkSurface('home', { loadDefaults: false });
+        if (typeof window.switchTab === 'function') window.switchTab('next-train');
+        if (typeof window.showToast === 'function') {
+            window.showToast('Community is not available', 'info', 4000);
+        }
+        return true;
+    }
+    try {
+        const community = await import('./community.js');
+        community.queueCommunityFocus?.(link.routeId, link.postId, { announce: true });
+        if (typeof window.switchTab === 'function') window.switchTab('community');
+        else community.openRouteCommunity?.({ routeId: link.routeId });
+    } catch {
+        if (typeof window.showToast === 'function') {
+            window.showToast('This message is no longer available', 'info', 4000);
+        }
+    }
+    slowToast.cancel();
+    return true;
+}
+
 /**
  * Legacy SPA `?action=map` — open the interactive Map tab (fallback: static PRASA modal).
  */
@@ -498,11 +772,6 @@ export async function applyMapDeepLink() {
     if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
 
     const slowToast = armSlowDeeplinkToast('Still opening this link');
-
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
-    }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
 
@@ -543,17 +812,14 @@ export async function applyMapDeepLink() {
         return true;
     };
 
-    if (openTab()) {
-        slowToast.cancel();
-        return true;
-    }
-    // Modal markup may still be mounting on cold start
-    if (openModal()) {
+    if (openTab() || openModal()) {
+        noteDeeplinkSurface('map', { loadDefaults: false });
         slowToast.cancel();
         return true;
     }
     await new Promise((r) => setTimeout(r, 120));
     const opened = openTab() || openModal();
+    if (opened) noteDeeplinkSurface('map', { loadDefaults: false });
     slowToast.cancel();
     return opened;
 }
@@ -600,7 +866,9 @@ export function bindPwaSameOriginLinks() {
         const sameDoc = norm(url.pathname) === norm(location.pathname) && url.search === location.search;
         const hash = url.hash || '';
 
-        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || hash === '#community' || hash === '#map' || hash === '#prasa-map' || hash === '#alerts')) {
+        const communityHash = hash === '#community' || hash.startsWith('#community/');
+        const alertsHash = hash === '#alerts' || hash.startsWith('#alerts/');
+        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || communityHash || hash === '#map' || hash === '#prasa-map' || alertsHash)) {
             if (isLegalHash(hash) || hash === '#fare') {
                 if (location.hash !== hash) {
                     history.pushState({ deeplink: hash }, '', hash);
@@ -613,8 +881,17 @@ export function bindPwaSameOriginLinks() {
                 if (location.hash !== hash) history.pushState({ tab: 'planner' }, '', hash);
                 return;
             }
-            if (hash === '#community') {
-                if (typeof window.switchTab === 'function') window.switchTab('community');
+            if (hash === '#community' || hash.startsWith('#community/')) {
+                const parts = hash.slice('#community'.length).split('/').filter(Boolean).map((part) => {
+                    try { return decodeURIComponent(part); } catch { return part; }
+                });
+                import('./community.js').then((m) => {
+                    if (parts[0] && parts[1]) m.queueCommunityFocus?.(parts[0], parts[1], { announce: true });
+                    else if (parts[0]) m.queueCommunityFocus?.(parts[0], '');
+                    if (typeof window.switchTab === 'function') window.switchTab('community');
+                }).catch(() => {
+                    if (typeof window.switchTab === 'function') window.switchTab('community');
+                });
                 if (location.hash !== hash) history.pushState({ tab: 'community' }, '', hash);
                 return;
             }
@@ -627,9 +904,33 @@ export function bindPwaSameOriginLinks() {
                 if (typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal');
                 return;
             }
-            if (hash === '#alerts') {
+            if (hash === '#alerts' || hash.startsWith('#alerts/')) {
+                const rawAlert = hash.startsWith('#alerts/') ? hash.slice('#alerts/'.length) : '';
+                const alertBits = rawAlert.split('/').filter(Boolean);
+                let noticeId = alertBits[0] || '';
+                try { noticeId = decodeURIComponent(noticeId); } catch { /* keep raw */ }
+                const photo = /^([1-9]|10)$/.test(alertBits[1] || '') ? Number(alertBits[1]) : 0;
+                if (noticeId) {
+                    import('./alerts-channel.js').then(async (m) => {
+                        const state = await m.focusSharedAlert?.(noticeId, '', photo);
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(
+                                state === 'opened' ? 'Opened service update' : 'This update is no longer available',
+                                state === 'opened' ? 'success' : 'info',
+                                state === 'opened' ? 2500 : 4000
+                            );
+                        }
+                    }).catch(() => {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast('This update is no longer available', 'info', 4000);
+                        }
+                    });
+                    return;
+                }
                 whenSettledForAutoNotices(() => {
-                    if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
+                    if (typeof window.openAlertsChannel === 'function') {
+                        window.openAlertsChannel({ highlightId: null, focusTop: false });
+                    }
                 });
                 return;
             }

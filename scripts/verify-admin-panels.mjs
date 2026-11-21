@@ -3,6 +3,7 @@
  * Run: node scripts/verify-admin-panels.mjs
  */
 import { readFileSync } from 'node:fs';
+import { adminBuildSnapshot, frozenLabPreviewUrl } from '../src/lib/admin-changelog.js';
 import {
     findingsFromPairDeltas,
     runScheduleQaReport,
@@ -183,7 +184,7 @@ assert(admin.includes('Add a message, a poster, or a poll.'), 'compose allows a 
 assert(!admin.includes('Add a message or a poster.'), 'old body-or-poster-only toast is gone');
 assert(admin.includes('writePollVoteMeta'), 'publish writes poll close meta for rules');
 assert(admin.includes('closesInMs'), 'scheduled polls store a dedicated run length');
-assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
+assert(admin.includes("'exp-map-enabled'") && admin.includes('id="community-block-regions"') && admin.includes('id="community-block-routes"'), 'Map stays experimental and Community can block a region or a route');
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
 assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications'), 'System Controls lists remaining experimental feature types');
@@ -419,6 +420,17 @@ assert(
     'poster preview sits in the message field, not only under the picker'
 );
 assert(admin.includes('window.withBase === \'function\' ? window.withBase(path)'), 'poster preview uses withBase so github.io still loads the jpg');
+assert(admin.includes('composerPosterKeys'), 'a poster already in the message is not previewed again');
+assert(admin.includes('composerImageMax: 10'), 'the upload beside posters accepts more than four images');
+assert(admin.includes('id="admin-changelog-preview"'), 'build notes can show a frozen preview');
+{
+    const operator = adminBuildSnapshot('V10_11.10.9');
+    assert(operator.known && operator.released === false && frozenLabPreviewUrl(operator.url), 'an unreleased build keeps an operator preview, not a commuter link');
+    const branch = frozenLabPreviewUrl('https://cursor-admin-panel-cards-5ee.next-train-lab.pages.dev');
+    assert(branch === '', 'a branch preview is not treated as a frozen build');
+    const missing = adminBuildSnapshot('V10_11.10.10');
+    assert(missing.known === false && missing.url === '', 'a build with no saved deployment has no preview link');
+}
 assert(admin.includes("style.zIndex = '260'"), 'build notes sit above Dev Hub');
 assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
 assert(admin.includes("if (e.target.closest?.('[data-fb-edit-admin]')) return;"), 'hold-to-react does not steal admin hold-to-edit');

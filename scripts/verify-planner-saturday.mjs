@@ -542,6 +542,23 @@ const ireneGrid = {
 };
 const kempHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
 if (!kempHtml.includes('>KEMP<') || !kempHtml.includes('data-kemp-train="0604"') || !kempHtml.includes('data-kemp-train="0618"')) fail('through Irene columns must show clickable KEMP');
+const paddedIrene = {
+    headers: ['STATION', '0604', '0626'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'PRETORIA', '0604': '5:10:00', '0626': '6:30:00' },
+        { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
+        { STATION: 'OLIFANTSFONTEIN' },
+        { STATION: 'KEMPTON PARK' },
+    ],
+};
+const paddedHtml = Renderer._buildGridHTML(paddedIrene, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
+if (paddedHtml.includes('>OLIFANTSFONTEIN<') || paddedHtml.includes('>KEMPTON PARK<')) {
+    fail('Irene grid must not list stops that only a Kempton train times');
+}
+if (!paddedHtml.includes('data-kemp-train="0604"') || !paddedHtml.includes('data-kemp-train="0618"') || !paddedHtml.includes('>PRETORIA<') || !paddedHtml.includes('>IRENE<')) {
+    fail('KEMP columns stay on the Irene stops');
+}
 if (kempHtml.includes('data-kemp-train="0626"')) fail('an Irene terminator must not be marked KEMP');
 if (!kempHtml.includes('color:#1d4ed8') || !kempHtml.includes('letter-spacing:0.02em')) fail('KEMP must use the NO SVC tag metrics');
 if (/0604[\s\S]{0,400}bg-red-50/.test(kempHtml) || /bg-green-50[\s\S]{0,80}KEMP/.test(kempHtml)) {
@@ -565,6 +582,46 @@ if (!ui.includes('flex-col items-start text-left') || !ui.includes('Via ${escape
     fail('planner train name must stack Via under the train on a narrow card');
 }
 if (!gridJs.includes('Irene is not the last stop')) fail('KEMP tap must explain the train continues');
+if (!gridJs.includes('Irene is not the first stop')) fail('KEMP tap toward Pretoria must say the train starts at Kempton Park');
+if (kempHtml.includes('data-kemp-from="1"') || !kempHtml.includes('Irene is not the last stop')) {
+    fail('Pretoria toward Irene must keep the continues-to-Kempton advisory');
+}
+const dbNow = $fullDatabase.get();
+dbNow.kemp_to_pta_weekday = [
+    { STATION: 'KEMPTON PARK', '0603': '4:40:00' },
+    { STATION: 'IRENE', '0603': '5:02:00' },
+    { STATION: 'PRETORIA', '0603': '5:27:00' },
+];
+$fullDatabase.set(dbNow);
+const towardPretoria = {
+    headers: ['STATION', '0626'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'IRENE', '0626': '6:10:00' },
+        { STATION: 'PRETORIA', '0626': '6:40:00' },
+    ],
+};
+const fromKempHtml = Renderer._buildGridHTML(towardPretoria, 'irene_to_pta_weekday', 'pta-irene', 1, false, false, 'weekday');
+if (!fromKempHtml.includes('data-kemp-from="1"') || !fromKempHtml.includes('data-kemp-train="0603"') || !fromKempHtml.includes('starts at Kempton Park')) {
+    fail('Irene toward Pretoria must say a KEMP train starts at Kempton Park');
+}
+globalThis.window = { isTrainProvisional: (train) => train === '0626' };
+const provHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
+const provExport = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, true, 'weekday');
+delete globalThis.window;
+if (!provHtml.includes('>Prov<') || !provHtml.includes('data-prov-train="0626"') || provHtml.includes('data-prov-open="1" data-prov-train="0604"')) {
+    fail('a provisional column must show a clickable Prov tag');
+}
+if (!provHtml.includes('color:#1d4ed8') || !provHtml.includes('letter-spacing:0.02em')) {
+    fail('Prov must use the KEMP tag metrics');
+}
+if (provHtml.includes('data-kemp-train="0626"')) fail('Prov must take the status slot ahead of KEMP');
+if (!provExport.includes('>Prov<') || provExport.includes('data-prov-open') || !provExport.includes('color:#1e40af') || !provExport.includes('export-note-col')) {
+    fail('export Prov must use the light KEMP tag and must not be a click target');
+}
+if (!gridJs.includes('data-prov-open') || !gridJs.includes('it is not guaranteed to run')) {
+    fail('Prov tap must open the same advisory as KEMP');
+}
 if (!gridJs.includes('goes via the ${route} route')) fail('via tap must explain the route');
 if (!gridJs.includes('fitGridStatusTags')) fail('in-app grid must fit long status tags after paint');
 if (!gridJs.includes("e.target?.closest?.('[data-expr-skip=\"1\"]')")) {

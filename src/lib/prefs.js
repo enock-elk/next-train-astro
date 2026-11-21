@@ -498,7 +498,9 @@ export function applyNavChrome(style = getNavStyle()) {
 
     const welcome = document.getElementById('welcome-modal');
     const welcomeOpen = !!(welcome && !welcome.classList.contains('hidden'));
-    const inApp = safeStorage.getItem('welcomeSeen') === 'true' && !welcomeOpen;
+    let deeplinkOpen = false;
+    try { deeplinkOpen = !!sessionStorage.getItem('nt_deeplink_surface'); } catch { /* ignore */ }
+    const inApp = (safeStorage.getItem('welcomeSeen') === 'true' || deeplinkOpen) && !welcomeOpen;
     document.documentElement.classList.toggle('nt-onboarding', !inApp);
     document.documentElement.classList.toggle('nt-in-app', inApp);
 
@@ -518,9 +520,11 @@ export function applyNavChrome(style = getNavStyle()) {
         bottomNav.setAttribute('aria-hidden', show ? 'false' : 'true');
         if (show && wasHidden) {
             bottomNav.classList.add('nt-nav-enter');
+            const clearEnter = () => bottomNav.classList.remove('nt-nav-enter');
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => bottomNav.classList.remove('nt-nav-enter'));
+                requestAnimationFrame(clearEnter);
             });
+            setTimeout(clearEnter, 400);
         }
         if (show && typeof window.ntFitAppViewport === 'function') {
             requestAnimationFrame(() => {
@@ -591,6 +595,9 @@ export function syncCrmRegionAnalytics(region) {
             window.clarity('set', 'crm_region', code);
         }
     } catch { /* ignore */ }
+    import('./region-presence-client.js')
+        .then((mod) => mod.reportSelectedRegionPresence?.(code))
+        .catch(() => {});
 }
 
 if (typeof window !== 'undefined') {

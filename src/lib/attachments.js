@@ -79,7 +79,9 @@ export function sanitizeAttachmentDisplayUrl(url) {
 
     const asPosterSrc = (candidate) => {
         const poster = sanitizeAlertImageUrl(candidate);
-        return poster ? withBase(poster.replace(/^\//, '')) : null;
+        if (!poster) return null;
+        if (/^https:\/\//i.test(poster)) return poster;
+        return withBase(poster.replace(/^\//, ''));
     };
 
     const direct = asPosterSrc(s);

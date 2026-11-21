@@ -68,6 +68,56 @@ const failures = [];
     applyFittedLabel(clipped, 'JHB West Line schedules', 'Johannesburg West Line schedules', false);
     assert(clipped.textContent === 'JHB West Line schedules', 'a short heading that cannot fit one line stays JHB');
     assert(clipped.style.whiteSpace === '', 'a short heading that cannot fit one line is allowed to wrap');
+    let writes = 0;
+    const repeat = {
+        clientWidth: 400,
+        scrollWidth: 0,
+        style: {},
+        _html: '',
+        widthOf: (value) => (value.includes('Johannesburg') ? 300 : 100),
+        set innerHTML(value) {
+            writes += 1;
+            this._html = value;
+            this.scrollWidth = this.widthOf(value);
+        },
+        get innerHTML() { return this._html; },
+    };
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    const fitted = writes;
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(writes === fitted, 'an unchanged route label is not refitted on the next board paint');
+    repeat.innerHTML = 'Pretoria';
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'Johannesburg <-> Randfontein', 'a label rewritten elsewhere is fitted again');
+    repeat.clientWidth = 200;
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'JHB' && repeat.style.whiteSpace === 'nowrap', 'a narrower box refits to the short label');
+    repeat.widthOf = (value) => (value.includes('Johannesburg') ? 180 : 60);
+    repeat.scrollWidth = repeat.widthOf(repeat.innerHTML);
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'Johannesburg <-> Randfontein', 'a short fallback tries the long label again after a narrower font');
+    repeat.widthOf = (value) => (value.includes('Johannesburg') ? 390 : 260);
+    repeat.scrollWidth = repeat.widthOf(repeat.innerHTML);
+    applyFittedLabel(repeat, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(repeat.innerHTML === 'JHB' && repeat.style.whiteSpace === '', 'a label that grew (font swap) is measured again');
+    let unmeasuredWrites = 0;
+    const unmeasured = {
+        clientWidth: 0,
+        scrollWidth: 0,
+        style: {},
+        _text: '',
+        set textContent(value) {
+            unmeasuredWrites += 1;
+            this._text = value;
+            this.clientWidth = 200;
+            this.scrollWidth = value.includes('Johannesburg') ? 180 : 60;
+        },
+        get textContent() { return this._text; },
+    };
+    applyFittedLabel(unmeasured, 'JHB West Line', 'Johannesburg West Line', false);
+    assert(unmeasured.textContent === 'JHB West Line', 'an unmeasured label paints short first');
+    applyFittedLabel(unmeasured, 'JHB West Line', 'Johannesburg West Line', false);
+    assert(unmeasured.textContent === 'Johannesburg West Line' && unmeasuredWrites === 2, 'once measurable, the long label is tried again');
 }
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
@@ -263,15 +313,18 @@ assert(renderer.includes('first ${dayBit}:'), 'empty board headline uses a trail
 assert(!renderer.includes('timeBit'), 'empty board headline no longer appends the time');
 assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First train … is at: removed');
 assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
+assert(renderer.includes('downloadImageFile'), 'timetable save downloads the file');
+assert(readFileSync(new URL('../src/lib/save-image.js', import.meta.url), 'utf8').includes('lastDownloadStamp'), 'download names end with the epoch');
 assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
+assert(!renderer.includes('offerSavedImage'), 'timetable save does not open the share sheet');
 assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('finalPrice = Math.floor(finalPrice)'), 'fare button floors to the lower rand');
-assert(FARE_CONFIG.zones_detailed.Z1.monthly === 180, 'Z1 monthly is the V5 R180');
-assert(FARE_CONFIG.zones_detailed.Z2.monthly === 220, 'Z2 monthly is the V5 R220');
-assert(FARE_CONFIG.zones_detailed.Z3.monthly === 250, 'Z3 monthly is the V5 R250');
-assert(FARE_CONFIG.zones_detailed.Z4.monthly === 280, 'Z4 monthly is the V5 R280');
+assert(FARE_CONFIG.zones_detailed.Z1.monthly === 215, 'Z1 monthly is the 1 Dec 2026 R215');
+assert(FARE_CONFIG.zones_detailed.Z2.monthly === 266, 'Z2 monthly is the 1 Dec 2026 R266');
+assert(FARE_CONFIG.zones_detailed.Z3.monthly === 291, 'Z3 monthly is the 1 Dec 2026 R291');
+assert(FARE_CONFIG.zones_detailed.Z4.monthly === 322, 'Z4 monthly is the 1 Dec 2026 R322');
 assert(FARE_CONFIG.zones.Z1 === 10 && FARE_CONFIG.zones.Z2 === 12 && FARE_CONFIG.zones.Z3 === 14 && FARE_CONFIG.zones.Z4 === 15, 'peak singles are unchanged');
 assert(liveBoard.includes('!quietPaint && typeof paintHeaderDayLabel'), 'quiet minute tick skips rewriting the day label');
 
@@ -315,6 +368,10 @@ assert(logic.includes("sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB']"), 'w
 assert(logic.includes('WATERFALL_BUDGET_MS = 18_000'), 'waterfall has an 18s hard budget');
 assert(logic.includes('CLOUDFLARE: 5000'), 'Cloudflare schedule timeout is 5s');
 assert(logic.includes('FIREBASE: 7000'), 'Firebase schedule timeout is 7s');
+assert(logic.includes('lastUpdated did not answer — keeping the timetable already painted'), 'a painted timetable stays when lastUpdated does not answer');
+assert(logic.includes('skipping the Firebase timetable'), 'IndexedDB paint skips the Firebase timetable when the cache edge missed');
+assert(logic.includes('const OVERLAY_TTL_MS = 20 * 60 * 1000'), 'overlay refresh is 20 minutes');
+assert(logic.includes('standardInterval: 20 * 60 * 1000') || readFileSync(new URL('../src/lib/config.js', import.meta.url), 'utf8').includes('standardInterval: 20 * 60 * 1000'), 'board refresh is 20 minutes');
 assert(logic.includes('GITHUB: 8000'), 'GitHub schedule timeout is 8s');
 assert(logic.includes('ntSoftNetwork: true'), 'schedule waterfall uses soft network retries');
 assert(logic.includes("timeoutErr.name = 'TimeoutError'"), 'per-host timeout is not AbortError');
@@ -441,13 +498,21 @@ const communityView = readFileSync(new URL('../src/components/CommunityView.astr
 assert(communityView.includes('community-pane relative'), 'Community wallpaper is pinned to the pane');
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
-assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
+assert(communityView.includes('id="community-room-about"') && communityView.includes('>Disclaimer</button>') && communityView.includes('border-radius: 999px'), 'the room disclaimer is a pill');
+assert(!communityView.includes('decoration-dotted underline-offset-2 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm'), 'the disclaimer pill has no dotted underline');
+assert(communityView.indexOf('id="community-room-about"') < communityView.indexOf('id="community-presence"'), 'the disclaimer sits left of who is here');
+assert(presence.includes('It is not part of PRASA or Metrorail'), 'the room note says Next Train is not part of PRASA');
+assert(presence.includes('This chat is for commuters to update each other.'), 'the room note says commuters update each other');
+assert(communityView.includes('>Guide</button>'), 'Guide sits as a short label');
+assert(communityView.includes('#community-route-list.has-more-below') && communityView.includes('mask-image:'), 'the route list fades when more routes sit below');
+assert(!communityView.includes('h-full w-full min-h-0 flex-col'), 'Guide this reply does not stretch a blank panel');
+assert(!communityView.includes('>Community</p>'), 'the room does not repeat the Community tab name');
 assert(communityView.includes('id="community-marks-chip"'), 'Community chrome keeps the leftover title chip id');
 assert(communityView.includes('community-bubble-marks'), 'Community name row can hold medal and points');
-assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
+assert(communityView.indexOf('community-route-select') < communityView.indexOf('id="community-presence"'), 'presence sits below the route name');
 assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
-assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
+assert(communityView.includes('rows="2"') && communityView.includes('min-h-[3.75rem]') && communityView.includes('rounded-[1.35rem]'), 'community composer matches the Feedback Hub field');
 const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
 assert(communityJs.includes('community-bubble-name'), 'name stays on the far left of the bubble row');
 assert(communityJs.includes('grouped'), 'consecutive same-author posts still omit the name row');
@@ -458,9 +523,15 @@ assert(communityJs.includes('offerNextTrainAccount') && communityJs.includes('nt
 assert(!communityJs.includes('requestAccountSignIn'), 'community post does not jump straight to Welcome back');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
+assert(communityJs.includes('revealCommunityRow') && !communityJs.includes("row.scrollIntoView"), 'a community link scrolls the room only');
+assert(communityJs.includes('nt-community-force-flash'), 'a community link rings the message the way an alert does');
+assert(communityJs.includes('data-community-react-choose') && communityJs.includes('nt-sheet-above-nav'), 'the grey face opens reaction choices and the sheet stays off the bottom bar');
+assert(communityView.includes('id="community-attach-modal"') && communityView.includes('community-poster-select') && communityView.includes('M21.44 11.05'), 'admin attach is the paperclip and opens the poster sheet');
+assert(!communityView.includes('>Attach</button>'), 'community attach is not a full-width Attach button');
+assert(communityJs.includes("acct.uid === uid"), 'your own reaction uses the name saved on the account');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
-assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');
+assert(hubModals.includes('color-mix(in srgb, #111827 6%, color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas)))'), 'feedback wallpaper uses the community wash');
 assert(hubModals.includes('id="about-champions"') && hubModals.includes('Next Train Champions'), 'About has Next Train Champions under admin credits');
 assert(hubModals.indexOf('Built & Maintained By') < hubModals.indexOf('id="about-champions"'), 'Champions sit below Built & Maintained');
 const championsJs = readFileSync(new URL('../src/lib/community-champions.js', import.meta.url), 'utf8');
@@ -580,7 +651,8 @@ assert(
     hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-points-btn"')
     && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
     && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-open-notifications"')
-    && hubModals.indexOf('id="account-open-notifications"') < hubModals.indexOf('id="account-open-appearance"')
+    && hubModals.indexOf('id="account-open-notifications"') < hubModals.indexOf('id="account-open-data"')
+    && hubModals.indexOf('id="account-open-data"') < hubModals.indexOf('id="account-open-appearance"')
     && hubModals.indexOf('id="account-open-appearance"') < hubModals.indexOf('id="account-haptics-slot"')
     && hubModals.indexOf('id="account-haptics-slot"') < hubModals.indexOf('id="account-signout-btn"')
     && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
@@ -806,9 +878,10 @@ assert(
     'Terms and Privacy are About rows above Sign out',
 );
 assert(hubModals.includes('id="account-open-notifications"') && hubModals.includes('id="account-notifications-slot"'), 'Notifications open their own page');
+assert(hubModals.includes('id="account-open-data"') && hubModals.includes('data-account-view="data"') && hubModals.includes('Data saving starts off'), 'Data saving opens its own page and starts off');
 assert(hubModals.includes('id="account-open-appearance"') && hubModals.includes('id="account-appearance-slot"'), 'Appearance opens its own page');
-assert(hubModals.includes('Changes save as you switch. No Save button needed.'), 'notification switches save on their own');
-assert(accountJs.includes('#account-notifications') && accountJs.includes('#account-appearance') && accountJs.includes('#account-profile'), 'account inner pages push their own history entry');
+assert(!hubModals.includes('Changes save as you switch. No Save button needed.'), 'account pages do not explain that switches save themselves');
+assert(accountJs.includes('#account-notifications') && accountJs.includes('#account-data') && accountJs.includes('#account-appearance') && accountJs.includes('#account-profile'), 'account inner pages push their own history entry');
 assert(hubModals.includes('privacy.html') && hubModals.includes('terms.html') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer links the public privacy and terms pages');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
@@ -867,6 +940,7 @@ assert(mapTab.includes('compareNearbyTrainLikelihood'), 'nearby modal ranks like
 
 assert(formatAccountDisplayName('Enock Leo Kazembe') === 'Enock LK', 'display name is first word plus remaining initials');
 assert(formatAccountDisplayName('Enock') === 'Enock', 'single-word display name stays the first name');
+assert(formatAccountDisplayName('Enock LK') === 'Enock LK', 'a saved short name is not abbreviated again');
 assert(clampDisplayName('  Enock   LK  ') === 'Enock LK', 'custom display name is trimmed');
 assert(refuseDisplayName('').ok === true, 'empty display name is allowed for Auth fallback');
 assert(refuseDisplayName('https://spam.example').ok === false, 'display names that look like URLs are refused');
@@ -923,6 +997,7 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(marksSrc.includes("el.id === 'settings-account-points'"), 'marks sync does not unhide Options points for guests');
     assert(pickCanonicalChatDeviceId({ usr_new_2000000000000: 2000000000000, usr_old_1000000000000: 1000000000000 }, 'usr_new_2000000000000') === 'usr_old_1000000000000', 'oldest linked device wins for inbox');
     assert(pickCanonicalChatDeviceId({ usr_a_2000000000000: true, usr_b_1000000000000: true }, 'usr_a_2000000000000') === 'usr_b_1000000000000', 'boolean deviceIds fall back to the usr_ epoch suffix');
+    assert(pickCanonicalChatDeviceId({ usr_new_1700000000000: 1700000000000, usr_old_1600000000000: 1700000000000 }, 'usr_new_1700000000000') === 'usr_old_1600000000000', 'a later account-link stamp does not hide the older usr_ id');
     const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     assert(uiJs.includes('alert-image-lightbox'), 'alert image preview uses a dedicated overlay');
     assert(!/openLightbox[\s\S]*mapImg\.src\s*=/.test(uiJs), 'openLightbox must not assign #map-image');
@@ -975,6 +1050,55 @@ assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'versi
     const mapModal = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
     assert(mapModal.includes('<ZoomControls />') && mapModal.includes('id="map-container"'), 'the network map has desktop zoom controls');
     assert(!mapModal.includes('cursor-grab'), 'the map does not use a hand cursor before it is zoomed');
+}
+{
+    // INP: the clock tick and board refreshes must not force layouts when
+    // nothing on screen changed.
+    assert(layout.includes('function recoverAppViewport(keepEnv)') && layout.includes('if (keepEnv !== true) cachedEnv = -1'), 'focusout keeps the cached safe-area inset (INP)');
+    assert(layout.includes('setTimeout(function () { recoverAppViewport(true); }, 50)'), 'focusout recovers the viewport without re-probing the inset (INP)');
+    assert(logic.includes('let headerDayFit = null') && logic.includes('last.width === el.scrollWidth'), 'day label fit is skipped while nothing changed (INP)');
+    const dayFit = logic.match(/export function fitHeaderDayLabel\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+    assert(dayFit.includes('for (let i = 0; i < 8; i++)'), 'day label fit stays at 8 search steps (INP)');
+    const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+    assert(utilsSrc.includes('export function applyFittedLabels') && utilsSrc.includes('const fittedLabels = new WeakMap()'), 'label fits are batched and memoised (INP)');
+}
+{
+    // INP: the uninvited Alerts auto-open waits for idle and a quiet second after a tap.
+    const listeners = {};
+    const hadWindow = 'window' in globalThis;
+    const prevWindow = globalThis.window;
+    globalThis.window = {
+        _appStabilized: true,
+        addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+        requestIdleCallback: (fn) => setTimeout(fn, 0),
+    };
+    const { whenIdleForAutoNotices } = await import('../src/lib/session-stability.js');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let quietOpened = 0;
+    whenIdleForAutoNotices(() => { quietOpened = Date.now(); });
+    await sleep(60);
+    assert(quietOpened > 0, 'auto-open runs promptly on an idle phone (INP)');
+    let tapOpened = 0;
+    const tappedAt = Date.now();
+    (listeners.pointerdown || []).forEach((fn) => fn());
+    whenIdleForAutoNotices(() => { tapOpened = Date.now(); });
+    await sleep(500);
+    assert(tapOpened === 0, 'auto-open does not land under a fresh tap (INP)');
+    await sleep(700);
+    assert(tapOpened - tappedAt >= 950, 'auto-open waits a quiet second after the last tap (INP)');
+    if (hadWindow) globalThis.window = prevWindow; else delete globalThis.window;
+    const hubSrc = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    const autoOpen = hubSrc.slice(hubSrc.indexOf('const autoNotice = pickAutoOpenNotice'), hubSrc.indexOf('const pushNotice ='));
+    assert(autoOpen.includes('whenIdleForAutoNotices(() => {') && autoOpen.includes('canAutoOpenHomeNotices()'), 'critical auto-open waits for idle and still re-checks the home screen (INP)');
+}
+{
+    // CLS: the board must not jump while the app boots.
+    const bodyStart = layout.match(/<RecoveryLifeline \/>\s*<script is:inline>([\s\S]*?)<\/script>/)?.[1] || '';
+    assert(bodyStart.includes("body.classList.add('nav-bottom')"), 'body has nav-bottom before the board parses (CLS)');
+    assert(bodyStart.includes("localStorage.getItem('welcomeSeen') === 'true'") && bodyStart.includes("body.classList.add('chrome-compact')"), 'returning commuters get the compact header before the board parses (CLS)');
+    const liveBoardMarkup = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
+    assert(!liveBoardMarkup.includes('min-h-[72px]'), 'board placeholders are not shorter than a departure card (CLS)');
+    assert((liveBoardMarkup.match(/min-h-\[96px\]/g) || []).length >= 2, 'both board placeholders reserve the departure card height (CLS)');
 }
 if (failures.length) {
     console.error('verify-home-polish failed:');

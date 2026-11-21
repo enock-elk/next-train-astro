@@ -203,6 +203,13 @@ if (!clarityCalls.some((c) => c[0] === 'event' && c[1] === 'select_station')) {
     fail('runtime: Clarity did not receive select_station without region');
 }
 
+const presence = src('src/lib/region-presence-client.js');
+if (!presence.includes('/region-presence')) fail('selected region must report to /region-presence');
+if (!presence.includes('requestIdleCallback')) fail('region presence must wait until idle');
+if (presence.includes('queueMicrotask')) fail('region presence must not use queueMicrotask');
+const prefs = src('src/lib/prefs.js');
+if (!prefs.includes('reportSelectedRegionPresence')) fail('region sync must report the selected region');
+
 const shareLinks = src('src/lib/share-links.js');
 if (!shareLinks.includes('export function isSeoAppHandoff')) fail('share-links must export isSeoAppHandoff');
 if (!shareLinks.includes("src === 'seo'")) fail('share-links must recognize src=seo');

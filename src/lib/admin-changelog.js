@@ -5,6 +5,282 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.21.1': [
+        'Alerts header is z-20, above the feed. Pin and Delete hang under that header and were painting behind the cards because the feed is also a stacking context at z-1. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.20.3': [
+        'Monthly Mon-Sat passes are Z1 R215, Z2 R266, Z3 R291, Z4 R322 from 1 December 2026. Singles, returns, and weeklies stay on the August 2025 table. Zone km bands stay 1-15, 16-40, 41-135, over 135. Guide, Ticket Prices, SEO fare tables, and Co-Pilot say a further increase covering all ticket types is expected no earlier than 1 April 2027. Irene grids drop station rows with no time on an Irene train before a Kempton column is copied on, so blank spreadsheet stops such as Kempton Park and Olifantsfontein stay off the Irene sheet. KEMP still marks a train that continues past Irene or starts at Kempton Park. Scheduled alerts: notices, notices_meta, notices_scheduled, polls/_meta, and notices_scheduler_status allow nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com, because the worker claim write was 401 Permission denied and only the Scheduled tab posted. The hourly GitHub poke exits when the worker reports failed jobs. Deploy firebase-database.rules.json. What\'s New covers monthly fares and the Irene timetable. forceShow stays false.',
+    ],
+    'V10_11.20.2': [
+        'New community messages raise the bottom-bar badge while the board, planner, or map is open. The check runs about every 20 seconds, and a failed read keeps the last count. The hidden room list stays as it is during that check. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.20.1': [
+        'A person opened from Community Monitor, Feedback, or User Trust is the same contact when the account lists that device, the device points at that account, or the feedback was sent with that account or its email. The feedback count, alias, route, and trip plans follow that link. Changing a display name keeps the previous name on the account. Deleting the live profile keeps the name, earlier names, email, and alias on the deletion record. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.19.4': [
+        'Community keeps each bubble in place when a reaction, a name, or a profile colour arrives. The list scrolls once when the room opens: the latest message for a new reader, or the unread line for someone who has been here before. A later update stays still unless they are already on the latest message. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.19.3': [
+        'Community leaves a grey message grey when a reaction or a name refresh paints the room. The unread count stays for 45 seconds. A community message link pasted into another room or an alert shows the message text, and a tap opens that message. No picture on that card. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.19.2': [
+        'Community opens from the messages saved on this phone, then syncs. Unread messages start under a count. That count leaves after 8 seconds, and when the room is left. The list stays on the message that was on screen. The seen cursor stays on the phone, and the account cursor still updates on users/{uid}/community_seen. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.19.1': [
+        'Closing the keyboard leaves the community composer. Two photos on one message sit side by side, and a photo keeps a frame while it loads. The attach sheet closes from a tap outside it, and after a photo or link is added. Deleting a message lets that same text be sent again. A link card leaves the composer when the message is posted. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.17.2': [
+        'A community photo uses its own height, and swiping it shows the other photos in that chat. An alert link in Community or Feedback Hub opens as a notice card, and an ended notice stays on the card. Co-Pilot drops a poll thank-you unless the alert is a poll, and a quoted or linked alert sends its picture, PDF, and text, including one that has ended. User Accounts shows the count, region bars, and filters in the Trip Plans layout, with points, a WhatsApp number from past feedback, and a trip-plan mark under the sign-in icon. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.17.1': [
+        'On iPhone the keyboard pans the page. The composer now docks to that pan, and a layout that already shrank does not lift the field a second time. Android still uses the gap test. A tap on a Feedback Hub reaction opens who reacted. Holding the message still opens the emoji tray. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.16.4': [
+        'Live Telemetry asks Google for the six headlines and the graph together again, keeps that finished reply for 30 seconds, and the next open returns it. A report is allowed to finish. One rejected report leaves the others in place. The phone asks again every 10 seconds. Ads, Sentry, and the regional cards are unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.16.3': [
+        'Editing a Feedback Hub reply or a community message keeps the blank lines. Play sits above Guide on the community composer. A community draft says what the sheet shows before it points at a desk. Co-Pilot thanks someone for a poll only when the alert is a poll, and a quoted alert sends its picture, PDF, and text. Live Telemetry answers with the last good numbers immediately and refreshes Google after that. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.16.2': [
+        'Deleting a community message leaves edit mode, and saving a message that is already gone returns the button to Post so the text can be sent as a new message. The suggestion card has a close control and closes when that room is left. An operator can mark a message unread. The room cursor moves to just before that message in users/{uid}/community_seen and admin_state/{uid}/community_seen, which those rules already allow. The open room does not stamp it read again until another room is opened. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.16.1': [
+        'A shared timetable still becomes the saved route. A first visit from a trip, a community message, or an alert opens that link immediately. Welcome appears when they leave that tab, and the tab they chose opens after they pick a region and route. A return visit keeps the saved route. Trip preview pictures encode spaces so Facebook can load the thumbnail. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.9': [
+        'A shared timetable still becomes the saved route. A first visit from a trip, a community message, an alert, or any other link opens the welcome screen so the commuter picks a region and route, then the link opens. A return visit keeps the saved route and opens the link. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.8': [
+        'Facebook, Instagram, Messenger, and Line keep the bottom nav in the visible area. A host toolbar no longer counts as the keyboard, and the nav fade cannot stay invisible. A shared timetable becomes the saved route. A first visit from a trip, a community message, or an alert saves that line and skips Welcome. A return visit keeps the saved route and opens the link. SEO Open in Next Train still does not replace a saved route. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.7': [
+        'Full train sheets title-case every stop, including Pretoria North, Pretoria West, and Waltloo. The in-app timetable and the downloaded sheet keep every stop in capitals, including Waltloo. Co-Pilot shows the pause, play, and restart tray on the draft, and the draft-ready line sits under Send. Community and Feedback names use darker inks on a light theme and lighter inks on a dark theme, and the letter disc is tinted so it does not match the wallpaper. User lookup and the short user sheet use the same card, activity tiles, and actions. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.6': [
+        'The read-aloud bar closes when Developer Mode returns to its home, when the clip ends, and from its own close control. Voice and pause use the same menus as the other operator lists. Test voice plays the choices on screen before they are saved. Additional prompt, knowledge, feedback style, and community style open in a full editor that stays above the keyboard and scrolls. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.5': [
+        'System Controls has Admin preferences, collapsed until opened. It holds the shared Co-Pilot note, a shared knowledge base, a feedback reply style, and a community reply style. Community drafts do not summarise the message and do not close with Thank you for using Next Train. Each operator can save their own Chirp 3 HD voice, speed, volume, and pause. Play shows a bar with pause, play, and restart, and a toast while the voice is preparing. Co-Pilot, Community, and Community Monitor can read a draft aloud. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.4': [
+        'Community read-aloud is a speaker icon in the selection header, and only for an operator. The Feedback Hub reaction tray closes when Dev Mode closes, when the tab changes, and when the press is outside the tray. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.3': [
+        'The station list fills from the line already on the phone before the region index and map pins. A painted timetable stays when lastUpdated or the cache edge does not answer, and an open phone waits 20 minutes before the next killswitch, exclusion, disruption, and timetable stamp read. The 60 second NUKE watch is unchanged. An operator can rewrite their own community message. The bubble is not marked edited. Alert link cards keep the large picture, including a tap-to-load frame when pictures wait, and hex characters in the description decode. Hold a Feedback Hub message or a community message to play it. Play is operator-only. Chirp 3 HD runs on the reply worker after the allowlisted sign-in, with an hourly and daily character cap and a saved copy so a replay is not billed again. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.2': [
+        'Station pages label every shared-corridor train. Toward one terminus each row says From its outer end, including the first corridor. A short working still says To its real last stop. Trains leaving toward different ends share one list, headed with two names and & more when a third end exists. About this station is one sentence per paragraph. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.15.1': [
+        'Community names next to each other use distant colours. The Community tab badge counts chats with new messages. Community Monitor clears a room for the operator who answered last, from the app or from the monitor. Alert previews treat a www address and the same address as one card, and each remaining card in the operator preview has its own remove button. User lookup and the accounts list show the recorded app version. Grid Column Order uses the premium menus, a shorter station column, and compact time buttons. Long Dev Hub introductions sit behind an i. Force schedule type drops dates that have passed and turns off a force whose dates are all past. Community Monitor bubbles and the reply box match the Community tab. A build card with a route and no station says No station selected. A verified email shows Email verified and hides the verify card. New passwords need 8 characters, a letter, and a number. Too many sign-in attempts says to wait and try again. Station pages merge shared-corridor trains toward the same hub, with To and From pills, and keep separate lists toward different outer ends. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.14.3': [
+        'Community and Feedback Hub leave Next Train links as links. An external address shows its preview in the composer, and the author can remove that card before sending. A station name on the trip map stays dark on the white label in every colour pack. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.14.2': [
+        'Community disclaimer names the room, says messages are from commuters and are not Next Train or PRASA notices, and points to Options then Account for the name and photo. Privacy Policy opens from that card. Community and Feedback Hub show the same photos, GIFs, video previews, and PDFs as Alerts. A fare correction keeps the ticket photo on the sheet while it uploads and after it is saved. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.14.1': [
+        'PRETORIA WEST and PRETORIA NORTH can be picked on the home board, the trip planner, and the other station lists. The timetable key is unchanged. Remove completely no longer stops on the worker permission error. It deletes the message with the operator sign-in. A community name shows the build, such as Johannes T and V10_11.14.1, only for an operator. The build opens the same card as Feedback Hub, with the default route, the station, and the handset. Commuters do not see that. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.11': [
+        'Download names end with the epoch, so saving the same photo or export again is a new file and the phone does not ask Download file again. A photo saves as next-train_<epoch>.jpg. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.10': [
+        'Download on an alert photo, a community photo, and a Feedback Hub photo saves the file in the background. It does not open the share sheet. The timetable save does the same, and Share on that toast is still the share. Feedback Hub bubbles use the community bubble: no pointer tail, the same width, and a photo sits in the picture row. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.9': [
+        'Alert share links such as /og/a/ are served by the preview worker again, so WhatsApp can read the notice instead of the site 404. Saving a timetable or an alert photo hands the file to the phone share sheet instead of opening a blob address. Live Telemetry keeps a stored 7-day, 30-day, all-time, and graph result for ten minutes, asks a slow Google report once, and does not paint ERR over a number it already has. Publish the telemetry worker. The preview worker is already published. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.8': [
+        'Live Telemetry 7-day, 30-day, all-time, and the graph said ERR because a 6 second cutoff aborted the same Google reports that used to return numbers, and that failed reply was kept for two minutes. Those cards are one-row reports again, a slow report gets a second try, and an ERR reply is not kept. Publish the telemetry worker. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.7': [
+        'Live Telemetry 7-day, 30-day, and all-time cards said ERR because Google rejected a users-only date range. Those three now ask for a daily breakdown and use Google\'s deduplicated total. Publish the telemetry worker for the cards to fill in. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.6': [
+        'Live Telemetry was sitting on Wait because the worker held the whole reply until every Google report finished, and a failed reply still said Wait with Loading Graph. Each report now stops after a few seconds, a finished reply is kept for two minutes, and a failed load says ERR instead of Wait. Station lists say PRETORIA WEST and PRETORIA NORTH, in capitals like the other stops. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.5': [
+        'Live Telemetry showed ERR on every GA4 card because one rejected Google query threw away the rest. The last 5 minutes card now asks for a minute range, a failed query leaves the other cards as numbers, and the error is written under the cards. Publish the telemetry worker for that to reach Live Telemetry. Station lists, the timetable, the planner, and the map say Pretoria North and Pretoria West instead of Pretoria-N and Pretoria Wes. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.4': [
+        'Copy on an alert, a community message, and a Feedback Hub message is hidden when there is no caption. When there is text, Copy copies it, says Copied, and clears the highlight. Tapping a quoted community message scrolls to that message and flashes it. Community in System Controls opens collapsed, the same as the other sections. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.3': [
+        'A device back press clears a highlighted community message, and a highlighted Feedback Hub message, before it leaves the room. A community message stores the closest station, and operators see it on the name, such as Asyria M - Pretoria (Auto). Commuter Feedback writes the route and that station as JHB ↔ Naledi | Pretoria (Auto), on the person and on the version card. The feedback alias follows the name they show on Community. Joined is the earlier of the first anonymous visit and the account, the account date is kept separately, and the older user id stays on the phone. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.2': [
+        'Sending a community reply clears the quote above the box as soon as the message is staged, and puts the quote back if the send fails. A tap outside the reaction tray closes it. A tap on the who-reacted list keeps that list and closes the tray, and closing the list closes the tray too. Planner departure options keep the times on the left and the length and changes on the right, without the wait. The alerts bell starts as the idle disc, so it does not flash red before notices load. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.13.1': [
+        'Community Monitor can mark a message read or unread, asks before Hide, and replies from the thread with Suggest, Guide, and Post. Opening a room scrolls to the new messages. The thread uses the community wallpaper. A reaction clears the alert selection and the selection header. A community bubble keeps its width when the keyboard opens. The black box keeps a cache probe message, a GA4 error, and how fast the board painted, separate from the config tail. Config reads wait five minutes on the same region unless the load is forced, and the killswitch is fetched once a minute. A GA4 error is not cached for two minutes. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.15': [
+        'Community photos go in the nexttrain-community-images bucket. Alert photos stay in nexttrain-alert-images. A photo on a community message is uploaded there, and a pasted image address is copied there before the message is saved. A catalog poster stays on the site. Deploy the community worker so the new bucket is created. A phone that blocks localStorage no longer throws while a room loads. Sentry ignores Script error, plus xbrowser and swbrowser. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.14': [
+        'Disclaimer is a pill on the left of the community room line. Who is here sits on the right. The note is three short paragraphs: what people share, that Next Train is independent of PRASA, and that the chat is for commuters to update each other. The route list fades at the bottom while more routes are below. Guide this reply is a short card, and Guide sits above Post after a draft. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.13': [
+        'The community room line says Disclaimer on the right, with a dotted underline. It still opens the note that Next Train is independent of PRASA. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.12': [
+        'Sharing an alert or a community message sends the link alone. The message text stays on Copy. Deleting a community message asks first, including Remove completely and Deleted by an Admin. Cancel leaves the message. Who is here sits on the left of the room line, and Not part of PRASA on the right opens a short note that Next Train is independent. A pasted trip button, such as Belle Ombre to Mamelodi Gardens, takes the tap by itself and does not dim or select the bubble. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.11': [
+        'A community message still stops at 4000 characters. Within 400 of that, the composer shows how many characters are left, in the same spot as the messages-left line. Over the cap, Post does not send, so a cut-off copy cannot become a second message. The Community label is gone. Who is here sits under the route name. The room header and the selected-message header are the same height. Your own selection is delete, copy, share. Someone else\'s is report, copy, share. The three-dot menu closes the reaction tray and keeps the message selected. Suggest reply stays on that menu. Guide this reply appears only after a draft, as a small button. Other people\'s bubbles start further left on a slightly smaller avatar. Feedback Hub uses the same wallpaper wash as Community. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.10': [
+        'A community message is stored whole up to 4000 characters. The bubble folds at 764 characters, the same first window as an alert, and See more reveals another window each tap. A paste longer than 4000 stays in the box and is not sent. The community wallpaper is a little darker so the bubbles read. Alerts wallpaper is unchanged. Deploy the community worker and Firebase rules so the 4000 cap is what the server accepts. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.9': [
+        'A community message over the limit is not cut off and saved. The whole text stays in the box, and the screen says nothing was sent. If a short copy was already saved, the rest stays in the box instead of going out as a second message. Passenger messages can be 364 characters and operator messages 1300, both 30 percent higher. Deploy the community worker and Firebase rules so the higher limits are what the server accepts. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.8': [
+        'On a wide screen the community reactions list sits in the app column, on the bottom bar. It no longer opens on the left edge of the window. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.7': [
+        'Holding a community message no longer shifts the thread. The selection bar covers the route header instead of replacing it. A bubble grows with the text, up to most of the row, and a short line stays narrow. A second tap cannot send the same reply twice. A reply that did not save is put back in the box instead of looking sent. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.6': [
+        'The bottom bar highlight follows the screen that is open. Back from the map returns to the board. Community bubbles keep their width when the keyboard opens, and the last one sits above the composer. Sent messages use a double tick. Reactions sit on the outer edge, left for other people and right for your own. Pulling the reaction list closed slides it behind the blue bar. Suggest reply answers only the message you held, or the latest passenger message, and does not reply to the rest of the room. Sitemap lastmod regenerated for the current routes and stations. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.5': [
+        'Grid Column Order paints the same timetable as the app. Hold a train column and drag it. Add or delete a train, clear one stop, or set the first station: the rest of that column follows the other trains. Monte Vista and Maitland stay on Western Cape sheets only. Save times writes that sheet to Firebase. The loading telemetry toast closes with Dev Mode. A long community draft scrolls inside the box, and the quote sits on the input rather than over Post. Operators get Suggest reply and Guide this reply on the community composer. A first visit that opens the map and taps Back lands on the welcome screen. A saved route still returns to that region page. Map gold hash updated for the Back target only. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.4': [
+        'Community and Feedback Hub bubbles keep the flat corner at the top, beside the avatar. Own messages are flat at the top right. The Feedback Hub tail moved up with that corner. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.3': [
+        'A community photo on its own fills the message, edge to edge, and a tap opens the same full-screen viewer as an alert, with download and close. It no longer opens the image host, so the address bar does not show supaimg or imagebb. Saving a picture from a host that blocks the page goes through the community worker at /media/file. That worker deploys from this push. The Play Store dialog that says Google Play is enabled is Play Console Automatic protection inside za.co.nexttrain.app, not a broken asset links file. The address bar staying hidden means the links are already verified. Turning Automatic protection off and shipping a new Android build is what stops that dialog. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.2': [
+        'Core Web Vitals, part two. A first-time visitor is no longer restarted a few seconds after the app loads: with no older copy of the app on the phone, the current killswitch is recorded as already applied. Returning phones, an interrupted NUKE and a newer killswitch still clean up and restart as before, and the black box logs "NUKE skipped on a first visit" when the skip happens. The critical Alerts auto-open now waits until the phone is idle and a second has passed since the last tap (at most eight extra seconds), so it no longer lands under a commuter\'s first taps. Shared Alerts links still open straight away. The deferred Firebase sign-in and start-up module steps are written up in docs/CWV-NEXT-STEPS.md, not shipped. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.12.1': [
+        'Home page Core Web Vitals. A returning commuter\'s board no longer jumps on start-up: the bottom-bar padding and the compact header are set before the board draws, and the empty board cards already have the height of a departure card. There is less main-thread work between taps: the clock no longer re-measures the day label every second, route labels refit only when they change, and the advert watcher scans the page once per burst instead of five or more times. Advert gold hashes follow the new watcher. After the production deploy, press Validate fix on the Search Console Core Web Vitals report. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.14': [
+        'On the guest account page, Sign in sits under the sign-in line, and Passenger type no longer has the fare-estimates line so it lines up with Points. The community reactions sheet closes when you leave Community. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.13': [
+        'The De Wildt weekday grid effective 16 November 2026 is in the timetable catalogue, both directions on one sheet, labelled Weekday both ways grid, 16 Nov 2026, so an admin can post it. The guest account line says Sign in to sync and unlock features. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.12': [
+        'The community reactions sheet sits on the bottom bar, with no gap above it. Each photo on an alert has its own link, /1 and /2 and so on, and opening that link opens that photo. Sharing a community message names who posted it. Copy on an alert with no words is greyed out. Deploy the nexttrain-og worker so the preview card uses the name and the photo. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.11': [
+        'The community reactions sheet stops above the bottom bar, so that bar stays its own colour. The grey face on that sheet opens the reaction choices. An admin attach on Community is the Feedback Hub paperclip, and it opens the poster and link sheet. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.10': [
+        'A saved Community name such as Enock LK stays Enock LK on a reaction. A shared community message rings that bubble, and the room scrolls inside the tab so the page does not grow a blank under the composer. The Community field is the same two-row curve as Feedback Hub. With the keyboard open, the wallpaper stays put and the latest messages sit above the keys. The shell is not shortened, so the blank slab under the composer stays gone. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.9': [
+        'The Community composer sits on the same wallpaper as Feedback Hub, so the area around the message field is not a white bar. Feedback Hub uses the Community bubble, name, and avatar. A run of your own messages shows You once. An admin reply uses that admin\'s account name and Community photo, so Enock LK stays Enock LK. One person has one reaction. A commuter reaction on an admin message badges that message and leaves the thread in Archives. Opening the thread clears the badge. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.8': [
+        'Reset this App still clears this phone, and it keeps which admin replies in Feedback Hub were already opened. A reply that was viewed does not come back as new. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.7': [
+        'A community long-press highlights that message with the same shape as the bubble, and puts the reaction tray just above the finger. A selected alert uses that same wash on the card. The tray cannot be selected as text. Tapping away clears the message, the tray, and the header together. A guest opens the same Account page, with a sign-in note where the name would be and Sign in where Edit profile is. Signing out stays on that page and keeps this phone\'s settings. A shared alert, community message, live train, timetable, or trip opens that item first. A saved region and route stay as they were. A new visitor sees Welcome only after leaving that screen. Alerts still show reaction totals to everyone. When a signed-in rider reacts, an admin also sees that rider. Deploy Firebase rules so those names can be saved. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.6': [
+        'Community reactions open the bottom sheet. It lists each person with their avatar, name, and reaction, plus the reaction totals. Swipe down or Back closes it. The Alerts reactions sheet is unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.5': [
+        'Community reactions are a small tray beside the message, so the header stays usable. Closing that tray, or reacting, clears the selection. Report and Delete sit on the header. A rider cannot report their own message, and can delete only their own. The three-dot menu is admin only. Alerts and Community share use the Share App icon. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.4': [
+        'Copy on an alert uses the words only, so an image-only notice cannot freeze the phone. Full view has a download button for the picture or GIF already on screen. A PDF on an alert opens in the app after a tap, with scripting off, and is not fetched before that tap. Pull to refresh reloads the open Alerts list. A shared alert or community link opens that notice or message, including when the app was already open, and says when it is gone. The share address is /og/a or /og/c so the preview can name the update. Deploy the nexttrain-og worker for those previews. Creating an account keeps this phone\'s user id, and a later sign-in on another phone keeps that same user id. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.3': [
+        'Alerts do not have Report. The header menu on an alert is Pin and Delete, and only for an admin session. Community can be switched off for every commuter, or left on and blocked for one region or one route. An admin session can still open it. The old enabled:false pilot config still does not hide the tab. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.2': [
+        'Ad revenue and the telemetry graphs export the period on screen as a wide graph or as a spreadsheet of the date and the amount. Each graph has a landscape button, and the saved image uses that wide frame. Holding an alert or a community message puts Copy, Share, and a menu on the header. Report is in that menu. A shared link opens that notice or that message. Tapping a community reaction lists who reacted and keeps the reaction buttons. Community is a normal tab. System Controls can switch it off for commuters. An admin session can still open it. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.11.1': [
+        'The Community badge waits until a signed-in account\'s seen cursors have loaded, so a restoring session does not show a count for messages already read. Opening Community clears only the room on screen, after that room has painted. Other rooms keep their counts. A sent message leaves the composer immediately, shows in the room with a clock, and the clock becomes a tick when the send is accepted. Live Telemetry stats compare the last 7 finished days with the 7 days before them, and a finished week or month with the one before it. Today, this week, and this month are left out of that comparison. Deploy the telemetry worker so the daily series includes the 14th finished day. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.15': [
+        'Live Telemetry revenue and the $4 CPM deal convert to rands from an open US dollar rate (Frankfurter, then open.er-api). Tap again to return to dollars. Ads on the user graph draws viewable impressions for the same days, weeks, or months. Stats opens the growth, the change, and the viewability rate for that view, and exports with the chart. The impressions graph opens full screen. A dismissible toast stays up while telemetry is loading and clears when the fetch succeeds. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.14': [
+        'Live telemetry has an Ad revenue block. The Clever script id stays in the Worker secret CLEVER_SCRIPT_ID. A search can start at the first hit. Ranges longer than 3 months are stitched on the Worker and drawn with the existing telemetry graph. A pasted Next Train planner, timetable, or live-train link in Community, Feedback, and the admin inbox becomes a short chip. A live chip opens the Map tab only while that train is still being shared, including when Map is off for that person or route. A stopped train does not open Map. Admins can still post other https links. Account cards keep both ends of the route on one row. Trains near you opens from the bottom, at the same height. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.13': [
+        'The first-visit map region grid uses the welcome sheet: white page, blue glow, app mark, and raised tiles. Back is the chevron. The choice itself is unchanged. GitHub Pages preview deploy for V10_11.10.12 timed out while GitHub was still syncing files. The Astro build succeeded and Cloudflare Pages deployed. That timeout is not a map code failure. forceShow stays false.',
+    ],
+    'V10_11.10.12': [
+        'A bare network map with no saved region, no ?region=, and no region already chosen this visit shows a 2 by 2 province grid and does not draw Gauteng. It does not write userRegion until a province is tapped. Back on that grid stays Back to Next Train, so a first visit opens the welcome screen. The general routes index is not the Back target: the control is already the app door, and a chosen region still returns to that region\'s timetable page. A saved region, ?region=, the in-app map tab, and a station preview are unchanged. The in-app tab and a station preview still fall back to GP in memory only, and that fallback is not saved. forceShow stays false.',
+    ],
+    'V10_11.10.11': [
+        'Swiping across alert pictures keeps the next picture in the frame while the finger moves, the same way the home tabs slide. The stage no longer goes black and then loads. Service alert, Transit Incident Manager, Feedback, and the other admin text fields use a field fill that sits off the hub background, in light and dark. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.10': [
+        'The account screen parks the side menu before it opens, so Welcome back no longer flashes that menu. A swipe on the account screen does not open it either. Build notes link a frozen lab preview when one is saved. A deployment address is eight hex characters and does not move. A branch preview is not used. A build that was not released says so, and still offers the operator preview when that frozen address exists. Community Monitor unread skips the signed-in operator\'s own posts and replies. Another operator\'s message still counts. A service alert hides the small poster preview when that picture is already in the message. The small preview stays when the poster is only selected. A GIF in Alerts, Community, and Feedback plays three times, then rests on the frame it reached, with a replay control in the middle. Media and Upload a photo take up to 10 pictures, including a GIF. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.9': [
+        'Community Monitor reads the newest stored post when a route has no activity index, so an older room such as Hercules to Koedoespoort still shows its message and time. That missing index row is written back. Route, delay, live share, account, ban, and train-order cards use the same sheet layout as Feedback. Live sharing and the other admin lists scroll with the page. The grey block under the session list is gone. Lookup no longer fails on accountEmailRaw before initialization. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.8': [
+        'Community avatars use the first letter of the display name in that person\'s existing colour, taken from their account id. A name with no letter gets a small disc in that colour. The shared person emoji is gone. A profile photo still shows only when the rider has opted in. A display name change is written to public_profile on sign-in, on save, and when Community opens. Older messages use that current name, or the newest name already seen for that person when the profile has no name yet. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.7': [
+        'Back from a Community Monitor route returns to the route list. It no longer drops out to the Dev Mode grid. Pull to refresh waits for a longer pull. An empty circle closes as the finger moves and completes at the threshold. Suggest reply leaves the community composer and sits on the admin hold menu. That draft sends the past 24 hours of the room and marks the held message as the priority. User Accounts asks the community worker for the Google or Facebook name on the Auth record, and also stores that name on the next sign-in. Until that name is available the card shows the email name, beside the display name. Gender and age are shown only when a record already has them. Google sign-in does not include them, and we do not ask. Feedback None has a plus that starts a message. Sign-in and create-account errors mention Forgot password. A community points chip uses the highest total already seen for that person, including a later message, so an older post stored as 0 still shows the real total. An admin view of that higher number asks the community worker to save it on public_profile. Deploy that worker so /community/points-seen is live. No gender collection. forceShow stays false.',
+    ],
+    'V10_11.10.6': [
+        'A picture waiting for a tap shows a small blurred preview and the real file size. New posts store that preview with the notice. Older photos, including ImageBB and R2, use GET /media/preview on the community worker, which returns a tiny JPEG and the byte count. Deploy that worker so phones already showing a notice can blur it. The alert poster list has Posters and Timetables. Timetables follow the board route order, Johannesburg written in full, and a tap opens the sheet. Add to this alert posts the /images/schedules path. Fare adjustment, the commuter mass meeting, Germiston-Leralla ballast, and Phelophepa health are removed from the catalogue. forceShow stays false.',
+    ],
+    'V10_11.10.5': [
+        'A community unread badge stays until that session opens the route. A first visit no longer stamps every room as seen. A signed-in account stores users/{uid}/community_seen so another signed-in session on the same account starts clear. A signed-out phone uses only its own cursor. A newer post, or a reply on a post in the newest page, raises the badge again. The open room still clears immediately. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.4': [
+        'Data saving labels the web-address card Link Previews. The stored choice is unchanged. Community Monitor drops the second route title, fills the beige chat, and moves Hide, Remove, Deleted by an Admin, and Shadow ban into Options. Linked device ids sit in a collapsed row. Admin panels with tabs swipe between those tabs. An accepted community message writes one public points total from the community worker. The bubble reads that total. A stored 0 on an older message is not shown when the public total is missing. Private marks still upload only when that ledger changes, and that upload does not replace a higher public total. Name colours in one chat reading stay on the same person, including a quote. Picture tap still uses the Photo outline. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.3': [
+        'Dev Hub badges wait until the schedule stamp check and download already running on this phone have finished, then read Firebase. They still use the shallow community_activity key list and a short page per route, four routes at a time. Community Monitor uses that same page (newest 20) instead of the whole tree. Unread on a route therefore stops at 20. Opening a route does not write older messages back into the index when that page is full. A commuter profile still reads the full activity tree. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.10.2': [
+        'Data saving is a signed-in Account page, next to Notifications. It starts off: pictures load on their own, link cards stay on, and profile photos stay on. Only when I tap waits for a tap before a new picture download. A poster already in the alert image cache, or a picture this phone has already shown, still paints with no download chip. Link cards off skips the card and the lookup. Profile photos off skips the photo and keeps the existing placeholder. The timetable is unchanged. The map still loads its picture when that map is opened. forceShow stays false.',
+    ],
+    'V10_11.10.1': [
+        'Media and Upload a photo take up to four photos in one pick. The notice stores each photo in the text as well as the poster list, so phones already on V10_11.09.2 still show all four. A catalog poster does not push one of those photos off that older screen. The photo address has no token. Posting still uses the operator sign-in the alert post already requires. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.09.6': [
+        'Community route names use Johannesburg when the pill or the open list can hold it on one line, and JHB when it would wrap. Opening a room no longer downloads that room\'s posts a second time, and reactions are read per visible message instead of the whole reactions tree. Unread checks stay at a minute on Community and slow to three minutes on the other tabs. Public names refresh every 10 minutes. Alert photos upload to Cloudflare R2 from Upload a photo on the channel poster, and from Insert Media. The file is served by the community worker. Deploy that worker so the nexttrain-alert-images bucket is created and the upload route is live. A photo address is https://nexttrain-community.enock.workers.dev/alerts/. Campus networks that block workers.dev will not show that photo until a custom host is added. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.09.5': [
+        'Community Monitor pages the full message log. Earlier messages loads the previous 80, and the phone still listens to the newest 80. The hourly job no longer deletes older messages. Reports sits between Group chats and Reviews. A report shows who sent it and who wrote the message. Safe leaves the message up and clears the report. Hide message and Shadow ban author stay on the card. Account cards show Google or Email at the top right. Region, sign-in, and route use the in-app dropdown. Lookup and the user sheet use grouped rows. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.09.4': [
+        'A passenger can delete their own community message. The bubble then says Deleted message. A quote made while it was still up keeps that quoted text. An operator chooses Remove, which takes the bubble away, or Deleted by an Admin. Community rooms keep the latest 80 messages instead of dropping everything after 24 hours. The hourly trim reads route keys and a short page of older messages, not the whole community tree. Passengers stay on the existing send limit. Operators can attach up to 4 image addresses, a service alert poster, or one https link. Alerts can carry 10 posters. Suggest reply on the community composer is operator-only and drafts into the box. Pull to refresh works on Next Train, Trip Planner, and Community, and stays off Map and Options. It follows the list that is actually scrolling, and the hint no longer sits inside that list. Deploy the community Worker so deletes, operator links, and the 80-message trim run. Deploy firebase-database.rules.json so a passenger cannot attach a link and an operator reply longer than 280 characters can be saved if the Worker is unavailable. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.09.3': [
+        'Opening a community room clears that room\'s unread count straight away, including when the latest messages are still below the screen. The room opens on the latest message. Community Monitor scrolls its introduction and search away, and a route opens as a full conversation with the latest message at the bottom. Community bubbles use the rider\'s latest points, and a photo stays hidden once they turn Show my photo next to my name off. Account, Lookup, Bans, and Deletions sit in that order. The account list shows the total, and a Gauteng filter shows the Gauteng total. The main tabs follow a finger and can rest between two tabs. Lookup can quietly raise how many community messages an account may send in 30 minutes. Deploy firebase-database.rules.json so the public points and the higher limit can be saved, and deploy the community Worker so the higher limit is not cut back to four a minute. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.09.2': [
+        'Planner fare accuracy counts confirmed quotes and quotes still waiting. Refuted prices sit in their own accordion and stay out of the percentage. Correct quotes move into Saved corrections, and the open list is only the incorrect ones. Community hides the messages-left control until 3 remain. Account points and badges follow the features open for that person. Grid column order uses the route ends and the same controls as the rest of the hub. Live telemetry keeps the last numbers and waits longer before it says Wait. Force schedule type sits in Holiday Notices. The default ban mode sits on the Bans tab of User Accounts & Bans. Deploy the telemetry Worker so the longer cache reaches phones. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.09.1': [
+        'Accounts fills the screen and can be filtered by name, region, route, and sign-in. The full name stays on the card. Regional breakdown can step back through earlier Johannesburg days, up to 35 days. Community shows the remaining messages as a dotted control that explains the try-out limit. The Irene timetable says a Kempton train starts at Kempton Park when the sheet runs toward Pretoria, and continues to Kempton Park when the sheet runs toward Irene. Route sheets sit inside Special Event Route. Notifications and Appearance no longer carry the save-as-you-switch line. Deploy the telemetry Worker so previous days load, and deploy firebase-database.rules.json so region and route can be stored on the account directory. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.07.18': [
+        'Feedback Hub messages store the station selected on the Next Train home board. Build notes then read Pretoria ↔ Pienaarspoort · Pretoria (Auto), or (man) when the station was picked from the list. A message already saved without a station stays on the route line. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.07.17': [
+        'Route sheets: Sunday and Special are per line. A _Sun tab is used on Sundays when that route is ticked. A _Special tab is used on the dates you list, or every day if the date box is empty. Other routes stay on their normal day. A ticked route whose tab has no times keeps the normal sheet. Spreadsheet sync picks up tabs ending in _Sun or _Special after that region Apps Script is updated. Deploy firebase-database.rules.json so commuters can read config/route_sheets. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.07.16': [
+        'Sunday No service uses the Saturday Schedule capsule: same offset, padding, radius, and wash. Only the ink is amber. No extra border or heavier fill. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.07.15': [
+        'Build notes name the selected station as Pretoria (man) or Lenz (Auto). Manual station without a name is gone. The regional overlapping-report warning hides once the telemetry Worker returns an exact device split. A provisional train shows Prov in the timetable and on the saved sheet, in the same slot as KEMP, and a tap opens the advisory. Sunday No service uses the Saturday Schedule capsule, in amber, on light and dark headers. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.07.14': [
+        'Regional breakdown counts each reporting device once, under the app region selected most recently today, Johannesburg time. The four cards add up. Analytics people today stays separate because older builds have not reported yet. Sentry today shows whether Sentry is unconfigured, failed, or genuinely at zero. The 24h list under it is the Firebase app diagnostic record, not a Sentry estimate. Feedback handset, network, signal, and screen size sit under the route line in Build notes. A one-letter handset token is left off. A trip-map station dot opens the station name. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.13': [
         'Departure rows no longer say Earlier or Later. A planner train name uses a dotted underline. A reply to an advisory wraps a long link inside the quote. Feedback Hub wraps long links and long unbroken text in a message. Add attachment sits in the corner of the details box, not as its own field. No commuter What\'s New. forceShow stays false.',
     ],
@@ -979,6 +1255,31 @@ export function normalizeAdminChangelogKey(version) {
         .split(' · ')[0]
         .split(' ·')[0]
         .trim();
+}
+
+/**
+ * Frozen Cloudflare Pages deployment for one build.
+ * Only an 8-hex deployment host is accepted. A branch preview moves when the branch moves, so it is not stored.
+ * released false means commuters were not shipped this build. The link is an operator preview of that exact code.
+ */
+export const ADMIN_BUILD_SNAPSHOTS = {
+    'V10_11.10.9': {
+        url: 'https://bb34866e.next-train-lab.pages.dev',
+        released: false,
+    },
+};
+
+export function frozenLabPreviewUrl(raw) {
+    const s = String(raw || '').trim().replace(/\/$/, '');
+    return /^https:\/\/[a-f0-9]{8}\.next-train-lab\.pages\.dev$/i.test(s) ? s : '';
+}
+
+export function adminBuildSnapshot(version) {
+    const key = normalizeAdminChangelogKey(version);
+    const row = key ? ADMIN_BUILD_SNAPSHOTS[key] : null;
+    const url = frozenLabPreviewUrl(row?.url);
+    if (!url) return { key, url: '', released: false, known: false };
+    return { key, url, released: row.released === true, known: true };
 }
 
 export function lookupAdminChangelog(version) {

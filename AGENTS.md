@@ -258,6 +258,19 @@ Anything on this list is a change you must **flag to the owner in your summary**
 
 Diagnosing an unstyled report: confirm the hashed CSS URL in the affected HTML still returns 200 on the host. If the file is gone, it is retention, not the app. A Clarity replay that renders unstyled while the AI session summary describes the visitor tapping stations, routes and departure times means the **commuter was fine** and only the replay lost the stylesheet — same root cause, still worth fixing, but not an outage.
 
+## Core Web Vitals
+
+Search Console flagged mobile INP 729 ms, LCP 2.8 s, CLS 0.11 (Nov 2026). Fixes are in V10_11.12.1 and V10_11.12.2. **Before any performance work, read [`docs/CWV-NEXT-STEPS.md`](docs/CWV-NEXT-STEPS.md)**: what shipped, how it was measured, and two follow-ups that are documented but **not** shipped.
+
+- **Do not undo:** the parse-time `nav-bottom` / `chrome-compact` body script and 96px board placeholders (CLS); memoised `applyFittedLabel` and header day fit (INP); the first-visit killswitch seed (`window.__ntFreshProfile` in `Layout.astro` `<head>` before the SW register, `shouldSeedFreshKillswitch` in `runKillswitchCheck`); the critical Alerts auto-open through `whenIdleForAutoNotices`.
+- **Next step A, Firebase Auth popup resolver (about 110 ms on phones).** Medium risk. Only ship it after Google sign-in passes on a **real iPhone** (Safari and home-screen PWA) and Android (Chrome and TWA). iOS blocks popups opened after async work.
+- **Next step B, lazy index / Welcome module evaluation (about 300 ms + 210 ms at 8x).** Higher risk. Inventory `window.*` hooks before moving any module behind `import()`. Do not touch `manualChunks`.
+- Ask the owner before starting either step. Neither is a drive-by change.
+
+## Play Store dialog
+
+The dialog **Something went wrong. Check that Google Play is enabled on your device…** on top of a running full-screen app is Play's license check, injected into `za.co.nexttrain.app` by Play Console **Automatic protection** (`com.pairip.licensecheck`). It shows every so often when that check fails for a moment. A hidden address bar means `public/.well-known/assetlinks.json` already verified. Do not edit asset links to chase this dialog. The website cannot dismiss it. It stops when Automatic protection is turned off and a new Android build is shipped.
+
 ## Testing
 
 Run the existing verify scripts that match the change (`npm run verify:alerts`, `verify:schedule`, `verify:urls`, …). Do not add walkthrough videos or screenshot demos unless the owner asks.

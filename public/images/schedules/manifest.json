@@ -909,6 +909,21 @@
       "notes": "Amended weekday. Companion to outbound."
     },
     {
+      "id": "gp-dewildt-weekday-combined-2026-11-16-grid",
+      "file": "gp/gp-dewildt-weekday-combined-2026-11-16-grid.jpg",
+      "region": "GP",
+      "corridorId": "NORTH_LINE",
+      "corridorLabel": "Pretoria <-> De Wildt",
+      "day": "weekday",
+      "direction": "combined",
+      "part": "grid",
+      "format": "grid",
+      "label": "De Wildt–Pretoria weekday grid, both ways (16 Nov 2026)",
+      "effective": "2026-11-16",
+      "routeIds": ["pta-dewildt"],
+      "notes": "Amended weekday full station grid, both directions, effective 16 November 2026. Keep the 8 Apr 2026 one-direction grids."
+    },
+    {
       "id": "gp-lenz-weekday-combined-2026-10-26-grid",
       "file": "gp/gp-lenz-weekday-combined-2026-10-26-grid.jpg",
       "region": "GP",

@@ -7,6 +7,7 @@
 import { DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { noticeQuotePlain } from './feedback-quote.js';
 import {
+    alertPhotoIndex,
     parseAlertSharePath,
     parseCommunitySharePath,
     parsePlannerDeepLink,
@@ -266,6 +267,14 @@ export async function loadSharedNotice(source, id) {
     };
 }
 
+/** The photo in the link, or the first poster when the link is the whole notice. */
+export function alertShareImageUrl(images, photo) {
+    const list = Array.isArray(images) ? images : [];
+    const index = alertPhotoIndex(photo);
+    const raw = String((index && list[index - 1]) || list[0] || '');
+    return (/^https:\/\//i.test(raw) || raw.startsWith('/')) ? raw : '';
+}
+
 function paintAlertShareCard(el, loaded) {
     const titleOf = (notice) => {
         const plain = noticeQuotePlain(notice);
@@ -281,8 +290,7 @@ function paintAlertShareCard(el, loaded) {
     const images = Array.isArray(loaded.notice.imageUrls) && loaded.notice.imageUrls.length
         ? loaded.notice.imageUrls
         : (loaded.notice.imageUrl ? [loaded.notice.imageUrl] : []);
-    const rawImage = String(images[0] || '');
-    const image = /^https:\/\//i.test(rawImage) || rawImage.startsWith('/') ? rawImage : '';
+    const image = alertShareImageUrl(images, el.getAttribute('data-alert-share-photo'));
     const ended = !!loaded.ended;
     el.classList.toggle('is-ended', ended);
     el.classList.toggle('is-live', !ended);

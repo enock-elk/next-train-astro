@@ -4356,11 +4356,11 @@ const Admin = {
         const ranges = ['INTRADAY', 'DAU', 'WAU', 'MAU', 'ALL'];
         Admin.telemetryRange = ranges[(ranges.indexOf(Admin.telemetryRange) + 1) % ranges.length];
         
-        const cycleBtn = document.getElementById('trend-cycle-btn');
-        if (cycleBtn) cycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange} Trend`;
-        
+        const rangeLabel = document.getElementById('trend-range-label');
+        if (rangeLabel) rangeLabel.textContent = `${Admin.telemetryRange} trend`;
+
         const drillCycleBtn = document.getElementById('analytics-trend-cycle');
-        if (drillCycleBtn) drillCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange}`;
+        if (drillCycleBtn) drillCycleBtn.textContent = Admin.telemetryRange;
         
         Admin.telemetryWeeksAgo = 0; // Reset pagination context
         Admin.telemetryCumulative = false;
@@ -4490,14 +4490,10 @@ const Admin = {
 
     _paintCumulativeToggle: () => {
         const on = !!Admin.telemetryCumulative;
-        ['trend-total-btn', 'analytics-trend-total'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.setAttribute('aria-pressed', on ? 'true' : 'false');
-            el.classList.toggle('text-blue-600', on);
-            el.classList.toggle('bg-blue-50', on);
-            el.classList.toggle('dark:bg-gray-700', on);
-        });
+        const el = document.getElementById('analytics-trend-total');
+        if (!el) return;
+        el.setAttribute('aria-pressed', on ? 'true' : 'false');
+        el.classList.toggle('is-on', on);
     },
 
     toggleCumulativeGraph: () => {
@@ -4517,14 +4513,11 @@ const Admin = {
 
     _paintAdToggle: () => {
         const on = !!Admin.showAdOverlay;
-        ['trend-ads-btn', 'analytics-trend-ads'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (!el) return;
+        const el = document.getElementById('analytics-trend-ads');
+        if (el) {
             el.setAttribute('aria-pressed', on ? 'true' : 'false');
-            el.classList.toggle('text-blue-600', on);
-            el.classList.toggle('bg-blue-50', on);
-            el.classList.toggle('dark:bg-gray-700', on);
-        });
+            el.classList.toggle('is-on', on);
+        }
         const legend = document.getElementById('tel-trend-legend');
         if (legend) {
             const show = on && Admin.telemetryRange !== 'INTRADAY' && Array.isArray(Admin._lastChart?.overlay);
@@ -4813,24 +4806,10 @@ const Admin = {
             trendWrapper.className = "mt-4 border-t border-gray-200 dark:border-gray-700 pt-3";
             trendWrapper.innerHTML = `
                 <div class="flex items-center justify-between mb-2 px-1">
-                    <button id="trend-cycle-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest focus:outline-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded flex items-center shadow-sm border border-gray-200 dark:border-gray-700">
-                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
-                        <span>${Admin.telemetryRange} Trend</span>
+                    <span id="trend-range-label" class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">${Admin.telemetryRange} trend</span>
+                    <button type="button" id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Open the full graph" aria-label="Open the full graph">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                     </button>
-                    <div class="flex space-x-2">
-                        <button type="button" id="trend-total-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Add up the buckets on this graph" aria-pressed="false">Total</button>
-                        <button type="button" id="trend-ads-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Show ad counts on this graph" aria-pressed="false">Ads</button>
-                        <button type="button" id="trend-stats-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Statistics for this graph">Stats</button>
-                        <button id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
-                        </button>
-                        <button type="button" id="trend-inline-landscape-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Landscape" aria-label="Open landscape view">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
-                        </button>
-                        <button id="trend-inline-export-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Export">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        </button>
-                    </div>
                 </div>
                 <div id="tel-trend-container" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
                     <span class="text-xs text-gray-400 italic">Loading Graph...</span>
@@ -4955,30 +4934,22 @@ const Admin = {
                 chartPanel.innerHTML = `
                     <button id="telemetry-chart-header-btn" class="hidden" type="button"><span>Analytics Trends</span></button>
                     <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-                        <div class="p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-2 bg-gray-50 dark:bg-gray-900 shrink-0">
-                            <button id="analytics-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-gray-200 dark:border-gray-700 shadow-sm flex items-center">
-                                <svg class="w-3.5 h-3.5 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
-                                <span>${Admin.telemetryRange}</span>
-                            </button>
-                            <div class="flex items-center space-x-2">
-                                <button type="button" id="analytics-trend-total" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Add up the buckets on this graph" aria-pressed="false">Total</button>
-                                <button type="button" id="analytics-trend-ads" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Show ad counts on this graph" aria-pressed="false">Ads</button>
-                                <button type="button" id="analytics-trend-stats" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Statistics for this graph">Stats</button>
-                                <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                                </button>
-                                <button type="button" id="analytics-trend-landscape" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Landscape" aria-label="Open landscape view">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
-                                </button>
-                                <button id="analytics-trend-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </button>
+                        <div class="nt-chart-toolbar">
+                            <div class="nt-chart-toolbar-top">
+                                <button type="button" id="analytics-trend-cycle" class="nt-chart-tool" data-chart-action="range">${Admin.telemetryRange}</button>
+                                <div id="analytics-pagination-controls" class="nt-chart-nav">
+                                    <button type="button" id="analytics-trend-prev" class="nt-chart-tool" data-chart-action="prev" aria-label="Previous period">Earlier</button>
+                                    <button type="button" id="analytics-trend-next" class="nt-chart-tool" data-chart-action="next" aria-label="Next period">Later</button>
+                                </div>
                             </div>
-                        </div>
-                        <div id="analytics-pagination-controls" class="p-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="analytics-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
-                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="analytics-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+                            <div class="nt-chart-toolbar-grid" role="toolbar" aria-label="Graph">
+                                <button type="button" id="analytics-trend-total" class="nt-chart-tool" data-chart-action="total" aria-pressed="false">Total</button>
+                                <button type="button" id="analytics-trend-ads" class="nt-chart-tool" data-chart-action="ads" aria-pressed="false">Ads</button>
+                                <button type="button" id="analytics-trend-stats" class="nt-chart-tool" data-chart-action="stats">Stats</button>
+                                <button type="button" id="analytics-trend-compare-btn" class="nt-chart-tool" data-chart-action="compare" aria-pressed="false">Compare</button>
+                                <button type="button" id="analytics-trend-landscape" class="nt-chart-tool" data-chart-action="landscape">Landscape</button>
+                                <button type="button" id="analytics-trend-export" class="nt-chart-tool" data-chart-action="export">Export</button>
+                            </div>
                         </div>
                         <div class="flex-grow p-2 sm:p-4 landscape:p-2 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0 overflow-hidden">
                             <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
@@ -5018,29 +4989,30 @@ const Admin = {
                     document.getElementById('ad-impressions-export').onclick = () => Admin.offerChartExport('ads');
                 }
 
-                document.getElementById('analytics-trend-prev').onclick = () => { Admin.telemetryWeeksAgo++; Admin.refreshTelemetry(); };
-                document.getElementById('analytics-trend-next').onclick = () => { if(Admin.telemetryWeeksAgo > 0) { Admin.telemetryWeeksAgo--; Admin.refreshTelemetry(); } };
-                document.getElementById('analytics-trend-landscape').onclick = () => Admin.openGraphLandscape('users');
-                document.getElementById('analytics-trend-export').onclick = () => Admin.offerChartExport('users');
-                document.getElementById('analytics-trend-cycle').onclick = Admin.cycleTelemetryRange;
-                document.getElementById('analytics-trend-ads').onclick = () => Admin.toggleAdOverlay();
-                document.getElementById('analytics-trend-total').onclick = () => Admin.toggleCumulativeGraph();
-                document.getElementById('analytics-trend-stats').onclick = () => Admin.openGraphStats();
-                
-                // Compare Toggle Binding
-                const compareBtn = document.getElementById('analytics-trend-compare-btn');
-                if (compareBtn) {
-                    compareBtn.onclick = () => {
-                        Admin.isComparing = !Admin.isComparing;
-                        if (Admin.isComparing) {
-                            compareBtn.classList.replace('text-gray-400', 'text-blue-600');
-                            compareBtn.classList.replace('dark:bg-gray-800', 'dark:bg-gray-700');
-                        } else {
-                            compareBtn.classList.replace('text-blue-600', 'text-gray-400');
-                            compareBtn.classList.replace('dark:bg-gray-700', 'dark:bg-gray-800');
+                const chartTools = document.getElementById('telemetry-chart-body');
+                if (chartTools && chartTools.dataset.chartTools !== '1') {
+                    chartTools.dataset.chartTools = '1';
+                    chartTools.addEventListener('click', (event) => {
+                        const btn = event.target?.closest?.('[data-chart-action]');
+                        if (!btn || !chartTools.contains(btn)) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const action = btn.getAttribute('data-chart-action');
+                        if (action === 'range') Admin.cycleTelemetryRange();
+                        else if (action === 'prev') { Admin.telemetryWeeksAgo++; Admin.refreshTelemetry(); }
+                        else if (action === 'next') { if (Admin.telemetryWeeksAgo > 0) { Admin.telemetryWeeksAgo--; Admin.refreshTelemetry(); } }
+                        else if (action === 'total') Admin.toggleCumulativeGraph();
+                        else if (action === 'ads') Admin.toggleAdOverlay();
+                        else if (action === 'stats') Admin.openGraphStats();
+                        else if (action === 'compare') {
+                            Admin.isComparing = !Admin.isComparing;
+                            btn.classList.toggle('is-on', Admin.isComparing);
+                            btn.setAttribute('aria-pressed', Admin.isComparing ? 'true' : 'false');
+                            Admin.refreshTelemetry();
                         }
-                        Admin.refreshTelemetry();
-                    };
+                        else if (action === 'landscape') Admin.openGraphLandscape('users');
+                        else if (action === 'export') Admin.offerChartExport('users');
+                    });
                 }
             }
 
@@ -5143,26 +5115,11 @@ const Admin = {
                 document.getElementById('region-day-next').onclick = () => Admin.shiftRegionDay(-1);
             }
 
-            const cycleBtn = document.getElementById('trend-cycle-btn');
-            if (cycleBtn) {
-                cycleBtn.onclick = Admin.cycleTelemetryRange;
-            }
-            const adsBtn = document.getElementById('trend-ads-btn');
-            if (adsBtn) adsBtn.onclick = () => Admin.toggleAdOverlay();
-            const totalBtn = document.getElementById('trend-total-btn');
-            if (totalBtn) totalBtn.onclick = () => Admin.toggleCumulativeGraph();
-            const statsBtn = document.getElementById('trend-stats-btn');
-            if (statsBtn) statsBtn.onclick = () => Admin.openGraphStats();
-
             const expandBtn = document.getElementById('trend-expand-btn');
-            const inlineExportBtn = document.getElementById('trend-inline-export-btn');
             const inlineContainer = document.getElementById('tel-trend-container');
 
             if (expandBtn) expandBtn.onclick = () => Admin.deepLinkToPanel('telemetry-chart-panel');
             if (inlineContainer) inlineContainer.onclick = () => Admin.deepLinkToPanel('telemetry-chart-panel');
-            if (inlineExportBtn) inlineExportBtn.onclick = () => Admin.offerChartExport('users');
-            const inlineLandscapeBtn = document.getElementById('trend-inline-landscape-btn');
-            if (inlineLandscapeBtn) inlineLandscapeBtn.onclick = () => Admin.openGraphLandscape('users');
 
             // Main Global Export Button (Raw Data Snapshot)
             const exportBtn = document.createElement('button');
@@ -13220,16 +13177,26 @@ const Admin = {
                         <form id="mq-composer" class="cm-composer" autocomplete="off">
                             <div id="mq-quote" class="cm-quote-bar hidden"></div>
                             <p id="mq-suggest-note" class="cm-suggest-note hidden"></p>
-                            <textarea id="mq-guide" class="cm-guide hidden" rows="2" maxlength="500" placeholder="A fact Co-Pilot should use"></textarea>
-                            <textarea id="mq-composer-input" class="cm-composer-input" rows="2" maxlength="1300" placeholder="Message" aria-label="Reply in this room"></textarea>
-                            <input id="mq-composer-link" class="cm-composer-link" type="url" inputmode="url" placeholder="https link, optional" aria-label="Optional link" />
-                            <div class="cm-composer-actions">
-                                <button type="button" id="mq-guide-toggle" class="cm-suggest">Guide</button>
-                                <button type="button" id="mq-suggest" class="cm-suggest">Suggest</button>
-                                <button type="button" id="mq-listen" class="cm-suggest" aria-label="Listen to this draft">Listen</button>
+                            <div id="mq-extras" class="cm-extras hidden">
+                                <textarea id="mq-guide" class="cm-guide" rows="2" maxlength="500" placeholder="A fact Co-Pilot should use"></textarea>
+                                <div class="cm-extras-actions">
+                                    <button type="button" id="mq-suggest" class="cm-suggest">Suggest</button>
+                                    <button type="button" id="mq-listen" class="cm-suggest" aria-label="Listen to this draft">Listen</button>
+                                </div>
+                                <label class="cm-extra-field">HTTPS link
+                                    <input id="mq-composer-link" class="cm-composer-link" type="url" inputmode="url" placeholder="https://..." aria-label="HTTPS link" />
+                                </label>
+                                <label class="cm-extra-field">Attachment
+                                    <input id="mq-composer-image" class="cm-composer-link" type="url" inputmode="url" placeholder="https image address" aria-label="Image attachment" />
+                                </label>
+                            </div>
+                            <div class="cm-composer-bar">
+                                <button type="button" id="mq-plus" class="cm-plus" aria-label="Suggestions, attachment, and link" aria-expanded="false">+</button>
+                                <textarea id="mq-composer-input" class="cm-composer-input" rows="1" maxlength="1300" placeholder="Message" aria-label="Message"></textarea>
                                 <button type="submit" id="mq-post" class="cm-post">Post</button>
                             </div>
                         </form>
+                        <div id="mq-options-portal" class="cm-options-portal" hidden></div>
                     </div>
                 </div>
                 <div id="mq-reports-pane" class="hidden flex flex-col">
@@ -14088,30 +14055,45 @@ const Admin = {
                     const replyAttr = isReply ? `data-reply="${esc(message.replyId || '')}"` : '';
                     const letter = String(message.displayName || 'P').trim().charAt(0).toUpperCase() || 'P';
                     const ts = Number(message.timestamp) || 0;
-                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''} ${mine ? 'cm-row-own' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
-                        ${mine ? '' : `<span class="cm-avatar" aria-hidden="true">${esc(letter)}</span>`}
-                        <div class="cm-bubble ${mine ? 'cm-bubble-own' : ''} ${message.hidden ? 'is-hidden' : ''}">
-                            <div class="cm-bubble-name">
-                                <span>${esc((() => {
-                                    const choice = typeof window.stationChoiceLabel === 'function'
-                                        ? window.stationChoiceLabel(message.station, message.stationAutoLocated)
-                                        : '';
-                                    const name = message.displayName || 'Passenger';
-                                    return choice ? `${name} - ${choice}` : name;
-                                })())} ${authorHint} ${category}</span>
-                            </div>
-                            <div class="cm-bubble-body">
-                                ${quote}<p class="cm-bubble-text${removed ? ' cm-msg-deleted' : ''}">${esc(shownBody)}<span class="cm-bubble-time">${esc(threadClock(message.timestamp))}</span></p>
-                                <div class="cm-options">
+                    const displayName = message.displayName || 'Passenger';
+                    const version = String(message.appVersion || '').split(' - ')[0].split(' · ')[0].trim();
+                    const versionOk = /^V\d+_/i.test(version);
+                    const station = String(message.station || '').replace(/\s+STATION\s*$/i, '').trim();
+                    const auto = message.stationAutoLocated === true || message.stationAutoLocated === '1' || message.stationAutoLocated === 1;
+                    const versionChip = versionOk
+                        ? `<button type="button" class="fb-version-chip" data-admin-changelog="${esc(version)}" data-cl-station="${esc(station)}" data-cl-auto="${auto ? '1' : '0'}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl&amp;&amp;window.Admin.changelogContextFromEl(this));">${esc(version)}</button>`
+                        : '';
+                    const photos = (Array.isArray(message.attachments) ? message.attachments : [])
+                        .map((item) => (typeof item === 'string' ? item : item?.url))
+                        .filter((url) => /^https:\/\//i.test(String(url || '')));
+                    const photoHtml = photos.length
+                        ? `<div class="cm-photos">${photos.map((url) => `<img src="${esc(url)}" alt="" loading="lazy">`).join('')}</div>`
+                        : '';
+                    const link = /^https:\/\//i.test(String(message.linkUrl || '')) ? String(message.linkUrl) : '';
+                    const linkHtml = link ? `<a class="cm-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link.replace(/^https:\/\//, '').slice(0, 64))}</a>` : '';
+                    return `<div class="community-post-row ${mine ? 'justify-end' : 'justify-start gap-1'}${isReply ? ' is-reply' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                        ${mine ? '' : `<span class="community-avatar-disc cm-letter" aria-hidden="true">${esc(letter)}</span>`}
+                        <div class="community-bubble-wrap">
+                            <div class="community-bubble ${mine ? 'community-bubble-own' : 'community-bubble-other'} ${message.hidden ? 'is-hidden' : ''}">
+                                <div class="community-bubble-name-row">
+                                    <span class="community-bubble-name truncate">${esc(displayName)}</span>
+                                    ${versionChip}
+                                    ${authorHint}
+                                    ${category}
                                     <button type="button" class="cm-options-toggle" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
-                                    <div class="cm-options-menu hidden">
-                                        <button type="button" class="cm-reply-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${replyAttr}>Reply</button>
-                                        <button type="button" class="cm-mark-unread" data-route="${esc(routeId)}" data-ts="${ts}">Mark unread</button>
-                                        <button type="button" class="cm-mark-read" data-route="${esc(routeId)}" data-ts="${ts}">Mark read</button>
-                                        <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
-                                        <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
-                                        ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
-                                        ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                                </div>
+                                <div class="community-bubble-body">
+                                    ${quote}${photoHtml}${linkHtml}<div class="community-msg-text cm-bubble-text${removed ? ' community-msg-deleted cm-msg-deleted' : ''}">${esc(shownBody)}<span class="community-msg-time cm-bubble-time">${esc(threadClock(message.timestamp))}</span></div>
+                                    <div class="cm-options">
+                                        <div class="cm-options-menu hidden">
+                                            <button type="button" class="cm-reply-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${replyAttr}>Reply</button>
+                                            <button type="button" class="cm-mark-unread" data-route="${esc(routeId)}" data-ts="${ts}">Mark unread</button>
+                                            <button type="button" class="cm-mark-read" data-route="${esc(routeId)}" data-ts="${ts}">Mark read</button>
+                                            <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
+                                            <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
+                                            ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
+                                            ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -14413,31 +14395,65 @@ const Admin = {
                         return;
                     }
                     const optionsToggle = event.target.closest?.('.cm-options-toggle');
+                    const closeMqOptions = () => {
+                        const portal = document.getElementById('mq-options-portal');
+                        if (!portal) return;
+                        portal.hidden = true;
+                        portal.innerHTML = '';
+                        delete portal.dataset.openFor;
+                    };
+                    const messageCard = (btn) => {
+                        const live = btn?.closest?.('[data-community-message]');
+                        if (live) return live;
+                        const replyId = btn?.dataset?.reply || '';
+                        const postId = btn?.dataset?.post || '';
+                        const scope = document.getElementById('mq-thread-scroll');
+                        if (!scope || (!replyId && !postId)) return null;
+                        const safe = (value) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : String(value).replace(/"/g, '\\"'));
+                        if (replyId) return scope.querySelector(`[data-community-reply="${safe(replyId)}"]`);
+                        return scope.querySelector(`[data-community-post="${safe(postId)}"]:not([data-community-reply])`);
+                    };
                     if (optionsToggle) {
                         event.preventDefault();
                         event.stopPropagation();
-                        const menu = optionsToggle.parentElement?.querySelector('.cm-options-menu');
-                        const willOpen = !!menu?.classList.contains('hidden');
-                        document.querySelectorAll('.cm-options-menu').forEach((node) => node.classList.add('hidden'));
-                        if (willOpen && menu) {
-                            const rect = optionsToggle.getBoundingClientRect();
-                            const width = 196;
-                            menu.classList.remove('hidden');
-                            menu.style.position = 'fixed';
-                            menu.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
-                            menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 180))}px`;
-                            menu.style.zIndex = '80';
+                        const source = optionsToggle.closest('.community-bubble')?.querySelector('.cm-options-menu');
+                        const portal = document.getElementById('mq-options-portal');
+                        const key = optionsToggle.closest('[data-community-message]')?.getAttribute('data-community-post') || '';
+                        if (!source || !portal) return;
+                        if (portal.dataset.openFor === key && !portal.hidden) {
+                            closeMqOptions();
+                            return;
                         }
+                        closeMqOptions();
+                        const menu = source.cloneNode(true);
+                        menu.classList.remove('hidden');
+                        const thread = document.getElementById('mq-thread');
+                        const threadRect = thread?.getBoundingClientRect();
+                        const rect = optionsToggle.getBoundingClientRect();
+                        const width = 196;
+                        const left = threadRect
+                            ? Math.max(8, Math.min(rect.right - threadRect.left - width, threadRect.width - width - 8))
+                            : 8;
+                        let top = threadRect ? rect.bottom - threadRect.top + 4 : rect.bottom + 4;
+                        if (threadRect && top + 220 > threadRect.height - 8) {
+                            top = Math.max(8, rect.top - threadRect.top - 220);
+                        }
+                        menu.style.left = `${left}px`;
+                        menu.style.top = `${top}px`;
+                        portal.appendChild(menu);
+                        portal.hidden = false;
+                        portal.dataset.openFor = key;
+                        portal.onclick = list.onclick;
                         return;
                     }
-                    document.querySelectorAll('.cm-options-menu').forEach((node) => node.classList.add('hidden'));
+                    closeMqOptions();
                     const replyBtn = event.target.closest?.('.cm-reply-message');
                     if (replyBtn) {
                         event.preventDefault();
-                        const card = replyBtn.closest('[data-community-message]');
+                        const card = messageCard(replyBtn);
                         const copy = card?.querySelector('.cm-bubble-text')?.cloneNode(true);
                         copy?.querySelector('.cm-bubble-time')?.remove();
-                        const name = (card?.querySelector('.cm-bubble-name span')?.textContent || 'Passenger').trim();
+                        const name = (card?.querySelector('.community-bubble-name')?.textContent || 'Passenger').trim();
                         Admin._mqQuote = {
                             postId: replyBtn.dataset.post || '',
                             uid: replyBtn.dataset.uid || '',
@@ -14484,7 +14500,7 @@ const Admin = {
                         const path = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}${replyId ? `/replies/${encodeURIComponent(replyId)}` : ''}/hidden.json`;
                         const put = await fetch(`${dynamicEndpoint}${path}${hideAuthQ}`, { method: 'PUT', body: 'true' });
                         if (put.ok) {
-                            hide.closest('[data-community-message]')?.classList.add('opacity-50', 'ring-1', 'ring-red-400');
+                            messageCard(hide)?.classList.add('opacity-50', 'ring-1', 'ring-red-400');
                             if (typeof showToast === 'function') showToast('Message hidden', 'success');
                         }
                         return;
@@ -14507,7 +14523,7 @@ const Admin = {
                         try {
                             if (mode === 'tombstone') {
                                 await Admin.tombstoneCommunityMessage(routeId, postId, replyId);
-                                const card = delBtn.closest('[data-community-message]');
+                                const card = messageCard(delBtn);
                                 const text = card?.querySelector('.cm-bubble-text');
                                 if (text) {
                                     text.classList.add('cm-msg-deleted');
@@ -14518,7 +14534,7 @@ const Admin = {
                                 card?.querySelector('.cm-quote')?.remove();
                             } else {
                                 await Admin.deletePublishedCommunityMessage(routeId, postId, replyId);
-                                const card = delBtn.closest('[data-community-message]');
+                                const card = messageCard(delBtn);
                                 if (replyId) {
                                     card?.remove();
                                 } else {
@@ -14742,7 +14758,22 @@ const Admin = {
                     el.style.height = `${next}px`;
                     el.style.overflowY = el.scrollHeight > cap + 2 ? 'auto' : 'hidden';
                 };
+                document.getElementById('mq-plus')?.addEventListener('click', () => {
+                    const extras = document.getElementById('mq-extras');
+                    const plus = document.getElementById('mq-plus');
+                    if (!extras || !plus) return;
+                    const open = extras.classList.toggle('hidden') === false;
+                    plus.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    plus.classList.toggle('is-on', open);
+                });
                 const mqComposerInput = document.getElementById('mq-composer-input');
+                mqComposerInput?.addEventListener('focus', () => {
+                    const portal = document.getElementById('mq-options-portal');
+                    if (!portal) return;
+                    portal.hidden = true;
+                    portal.innerHTML = '';
+                    delete portal.dataset.openFor;
+                });
                 mqComposerInput?.addEventListener('input', () => fitMqComposer(mqComposerInput));
                 fitMqComposer(mqComposerInput);
                 Admin._fitMqComposer = fitMqComposer;
@@ -14849,19 +14880,21 @@ const Admin = {
                     const routeId = card?.dataset?.communityRoute || '';
                     const input = document.getElementById('mq-composer-input');
                     const linkEl = document.getElementById('mq-composer-link');
+                    const imageEl = document.getElementById('mq-composer-image');
                     const note = document.getElementById('mq-suggest-note');
                     const postBtn = document.getElementById('mq-post');
                     const text = String(input?.value || '').trim();
                     const linkUrl = String(linkEl?.value || '').trim();
+                    const imageUrl = String(imageEl?.value || '').trim();
                     if (!routeId) return;
-                    if (linkUrl && !/^https:\/\//i.test(linkUrl)) {
+                    if ((linkUrl && !/^https:\/\//i.test(linkUrl)) || (imageUrl && !/^https:\/\//i.test(imageUrl))) {
                         if (note) {
                             note.textContent = 'Use a full https link.';
                             note.classList.remove('hidden');
                         }
                         return;
                     }
-                    if (text.length < 2 && !linkUrl) {
+                    if (text.length < 2 && !linkUrl && !imageUrl) {
                         if (note) {
                             note.textContent = 'Write a short message.';
                             note.classList.remove('hidden');
@@ -14896,6 +14929,7 @@ const Admin = {
                                 replyCount: 0,
                                 appVersion: typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '',
                                 ...(linkUrl ? { linkUrl } : {}),
+                                ...(imageUrl ? { attachments: [imageUrl] } : {}),
                                 ...(quote?.postId ? {
                                     replyTo: {
                                         postId: quote.postId,
@@ -14913,6 +14947,7 @@ const Admin = {
                         }
                         if (input) input.value = '';
                         if (linkEl) linkEl.value = '';
+                        if (imageEl) imageEl.value = '';
                         Admin._mqQuote = null;
                         Admin._mqPaintQuote?.();
                         if (note) note.classList.add('hidden');

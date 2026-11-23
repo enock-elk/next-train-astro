@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.23.2': [
+        'Live Telemetry keeps the small graph clear. Total, Ads, Stats, Compare, Landscape, Export, and the earlier and later buttons live on the full graph, in two rows with a filled state when Total, Ads, or Compare is on. Community Monitor uses the commuter bubble, the name, and the version button. Suggestions, an image address, and the https field sit behind +. Message options open above the composer. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.23.1': [
         'A scheduled-alert write that Firebase refuses names the RTDB path, so the next mail says notices or notices_scheduled. Community opens with the unread line at the top, or on the newest messages when nothing is unread. A send paints that message and stays on it until the request settles. The user graph has a Total button that adds up the hours, days, or weeks on screen, and the spreadsheet uses that same line. Total turns off when the range changes. Empty future hours stay empty. Deploy firebase-database.rules.json if the live rules are still behind this file. No commuter What\'s New. forceShow stays false.',
     ],

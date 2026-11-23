@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.23.1': [
+        'A scheduled-alert write that Firebase refuses names the RTDB path, so the next mail says notices or notices_scheduled. Community opens with the unread line at the top, or on the newest messages when nothing is unread. A send paints that message and stays on it until the request settles. The user graph has a Total button that adds up the hours, days, or weeks on screen, and the spreadsheet uses that same line. Total turns off when the range changes. Empty future hours stay empty. Deploy firebase-database.rules.json if the live rules are still behind this file. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.22.1': [
         'A community notice card for /og/a/.../4 paints that poster. It was painting the first image on the notice. The preview worker already returned the numbered photo. No commuter What\'s New. forceShow stays false.',
     ],

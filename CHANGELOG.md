@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_11.23.1 — no release notes
+
+- Community opens on unread messages or the latest ones, a send shows immediately, and the operator graph can add up the buckets on screen. A refused scheduled-alert write names the database path. Deploy the database rules if the live rules are still behind this file.
+
 ## V10_11.22.1 — no release notes
 
 - A shared notice link that names one poster shows that poster on the community card.

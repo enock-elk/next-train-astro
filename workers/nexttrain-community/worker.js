@@ -414,7 +414,7 @@ function createRtdbClient(env) {
             if (res.status === 412) return { matched: false };
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`RTDB conditional write failed (${res.status}): ${text.slice(0, 200)}`);
+                throw new Error(`RTDB conditional write failed (${res.status}) at ${path}: ${text.slice(0, 160)}`);
             }
             return { matched: true };
         },

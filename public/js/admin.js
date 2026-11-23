@@ -4363,6 +4363,8 @@ const Admin = {
         if (drillCycleBtn) drillCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange}`;
         
         Admin.telemetryWeeksAgo = 0; // Reset pagination context
+        Admin.telemetryCumulative = false;
+        Admin._paintCumulativeToggle?.();
         
         const paginationControls = document.getElementById('analytics-pagination-controls');
         if (paginationControls) {
@@ -4484,6 +4486,33 @@ const Admin = {
         };
         Admin._adDailyCache = row;
         return row;
+    },
+
+    _paintCumulativeToggle: () => {
+        const on = !!Admin.telemetryCumulative;
+        ['trend-total-btn', 'analytics-trend-total'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.setAttribute('aria-pressed', on ? 'true' : 'false');
+            el.classList.toggle('text-blue-600', on);
+            el.classList.toggle('bg-blue-50', on);
+            el.classList.toggle('dark:bg-gray-700', on);
+        });
+    },
+
+    toggleCumulativeGraph: () => {
+        Admin.telemetryCumulative = !Admin.telemetryCumulative;
+        Admin._paintCumulativeToggle();
+        Admin.refreshTelemetry();
+    },
+
+    cumulativeSeries: (arr) => {
+        let sum = 0;
+        return (Array.isArray(arr) ? arr : []).map((value) => {
+            if (value === null || value === undefined) return null;
+            sum += Number(value) || 0;
+            return sum;
+        });
     },
 
     _paintAdToggle: () => {
@@ -4789,6 +4818,7 @@ const Admin = {
                         <span>${Admin.telemetryRange} Trend</span>
                     </button>
                     <div class="flex space-x-2">
+                        <button type="button" id="trend-total-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Add up the buckets on this graph" aria-pressed="false">Total</button>
                         <button type="button" id="trend-ads-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Show ad counts on this graph" aria-pressed="false">Ads</button>
                         <button type="button" id="trend-stats-btn" class="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 focus:outline-none" title="Statistics for this graph">Stats</button>
                         <button id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
@@ -4931,6 +4961,7 @@ const Admin = {
                                 <span>${Admin.telemetryRange}</span>
                             </button>
                             <div class="flex items-center space-x-2">
+                                <button type="button" id="analytics-trend-total" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Add up the buckets on this graph" aria-pressed="false">Total</button>
                                 <button type="button" id="analytics-trend-ads" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Show ad counts on this graph" aria-pressed="false">Ads</button>
                                 <button type="button" id="analytics-trend-stats" class="px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-blue-600 focus:outline-none" title="Statistics for this graph">Stats</button>
                                 <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
@@ -4993,6 +5024,7 @@ const Admin = {
                 document.getElementById('analytics-trend-export').onclick = () => Admin.offerChartExport('users');
                 document.getElementById('analytics-trend-cycle').onclick = Admin.cycleTelemetryRange;
                 document.getElementById('analytics-trend-ads').onclick = () => Admin.toggleAdOverlay();
+                document.getElementById('analytics-trend-total').onclick = () => Admin.toggleCumulativeGraph();
                 document.getElementById('analytics-trend-stats').onclick = () => Admin.openGraphStats();
                 
                 // Compare Toggle Binding
@@ -5117,6 +5149,8 @@ const Admin = {
             }
             const adsBtn = document.getElementById('trend-ads-btn');
             if (adsBtn) adsBtn.onclick = () => Admin.toggleAdOverlay();
+            const totalBtn = document.getElementById('trend-total-btn');
+            if (totalBtn) totalBtn.onclick = () => Admin.toggleCumulativeGraph();
             const statsBtn = document.getElementById('trend-stats-btn');
             if (statsBtn) statsBtn.onclick = () => Admin.openGraphStats();
 
@@ -5858,6 +5892,11 @@ const Admin = {
                         }
                     }
                 }
+                if (Admin.telemetryCumulative) {
+                    activeCountsArray = Admin.cumulativeSeries(activeCountsArray);
+                    if (compareCountsArray) compareCountsArray = Admin.cumulativeSeries(compareCountsArray);
+                    if (overlayCounts) overlayCounts = Admin.cumulativeSeries(overlayCounts);
+                }
                 Admin._lastChart = {
                     labels: labelsArray.slice(),
                     displayLabels: displayLabels.slice(),
@@ -5870,6 +5909,7 @@ const Admin = {
                     range: Admin.telemetryRange,
                     title: titleStr,
                     liveEdge: Admin.telemetryWeeksAgo === 0,
+                    cumulative: !!Admin.telemetryCumulative,
                 };
                 
                 // Render Inline Miniature SVG
@@ -5881,6 +5921,7 @@ const Admin = {
                 const drillSvgContainer = document.getElementById('analytics-chart-svg-container');
                 if (drillSvgContainer) drillSvgContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, false, compareCountsArray, { overlay: overlayCounts, gradTag: 'usersFull' });
                 Admin._paintAdToggle();
+                Admin._paintCumulativeToggle();
 
                 [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
                     if (el) el.classList.remove('animate-pulse');
@@ -6289,7 +6330,7 @@ const Admin = {
             return;
         }
         const hasAds = Array.isArray(view.overlay);
-        const headers = ['Bucket', 'Active users'];
+        const headers = ['Bucket', view.cumulative ? 'Active users, running total' : 'Active users'];
         if (hasAds) headers.push('Viewable impressions');
         const lines = [headers.join(',')];
         view.labels.forEach((label, i) => {

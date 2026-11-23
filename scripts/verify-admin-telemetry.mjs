@@ -555,6 +555,7 @@ ok(workerJs.includes("url.pathname === '/admin/ads'") && workerJs.includes('CLEV
 ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('loadAdRevenue'), 'live telemetry draws its own ad revenue search');
 ok(adminJs.includes('$4 CPM') && adminJs.includes('api.frankfurter.dev') && adminJs.includes('open.er-api.com'), 'revenue and the $4 CPM deal convert with an open dollar rate');
 ok(adminJs.includes('trend-ads-btn') && adminJs.includes('alignAdSeries') && adminJs.includes('showAdOverlay'), 'the user graph can draw ad counts for the same buckets');
+ok(adminJs.includes('trend-total-btn') && adminJs.includes('analytics-trend-total') && adminJs.includes('cumulativeSeries') && adminJs.includes('telemetryCumulative = false'), 'the user graph can add up the buckets on screen and resets that when the range changes');
 ok(adminJs.includes('openGraphStats') && adminJs.includes('equivalentViewability') && adminJs.includes('telemetry-stats-export'), 'graph statistics compare equal finished periods and can export');
 ok(adminJs.includes('offerChartExport') && adminJs.includes("label: 'Excel (.csv)'") && adminJs.includes('exportAdRevenueSheet'), 'ad revenue and telemetry graphs export a graph or a spreadsheet');
 ok(adminJs.includes('openGraphLandscape') && adminJs.includes('_telemetryExportFrame(1100') && adminJs.includes('wide: true'), 'telemetry graphs open landscape and export that wide frame');

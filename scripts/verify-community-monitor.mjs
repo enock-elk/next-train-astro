@@ -296,6 +296,8 @@ assert.match(community, /readRoomCache\(routeId\)/, 'opening a room paints the s
 assert.match(community, /UNREAD_DIVIDER_MS = 45000/, 'the unread count leaves after 45 seconds');
 assert.match(community, /unread messages/, 'the room shows how many messages are unread');
 assert.match(community, /data-community-unread-divider/, 'unread messages start under a divider');
+assert.match(community, /mode === 'unread'/, 'an open room with unread messages stays on the divider');
+assert.match(community, /communitySendHoldId/, 'a send stays on screen until the request settles');
 assert.match(community, /settleCommunityRoomSeen\(paintedCommunityRouteId\)/, 'leaving the room clears the unread count');
 assert.doesNotMatch(community, /markCommunityRouteSeen\(routeId, \{ silent: true \}\)/, 'a live update does not stamp the room seen');
 assert.match(community, /paintedCommunityRouteId/, 'only a painted room is treated as open');

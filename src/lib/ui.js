@@ -2563,6 +2563,7 @@ export function switchTab(tab, opts = null) {
     // tab (before hub idle-import) still has click handlers.
     if (tab === 'community') {
         document.querySelector('#view-community .community-feed-scroll')?.classList.add('is-parking');
+        document.getElementById('community-feed-loading')?.classList.remove('hidden');
         if (typeof window.parkCommunityOpen === 'function') window.parkCommunityOpen();
         import('./community.js').then((m) => {
             m.bindCommunityUi?.();

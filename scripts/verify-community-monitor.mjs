@@ -306,12 +306,35 @@ assert.match(community, /mode: 'both'/, 'a short unread block opens with the lat
 assert.match(community, /mode: 'short'/, 'a room that does not fill the screen stays at the top');
 assert.match(community, /function preloadCommunityRoom/, 'the current route is preloaded before Community opens');
 assert.match(community, /is-parking/, 'the feed stays hidden until the open position is set');
+assert.match(community, /setCommunityRoomLoading\(true\)/, 'a room switch shows the spinner while the feed is parked');
+assert.match(community, /This phone doesn't have this line's messages yet/, 'an offline room does not claim it has no posts');
+assert.match(community, /!slim\.length && communityIsOffline\(\)\) return/, 'an offline miss does not wipe the saved room');
 assert.match(community, /anchor\.placed && !anchor\.taken/, 'an open view stays until the person scrolls or sends');
 const logic = await readFile(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert.match(logic, /__ntCommunityStablePoll/, 'community unread is checked once after the board is stable');
 assert.match(logic, /5000/, 'the stable community check waits about 5 seconds');
 assert.match(logic, /preloadCommunityRoom/, 'the stable board preloads the community room');
 assert.match(communityView, /is-parking/, 'Community markup hides the feed until it is parked');
+assert.match(communityView, /id="community-feed-loading"/, 'the room spinner sits outside the parked feed');
+assert.match(communityView, /Opening this room\.\.\./, 'the room spinner uses a short line');
+{
+    const copyStart = community.indexOf('export function communityEmptyCopy');
+    const copyEnd = community.indexOf('function communityEmptyHtml', copyStart);
+    const communityEmptyCopy = new Function(`${community.slice(copyStart, copyEnd).replace('export function', 'function')}\nreturn communityEmptyCopy;`)();
+    const offlineMiss = communityEmptyCopy({ offline: true, confirmedEmpty: false, loaded: false });
+    assert.equal(offlineMiss.title, "You're offline");
+    assert.match(offlineMiss.body, /doesn't have this line's messages yet/);
+    assert.doesNotMatch(offlineMiss.body, /Be the first/);
+    const offlineKnownEmpty = communityEmptyCopy({ offline: true, confirmedEmpty: true, loaded: true });
+    assert.match(offlineKnownEmpty.body, /no messages last time you were online/);
+    assert.doesNotMatch(offlineKnownEmpty.body, /Be the first/);
+    const failed = communityEmptyCopy({ offline: false, confirmedEmpty: false, loaded: false });
+    assert.equal(failed.title, "Couldn't load this line");
+    assert.doesNotMatch(failed.body, /Be the first/);
+    const empty = communityEmptyCopy({ offline: false, confirmedEmpty: false, loaded: true });
+    assert.equal(empty.title, 'No posts on this line yet');
+    assert.match(empty.body, /Be the first to share a heads-up/);
+}
 {
     const start = community.indexOf('export function communityOpenTarget');
     const end = community.indexOf('function pinCommunityFeedToLatest', start);

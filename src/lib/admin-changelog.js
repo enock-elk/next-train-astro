@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.26.2': [
+        'Switching Community rooms shows a short spinner instead of a blank wallpaper. An offline phone says it does not have this line\'s messages yet, or that the line had none last time it was online. It no longer invites the commuter to be first when the room was never loaded. A failed read says the messages did not come through. Saved messages stay on the phone. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.26.1': [
         'Community preloads the current route after the board is stable. Opening the tab parks once: the latest message sits at the bottom when the room fills the screen, a short room stays at the top, and a tall unread block opens with the unread line near the top. Later paints do not scroll that view until the person scrolls or sends. No commuter What\'s New. forceShow stays false.',
     ],

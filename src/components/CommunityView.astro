@@ -141,9 +141,15 @@
         </div>
 
         <!-- Wallpaper lives on the pane so IME / composer resize does not retile it -->
-        <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-[8rem] min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent is-parking">
-            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
-            <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
+        <div class="community-feed-slot relative z-[1] flex flex-1 basis-0 min-h-[8rem] min-h-0 flex-col">
+            <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent is-parking">
+                <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
+                <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
+            </div>
+            <div id="community-feed-loading" class="community-feed-loading hidden absolute inset-0 z-[2] px-6 text-center pointer-events-none" role="status" aria-live="polite">
+                <svg class="w-10 h-10 animate-spin mx-auto text-blue-500 mb-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="text-sm font-bold text-gray-600 dark:text-gray-400 animate-pulse">Opening this room...</p>
+            </div>
         </div>
 
         <div id="community-composer-dock" class="relative z-[1] shrink-0 px-3 pt-2 pb-2 bg-transparent">
@@ -258,9 +264,19 @@
   #view-community .community-feed-scroll {
     overflow-anchor: none;
   }
-  /* Stay hidden until the open position is set, so the first paint is not a scroll. */
+  /* Stay hidden until the open position is set, so the first paint is not a scroll.
+     The spinner sits outside this scroller, so the wait is not a blank wallpaper. */
   #view-community .community-feed-scroll.is-parking {
     visibility: hidden;
+  }
+  #view-community .community-feed-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #view-community .community-feed-loading.hidden {
+    display: none;
   }
   #view-community.view-section {
     transform: none;

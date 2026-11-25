@@ -799,6 +799,10 @@ async function startRealtimePosts(routeId) {
                     ? postsVisibleFilter(Object.values(data), myUid)
                     : [];
                 const merged = mergeOverlayPosts(routeId, list);
+                if (!merged.length && communityIsOffline() && cachedFeedPosts.length) {
+                    resolve(true);
+                    return;
+                }
                 cachedFeedPosts.forEach((old) => {
                     const now = merged.find((row) => String(row?.postId) === String(old?.postId));
                     if (old && now && !isCommunityTombstone(old) && isCommunityTombstone(now)) noteDeletedOwnPost(old);
@@ -828,15 +832,14 @@ async function startRealtimePosts(routeId) {
     }
 }
 
-export async function fetchRoutePosts(routeId, opts = {}) {
-    const miss = opts.strict ? null : [];
-    if (!routeId || !navigator.onLine) return miss;
+export async function fetchRoutePosts(routeId) {
+    if (!routeId || !navigator.onLine) return null;
     try {
         const q = await authQuery();
         const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json${q ? `${q}&` : '?'}orderBy="timestamp"&limitToLast=${FEED_LIMIT}`
         );
-        if (!res.ok) return miss;
+        if (!res.ok) return null;
         const data = await res.json();
         if (!data) return [];
         const acct = $account.get();
@@ -844,7 +847,7 @@ export async function fetchRoutePosts(routeId, opts = {}) {
         const list = postsVisibleFilter(Object.values(data), myUid);
         return mergeOverlayPosts(routeId, list);
     } catch {
-        return miss;
+        return null;
     }
 }
 
@@ -2376,15 +2379,65 @@ function slimCachedPost(post) {
     };
 }
 
-function readRoomCache(routeId) {
-    if (!routeId) return [];
+function readRoomCacheRecord(routeId) {
+    if (!routeId) return null;
     try {
         const data = JSON.parse(safeStorage.getItem(ROOM_CACHE_PREFIX + routeId) || 'null');
-        const posts = Array.isArray(data?.posts) ? data.posts : [];
-        return posts.filter((post) => post && post.postId);
+        return data && typeof data === 'object' ? data : null;
     } catch {
-        return [];
+        return null;
     }
+}
+
+function readRoomCache(routeId) {
+    const posts = readRoomCacheRecord(routeId)?.posts;
+    return Array.isArray(posts) ? posts.filter((post) => post && post.postId) : [];
+}
+
+function roomCacheConfirmedEmpty(routeId) {
+    const data = readRoomCacheRecord(routeId);
+    if (!data || readRoomCache(routeId).length) return false;
+    if (data.confirmedEmpty === false) return false;
+    return data.confirmedEmpty === true || Array.isArray(data.posts);
+}
+
+function communityIsOffline() {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+export function communityEmptyCopy({ offline, confirmedEmpty, loaded }) {
+    if (offline) {
+        if (confirmedEmpty) {
+            return {
+                title: "You're offline",
+                body: "This line had no messages last time you were online. Check again when you're back online.",
+            };
+        }
+        return {
+            title: "You're offline",
+            body: "This phone doesn't have this line's messages yet. They'll show when you're back online.",
+        };
+    }
+    if (!loaded) {
+        return {
+            title: "Couldn't load this line",
+            body: "The messages didn't come through. Try again in a moment.",
+        };
+    }
+    return {
+        title: 'No posts on this line yet',
+        body: 'Be the first to share a heads-up, or ask a question.',
+    };
+}
+
+function communityEmptyHtml(routeId) {
+    const copy = communityEmptyCopy({
+        offline: communityIsOffline(),
+        confirmedEmpty: roomCacheConfirmedEmpty(routeId),
+        loaded: communityRoomSynced === routeId,
+    });
+    return `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">${copy.title}</p>
+                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">${copy.body}</p>`;
 }
 
 let lastRoomCacheSig = '';
@@ -2392,11 +2445,13 @@ let lastRoomCacheSig = '';
 function writeRoomCache(routeId, posts) {
     if (!routeId) return;
     const slim = (posts || []).map(slimCachedPost).filter(Boolean).slice(-FEED_LIMIT);
-    const sig = `${routeId}:${slim.map((post) => `${post.postId}|${post.timestamp}|${post.deleted ? 1 : 0}|${String(post.body || '').length}`).join(';')}`;
+    if (!slim.length && communityIsOffline()) return;
+    const confirmedEmpty = slim.length === 0 && !communityIsOffline() && communityRoomSynced === routeId;
+    const sig = `${routeId}:${confirmedEmpty ? 'empty' : ''}:${slim.map((post) => `${post.postId}|${post.timestamp}|${post.deleted ? 1 : 0}|${String(post.body || '').length}`).join(';')}`;
     if (sig === lastRoomCacheSig) return;
     lastRoomCacheSig = sig;
     try {
-        safeStorage.setItem(ROOM_CACHE_PREFIX + routeId, JSON.stringify({ posts: slim }));
+        safeStorage.setItem(ROOM_CACHE_PREFIX + routeId, JSON.stringify({ posts: slim, confirmedEmpty }));
     } catch {
         /* this visit still has the messages in memory */
     }
@@ -2729,8 +2784,15 @@ function communityFeedIsOpen() {
         && !!document.getElementById('view-community')?.classList.contains('active');
 }
 
+function setCommunityRoomLoading(on) {
+    const el = document.getElementById('community-feed-loading');
+    if (!el) return;
+    el.classList.toggle('hidden', !on);
+}
+
 function armCommunityParking() {
     communityFeedScroller()?.classList.add('is-parking');
+    setCommunityRoomLoading(true);
 }
 
 /** Where WhatsApp would open this room. Null until the feed has a real height. */
@@ -2815,6 +2877,7 @@ function revealCommunityOpen(routeId) {
     }
     communityRevealTries = 0;
     scroller.classList.remove('is-parking');
+    setCommunityRoomLoading(false);
 }
 
 /** Set the open position in this turn, before the tab paints. */
@@ -2826,7 +2889,10 @@ export function parkCommunityOpen() {
         || communityPreloadRoute
         || document.getElementById('community-route-select')?.value
         || '';
-    if (!routeId || !isCommunityWarm(routeId)) return;
+    if (!routeId || !isCommunityWarm(routeId)) {
+        setCommunityRoomLoading(true);
+        return;
+    }
     revealCommunityOpen(routeId);
 }
 
@@ -3143,15 +3209,14 @@ function applyFeedFilter(routeId) {
     bindCommunityFeedPin();
 
     if (!posts.length) {
-        if (communityRoomSynced === routeId) writeRoomCache(routeId, []);
+        if (communityRoomSynced === routeId && !communityIsOffline()) writeRoomCache(routeId, []);
         lastCommunityFeedHtml = '';
         lastCommunityFeedRoute = routeId;
         listEl.innerHTML = '';
         wireCommunityChatGestures(listEl);
         if (emptyEl) {
             emptyEl.classList.remove('hidden');
-            emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
-                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up, or ask a question.</p>`;
+            emptyEl.innerHTML = communityEmptyHtml(routeId);
         }
         const focusingEmpty = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
         if (focusingEmpty) void revealCommunityFocus(routeId);
@@ -3835,6 +3900,10 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
     if (!listEl) return;
+    if (communityFeedIsOpen() && routeId && communityOpenAnchor?.routeId && communityOpenAnchor.routeId !== routeId) {
+        armCommunityParking();
+        stopRealtimePosts();
+    }
     try { await fetchFeatures(); } catch { /* defaults */ }
     if (!communityRoomAllowed(routeId)) routeId = resolveCommunityRoute('');
     else routeId = resolveCommunityRoute(routeId);
@@ -3843,6 +3912,7 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
         listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">No community is open for this region.</p>`;
         if (emptyEl) emptyEl.classList.add('hidden');
         if (communityFeedIsOpen()) communityFeedScroller()?.classList.remove('is-parking');
+        setCommunityRoomLoading(false);
         return;
     }
     if (!opts.owner && communityRenderJob?.routeId === routeId && !opts.forceRest) {
@@ -3877,7 +3947,9 @@ async function renderCommunityFeedNow(routeId, opts, els) {
         cachedFeedPosts = mergeOverlayPosts(routeId, stored);
         communityFeedPinned = !unreadBannerFor(routeId, cachedFeedPosts);
         applyFeedFilter(routeId);
+        if (communityFeedIsOpen()) revealCommunityOpen(routeId);
     } else if (!feedSilentRepaint && !sameRoom) {
+        cachedFeedPosts = [];
         communityFeedPinned = true;
         listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
         if (emptyEl) emptyEl.classList.add('hidden');
@@ -3901,6 +3973,13 @@ async function renderCommunityFeedNow(routeId, opts, els) {
         }
     }
 
+    // An offline phone must not wait on the live window, and an empty result is
+    // not proof the room has no messages.
+    if (communityIsOffline()) {
+        if (!cachedFeedPosts.length) applyFeedFilter(routeId);
+        return;
+    }
+
     // Prefer the live window. A second REST download of the same posts is skipped
     // once that snapshot has arrived.
     if (!forceRest) {
@@ -3916,6 +3995,10 @@ async function renderCommunityFeedNow(routeId, opts, els) {
 
     stopRealtimePosts();
     const posts = await fetchRoutePosts(routeId);
+    if (!Array.isArray(posts)) {
+        if (!cachedFeedPosts.length) applyFeedFilter(routeId);
+        return;
+    }
     cachedFeedPosts = posts;
     startRealtimeReactions(routeId);
     const reactionsMap = await fetchPostReactions(routeId, posts.map((p) => p.postId));
@@ -4580,6 +4663,19 @@ function bindCommunityVisibilityTeardown() {
             preloadCommunityRoom();
         }
     });
+    if (!window.__ntCommunityNetBound) {
+        window.__ntCommunityNetBound = true;
+        window.addEventListener('offline', () => {
+            if (safeStorage.getItem('activeTab') !== 'community' || cachedFeedPosts.length) return;
+            const rid = document.getElementById('community-route-select')?.value || '';
+            if (rid) applyFeedFilter(rid);
+        });
+        window.addEventListener('online', () => {
+            if (safeStorage.getItem('activeTab') !== 'community') return;
+            const rid = resolveCommunityRoute(document.getElementById('community-route-select')?.value || '');
+            if (rid && communityRoomAllowed(rid)) renderCommunityFeed(rid);
+        });
+    }
 }
 
 let communityWaitCancel = null;

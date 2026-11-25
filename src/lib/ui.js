@@ -2562,6 +2562,8 @@ export function switchTab(tab, opts = null) {
     // Presence only while Community is visible. Bind first so a cold Community
     // tab (before hub idle-import) still has click handlers.
     if (tab === 'community') {
+        document.querySelector('#view-community .community-feed-scroll')?.classList.add('is-parking');
+        if (typeof window.parkCommunityOpen === 'function') window.parkCommunityOpen();
         import('./community.js').then((m) => {
             m.bindCommunityUi?.();
             m.openRouteCommunity?.();

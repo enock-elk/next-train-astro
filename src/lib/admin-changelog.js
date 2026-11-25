@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.26.1': [
+        'Community preloads the current route after the board is stable. Opening the tab parks once: the latest message sits at the bottom when the room fills the screen, a short room stays at the top, and a tall unread block opens with the unread line near the top. Later paints do not scroll that view until the person scrolls or sends. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.25.1': [
         'Scheduled-alert RTDB calls use only the userinfo.email and firebase.database scopes. A 401 names the service account email. Admin lookup, the user sheet, and inbox identity show users/{uid}/photoURL even when the commuter hid the photo on Community. A new display name needs 3 characters and a letter or number. An existing short name is left as it is. Community opens on the latest messages when the unread line still fits, or on the unread line when it does not, and later paints leave that view until the person scrolls or sends. The unread check runs once about 5 seconds after the board is stable. The pull-to-refresh pill hides the closed blue ring. The homepage description names weekdays, Saturdays, and public holidays. A festive season page says the December 2026 scaled-down timetable is not released yet and links the route pages. The guide and route pages mention the Community tab. Route pages load up to three recent messages after open, outside the snippet. No commuter What\'s New. forceShow stays false.',
     ],

@@ -2325,6 +2325,10 @@ let communitySendHoldId = '';
 let communityScrollGuardUntil = 0;
 let communityScrollGeneration = 0;
 let communityOpenAnchor = null;
+let communityPreloadRoute = '';
+let communityPreloadReady = '';
+let communityPreloadFlight = null;
+let communityRenderJob = null;
 let communityUnreadBanner = null;
 let unreadDividerTimer = 0;
 let communityRoomSynced = '';
@@ -2716,9 +2720,42 @@ function hintPublicPoints(uid, points) {
     }).catch(() => {});
 }
 
+function communityFeedScroller() {
+    return document.querySelector('#view-community .community-feed-scroll');
+}
+
+function communityFeedIsOpen() {
+    return safeStorage.getItem('activeTab') === 'community'
+        && !!document.getElementById('view-community')?.classList.contains('active');
+}
+
+function armCommunityParking() {
+    communityFeedScroller()?.classList.add('is-parking');
+}
+
+/** Where WhatsApp would open this room. Null until the feed has a real height. */
+export function communityOpenTarget({ scrollHeight, clientHeight, dividerTop, hasDivider, hasRows }) {
+    const height = Number(clientHeight) || 0;
+    const full = Number(scrollHeight) || 0;
+    if (height < 40) return null;
+    const maxTop = Math.max(0, full - height);
+    if (!hasRows && !hasDivider) return { top: 0, mode: 'short', pinned: true };
+    if (maxTop <= 1) return { top: 0, mode: 'short', pinned: true };
+    if (hasDivider) {
+        const top = Number(dividerTop) || 0;
+        const unreadSpan = Math.max(0, full - top);
+        if (unreadSpan > height + 8) {
+            return { top: Math.max(0, top - 12), mode: 'unread', pinned: false };
+        }
+        return { top: maxTop, mode: 'both', pinned: true };
+    }
+    return { top: maxTop, mode: 'latest', pinned: true };
+}
+
 function pinCommunityFeedToLatest() {
-    const scroller = document.querySelector('#view-community .community-feed-scroll');
-    if (!scroller || !communityFeedPinned) return;
+    const scroller = communityFeedScroller();
+    if (!scroller || !communityFeedPinned || scroller.classList.contains('is-parking')) return;
+    if (scroller.clientHeight < 40) return;
     if (Date.now() < communityScrollGuardUntil) return;
     communityScrollGeneration += 1;
     communityScrollGuardUntil = Date.now() + 450;
@@ -2728,33 +2765,69 @@ function pinCommunityFeedToLatest() {
 function placeCommunityOpen(routeId, listEl) {
     const scroller = listEl?.closest?.('.community-feed-scroll');
     const anchor = communityOpenAnchor;
-    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.taken || anchor.placed) return false;
-    const rows = [...listEl.querySelectorAll('.community-post-row')];
+    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.taken) return false;
+    const rows = listEl.querySelectorAll('.community-post-row');
     const divider = listEl.querySelector('[data-community-unread-divider]');
-    if (!rows.length && !divider) return false;
-    communityScrollGeneration += 1;
-    communityScrollGuardUntil = Date.now() + 500;
-    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    let target = maxTop;
-    let mode = 'latest';
-    if (divider && divider.isConnected) {
-        const dividerTop = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-        const unreadSpan = Math.max(0, scroller.scrollHeight - dividerTop);
-        if (unreadSpan > scroller.clientHeight + 8) {
-            target = Math.max(0, dividerTop - 8);
-            mode = 'unread';
-        } else {
-            target = maxTop;
-            mode = 'both';
-        }
+    const hasRows = rows.length > 0;
+    const hasDivider = !!(divider && divider.isConnected);
+    if (!hasRows && !hasDivider && listEl.querySelector('.animate-pulse')) return false;
+    let dividerTop = 0;
+    if (hasDivider) {
+        dividerTop = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
     }
-    scroller.scrollTop = target;
-    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-    communityFeedPinned = gap < 160;
-    anchor.mode = mode;
+    const target = communityOpenTarget({
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+        dividerTop,
+        hasDivider,
+        hasRows,
+    });
+    if (!target) return false;
+    if (Math.abs(scroller.scrollTop - target.top) > 1) {
+        communityScrollGeneration += 1;
+        communityScrollGuardUntil = Date.now() + 500;
+        scroller.scrollTop = target.top;
+    }
+    communityFeedPinned = target.pinned;
+    anchor.mode = target.mode;
     anchor.scrollTop = scroller.scrollTop;
-    if (communityRoomSynced === routeId) anchor.placed = true;
+    anchor.placed = true;
     return true;
+}
+
+let communityRevealTries = 0;
+
+function revealCommunityOpen(routeId) {
+    const listEl = document.getElementById('community-feed-list');
+    const scroller = communityFeedScroller();
+    if (!listEl || !scroller || !communityFeedIsOpen()) return;
+    if (communityOpenAnchor?.routeId !== routeId) return;
+    const parked = placeCommunityOpen(routeId, listEl);
+    if (!parked && listEl.querySelector('.animate-pulse') && communityRevealTries < 8) {
+        communityRevealTries += 1;
+        requestAnimationFrame(() => revealCommunityOpen(routeId));
+        return;
+    }
+    if (!parked && scroller.clientHeight < 40 && communityRevealTries < 4) {
+        communityRevealTries += 1;
+        requestAnimationFrame(() => revealCommunityOpen(routeId));
+        return;
+    }
+    communityRevealTries = 0;
+    scroller.classList.remove('is-parking');
+}
+
+/** Set the open position in this turn, before the tab paints. */
+export function parkCommunityOpen() {
+    const scroller = communityFeedScroller();
+    if (!scroller) return;
+    scroller.classList.add('is-parking');
+    const routeId = communityOpenAnchor?.routeId
+        || communityPreloadRoute
+        || document.getElementById('community-route-select')?.value
+        || '';
+    if (!routeId || !isCommunityWarm(routeId)) return;
+    revealCommunityOpen(routeId);
 }
 
 function bindCommunityFeedPin() {
@@ -2790,7 +2863,11 @@ function bindCommunityFeedPin() {
             return;
         }
         const anchor = communityOpenAnchor;
-        if (anchor && anchor.placed && !anchor.taken) return;
+        if (scroller.classList.contains('is-parking')) return;
+        if (anchor && anchor.placed && !anchor.taken) {
+            placeCommunityOpen(paintedCommunityRouteId, list);
+            return;
+        }
         if (!communityFeedPinned || !anchor?.placed) return;
         if (Date.now() < communityScrollGuardUntil) return;
         const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
@@ -3141,10 +3218,10 @@ function applyFeedFilter(routeId) {
         /* the outgoing row stays on screen while the send is still going */
     } else if (focusing) void revealCommunityFocus(routeId);
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
-    else if (anchor && !anchor.taken && !anchor.placed) {
-        placeCommunityOpen(routeId, listEl);
+    else if (!communityFeedIsOpen() || scroller?.classList.contains('is-parking')) {
+        /* Preload, or the first open, paints here and parks once when the tab is shown. */
     } else if (anchor && anchor.placed && !anchor.taken) {
-        /* the open view stays until this person scrolls or sends */
+        placeCommunityOpen(routeId, listEl);
     } else if (anchor && anchor.placed && communityFeedPinned && anchor.mode !== 'unread') {
         pinCommunityFeedToLatest();
     } else if (anchor && anchor.placed && anchor.taken) {
@@ -3153,7 +3230,7 @@ function applyFeedFilter(routeId) {
             communityScrollGuardUntil = Date.now() + 400;
             restoreFeedViewport(scroller, viewport);
         }
-    } else pinCommunityFeedToLatest();
+    } else if (!anchor || anchor.placed) pinCommunityFeedToLatest();
     rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
     const uids = posts.map((p) => p.uid);
@@ -3691,6 +3768,68 @@ export function startCommunityUnreadWatch() {
     });
 }
 
+function isCommunityWarm(routeId) {
+    const list = document.getElementById('community-feed-list');
+    return !!(
+        routeId
+        && communityPreloadReady === routeId
+        && communityOpenAnchor?.routeId === routeId
+        && list
+        && !list.querySelector('.animate-pulse')
+    );
+}
+
+function finishCommunityRender(routeId) {
+    if (routeId && communityRoomSynced === routeId) communityPreloadReady = routeId;
+    const selected = document.getElementById('community-route-select')?.value || '';
+    if (selected && selected !== routeId) return;
+    if (!communityFeedIsOpen()) return;
+    revealCommunityOpen(routeId);
+}
+
+function seenCursorForRoute(routeId) {
+    const remote = accountSeenCache.map ? accountSeenCache.map[routeId] : null;
+    const cursor = communityUnreadCursor(safeStorage.getItem(unreadSeenKey(routeId)), remote);
+    return cursor.established ? cursor.lastSeen : 0;
+}
+
+function prepareCommunityOpen(routeId) {
+    const seen = seenCursorForRoute(routeId);
+    const anchor = communityOpenAnchor;
+    if (!anchor || anchor.routeId !== routeId) {
+        beginCommunityOpenAnchor(routeId);
+        if (communityOpenAnchor) communityOpenAnchor.seen = seen;
+        return;
+    }
+    const seenChanged = anchor.seen !== seen;
+    if (seenChanged || anchor.taken || anchor.placed) {
+        anchor.seen = seen;
+        anchor.placed = false;
+        anchor.taken = false;
+        anchor.mode = 'latest';
+        anchor.scrollTop = 0;
+        if (seenChanged) communityUnreadBanner = null;
+    }
+}
+
+export function preloadCommunityRoom(routeId) {
+    if (typeof document === 'undefined') return Promise.resolve();
+    if (safeStorage.getItem('activeTab') === 'community') return Promise.resolve();
+    const id = resolveCommunityRoute(routeId || getLastCommunityRoom() || $currentRouteId.get() || '');
+    if (!id || !communityRoomAllowed(id)) return Promise.resolve();
+    if (communityPreloadReady === id && postsListenRouteId === id && postsSnapSeen) return Promise.resolve();
+    if (communityPreloadFlight?.routeId === id) return communityPreloadFlight.promise;
+    communityPreloadRoute = id;
+    const promise = renderCommunityFeed(id)
+        .then(() => refreshCommunityUnreadBadge())
+        .catch(() => {})
+        .finally(() => {
+            if (communityPreloadFlight?.routeId === id) communityPreloadFlight = null;
+        });
+    communityPreloadFlight = { routeId: id, promise };
+    return promise;
+}
+
 export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts = {}) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
@@ -3703,21 +3842,42 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
         if (titleEl) titleEl.textContent = 'Community';
         listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">No community is open for this region.</p>`;
         if (emptyEl) emptyEl.classList.add('hidden');
+        if (communityFeedIsOpen()) communityFeedScroller()?.classList.remove('is-parking');
+        return;
+    }
+    if (!opts.owner && communityRenderJob?.routeId === routeId && !opts.forceRest) {
+        await communityRenderJob.promise;
+        finishCommunityRender(routeId);
         return;
     }
 
+    let releaseRender = () => {};
+    const renderGate = new Promise((resolve) => { releaseRender = resolve; });
+    communityRenderJob = { routeId, promise: renderGate };
+    try {
+        await renderCommunityFeedNow(routeId, opts, { listEl, emptyEl, titleEl });
+    } finally {
+        finishCommunityRender(routeId);
+        releaseRender();
+        if (communityRenderJob?.promise === renderGate) communityRenderJob = null;
+    }
+}
+
+async function renderCommunityFeedNow(routeId, opts, els) {
+    const { listEl, emptyEl, titleEl } = els;
     if (titleEl) titleEl.textContent = routeLabel(routeId);
     paintCategoryFilters();
-    const sameOpenRoom = communityOpenAnchor?.routeId === routeId && communityOpenAnchor.placed;
-    if (!feedSilentRepaint && !sameOpenRoom) beginCommunityOpenAnchor(routeId);
+    if (communityFeedIsOpen() && communityOpenAnchor?.routeId !== routeId) armCommunityParking();
+    const sameRoom = communityOpenAnchor?.routeId === routeId && !opts.forceRest;
+    if (!feedSilentRepaint && !sameRoom) beginCommunityOpenAnchor(routeId);
 
     const forceRest = !!opts.forceRest;
-    const stored = !feedSilentRepaint && !sameOpenRoom ? readRoomCache(routeId) : [];
+    const stored = !feedSilentRepaint && !sameRoom ? readRoomCache(routeId) : [];
     if (stored.length) {
         cachedFeedPosts = mergeOverlayPosts(routeId, stored);
         communityFeedPinned = !unreadBannerFor(routeId, cachedFeedPosts);
         applyFeedFilter(routeId);
-    } else if (!feedSilentRepaint && !sameOpenRoom) {
+    } else if (!feedSilentRepaint && !sameRoom) {
         communityFeedPinned = true;
         listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
         if (emptyEl) emptyEl.classList.add('hidden');
@@ -3725,7 +3885,7 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
 
     const acct = $account.get();
     const seenReady = accountSeenCache.uid === (acct?.uid || '') && accountSeenCache.map;
-    if (!feedSilentRepaint && !sameOpenRoom && acct?.status === 'signed-in' && acct.uid && !seenReady) {
+    if (!feedSilentRepaint && !sameRoom && acct?.status === 'signed-in' && acct.uid && !seenReady) {
         try { await readAccountCommunitySeen(); } catch { /* the phone cursor still opens the room */ }
         if (communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed) {
             const remote = accountSeenCache.map ? accountSeenCache.map[routeId] : null;
@@ -4335,7 +4495,6 @@ function publishOwnCommunityName() {
 }
 
 async function openRouteCommunityNow(opts = {}) {
-    try { await fetchFeatures(); } catch { /* defaults */ }
     const requested = pendingCommunityFocus?.routeId || opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
     const routeId = resolveCommunityRoute(requested);
     const routeSel = document.getElementById('community-route-select');
@@ -4366,23 +4525,39 @@ async function openRouteCommunityNow(opts = {}) {
         return;
     }
 
+    prepareCommunityOpen(activeRoute);
+    armCommunityParking();
+    const warm = isCommunityWarm(activeRoute);
+    if (warm) {
+        applyFeedFilter(activeRoute);
+        revealCommunityOpen(activeRoute);
+    }
+
     publishOwnCommunityName();
 
     triggerHaptic();
-    renderCommunityFeed(activeRoute);
+    if (!warm) renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
     refreshCommunitySendMax().finally(() => paintCommunityQuotaHint());
     startQuotaHintWatch();
+    try { await fetchFeatures(); } catch { /* defaults */ }
+    if (activeRoute && !communityRoomAllowed(activeRoute) && safeStorage.getItem('activeTab') === 'community') {
+        renderCommunityFeed(activeRoute);
+    }
 }
 
 export function leaveCommunityRoom() {
     if (paintedCommunityRouteId) settleCommunityRoomSeen(paintedCommunityRouteId);
     dismissCommunitySuggest();
-    stopRealtimePosts();
     leaveCommunityPresence();
+    armCommunityParking();
+    if (communityOpenAnchor) {
+        communityOpenAnchor.placed = false;
+        communityOpenAnchor.taken = false;
+    }
 }
 
-/** Destroy chat listeners when the Community tab is not visible (Blaze control). */
+/** Stop the room listener when the app is backgrounded. Leaving the tab keeps the preloaded room. */
 function bindCommunityVisibilityTeardown() {
     if (typeof document === 'undefined' || window.__ntCommunityVisBound) return;
     window.__ntCommunityVisBound = true;
@@ -4401,6 +4576,8 @@ function bindCommunityVisibilityTeardown() {
                 startRealtimeReactions(rid);
                 joinCommunityPresence(rid);
             }
+        } else {
+            preloadCommunityRoom();
         }
     });
 }
@@ -5334,6 +5511,16 @@ export function bindCommunityUi() {
 }
 
 if (typeof window !== 'undefined') {
+    if (!window.__ntCommunityPreloadRoute) {
+        window.__ntCommunityPreloadRoute = true;
+        let communityPreloadTimer = 0;
+        $currentRouteId.subscribe((id) => {
+            if (!window._appStabilized) return;
+            if (safeStorage.getItem('activeTab') === 'community') return;
+            clearTimeout(communityPreloadTimer);
+            communityPreloadTimer = setTimeout(() => preloadCommunityRoom(id), 400);
+        });
+    }
     window.addEventListener('nt-features-updated', () => {
         if (safeStorage.getItem('activeTab') !== 'community') return;
         const routeId = document.getElementById('community-route-select')?.value || '';
@@ -5348,6 +5535,8 @@ if (typeof window !== 'undefined') {
         if (routeId) applyFeedFilter(routeId);
     });
     window.openRouteCommunity = openRouteCommunity;
+    window.parkCommunityOpen = parkCommunityOpen;
+    window.preloadCommunityRoom = preloadCommunityRoom;
     window.queueCommunityFocus = queueCommunityFocus;
     window.renderCommunityFeed = renderCommunityFeed;
     window.leaveCommunityRoom = leaveCommunityRoom;

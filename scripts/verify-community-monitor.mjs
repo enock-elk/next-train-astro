@@ -301,12 +301,35 @@ assert.match(community, /readRoomCache\(routeId\)/, 'opening a room paints the s
 assert.match(community, /UNREAD_DIVIDER_MS = 45000/, 'the unread count leaves after 45 seconds');
 assert.match(community, /unread messages/, 'the room shows how many messages are unread');
 assert.match(community, /data-community-unread-divider/, 'unread messages start under a divider');
-assert.match(community, /unreadSpan > scroller\.clientHeight/, 'a tall unread block opens on the divider');
-assert.match(community, /mode = 'both'/, 'a short unread block opens with the latest messages');
+assert.match(community, /unreadSpan > height \+ 8/, 'a tall unread block opens on the divider');
+assert.match(community, /mode: 'both'/, 'a short unread block opens with the latest messages');
+assert.match(community, /mode: 'short'/, 'a room that does not fill the screen stays at the top');
+assert.match(community, /function preloadCommunityRoom/, 'the current route is preloaded before Community opens');
+assert.match(community, /is-parking/, 'the feed stays hidden until the open position is set');
 assert.match(community, /anchor\.placed && !anchor\.taken/, 'an open view stays until the person scrolls or sends');
 const logic = await readFile(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert.match(logic, /__ntCommunityStablePoll/, 'community unread is checked once after the board is stable');
 assert.match(logic, /5000/, 'the stable community check waits about 5 seconds');
+assert.match(logic, /preloadCommunityRoom/, 'the stable board preloads the community room');
+assert.match(communityView, /is-parking/, 'Community markup hides the feed until it is parked');
+{
+    const start = community.indexOf('export function communityOpenTarget');
+    const end = community.indexOf('function pinCommunityFeedToLatest', start);
+    const communityOpenTarget = new Function(`${community.slice(start, end).replace('export function', 'function')}\nreturn communityOpenTarget;`)();
+    const short = communityOpenTarget({ scrollHeight: 400, clientHeight: 700, dividerTop: 0, hasDivider: false, hasRows: true });
+    assert.equal(short.mode, 'short');
+    assert.equal(short.top, 0);
+    const latest = communityOpenTarget({ scrollHeight: 2000, clientHeight: 700, dividerTop: 0, hasDivider: false, hasRows: true });
+    assert.equal(latest.mode, 'latest');
+    assert.equal(latest.top, 1300);
+    const unread = communityOpenTarget({ scrollHeight: 3000, clientHeight: 700, dividerTop: 400, hasDivider: true, hasRows: true });
+    assert.equal(unread.mode, 'unread');
+    assert.equal(unread.top, 388);
+    const both = communityOpenTarget({ scrollHeight: 2000, clientHeight: 700, dividerTop: 1500, hasDivider: true, hasRows: true });
+    assert.equal(both.mode, 'both');
+    assert.equal(both.top, 1300);
+    assert.equal(communityOpenTarget({ scrollHeight: 2000, clientHeight: 0, dividerTop: 0, hasDivider: false, hasRows: true }), null);
+}
 assert.match(community, /communitySendHoldId/, 'a send stays on screen until the request settles');
 assert.match(community, /settleCommunityRoomSeen\(paintedCommunityRouteId\)/, 'leaving the room clears the unread count');
 assert.doesNotMatch(community, /markCommunityRouteSeen\(routeId, \{ silent: true \}\)/, 'a live update does not stamp the room seen');

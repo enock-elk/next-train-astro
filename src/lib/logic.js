@@ -1703,6 +1703,13 @@ function markSchedulesCoreReady() {
     window._appStabilized = true;
     if (!window.__ntCommunityStablePoll) {
         window.__ntCommunityStablePoll = true;
+        const preloadCommunity = () => {
+            import('./community.js')
+                .then((mod) => mod.preloadCommunityRoom?.())
+                .catch(() => {});
+        };
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(preloadCommunity, { timeout: 1500 });
+        else setTimeout(preloadCommunity, 400);
         setTimeout(() => {
             import('./community.js')
                 .then((mod) => mod.refreshCommunityUnreadBadge?.())

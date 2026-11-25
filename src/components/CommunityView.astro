@@ -141,7 +141,7 @@
         </div>
 
         <!-- Wallpaper lives on the pane so IME / composer resize does not retile it -->
-        <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-[8rem] min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent">
+        <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-[8rem] min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent is-parking">
             <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
             <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
         </div>
@@ -257,6 +257,14 @@
   }
   #view-community .community-feed-scroll {
     overflow-anchor: none;
+  }
+  /* Stay hidden until the open position is set, so the first paint is not a scroll. */
+  #view-community .community-feed-scroll.is-parking {
+    visibility: hidden;
+  }
+  #view-community.view-section {
+    transform: none;
+    transition: none;
   }
   /* A little darker than the shared wash so the bubbles sit forward.
      Alerts and Feedback Hub keep their own wallpaper. */

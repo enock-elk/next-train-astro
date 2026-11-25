@@ -47,6 +47,11 @@ const holidayUrls = [
     changefreq: 'weekly',
     priority: '0.78',
   },
+  {
+    loc: `${ORIGIN}/festive-season.html`,
+    changefreq: 'weekly',
+    priority: '0.8',
+  },
 ];
 
 const routeUrls = listSeoRoutes().map(({ seed }) => ({

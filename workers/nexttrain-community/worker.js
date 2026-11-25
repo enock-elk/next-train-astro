@@ -182,12 +182,21 @@ function toBase64Url(obj) {
     return btoa(s).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
+/** Documented admin bypass. Messaging on this token makes RTDB score the caller as a user. */
+const RTDB_ADMIN_SCOPE = 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database';
+const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
+
+function rtdbAuthNote(email, status) {
+    if (Number(status) !== 401 || !email) return '';
+    return ` as ${email}`;
+}
+
 async function getGoogleAccessToken(clientEmail, privateKey, scope) {
     const header = { alg: 'RS256', typ: 'JWT' };
     const now = Math.floor(Date.now() / 1000);
     const payload = {
         iss: clientEmail,
-        scope: scope || 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
+        scope: scope || RTDB_ADMIN_SCOPE,
         aud: 'https://oauth2.googleapis.com/token',
         exp: now + 3600,
         iat: now,
@@ -327,7 +336,7 @@ async function rtdbWrite(env, path, value) {
     });
     if (!res.ok) {
         const t = await res.text();
-        throw new Error(`RTDB write failed (${res.status}): ${t.slice(0, 200)}`);
+        throw new Error(`RTDB write failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}: ${t.slice(0, 200)}`);
     }
     return true;
 }
@@ -345,7 +354,7 @@ async function rtdbUpdate(env, updates) {
     });
     if (!res.ok) {
         const t = await res.text();
-        throw new Error(`RTDB update failed (${res.status}): ${t.slice(0, 200)}`);
+        throw new Error(`RTDB update failed (${res.status})${rtdbAuthNote(email, res.status)}: ${t.slice(0, 200)}`);
     }
     return true;
 }
@@ -365,7 +374,7 @@ async function rtdbQuery(env, path, params = {}) {
         if (value != null && value !== '') url.searchParams.set(name, String(value));
     });
     const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
+    if (!res.ok) throw new Error(`RTDB read failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}`);
     return res.json();
 }
 
@@ -375,7 +384,7 @@ async function rtdbDelete(env, path) {
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     const token = await getGoogleAccessToken(email, key);
     const res = await fetch(rtdbJsonUrl(base, path, token), { method: 'DELETE' });
-    if (!res.ok) throw new Error(`RTDB delete failed (${res.status})`);
+    if (!res.ok) throw new Error(`RTDB delete failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}`);
 }
 
 function createRtdbClient(env) {
@@ -397,7 +406,7 @@ function createRtdbClient(env) {
             const res = await request(path, {
                 headers: withEtag ? { 'X-Firebase-ETag': 'true' } : {},
             });
-            if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
+            if (!res.ok) throw new Error(`RTDB read failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}`);
             return {
                 value: await res.json(),
                 etag: res.headers.get('ETag'),
@@ -414,7 +423,7 @@ function createRtdbClient(env) {
             if (res.status === 412) return { matched: false };
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`RTDB conditional write failed (${res.status}) at ${path}: ${text.slice(0, 160)}`);
+                throw new Error(`RTDB conditional write failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}: ${text.slice(0, 160)}`);
             }
             return { matched: true };
         },
@@ -422,7 +431,7 @@ function createRtdbClient(env) {
             const res = await request(path, { method: 'DELETE' });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`RTDB delete failed (${res.status}): ${text.slice(0, 200)}`);
+                throw new Error(`RTDB delete failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}: ${text.slice(0, 200)}`);
             }
             return { matched: true };
         },
@@ -1131,7 +1140,7 @@ export async function deliverPushNotifications(env, raw, options = {}) {
 
     const accessToken = options.sendOne
         ? null
-        : await getGoogleAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY);
+        : await getGoogleAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY, FCM_SCOPE);
     const sendOne = options.sendOne
         || ((registrationId, subscription) => (
             sendOneFcm(env, accessToken, registrationId, request, subscription.registrationType)

@@ -32,7 +32,9 @@ import {
     clampDisplayName,
     resolveAccountDisplayName,
     refuseDisplayName,
+    displayNameMeetsMinimum,
     DISPLAY_NAME_REFUSE_MSG,
+    DISPLAY_NAME_MIN_MSG,
 } from './display-name.js';
 import { paintDataSaverUi, readDataSaver, writeDataSaver } from './data-saver.js';
 
@@ -537,10 +539,20 @@ export async function ensureUserProfile(user, opts = {}) {
     try {
         const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, userPath));
         const existing = snap.exists() ? (snap.val() || {}) : null;
-        const displayName = resolveAccountDisplayName(user, {
+        const storedName = clampDisplayName(existing?.displayName);
+        let displayName = resolveAccountDisplayName(user, {
             displayName: customName || existing?.displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
         });
+        let askForDisplayName = false;
+        if (existing && storedName && !customName) {
+            if (!displayNameMeetsMinimum(storedName) || !displayNameMeetsMinimum(displayName)) {
+                displayName = storedName;
+            }
+        } else if (displayName && !displayNameMeetsMinimum(displayName)) {
+            displayName = '';
+            askForDisplayName = !existing || !storedName;
+        }
         const localPrefs = readLocalAccountPrefs();
         const priorIds = existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : null;
         const mergedDeviceIds = { ...(priorIds || {}) };
@@ -683,6 +695,7 @@ export async function ensureUserProfile(user, opts = {}) {
                 .then((m) => m.publishPublicProfile({ displayName }))
                 .catch(() => {});
         }
+        if (askForDisplayName) askForADisplayName();
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
@@ -700,7 +713,10 @@ export async function updateAccountDisplayName(raw) {
     const check = refuseDisplayName(raw);
     if (!check.ok) throw new Error(check.message);
     const custom = check.name;
-    const displayName = custom || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    const fallback = formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    const fallbackCheck = custom ? null : refuseDisplayName(fallback);
+    if (fallbackCheck && !fallbackCheck.ok) throw new Error(fallbackCheck.message);
+    const displayName = custom || fallbackCheck.name;
     const photoURL = resolveAuthPhotoURL(user);
     if (window.firebaseUpdateProfile) {
         const profilePatch = { displayName };
@@ -1378,6 +1394,14 @@ export async function pushAccountRecentTrips() {
     } catch {
         _lastTripsPush = '';
     }
+}
+
+function askForADisplayName() {
+    if (typeof window.showToast === 'function') window.showToast(DISPLAY_NAME_MIN_MSG);
+    const welcome = document.getElementById('welcome-modal');
+    if (welcome && !welcome.classList.contains('hidden')) return;
+    openAccountModal();
+    setAccountProfileOpen(true);
 }
 
 function setAccountProfileOpen(open) {
@@ -2126,9 +2150,9 @@ export function bindAccountUi() {
             }
             paintAccountPoints();
         } catch (e) {
-            if (e?.message === DISPLAY_NAME_REFUSE_MSG) {
-                if (typeof window.showToast === 'function') window.showToast(DISPLAY_NAME_REFUSE_MSG);
-                showErr(DISPLAY_NAME_REFUSE_MSG);
+            if (e?.message === DISPLAY_NAME_REFUSE_MSG || e?.message === DISPLAY_NAME_MIN_MSG) {
+                if (typeof window.showToast === 'function') window.showToast(e.message);
+                showErr(e.message);
             } else {
                 showErr(friendlyAuthError(e));
             }
@@ -2154,8 +2178,8 @@ export function bindAccountUi() {
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
-            if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
-                window.showToast(DISPLAY_NAME_REFUSE_MSG);
+            if ((msg === DISPLAY_NAME_REFUSE_MSG || msg === DISPLAY_NAME_MIN_MSG) && typeof window.showToast === 'function') {
+                window.showToast(msg);
             }
             if (nameErr) nameErr.textContent = msg;
             showErr(msg);

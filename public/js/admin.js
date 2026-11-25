@@ -1518,7 +1518,37 @@ const Admin = {
         return n;
     },
 
-    /** Account display name and opted-in photo, not the email's first name. */
+    /** Operator surfaces. Community still hides a photo the commuter turned off. */
+    adminPhotoUrl: (raw) => {
+        const s = String(raw || '').trim();
+        if (!s || s.length > 2000 || /[\s<>]/.test(s)) return '';
+        try {
+            const u = new URL(s);
+            if (u.protocol !== 'https:' || u.username || u.password) return '';
+            const host = u.hostname.toLowerCase();
+            const allowed = host === 'firebasestorage.googleapis.com'
+                || host === 'storage.googleapis.com'
+                || host.endsWith('.firebasestorage.app')
+                || host.endsWith('.googleusercontent.com')
+                || host === 'graph.facebook.com'
+                || host.endsWith('.facebook.com')
+                || host.endsWith('.fbcdn.net')
+                || host.endsWith('.cdn-apple.com')
+                || host.endsWith('.mzstatic.com');
+            return allowed ? u.href : '';
+        } catch {
+            return '';
+        }
+    },
+
+    adminAvatarHtml: (photoURL, initial) => {
+        const letter = Admin.commuterEsc(initial || 'U');
+        const photo = Admin.adminPhotoUrl(photoURL);
+        if (!photo) return `<span class="ut-avatar" aria-hidden="true">${letter}</span>`;
+        return `<span class="ut-avatar ut-avatar-photo" aria-hidden="true"><span class="ut-avatar-letter">${letter}</span><img src="${Admin.commuterEsc(photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></span>`;
+    },
+
+    /** Account display name and profile photo, not the email's first name. */
     inboxSenderIdentity: async () => {
         const user = Admin.currentUser;
         if (!user?.uid) return null;
@@ -1526,7 +1556,6 @@ const Admin = {
         const short = email.includes('enock') ? 'Enock' : (email.includes('thandeka') ? 'Thandeka' : 'Admin');
         let displayName = String(user.displayName || '').trim();
         let photoURL = String(user.photoURL || '').trim();
-        let showPhoto = false;
         try {
             const secret = await Admin.getAuthKey();
             const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -1540,11 +1569,10 @@ const Admin = {
                 if (userNode?.displayName) displayName = String(userNode.displayName).trim();
                 else if (pub?.displayName) displayName = String(pub.displayName).trim();
                 if (userNode?.photoURL) photoURL = String(userNode.photoURL).trim();
-                showPhoto = pub?.showPhoto === true;
             }
         } catch { /* keep the auth profile */ }
         const name = (displayName || short).slice(0, 80);
-        const photo = showPhoto && /^https:\/\//i.test(photoURL) ? photoURL.slice(0, 500) : '';
+        const photo = Admin.adminPhotoUrl(photoURL);
         return { uid: user.uid, name, photo, short };
     },
 
@@ -3591,6 +3619,7 @@ const Admin = {
                 uid: accountNode?.uid || '',
             }) || null,
             displayName: accountNode?.displayName || deviceNode?.displayName || userNode?.displayName || '',
+            photoURL: accountNode?.photoURL || userNode?.photoURL || deviceNode?.photoURL || '',
             email: accountNode?.email || deviceNode?.email || userNode?.email || '',
             linkedUid: accountNode?.uid || deviceNode?.uid || '',
             tripLast,
@@ -3692,12 +3721,12 @@ const Admin = {
                     : `<div class="ut-tile">${inner}</div>`;
             };
             const countValue = (count) => (count == null ? '—' : String(count));
-            const initial = esc(Array.from(String(heading).trim())[0]?.toLocaleUpperCase() || 'U');
+            const initial = Array.from(String(heading).trim())[0]?.toLocaleUpperCase() || 'U';
             body.innerHTML = `
                 <div class="ut-lookup">
                     <div class="ut-card ut-profile">
                         <div class="ut-profile-head">
-                            <span class="ut-avatar" aria-hidden="true">${initial}</span>
+                            ${Admin.adminAvatarHtml(peek.photoURL, initial)}
                             <div class="min-w-0 flex-1">
                                 <p class="ut-profile-name">${esc(heading)}</p>
                                 ${peek.email ? `<p class="ut-profile-email">${esc(peek.email)}</p>` : ''}
@@ -16548,7 +16577,7 @@ const Admin = {
                 const rowBtn = (id, label, extraClass) => `<button type="button" id="${id}" class="ut-row"><span class="flex-1 ${extraClass || ''}">${label}</span>${chevron}</button>`;
                 const stat = (label, valueHtml) => `<div><div class="ut-k">${label}</div><div class="ut-v">${valueHtml}</div></div>`;
                 const plainName = profile.alias || String(user.displayName || '').trim() || (user._isDeviceStub ? 'Device guest' : 'User');
-                const initial = Admin.commuterEsc(Array.from(plainName)[0]?.toLocaleUpperCase() || 'U');
+                const initial = Array.from(plainName)[0]?.toLocaleUpperCase() || 'U';
                 const seenAt = Number(user.lastSeenAt) || 0;
                 const appOpen = seenAt > 0 && (Date.now() - seenAt) < 3 * 60 * 1000;
                 const banDetail = banned ? (expired ? 'Expired' : 'On') : 'Off';
@@ -16559,7 +16588,7 @@ const Admin = {
                     <div class="ut-lookup">
                         <div class="ut-card ut-profile">
                             <div class="ut-profile-head">
-                                <span class="ut-avatar" aria-hidden="true">${initial}</span>
+                                ${Admin.adminAvatarHtml(user.photoURL, initial)}
                                 <div class="min-w-0 flex-1">
                                     <p class="ut-profile-name">${heading}</p>
                                     <p class="ut-profile-email">${accountEmailHtml}</p>

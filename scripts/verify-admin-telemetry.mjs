@@ -143,6 +143,10 @@ ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-inst
 ok(adminJs.includes('userIdJoinHintHtml'), 'admin shows an i next to user ids');
 ok(adminJs.includes('openCommuterPeek'), 'i opens a user sheet modal');
 ok(adminJs.includes("modal.id = 'admin-commuter-peek'"), 'user sheet modal id is admin-commuter-peek');
+ok(adminJs.includes('adminAvatarHtml(peek.photoURL'), 'user sheet shows the account photo');
+ok(adminJs.includes('adminAvatarHtml(user.photoURL'), 'lookup shows the account photo');
+ok(adminJs.includes('adminPhotoUrl'), 'admin photos use the https allowlist');
+ok(!adminJs.includes('showPhoto === true'), 'admin photos ignore the community photo switch');
 ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads');
 {
     const peekAt = adminJs.indexOf('collectCommuterPeek: async');

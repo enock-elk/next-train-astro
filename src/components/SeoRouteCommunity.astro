@@ -1,0 +1,84 @@
+---
+/**
+ * Route SEO community preview.
+ * The indexable sentence stays in the HTML. Recent messages load after the page
+ * opens and are marked data-nosnippet so the snippet stays the stable sentence.
+ */
+import { DYNAMIC_BASE_URL } from '../lib/config.js';
+
+const { routeId = '', routeName = 'this route', appHref = '/' } = Astro.props;
+---
+
+<section class="max-w-2xl mx-auto px-4 pt-8" aria-labelledby="seo-route-community-title">
+  <h2 id="seo-route-community-title" class="text-lg font-bold text-slate-900 dark:text-white">
+    Commuters on this route
+  </h2>
+  <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+    People on {routeName} use the Community tab in Next Train to ask a question, answer one, and see what other commuters are reporting.
+    <a href={appHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">Open Next Train for this route</a>.
+  </p>
+  <div
+    class="mt-4 space-y-3"
+    data-nosnippet
+    data-seo-community
+    data-route-id={routeId}
+    data-rtdb-base={DYNAMIC_BASE_URL}
+  >
+    <p class="text-sm text-slate-500 dark:text-slate-400" data-seo-community-empty>
+      No messages on this route yet. Open Next Train and ask.
+    </p>
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-seo-community]');
+    if (!root || root.getAttribute('data-seo-community-bound') === '1') return;
+    root.setAttribute('data-seo-community-bound', '1');
+    var routeId = root.getAttribute('data-route-id') || '';
+    var base = String(root.getAttribute('data-rtdb-base') || '').replace(/\/?$/, '/');
+    if (!routeId || !base) return;
+    var empty = root.querySelector('[data-seo-community-empty]');
+    function esc(value) {
+      return String(value || '').replace(/[&<>"']/g, function (ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+    var url = base + 'route_community/' + encodeURIComponent(routeId) + '/posts.json?orderBy=%22timestamp%22&limitToLast=12';
+    fetch(url).then(function (res) {
+      if (!res.ok) return null;
+      return res.json();
+    }).then(function (data) {
+      if (!data || typeof data !== 'object') return;
+      var rows = Object.keys(data).map(function (id) {
+        var post = data[id] || {};
+        post.postId = id;
+        return post;
+      }).filter(function (post) {
+        if (!post || post.deleted || post.hidden || post.shadowOnly) return false;
+        return String(post.body || '').trim().length > 0;
+      }).sort(function (a, b) {
+        return (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0);
+      }).slice(0, 3);
+      if (!rows.length) return;
+      if (empty) empty.hidden = true;
+      rows.forEach(function (post) {
+        var name = String(post.displayName || 'Commuter').trim().slice(0, 80) || 'Commuter';
+        var body = String(post.body || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+        var when = '';
+        var ts = Number(post.timestamp) || 0;
+        if (ts) {
+          try {
+            when = new Date(ts).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          } catch (e) { when = ''; }
+        }
+        var article = document.createElement('article');
+        article.className = 'rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
+        article.innerHTML = '<p class="font-semibold text-slate-900 dark:text-white">' + esc(name)
+          + (when ? ' <span class="font-normal text-slate-500">' + esc(when) + '</span>' : '')
+          + '</p><p class="mt-1 text-slate-700 dark:text-slate-200">' + esc(body) + '</p>';
+        root.appendChild(article);
+      });
+    }).catch(function () {});
+  })();
+</script>

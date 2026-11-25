@@ -1701,6 +1701,14 @@ function markSchedulesCoreReady() {
     const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
     if (!$currentRouteId.get() || isWelcomeActive) return;
     window._appStabilized = true;
+    if (!window.__ntCommunityStablePoll) {
+        window.__ntCommunityStablePoll = true;
+        setTimeout(() => {
+            import('./community.js')
+                .then((mod) => mod.refreshCommunityUnreadBadge?.())
+                .catch(() => {});
+        }, 5000);
+    }
     try {
         sessionStorage.removeItem('nt_safe_mode_inline');
         sessionStorage.removeItem('nt_lifeboat_auto');

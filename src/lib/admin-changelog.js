@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.25.1': [
+        'Scheduled-alert RTDB calls use only the userinfo.email and firebase.database scopes. A 401 names the service account email. Admin lookup, the user sheet, and inbox identity show users/{uid}/photoURL even when the commuter hid the photo on Community. A new display name needs 3 characters and a letter or number. An existing short name is left as it is. Community opens on the latest messages when the unread line still fits, or on the unread line when it does not, and later paints leave that view until the person scrolls or sends. The unread check runs once about 5 seconds after the board is stable. The pull-to-refresh pill hides the closed blue ring. The homepage description names weekdays, Saturdays, and public holidays. A festive season page says the December 2026 scaled-down timetable is not released yet and links the route pages. The guide and route pages mention the Community tab. Route pages load up to three recent messages after open, outside the snippet. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.23.2': [
         'Live Telemetry keeps the small graph clear. Total, Ads, Stats, Compare, Landscape, Export, and the earlier and later buttons live on the full graph, in two rows with a filled state when Total, Ads, or Compare is on. Community Monitor uses the commuter bubble, the name, and the version button. Suggestions, an image address, and the https field sit behind +. Message options open above the composer. No commuter What\'s New. forceShow stays false.',
     ],

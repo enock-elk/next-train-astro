@@ -18,8 +18,10 @@ import {
   seoIntroParagraphs,
   slugifyStation,
   WC_PUBLIC_HOLIDAYS_PATH,
+  FESTIVE_SEASON_PATH,
 } from '../../lib/seo-routes.js';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
+import SeoRouteCommunity from '../../components/SeoRouteCommunity.astro';
 import JhbFit from '../../components/JhbFit.astro';
 import {
   buildRouteSeoTimetable,
@@ -213,7 +215,9 @@ const related = [
         </p>
         <p>
           <span class="font-semibold text-slate-800 dark:text-slate-100">Festive season.</span>
-          Most regions use a scaled-down timetable from the week of the early 20s of December through the first week of January. That sheet is not the usual weekday, Saturday, or public holiday timetable. The 21 December 2026 to 1 January 2027 times are not on this page yet. Next Train will update this route when PRASA releases the scaled-down timetable.
+          Most regions use a scaled-down timetable from the week of the early 20s of December through the first week of January. That sheet is not the usual weekday, Saturday, or public holiday timetable. The 21 December 2026 to 1 January 2027 times are not on this page yet.
+          <a href={withBase(FESTIVE_SEASON_PATH)} class="text-blue-700 dark:text-blue-300 hover:underline">Festive season timetable</a>.
+          Next Train will update this route when PRASA releases the scaled-down timetable.
         </p>
       </div>
 
@@ -422,6 +426,7 @@ const related = [
 
       <SeoNetworkMap region={route.region} regionLabel={province} />
 
+      <SeoRouteCommunity routeId={route.id} routeName={name} appHref={liveBoardHref} />
       <SeoCrossLinks region={route.region} current="route" />
 
       <p class="mt-10 text-sm text-slate-500">

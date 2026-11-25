@@ -12,7 +12,7 @@ import {
     routeAllowsDualHubOptions,
     shortenStationLabel,
 } from '../src/lib/transfer-card.js';
-import { formatAccountDisplayName, clampDisplayName, refuseDisplayName, DISPLAY_NAME_REFUSE_MSG } from '../src/lib/display-name.js';
+import { formatAccountDisplayName, clampDisplayName, refuseDisplayName, displayNameMeetsMinimum, DISPLAY_NAME_REFUSE_MSG, DISPLAY_NAME_MIN_MSG } from '../src/lib/display-name.js';
 import { pickCanonicalChatDeviceId } from '../src/lib/account.js';
 import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
 import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
@@ -950,6 +950,12 @@ assert(refuseDisplayName('https://spam.example').message === DISPLAY_NAME_REFUSE
 assert(refuseDisplayName('Sex').ok === false, 'Sex is refused as a display name');
 assert(refuseDisplayName('sexy').ok === false, 'sexy is refused as a display name');
 assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still allowed');
+assert(refuseDisplayName('60').ok === false, 'a two-character display name is refused');
+assert(refuseDisplayName('%^&').ok === false, 'a symbol-only display name is refused');
+assert(refuseDisplayName('60').message === DISPLAY_NAME_MIN_MSG, 'short names explain the 3 character rule');
+assert(displayNameMeetsMinimum('A1b') === true, 'three characters with a letter or number pass');
+assert(accountJs.includes('askForADisplayName'), 'a new account with a short provider name is asked to choose one');
+assert(accountJs.includes('displayNameMeetsMinimum(storedName)'), 'an existing short name is kept on later sign-in');
 {
     const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
     assert(sidenav.includes('Haptic feedback'), 'haptics row is labelled Haptic feedback');

@@ -301,7 +301,12 @@ assert.match(community, /readRoomCache\(routeId\)/, 'opening a room paints the s
 assert.match(community, /UNREAD_DIVIDER_MS = 45000/, 'the unread count leaves after 45 seconds');
 assert.match(community, /unread messages/, 'the room shows how many messages are unread');
 assert.match(community, /data-community-unread-divider/, 'unread messages start under a divider');
-assert.match(community, /mode === 'unread'/, 'an open room with unread messages stays on the divider');
+assert.match(community, /unreadSpan > scroller\.clientHeight/, 'a tall unread block opens on the divider');
+assert.match(community, /mode = 'both'/, 'a short unread block opens with the latest messages');
+assert.match(community, /anchor\.placed && !anchor\.taken/, 'an open view stays until the person scrolls or sends');
+const logic = await readFile(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+assert.match(logic, /__ntCommunityStablePoll/, 'community unread is checked once after the board is stable');
+assert.match(logic, /5000/, 'the stable community check waits about 5 seconds');
 assert.match(community, /communitySendHoldId/, 'a send stays on screen until the request settles');
 assert.match(community, /settleCommunityRoomSeen\(paintedCommunityRouteId\)/, 'leaving the room clears the unread count');
 assert.doesNotMatch(community, /markCommunityRouteSeen\(routeId, \{ silent: true \}\)/, 'a live update does not stamp the room seen');

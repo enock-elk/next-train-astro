@@ -2081,7 +2081,11 @@ function jumpCommunitySend(listEl) {
     communityScrollGuardUntil = Date.now() + 8000;
     if (!scroller) return true;
     scroller.scrollTop = communityRowScrollTarget(scroller, row, 'end');
-    if (communityOpenAnchor) communityOpenAnchor.scrollTop = scroller.scrollTop;
+    if (communityOpenAnchor) {
+        communityOpenAnchor.scrollTop = scroller.scrollTop;
+        communityOpenAnchor.taken = true;
+        communityOpenAnchor.placed = true;
+    }
     return true;
 }
 
@@ -2724,21 +2728,30 @@ function pinCommunityFeedToLatest() {
 function placeCommunityOpen(routeId, listEl) {
     const scroller = listEl?.closest?.('.community-feed-scroll');
     const anchor = communityOpenAnchor;
-    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.taken) return false;
+    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.taken || anchor.placed) return false;
     const rows = [...listEl.querySelectorAll('.community-post-row')];
     const divider = listEl.querySelector('[data-community-unread-divider]');
     if (!rows.length && !divider) return false;
     communityScrollGeneration += 1;
     communityScrollGuardUntil = Date.now() + 500;
-    anchor.mode = divider ? 'unread' : 'latest';
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    let target = maxTop;
+    let mode = 'latest';
     if (divider && divider.isConnected) {
-        const top = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-        scroller.scrollTop = Math.max(0, top - 8);
-        communityFeedPinned = false;
-    } else {
-        communityFeedPinned = true;
-        scroller.scrollTop = scroller.scrollHeight;
+        const dividerTop = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+        const unreadSpan = Math.max(0, scroller.scrollHeight - dividerTop);
+        if (unreadSpan > scroller.clientHeight + 8) {
+            target = Math.max(0, dividerTop - 8);
+            mode = 'unread';
+        } else {
+            target = maxTop;
+            mode = 'both';
+        }
     }
+    scroller.scrollTop = target;
+    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    communityFeedPinned = gap < 160;
+    anchor.mode = mode;
     anchor.scrollTop = scroller.scrollTop;
     if (communityRoomSynced === routeId) anchor.placed = true;
     return true;
@@ -2755,10 +2768,10 @@ function bindCommunityFeedPin() {
         }
         if (Date.now() < communityScrollGuardUntil) return;
         const anchor = communityOpenAnchor;
-        if (anchor && anchor.routeId === paintedCommunityRouteId && anchor.mode === 'unread' && !anchor.taken) {
-            if (Math.abs(scroller.scrollTop - (Number(anchor.scrollTop) || 0)) > 80) anchor.taken = true;
-            communityFeedPinned = false;
-            return;
+        if (anchor && anchor.routeId === paintedCommunityRouteId && !anchor.taken) {
+            const parked = Number(anchor.scrollTop) || 0;
+            if (Math.abs(scroller.scrollTop - parked) > 80) anchor.taken = true;
+            if (anchor.placed && !anchor.taken) return;
         }
         if (communityUnreadBanner && !communityUnreadBanner.cleared && communityUnreadBanner.routeId === paintedCommunityRouteId) {
             communityFeedPinned = false;
@@ -2777,23 +2790,9 @@ function bindCommunityFeedPin() {
             return;
         }
         const anchor = communityOpenAnchor;
-        if (!anchor?.placed || anchor.taken) return;
+        if (anchor && anchor.placed && !anchor.taken) return;
+        if (!communityFeedPinned || !anchor?.placed) return;
         if (Date.now() < communityScrollGuardUntil) return;
-        if (anchor.mode === 'unread') {
-            const divider = list.querySelector('[data-community-unread-divider]');
-            if (!divider) return;
-            const moved = Math.abs(scroller.scrollTop - (Number(anchor.scrollTop) || 0)) > 80;
-            if (moved) {
-                anchor.taken = true;
-                return;
-            }
-            const top = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-            communityScrollGuardUntil = Date.now() + 400;
-            scroller.scrollTop = Math.max(0, top - 8);
-            anchor.scrollTop = scroller.scrollTop;
-            return;
-        }
-        if (!communityFeedPinned) return;
         const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
         const parked = Number(anchor.scrollTop) || 0;
         const moved = Math.abs(scroller.scrollTop - parked) > 80;
@@ -3142,8 +3141,10 @@ function applyFeedFilter(routeId) {
         /* the outgoing row stays on screen while the send is still going */
     } else if (focusing) void revealCommunityFocus(routeId);
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
-    else if (anchor && !anchor.taken && (!anchor.placed || anchor.mode === 'unread')) {
+    else if (anchor && !anchor.taken && !anchor.placed) {
         placeCommunityOpen(routeId, listEl);
+    } else if (anchor && anchor.placed && !anchor.taken) {
+        /* the open view stays until this person scrolls or sends */
     } else if (anchor && anchor.placed && communityFeedPinned && anchor.mode !== 'unread') {
         pinCommunityFeedToLatest();
     } else if (anchor && anchor.placed && anchor.taken) {

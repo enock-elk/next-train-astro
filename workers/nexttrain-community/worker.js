@@ -182,7 +182,12 @@ function toBase64Url(obj) {
     return btoa(s).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-/** Documented admin bypass. Messaging on this token makes RTDB score the caller as a user. */
+/**
+ * Admin bypass for RTDB REST. This token skips security rules only when
+ * nexttrain-telemetry has roles/firebasedatabase.admin. An email allowlist
+ * in the rules file is not enough. Keep messaging off this token: a
+ * firebase.messaging scope makes RTDB score the caller as a normal user.
+ */
 const RTDB_ADMIN_SCOPE = 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database';
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 

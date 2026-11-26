@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.26.3': [
+        'Community Monitor messages use the commuter bubble, name row, and clock. Search, person lookup, and Refresh sit in Search and filters. A long URL in a message, route preview, or report wraps inside the phone. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.26.2': [
         'Switching Community rooms shows a short spinner instead of a blank wallpaper. An offline phone says it does not have this line\'s messages yet, or that the line had none last time it was online. It no longer invites the commuter to be first when the room was never loaded. A failed read says the messages did not come through. Saved messages stay on the phone. No commuter What\'s New. forceShow stays false.',
     ],

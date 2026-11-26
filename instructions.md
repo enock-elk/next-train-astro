@@ -198,6 +198,7 @@ Facts to keep consistent (from PRASA EC public posts / comments; refresh if the 
 
 ## UI / SEO that already bit us
 
+- **Long user text must not widen the phone.** Community, Community Monitor, Alerts, Feedback, the inbox, reports, and reviews show commuter or operator text, often a URL with no spaces. The text and its flex or grid parent need `overflow-wrap: anywhere` and `min-width: 0`. A bubble that sizes to its content, or a flex item left at `min-width: auto`, grows the sheet to the full URL. `word-break: break-word` on the text alone does not stop that.
 - Region swap must **not** reopen Select Route when a pin is restored.
 - Weekday/Sat/Sun sim must ignore leftover `#sim-date` unless the user picked a specific date.
 - Shared-corridor “To …” uses the warning **SVG**, not emoji.

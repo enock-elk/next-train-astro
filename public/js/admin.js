@@ -13180,17 +13180,26 @@ const Admin = {
                 <div id="mq-chats-pane" class="flex flex-col min-h-0">
                     <div id="mq-chats-home">
                     <div class="flex justify-end px-1 mb-2">${Admin.infoButton('mq-chats')}</div>
-                    <label class="px-1 mb-2">
-                        <span class="sr-only">Search community routes and messages</span>
-                        <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
-                    </label>
-                    <div class="flex gap-2 px-1 mb-3">
-                        <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
-                        <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
-                    </div>
-                    <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
-                        <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
-                    </div>
+                    <details class="mq-tools" id="mq-tools">
+                        <summary class="mq-tools-summary">
+                            <span>Search and filters</span>
+                            <svg class="mq-tools-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="mq-tools-body">
+                            <label class="mq-field">
+                                <span class="mq-field-label">Routes, messages, or user id</span>
+                                <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" autocomplete="off"/>
+                            </label>
+                            <div class="mq-field">
+                                <span class="mq-field-label">Look up a person</span>
+                                <div class="mq-lookup-row">
+                                    <input id="mq-lookup" type="search" placeholder="UID, device, or email" autocomplete="off"/>
+                                    <button type="button" id="mq-lookup-btn">Look up</button>
+                                </div>
+                            </div>
+                            <button type="button" id="mq-refresh-btn" class="mq-tools-refresh grid-hidden-actions">Refresh</button>
+                        </div>
+                    </details>
                     <div id="mq-list" class="admin-sheet-list"></div>
                     </div>
                     <div id="mq-thread" class="cm-thread" hidden>
@@ -14062,6 +14071,11 @@ const Admin = {
                     if (same(day, y)) return 'Yesterday';
                     return formatWhen(value);
                 };
+                const shareHtml = (value) => {
+                    const text = String(value || '');
+                    if (typeof window.ntShareTextHtml === 'function') return window.ntShareTextHtml(text);
+                    return esc(text);
+                };
                 const renderMessage = (message, routeId, isReply = false) => {
                     const category = message.category && message.category !== 'general'
                         ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
@@ -14074,7 +14088,7 @@ const Admin = {
                         || message.body === 'Deleted message'
                         || message.body === 'Deleted by an Admin';
                     const quote = !removed && message.replyTo?.body
-                        ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
+                        ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${shareHtml(message.replyTo.body)}</div>`
                         : '';
                     const shownBody = removed
                         ? (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin' ? 'Deleted by an Admin' : 'Deleted message')
@@ -14112,7 +14126,7 @@ const Admin = {
                                     <button type="button" class="cm-options-toggle" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
                                 </div>
                                 <div class="community-bubble-body">
-                                    ${quote}${photoHtml}${linkHtml}<div class="community-msg-text cm-bubble-text${removed ? ' community-msg-deleted cm-msg-deleted' : ''}">${esc(shownBody)}<span class="community-msg-time cm-bubble-time">${esc(threadClock(message.timestamp))}</span></div>
+                                    ${quote}${photoHtml}${linkHtml}<div class="community-msg-text cm-bubble-text${removed ? ' community-msg-deleted cm-msg-deleted' : ''}">${removed ? esc(shownBody) : shareHtml(shownBody)}<span class="community-msg-time cm-bubble-time">${esc(threadClock(message.timestamp))}</span></div>
                                     <div class="cm-options">
                                         <div class="cm-options-menu hidden">
                                             <button type="button" class="cm-reply-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${replyAttr}>Reply</button>

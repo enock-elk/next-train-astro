@@ -561,7 +561,10 @@
     font-size: 0.84rem;
     line-height: 1.35;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     word-break: break-word;
+    max-width: 100%;
+    min-width: 0;
   }
   #community-char-hint.is-over {
     color: #dc2626;
@@ -700,9 +703,12 @@
   .community-msg-link {
     display: block;
     margin-bottom: 0.25rem;
+    max-width: 100%;
+    min-width: 0;
     font-size: 0.75rem;
     font-weight: 700;
     text-decoration: underline;
+    overflow-wrap: anywhere;
     word-break: break-all;
   }
   .community-attach-chip {

@@ -496,7 +496,7 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
       const stickFull = !primed || (full.scrollHeight - full.scrollTop - full.clientHeight < 80);
       root.querySelectorAll('.seo-room-row, .seo-room-day').forEach((node) => node.remove());
       if (!preview.length) {
-        if (empty) {
+        if (empty instanceof HTMLElement) {
           empty.hidden = false;
           if (empty.parentNode !== root) root.appendChild(empty);
         }
@@ -506,7 +506,7 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
         const markup = document.createElement('div');
         paintInto(markup, preview);
         while (markup.firstChild) root.appendChild(markup.firstChild);
-        if (hold) {
+        if (hold instanceof HTMLElement) {
           hold.hidden = true;
           root.appendChild(hold);
         }

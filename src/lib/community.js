@@ -4564,6 +4564,28 @@ export function openRouteCommunity(opts = {}) {
     void openRouteCommunityNow(opts);
 }
 
+/** SEO room handoff: guests can read, and the existing hint points them at sign-in. */
+let seoCommunityGuestVisit = false;
+
+function revealSeoCommunityGuestHint(guestHint) {
+    if (!guestHint || typeof sessionStorage === 'undefined') return;
+    try {
+        if (sessionStorage.getItem('nt_community_from_seo') === '1') {
+            seoCommunityGuestVisit = true;
+            sessionStorage.removeItem('nt_community_from_seo');
+        }
+    } catch { return; }
+    if (!seoCommunityGuestVisit || guestHintDismissedThisOpen || $account.get()?.status === 'signed-in') return;
+    guestHint.classList.remove('hidden');
+    if (guestHint.dataset.seoHintBound === '1') return;
+    guestHint.dataset.seoHintBound = '1';
+    const unsub = $account.subscribe((state) => {
+        if (state?.status !== 'signed-in') return;
+        guestHint.classList.add('hidden');
+        try { unsub(); } catch { /* ignore */ }
+    });
+}
+
 let publishedCommunityName = '';
 
 /** Write this account's current name so older messages in every room pick it up. */
@@ -4608,6 +4630,7 @@ async function openRouteCommunityNow(opts = {}) {
         return;
     }
 
+    revealSeoCommunityGuestHint(guestHint);
     prepareCommunityOpen(activeRoute);
     armCommunityParking();
     const warm = isCommunityWarm(activeRoute);

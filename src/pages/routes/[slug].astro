@@ -85,6 +85,7 @@ const description = routeMetaDescription(origin, dest, province, {
 const canonicalPath = `/routes/${seed.slug}.html`;
 const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const liveBoardHref = withBase(buildRouteBoardAppPath(route.id));
+const liveCommunityHref = withBase(`/?rt=${encodeURIComponent(route.id)}&r=${encodeURIComponent(route.region)}&src=seo&v=community`);
 const liveGridWeekdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'weekday'));
 const liveGridWeekdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'weekday'));
 const liveGridSaturdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'saturday'));
@@ -172,6 +173,8 @@ const related = [
           <p>{para}</p>
         ))}
       </div>
+
+      <SeoRouteCommunity routeId={route.id} routeName={name} communityHref={liveCommunityHref} />
 
       <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-3 py-2.5">
@@ -426,7 +429,6 @@ const related = [
 
       <SeoNetworkMap region={route.region} regionLabel={province} />
 
-      <SeoRouteCommunity routeId={route.id} routeName={name} appHref={liveBoardHref} />
       <SeoCrossLinks region={route.region} current="route" />
 
       <p class="mt-10 text-sm text-slate-500">

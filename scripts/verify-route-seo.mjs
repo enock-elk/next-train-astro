@@ -446,9 +446,30 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!communityBlock.includes('data-nosnippet') || !communityBlock.includes('No messages on this route yet')) {
     fail('route community preview keeps messages out of the snippet and has an empty invite');
   }
+  if (!communityBlock.includes('data-seo-community-open') || !communityBlock.includes('Tap to open this room')) {
+    fail('route community preview opens like the station map');
+  }
+  const gridSrc = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+  if (!gridSrc.includes("link.view === 'community'") || !gridSrc.includes("noteDeeplinkSurface('community'")) {
+    fail('community handoff must open the room before Welcome can swallow it');
+  }
+  const communitySrc = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+  if (!communitySrc.includes('nt_community_from_seo') || !communitySrc.includes('revealSeoCommunityGuestHint')) {
+    fail('SEO community entry must show the guest hint');
+  }
+  const adminSrc = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+  if (!adminSrc.includes('data-ad-email') || !adminSrc.includes('promptDeletionDrafts') || !adminSrc.includes('Draft email')) {
+    fail('a deletion request must offer the admin a draft email');
+  }
   const guidePage = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
   if (!guidePage.includes('festive-season.html') || !guidePage.includes('Community tab')) {
     fail('guide must link the festive page and mention the Community tab');
+  }
+  if (guidePage.includes('m-7-7h18') || guidePage.includes('M7 11c.5-2')) {
+    fail('guide icons must not use the broken back shaft or the face-like wave');
+  }
+  if (!guidePage.includes('m-7 7h18') || !guidePage.includes('class="guide-icon-people"') || !guidePage.includes('cx="7.5" cy="6.2"')) {
+    fail('guide back arrow and commuters icon must be the repaired marks');
   }
   const regionSrc = readFileSync(new URL('../src/pages/regions/[slug].astro', import.meta.url), 'utf8');
   if (!regionSrc.includes('WC_PUBLIC_HOLIDAYS_PATH') || !regionSrc.includes('Public holidays')) {
@@ -473,6 +494,14 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   }
   if (!routePage.includes('To Download this time table, Open Next Train online')) {
     fail('route landings must keep the existing download sentence');
+  }
+  const communityAt = routePage.indexOf('<SeoRouteCommunity');
+  const whenAt = routePage.indexOf('When trains run');
+  if (communityAt < 0 || whenAt < 0 || communityAt > whenAt) {
+    fail('route community preview must sit above the timetable notes');
+  }
+  if (!routePage.includes('v=community')) {
+    fail('route community preview must hand off into the community room');
   }
   const gridComponent = readFileSync(new URL('../src/components/SeoTimetableGrid.astro', import.meta.url), 'utf8');
   if (!gridComponent.includes('Schedule effective from:') || !gridComponent.includes('seo-tt-toolbar')) {

@@ -3,82 +3,591 @@
  * Route SEO community preview.
  * The indexable sentence stays in the HTML. Recent messages load after the page
  * opens and are marked data-nosnippet so the snippet stays the stable sentence.
+ * The frame is a live room: wallpaper, name colours, and a tap-through sheet.
  */
 import { DYNAMIC_BASE_URL } from '../lib/config.js';
 
-const { routeId = '', routeName = 'this route', appHref = '/' } = Astro.props;
+const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.props;
 ---
 
-<section class="max-w-2xl mx-auto px-4 pt-8" aria-labelledby="seo-route-community-title">
-  <h2 id="seo-route-community-title" class="text-lg font-bold text-slate-900 dark:text-white">
-    Commuters on this route
-  </h2>
-  <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-    People on {routeName} use the Community tab in Next Train to ask a question, answer one, and see what other commuters are reporting.
-    <a href={appHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">Open Next Train for this route</a>.
-  </p>
-  <div
-    class="mt-4 space-y-3"
-    data-nosnippet
-    data-seo-community
-    data-route-id={routeId}
-    data-rtdb-base={DYNAMIC_BASE_URL}
-  >
-    <p class="text-sm text-slate-500 dark:text-slate-400" data-seo-community-empty>
-      No messages on this route yet. Open Next Train and ask.
+<section class="seo-room" aria-labelledby="seo-route-community-title">
+  <h2 id="seo-route-community-title" class="seo-room-title">Commuters on this route</h2>
+  <div class="seo-room-layout">
+    <p class="seo-room-lead">
+      People on {routeName} use the Community tab in Next Train to ask a question, answer one, and see what other commuters are reporting.
+      <a href={communityHref} class="seo-room-lead-link">Open Next Train for this route</a>.
     </p>
+    <figure class="seo-room-frame">
+      <button
+        type="button"
+        class="seo-room-open"
+        data-seo-community-open
+        aria-label={`Open the ${routeName} community room`}
+      >
+        <div class="seo-room-stage">
+          <div class="nt-pack-wallpaper" aria-hidden="true"></div>
+          <div class="seo-room-bar">
+            <span class="seo-room-live" aria-hidden="true"></span>
+            <span class="seo-room-bar-name">{routeName}</span>
+            <span class="seo-room-live-label">Live</span>
+          </div>
+          <div
+            class="seo-room-feed"
+            data-nosnippet
+            data-seo-community
+            data-seo-community-preview
+            data-route-id={routeId}
+            data-route-name={routeName}
+            data-rtdb-base={DYNAMIC_BASE_URL}
+            data-community-href={communityHref}
+          >
+            <p class="seo-room-empty" data-seo-community-empty>
+              No messages on this route yet. Open Next Train and ask.
+            </p>
+          </div>
+          <div class="seo-room-dock" aria-hidden="true">
+            <span class="seo-room-field">Message</span>
+            <span class="seo-room-send">Post</span>
+          </div>
+          <span class="seo-room-tap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" />
+            </svg>
+            Tap to open this room
+          </span>
+        </div>
+      </button>
+      <figcaption class="seo-room-caption">
+        {routeName} on Community. Messages update on this page. Open the room to read and reply.
+      </figcaption>
+    </figure>
   </div>
 </section>
 
-<script is:inline>
-  (function () {
-    var root = document.querySelector('[data-seo-community]');
-    if (!root || root.getAttribute('data-seo-community-bound') === '1') return;
-    root.setAttribute('data-seo-community-bound', '1');
-    var routeId = root.getAttribute('data-route-id') || '';
-    var base = String(root.getAttribute('data-rtdb-base') || '').replace(/\/?$/, '/');
-    if (!routeId || !base) return;
-    var empty = root.querySelector('[data-seo-community-empty]');
-    function esc(value) {
-      return String(value || '').replace(/[&<>"']/g, function (ch) {
-        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
-      });
+<div
+  id="seo-community-lightbox"
+  class="seo-room-lightbox"
+  role="dialog"
+  aria-modal="true"
+  aria-hidden="true"
+  aria-label={`${routeName} community room`}
+  data-seo-community-lightbox
+  hidden
+>
+  <div class="seo-room-sheet">
+    <div class="seo-room-sheet-bar">
+      <div class="seo-room-sheet-heading">
+        <span class="seo-room-live" aria-hidden="true"></span>
+        <h3 class="seo-room-sheet-name">{routeName}</h3>
+      </div>
+      <button type="button" class="seo-room-sheet-x" data-seo-community-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="seo-room-sheet-body">
+      <div class="nt-pack-wallpaper" aria-hidden="true"></div>
+      <div class="seo-room-sheet-feed" data-nosnippet data-seo-community-full></div>
+    </div>
+    <div class="seo-room-sheet-foot">
+      <p>You can read without an account. A new phone asks for your region when you leave this room.</p>
+      <a class="seo-room-enter" href={communityHref}>Open in Next Train</a>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  .seo-room { margin-top: 1.25rem; }
+  .seo-room-title {
+    margin: 0 0 0.65rem;
+    font-size: 1.125rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+  .seo-room-layout { display: grid; gap: 0.85rem; align-items: start; }
+  .seo-room-lead {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #475569;
+  }
+  .seo-room-lead-link { color: #1d4ed8; font-weight: 700; }
+  .seo-room-lead-link:hover { text-decoration: underline; }
+  .seo-room-frame { margin: 0; min-width: 0; }
+  .seo-room-open {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 1rem;
+  }
+  .seo-room-open:focus { outline: none; }
+  .seo-room-open:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2563eb; }
+  .seo-room-stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 19.5rem;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    background: color-mix(in srgb, var(--nt-chrome-header, #1d4ed8) 16%, var(--nt-canvas, #f8fafc));
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  }
+  .seo-room-bar,
+  .seo-room-sheet-bar {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.75rem;
+    background: color-mix(in srgb, var(--nt-chrome-header, #1e3a8a) 88%, #0f172a);
+    color: #fff;
+  }
+  .seo-room-bar-name,
+  .seo-room-sheet-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .seo-room-sheet-name { margin: 0; font-size: 0.95rem; }
+  .seo-room-live {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #4ade80;
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+    animation: seo-room-pulse 1.8s ease-out infinite;
+  }
+  .seo-room-live-label {
+    flex: 0 0 auto;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #bbf7d0;
+  }
+  .seo-room-feed,
+  .seo-room-sheet-feed {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.65rem 0.7rem 0.35rem;
+  }
+  .seo-room-sheet-feed { padding-bottom: 0.8rem; }
+  .seo-room-empty {
+    margin: 1.5rem 0.4rem 0;
+    text-align: center;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: #64748b;
+  }
+  .seo-room-day {
+    display: flex;
+    justify-content: center;
+    margin: 0.15rem 0 0.45rem;
+  }
+  .seo-room-day span {
+    border-radius: 999px;
+    padding: 0.15rem 0.65rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.82);
+    color: #334155;
+  }
+  .seo-room-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+  }
+  .seo-room-bubble {
+    min-width: 0;
+    max-width: min(88%, 28rem);
+    background: #fff;
+    color: #111827;
+    border: 1px solid rgba(229, 231, 235, 0.95);
+    border-radius: 0.2rem 0.75rem 0.75rem 0.75rem;
+    box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+  }
+  .seo-room-name {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.28rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.045);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .seo-room-name span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .seo-room-name time {
+    flex: 0 0 auto;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #64748b;
+  }
+  .seo-room-text {
+    margin: 0;
+    padding: 0.32rem 0.6rem 0.42rem;
+    font-size: 0.84rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .seo-room-dock {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem 0.55rem;
+  }
+  .seo-room-field {
+    flex: 1;
+    min-height: 2.4rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 1.2rem;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    color: #94a3b8;
+    font-size: 0.8rem;
+  }
+  .seo-room-send {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.25rem;
+    height: 2.4rem;
+    padding: 0 0.7rem;
+    border-radius: 0.75rem;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 800;
+  }
+  .seo-room-tap {
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 2.4rem 0.75rem 0.7rem;
+    background: linear-gradient(to top, rgba(15, 23, 42, 0.72), transparent);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    pointer-events: none;
+  }
+  .seo-room-tap svg { width: 1rem; height: 1rem; }
+  .seo-room-caption {
+    padding: 0.7rem 0.15rem 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: #475569;
+  }
+  .seo-room-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: flex;
+    background: rgba(0, 0, 0, 0.9);
+  }
+  .seo-room-lightbox[hidden] { display: none; }
+  .seo-room-sheet {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: #f8fafc;
+  }
+  .seo-room-sheet-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .seo-room-sheet-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+  }
+  .seo-room-sheet-x svg { width: 1.25rem; height: 1.25rem; }
+  .seo-room-sheet-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: color-mix(in srgb, var(--nt-chrome-header, #1d4ed8) 16%, var(--nt-canvas, #f8fafc));
+  }
+  .seo-room-sheet-foot {
+    flex: 0 0 auto;
+    padding: 0.85rem 1rem 1rem;
+    border-top: 1px solid #e2e8f0;
+    background: #f1f5f9;
+  }
+  .seo-room-sheet-foot p {
+    margin: 0 0 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #475569;
+  }
+  .seo-room-enter {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    border-radius: 0.7rem;
+    background: #2563eb;
+    color: #fff;
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .seo-room-enter:hover { background: #1d4ed8; }
+  @media (min-width: 1024px) {
+    .seo-room-layout {
+      grid-template-columns: minmax(16rem, 24rem) minmax(18rem, 28rem);
+      justify-content: start;
+      gap: 1.5rem;
     }
-    var url = base + 'route_community/' + encodeURIComponent(routeId) + '/posts.json?orderBy=%22timestamp%22&limitToLast=12';
-    fetch(url).then(function (res) {
-      if (!res.ok) return null;
-      return res.json();
-    }).then(function (data) {
-      if (!data || typeof data !== 'object') return;
-      var rows = Object.keys(data).map(function (id) {
-        var post = data[id] || {};
-        post.postId = id;
-        return post;
-      }).filter(function (post) {
-        if (!post || post.deleted || post.hidden || post.shadowOnly) return false;
-        return String(post.body || '').trim().length > 0;
-      }).sort(function (a, b) {
-        return (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0);
-      }).slice(0, 3);
-      if (!rows.length) return;
-      if (empty) empty.hidden = true;
-      rows.forEach(function (post) {
-        var name = String(post.displayName || 'Commuter').trim().slice(0, 80) || 'Commuter';
-        var body = String(post.body || '').replace(/\s+/g, ' ').trim().slice(0, 180);
-        var when = '';
-        var ts = Number(post.timestamp) || 0;
-        if (ts) {
-          try {
-            when = new Date(ts).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-          } catch (e) { when = ''; }
+    .seo-room-stage { height: 24rem; }
+    .seo-room-sheet {
+      width: min(32rem, 100%);
+      margin-left: auto;
+      box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
+    }
+  }
+  @keyframes seo-room-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
+    100% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .seo-room-live { animation: none; }
+  }
+</style>
+
+<script>
+  function bindSeoCommunity() {
+    const root = document.querySelector('[data-seo-community]');
+    const overlay = document.getElementById('seo-community-lightbox');
+    if (!root || !overlay || root.getAttribute('data-seo-community-bound') === '1') return;
+    root.setAttribute('data-seo-community-bound', '1');
+
+    const routeId = root.getAttribute('data-route-id') || '';
+    const base = String(root.getAttribute('data-rtdb-base') || '').replace(/\/?$/, '/');
+    const full = overlay.querySelector('[data-seo-community-full]');
+    const empty = root.querySelector('[data-seo-community-empty]');
+    if (!routeId || !base || !full) return;
+
+    let open = false;
+    let posts = [];
+    let primed = false;
+
+    const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[ch]));
+
+    const nameSlot = (seed) => {
+      const s = String(seed || 'x');
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+      return Math.abs(h) % 10;
+    };
+
+    const letter = (name) => {
+      const ch = Array.from(String(name || '').trim())[0] || '';
+      return /^[\p{L}\p{N}]$/u.test(ch) ? ch.toLocaleUpperCase() : '';
+    };
+
+    const clock = (ts) => {
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return '';
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+
+    const dayLabel = (ts) => {
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return '';
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      if (d.toDateString() === now.toDateString()) return 'Today';
+      if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      try { return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }); } catch { return ''; }
+    };
+
+    const rowHtml = (post) => {
+      const name = String(post.displayName || 'Passenger').trim().slice(0, 80) || 'Passenger';
+      const body = String(post.body || '').trim().slice(0, 700);
+      const seed = String(post.uid || name);
+      const slot = nameSlot(seed);
+      const ink = `var(--nt-name-${slot})`;
+      const mark = letter(name);
+      const avatar = mark
+        ? `<span class="community-avatar-letter" style="color:${ink}">${esc(mark)}</span>`
+        : `<span class="community-avatar-mark" style="background:${ink}"></span>`;
+      const when = clock(Number(post.timestamp) || 0);
+      return `<div class="seo-room-row">
+        <div class="community-avatar"><span class="community-avatar-disc" style="--nt-avatar:${ink}">${avatar}</span></div>
+        <div class="seo-room-bubble">
+          <div class="seo-room-name" style="color:${ink}"><span>${esc(name)}</span>${when ? `<time>${esc(when)}</time>` : ''}</div>
+          <p class="seo-room-text">${esc(body)}</p>
+        </div>
+      </div>`;
+    };
+
+    const paintInto = (target, rows) => {
+      if (!target) return;
+      if (!rows.length) {
+        target.innerHTML = '<p class="seo-room-empty">No messages on this route yet. Open Next Train and ask.</p>';
+        return;
+      }
+      let html = '';
+      let prevDay = '';
+      rows.forEach((post) => {
+        const day = dayLabel(Number(post.timestamp) || 0);
+        if (day && day !== prevDay) {
+          html += `<div class="seo-room-day"><span>${esc(day)}</span></div>`;
+          prevDay = day;
         }
-        var article = document.createElement('article');
-        article.className = 'rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
-        article.innerHTML = '<p class="font-semibold text-slate-900 dark:text-white">' + esc(name)
-          + (when ? ' <span class="font-normal text-slate-500">' + esc(when) + '</span>' : '')
-          + '</p><p class="mt-1 text-slate-700 dark:text-slate-200">' + esc(body) + '</p>';
-        root.appendChild(article);
+        html += rowHtml(post);
       });
-    }).catch(function () {});
-  })();
+      target.innerHTML = html;
+    };
+
+    const paint = () => {
+      const preview = posts.slice(-4);
+      const stickFull = !primed || (full.scrollHeight - full.scrollTop - full.clientHeight < 80);
+      root.querySelectorAll('.seo-room-row, .seo-room-day').forEach((node) => node.remove());
+      if (!preview.length) {
+        if (empty) {
+          empty.hidden = false;
+          if (empty.parentNode !== root) root.appendChild(empty);
+        }
+      } else {
+        const hold = empty;
+        if (hold) hold.remove();
+        const markup = document.createElement('div');
+        paintInto(markup, preview);
+        while (markup.firstChild) root.appendChild(markup.firstChild);
+        if (hold) {
+          hold.hidden = true;
+          root.appendChild(hold);
+        }
+        root.scrollTop = root.scrollHeight;
+      }
+      paintInto(full, posts);
+      if (stickFull) full.scrollTop = full.scrollHeight;
+      primed = true;
+    };
+
+    const load = () => {
+      const url = `${base}route_community/${encodeURIComponent(routeId)}/posts.json?orderBy=%22timestamp%22&limitToLast=12`;
+      fetch(url).then((res) => (res.ok ? res.json() : null)).then((data) => {
+        if (!data || typeof data !== 'object') return;
+        posts = Object.keys(data).map((id) => ({ ...(data[id] || {}), postId: id }))
+          .filter((post) => post && !post.deleted && !post.hidden && !post.shadowOnly && String(post.body || '').trim())
+          .sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
+          .slice(-12);
+        paint();
+      }).catch(() => {});
+    };
+
+    const lockScroll = () => document.body.classList.add('modal-active');
+    const unlockScroll = () => {
+      if (document.getElementById('alerts-channel')?.classList.contains('hidden') === false) return;
+      document.body.classList.remove('modal-active');
+    };
+    const hideSheet = () => {
+      open = false;
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+      unlockScroll();
+    };
+    const close = (fromPop = false) => {
+      if (!open) return;
+      if (!fromPop && location.hash === '#route-community') {
+        try { history.back(); return; } catch { /* fall through */ }
+      }
+      hideSheet();
+    };
+    const openRoom = () => {
+      open = true;
+      overlay.hidden = false;
+      overlay.setAttribute('aria-hidden', 'false');
+      lockScroll();
+      full.scrollTop = full.scrollHeight;
+      if (location.hash !== '#route-community') {
+        try { history.pushState({ modal: 'route-community' }, '', '#route-community'); } catch { /* ignore */ }
+      }
+    };
+
+    document.querySelectorAll('[data-seo-community-open]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        openRoom();
+      });
+    });
+    overlay.querySelectorAll('[data-seo-community-close]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        close();
+      });
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (!open || e.key !== 'Escape') return;
+      e.preventDefault();
+      close();
+    });
+    window.addEventListener('popstate', () => {
+      if (open && location.hash !== '#route-community') close(true);
+    });
+    if (location.hash === '#route-community') openRoom();
+
+    load();
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 45000);
+  }
+
+  bindSeoCommunity();
 </script>

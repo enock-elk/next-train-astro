@@ -15240,6 +15240,55 @@ const Admin = {
         document.getElementById('account-deletions-panel')?.remove();
     },
 
+    openDeletionDraft: (row) => {
+        const email = String(row?.email || '').trim();
+        const name = String(row?.displayName || '').trim();
+        if (!/^[^\s<>"']+@[^\s<>"']+$/.test(email)) {
+            if (typeof showToast === 'function') showToast('This request has no email address.', 'warning');
+            return false;
+        }
+        const hello = name ? `Hello ${name},` : 'Hello,';
+        const body = [
+            hello,
+            '',
+            'We received your request to delete your Next Train account.',
+            `The request is for ${email}.`,
+            '',
+            'We will remove the live profile. Reply to this email if you did not ask for this.',
+            '',
+            'Next Train',
+        ].join('\n');
+        const href = `mailto:${email}?subject=${encodeURIComponent('Next Train account deletion')}&body=${encodeURIComponent(body)}`;
+        try { window.location.href = href; } catch { /* ignore */ }
+        return true;
+    },
+
+    promptDeletionDrafts: (rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        const pane = document.getElementById('ut-pane-deletions');
+        if (!pane || pane.classList.contains('hidden') || !list.length) return;
+        const unseen = list.filter((row) => {
+            const uid = String(row?.uid || '');
+            if (!uid) return false;
+            try { return sessionStorage.getItem(`nt-del-mail-${uid}`) !== '1'; } catch { return false; }
+        });
+        if (!unseen.length) return;
+        unseen.forEach((row) => {
+            try { sessionStorage.setItem(`nt-del-mail-${row.uid}`, '1'); } catch { /* ignore */ }
+        });
+        const row = unseen.find((item) => String(item.email || '').includes('@')) || unseen[0];
+        const who = String(row.displayName || row.email || 'A commuter').trim() || 'A commuter';
+        const email = String(row.email || '').trim();
+        if (!email.includes('@')) {
+            if (typeof showToast === 'function') showToast(`${who} asked to delete their account. There is no email to write to.`, 'warning');
+            return;
+        }
+        const ask = typeof window.confirm === 'function'
+            ? window.confirm(`${who} asked to delete their Next Train account. Open a draft email to them?`)
+            : false;
+        if (ask) Admin.openDeletionDraft(row);
+    },
+
     fetchAccountDeletions: async () => {
         const list = document.getElementById('ad-list');
         if (!list) return;
@@ -15310,15 +15359,26 @@ const Admin = {
                 <p class="font-mono text-[10px] text-gray-400 break-all mt-0.5">${esc(row.uid)}</p>
                 ${row.deviceId ? `<p class="font-mono text-[10px] text-gray-400 break-all">device ${esc(row.deviceId)}</p>` : ''}
                 <p class="text-[10px] text-gray-400 mt-1">${esc(Admin.formatDate(row.requestedAt))}</p>
-                <button type="button" data-ad-delete="${esc(row.uid)}" data-ad-device="${esc(row.deviceId || '')}" class="mt-2 text-[10px] font-black uppercase tracking-wider text-white bg-rose-700 hover:bg-rose-800 px-3 py-1.5 rounded-lg">Delete data</button>
+                <div class="mt-2 flex flex-wrap gap-2">
+                    <button type="button" data-ad-email="${esc(row.email || '')}" data-ad-name="${esc(row.displayName || '')}" data-ad-uid="${esc(row.uid)}" class="text-[10px] font-black uppercase tracking-wider text-white bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-lg">Draft email</button>
+                    <button type="button" data-ad-delete="${esc(row.uid)}" data-ad-device="${esc(row.deviceId || '')}" class="text-[10px] font-black uppercase tracking-wider text-white bg-rose-700 hover:bg-rose-800 px-3 py-1.5 rounded-lg">Delete data</button>
+                </div>
             </div>
         `).join('');
+        list.querySelectorAll('[data-ad-email]').forEach((btn) => {
+            btn.addEventListener('click', () => Admin.openDeletionDraft({
+                email: btn.getAttribute('data-ad-email') || '',
+                displayName: btn.getAttribute('data-ad-name') || '',
+                uid: btn.getAttribute('data-ad-uid') || '',
+            }));
+        });
         list.querySelectorAll('[data-ad-delete]').forEach((btn) => {
             btn.addEventListener('click', () => Admin.purgeAccountDeletion(
                 btn.getAttribute('data-ad-delete'),
                 btn.getAttribute('data-ad-device') || '',
             ));
         });
+        Admin.promptDeletionDrafts(rows);
     },
 
     purgeAccountDeletion: async (uid, deviceId = '') => {

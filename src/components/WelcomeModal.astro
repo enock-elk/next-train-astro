@@ -205,7 +205,8 @@ import { withBase } from '../lib/config.js';
 
         const restoredRegion = $userRegion.get();
         const lsRegion = safeStorage.getItem('userRegion');
-        if (lsRegion && lsRegion !== restoredRegion) {
+        // A share or SEO handoff browses in memory and keeps the saved region in storage.
+        if (lsRegion && lsRegion !== restoredRegion && !window.__ntShareBootLock) {
             $userRegion.set(lsRegion);
         }
 

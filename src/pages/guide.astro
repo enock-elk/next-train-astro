@@ -128,7 +128,7 @@ const faqJsonLd = {
   ]
 };
 
-const iconWave = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11c.5-2 1.5-3 3-3s2.5 1 3 3 1.5 3 3 3 2.5-1 3-3M4 14c.4 2.2 2.2 4 5 4h1c2.5 0 4-1.2 5-3"/><circle cx="9" cy="7" r="2.2"/><circle cx="15.5" cy="7.5" r="1.8"/></svg>`;
+const iconPeople = `<svg class="guide-icon-people" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="6.2" r="2.7"/><path d="M2.6 18.2v-1.1C2.6 14.2 4.7 12.6 7.5 12.6s4.9 1.6 4.9 4.5v1.1H2.6z"/><circle cx="16.7" cy="7.4" r="2.3"/><path d="M12.9 18.8v-.8c0-2.3 1.7-3.8 3.8-3.8s3.8 1.5 3.8 3.8v.8h-7.6z"/></svg>`;
 const iconRoute = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><path stroke-linecap="round" d="M8.5 19H15a3 3 0 000-6H9a3 3 0 010-6h6.5"/><circle cx="18" cy="5" r="2.5"/></svg>`;
 const iconBook = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A2.5 2.5 0 016.5 3H20v16.5H6.5A2.5 2.5 0 004 17V5.5z"/><path stroke-linecap="round" d="M8 7h8M8 11h6"/></svg>`;
 const iconClock = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5V12l3 2"/></svg>`;
@@ -220,6 +220,10 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
       width: 1.15rem;
       height: 1.15rem;
     }
+    .guide-section-icon svg.guide-icon-people {
+      width: 1.45rem;
+      height: 1.45rem;
+    }
     .guide-inline-icon {
       display: inline-flex;
       align-items: center;
@@ -308,7 +312,7 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
 <!-- Back Button Overlay — closes in-app sheet when embedded; else goes home -->
     <div class="fixed top-4 left-4 z-50">
         <a id="guide-home-btn" href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm backdrop-blur-md bg-opacity-90 dark:bg-opacity-90">
-            <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
+            <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Home
         </a>
     </div>
@@ -390,7 +394,7 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
             <!-- Section 1: Introduction -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="guide-section-icon" set:html={iconWave} />
+                    <span class="guide-section-icon" set:html={iconPeople} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Built by Commuters, for Commuters</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">

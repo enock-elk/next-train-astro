@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.26.5': [
+        'Guide section icons are redrawn so the commuters mark reads as two people. A route page shows a live Community room near the top. Opening it lands in that room, and a new phone asks for a region when they leave. An admin looking at a deletion request is prompted to email the person. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.26.4': [
         'Community Monitor bubbles use the same name colours and avatar discs as Community. The attach control sits above Post. A preview phone is saved as Lab, so a Lab send reaches it and a Production send from a preview warns that it reaches live commuters. Notification menus use the app dropdown. An admin tap on an alert reaction lists who reacted and can look them up. Crowded graph numbers are spaced out, and the analytics controls sit under the chart. No commuter What\'s New. forceShow stays false.',
     ],

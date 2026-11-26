@@ -2300,6 +2300,22 @@ html.dark .cm-composer { background: #1f2c34; border-top-color: rgba(255, 255, 2
   align-items: flex-end;
   gap: 0.4rem;
 }
+.cm-composer-send {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  width: 4.4rem;
+}
+.cm-composer-send .cm-plus,
+.cm-composer-send .cm-post {
+  width: 100%;
+}
+.cm-composer-send .cm-plus {
+  height: 2.15rem;
+  font-size: 1.35rem;
+}
 .cm-plus {
   width: 2.75rem;
   height: 2.75rem;
@@ -2399,28 +2415,29 @@ html.dark .cm-extra-field { color: #d1d7db; }
   position: relative;
   z-index: 3;
   flex: 0 0 auto;
-  padding: 0.55rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin-top: auto;
+  padding: 0.55rem 0.65rem 0.7rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
   background: #f9fafb;
 }
-html.dark .nt-chart-toolbar { background: #111827; border-bottom-color: rgba(255, 255, 255, 0.08); }
+html.dark .nt-chart-toolbar { background: #111827; border-top-color: rgba(255, 255, 255, 0.08); }
 .nt-chart-toolbar-top { display: flex; align-items: center; gap: 0.4rem; }
 .nt-chart-nav { display: flex; gap: 0.4rem; margin-left: auto; }
 .nt-chart-nav.hidden { display: none; }
 .nt-chart-toolbar-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.45rem;
 }
 .nt-chart-tool {
-  min-height: 2.75rem;
-  padding: 0 0.4rem;
-  border-radius: 0.8rem;
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  border-radius: 999px;
   border: 1px solid #d1d5db;
   background: #fff;
   color: #111827;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 700;
   touch-action: manipulation;
 }
@@ -3092,6 +3109,7 @@ html.dark .cm-thread-scroll { background-color: #0b141a; }
 .cm-thread .community-post-row {
   display: flex;
   align-items: flex-start;
+  position: relative;
   width: 100%;
   box-sizing: border-box;
 }
@@ -3130,30 +3148,85 @@ html.dark .cm-thread .community-bubble-other {
   color: #f3f4f6;
   border-color: #374151;
 }
+:root {
+  --nt-name-0: #9f1239;
+  --nt-name-1: #c2410c;
+  --nt-name-2: #a16207;
+  --nt-name-3: #166534;
+  --nt-name-4: #0f766e;
+  --nt-name-5: #0e7490;
+  --nt-name-6: #1d4ed8;
+  --nt-name-7: #4338ca;
+  --nt-name-8: #7e22ce;
+  --nt-name-9: #be185d;
+  --nt-name-own: #065f46;
+}
+html.dark {
+  --nt-name-0: #fda4af;
+  --nt-name-1: #fdba74;
+  --nt-name-2: #fde68a;
+  --nt-name-3: #86efac;
+  --nt-name-4: #5eead4;
+  --nt-name-5: #67e8f9;
+  --nt-name-6: #93c5fd;
+  --nt-name-7: #c4b5fd;
+  --nt-name-8: #e9d5ff;
+  --nt-name-9: #f9a8d4;
+  --nt-name-own: #d1fae5;
+}
+.community-avatar { flex: 0 0 auto; align-self: flex-start; }
+.community-avatar-disc {
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--nt-avatar, #334155) 24%, #ffffff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-avatar, #334155) 55%, transparent);
+}
+html.dark .community-avatar-disc {
+  background: color-mix(in srgb, var(--nt-avatar, #e2e8f0) 38%, #0b1220);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-avatar, #e2e8f0) 70%, transparent);
+}
+.community-avatar-letter { font-size: 0.75rem; font-weight: 700; line-height: 1; }
+.community-avatar-mark { width: 0.625rem; height: 0.625rem; border-radius: 999px; }
+.cm-message-tools {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.cm-thread .community-post-row.justify-end .cm-message-tools { right: auto; left: 0.15rem; }
+.cm-options-side {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  color: #64748b;
+}
 .cm-thread .community-bubble-name-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.3rem 0.65rem;
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.2;
   background: rgba(0, 0, 0, 0.055);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  color: #0f766e;
 }
 html.dark .cm-thread .community-bubble-name-row {
   background: rgba(255, 255, 255, 0.07);
   border-bottom-color: rgba(255, 255, 255, 0.08);
-  color: #7dcea0;
 }
 .cm-thread .community-bubble-own .community-bubble-name-row {
   background: rgba(0, 0, 0, 0.06);
-  color: #065f46;
 }
 html.dark .cm-thread .community-bubble-own .community-bubble-name-row {
   background: rgba(0, 0, 0, 0.18);
-  color: #d1fae5;
 }
 .cm-thread .community-bubble-name {
   min-width: 0;

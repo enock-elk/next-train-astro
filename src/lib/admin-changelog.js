@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.26.4': [
+        'Community Monitor bubbles use the same name colours and avatar discs as Community. The attach control sits above Post. A preview phone is saved as Lab, so a Lab send reaches it and a Production send from a preview warns that it reaches live commuters. Notification menus use the app dropdown. An admin tap on an alert reaction lists who reacted and can look them up. Crowded graph numbers are spaced out, and the analytics controls sit under the chart. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.26.3': [
         'Community Monitor messages use the commuter bubble, name row, and clock. Search, person lookup, and Refresh sit in Search and filters. A long URL in a message, route preview, or report wraps inside the phone. No commuter What\'s New. forceShow stays false.',
     ],

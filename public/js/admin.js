@@ -4963,6 +4963,13 @@ const Admin = {
                 chartPanel.innerHTML = `
                     <button id="telemetry-chart-header-btn" class="hidden" type="button"><span>Analytics Trends</span></button>
                     <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="flex-grow p-2 sm:p-4 landscape:p-2 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0 overflow-hidden">
+                            <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
+                            <div class="text-center shrink-0 pb-2 landscape:pb-0">
+                                <h3 class="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
+                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
+                            </div>
+                        </div>
                         <div class="nt-chart-toolbar">
                             <div class="nt-chart-toolbar-top">
                                 <button type="button" id="analytics-trend-cycle" class="nt-chart-tool" data-chart-action="range">${Admin.telemetryRange}</button>
@@ -4978,13 +4985,6 @@ const Admin = {
                                 <button type="button" id="analytics-trend-compare-btn" class="nt-chart-tool" data-chart-action="compare" aria-pressed="false">Compare</button>
                                 <button type="button" id="analytics-trend-landscape" class="nt-chart-tool" data-chart-action="landscape">Landscape</button>
                                 <button type="button" id="analytics-trend-export" class="nt-chart-tool" data-chart-action="export">Export</button>
-                            </div>
-                        </div>
-                        <div class="flex-grow p-2 sm:p-4 landscape:p-2 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0 overflow-hidden">
-                            <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
-                            <div class="text-center shrink-0 pb-2 landscape:pb-0">
-                                <h3 class="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
-                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
                             </div>
                         </div>
                     </div>
@@ -5240,6 +5240,7 @@ const Admin = {
     // --- DYNAMIC SVG LINE GRAPH BUILDER (GROWTH PHASE 8: SCALE AWARE) ---
     _buildLineGraphSVG: (dataArray, labelsArray, title, isTodayIdx, isMini = false, compareDataArray = null, extra = null) => {
         const numPoints = Math.max(1, dataArray.length);
+        Admin._graphValueLabelX = -999;
         
         // SVG dimensions. Wide is the landscape stage and the exported frame.
         const wide = extra?.wide === true;
@@ -5409,11 +5410,19 @@ const Admin = {
             // X-Axis Labels (Dynamic formatting from worker)
             if (!isMini && labelsArray[i]) {
                 const dayColor = isToday ? todayColor : labelColor;
-                svg += `<text x="${vx}" y="${pt+uh+20}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
-                
-                // GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
-                if (Admin.telemetryRange !== 'INTRADAY') {
+                const labelGap = numPoints > 1 ? (uw / Math.max(1, numPoints - 1)) : 999;
+                const showDay = labelGap >= 28 || i === 0 || i === numPoints - 1 || i % Math.ceil(28 / Math.max(labelGap, 1)) === 0;
+                if (showDay) {
+                    svg += `<text x="${vx}" y="${pt+uh+20}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
+                }
+                // A dense series (ad impressions across months) cannot label every point.
+                const gapFromLast = vx - (Admin._graphValueLabelX ?? -999);
+                const intradayUsers = Admin.telemetryRange === 'INTRADAY' && extra?.metricWord !== 'Viewable impressions';
+                const drawValue = !intradayUsers
+                    && (gapFromLast >= 42 || (i === numPoints - 1 && gapFromLast >= 28));
+                if (drawValue) {
                     svg += `<text x="${vx}" y="${vy - 10}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" fill="${dayColor}" text-anchor="middle">${val}</text>`;
+                    Admin._graphValueLabelX = vx;
                 }
             }
         }
@@ -13229,9 +13238,11 @@ const Admin = {
                                 </label>
                             </div>
                             <div class="cm-composer-bar">
-                                <button type="button" id="mq-plus" class="cm-plus" aria-label="Suggestions, attachment, and link" aria-expanded="false">+</button>
                                 <textarea id="mq-composer-input" class="cm-composer-input" rows="1" maxlength="1300" placeholder="Message" aria-label="Message"></textarea>
-                                <button type="submit" id="mq-post" class="cm-post">Post</button>
+                                <div class="cm-composer-send">
+                                    <button type="button" id="mq-plus" class="cm-plus" aria-label="Suggestions, attachment, and link" aria-expanded="false">+</button>
+                                    <button type="submit" id="mq-post" class="cm-post">Post</button>
+                                </div>
                             </div>
                         </form>
                         <div id="mq-options-portal" class="cm-options-portal" hidden></div>
@@ -14096,15 +14107,22 @@ const Admin = {
                     const postId = message.postId || '';
                     const mine = Admin.currentUser?.uid && message.uid === Admin.currentUser.uid;
                     const replyAttr = isReply ? `data-reply="${esc(message.replyId || '')}"` : '';
-                    const letter = String(message.displayName || 'P').trim().charAt(0).toUpperCase() || 'P';
                     const ts = Number(message.timestamp) || 0;
                     const displayName = message.displayName || 'Passenger';
+                    const nameSeed = String(message.uid || displayName || 'x');
+                    let nameHash = 0;
+                    for (let i = 0; i < nameSeed.length; i++) nameHash = ((nameHash << 5) - nameHash) + nameSeed.charCodeAt(i);
+                    const nameSlot = Math.abs(nameHash) % 10;
+                    const nameColor = mine ? 'var(--nt-name-own)' : `var(--nt-name-${nameSlot})`;
+                    const letterSource = Array.from(String(displayName || '').trim())[0] || '';
+                    const letter = /^[\p{L}\p{N}]$/u.test(letterSource) ? letterSource.toLocaleUpperCase() : '';
+                    const avatar = mine ? '' : `<div class="community-avatar"><span class="community-avatar-disc" style="--nt-avatar:${nameColor}">${letter ? `<span class="community-avatar-letter" style="color:${nameColor}">${esc(letter)}</span>` : `<span class="community-avatar-mark" style="background:${nameColor}" aria-hidden="true"></span>`}</span></div>`;
                     const version = String(message.appVersion || '').split(' - ')[0].split(' · ')[0].trim();
                     const versionOk = /^V\d+_/i.test(version);
                     const station = String(message.station || '').replace(/\s+STATION\s*$/i, '').trim();
                     const auto = message.stationAutoLocated === true || message.stationAutoLocated === '1' || message.stationAutoLocated === 1;
                     const versionChip = versionOk
-                        ? `<button type="button" class="fb-version-chip" data-admin-changelog="${esc(version)}" data-cl-station="${esc(station)}" data-cl-auto="${auto ? '1' : '0'}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl&amp;&amp;window.Admin.changelogContextFromEl(this));">${esc(version)}</button>`
+                        ? `<button type="button" class="fb-version-chip relative z-[2] cursor-pointer font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2" data-admin-changelog="${esc(version)}" data-cl-station="${esc(station)}" data-cl-auto="${auto ? '1' : '0'}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl&amp;&amp;window.Admin.changelogContextFromEl(this));">${esc(version)}</button>`
                         : '';
                     const photos = (Array.isArray(message.attachments) ? message.attachments : [])
                         .map((item) => (typeof item === 'string' ? item : item?.url))
@@ -14115,15 +14133,12 @@ const Admin = {
                     const link = /^https:\/\//i.test(String(message.linkUrl || '')) ? String(message.linkUrl) : '';
                     const linkHtml = link ? `<a class="cm-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link.replace(/^https:\/\//, '').slice(0, 64))}</a>` : '';
                     return `<div class="community-post-row ${mine ? 'justify-end' : 'justify-start gap-1'}${isReply ? ' is-reply' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
-                        ${mine ? '' : `<span class="community-avatar-disc cm-letter" aria-hidden="true">${esc(letter)}</span>`}
+                        ${avatar}
                         <div class="community-bubble-wrap">
                             <div class="community-bubble ${mine ? 'community-bubble-own' : 'community-bubble-other'} ${message.hidden ? 'is-hidden' : ''}">
-                                <div class="community-bubble-name-row">
+                                <div class="community-bubble-name-row" style="color:${nameColor}">
                                     <span class="community-bubble-name truncate">${esc(displayName)}</span>
                                     ${versionChip}
-                                    ${authorHint}
-                                    ${category}
-                                    <button type="button" class="cm-options-toggle" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
                                 </div>
                                 <div class="community-bubble-body">
                                     ${quote}${photoHtml}${linkHtml}<div class="community-msg-text cm-bubble-text${removed ? ' community-msg-deleted cm-msg-deleted' : ''}">${removed ? esc(shownBody) : shareHtml(shownBody)}<span class="community-msg-time cm-bubble-time">${esc(threadClock(message.timestamp))}</span></div>
@@ -14141,6 +14156,7 @@ const Admin = {
                                 </div>
                             </div>
                         </div>
+                        <span class="cm-message-tools">${authorHint}${category}<button type="button" class="cm-options-toggle cm-options-side" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button></span>
                     </div>`;
                 };
 
@@ -14459,7 +14475,7 @@ const Admin = {
                     if (optionsToggle) {
                         event.preventDefault();
                         event.stopPropagation();
-                        const source = optionsToggle.closest('.community-bubble')?.querySelector('.cm-options-menu');
+                        const source = optionsToggle.closest('[data-community-message]')?.querySelector('.cm-options-menu');
                         const portal = document.getElementById('mq-options-portal');
                         const key = optionsToggle.closest('[data-community-message]')?.getAttribute('data-community-post') || '';
                         if (!source || !portal) return;
@@ -15571,6 +15587,11 @@ const Admin = {
             document.addEventListener('click', () => {
                 document.querySelectorAll('.nt-premium-list').forEach((el) => el.classList.add('hidden'));
             });
+        }
+        select.addEventListener('change', paint);
+        if (typeof MutationObserver === 'function') {
+            const optionsWatch = new MutationObserver(() => paint());
+            optionsWatch.observe(select, { childList: true, subtree: true });
         }
         paint();
     },
@@ -27510,7 +27531,7 @@ const Admin = {
                     <button type="button" id="push-notifications-preview" class="h-10 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[10px] font-black uppercase tracking-wide">Count devices</button>
                     <button type="button" id="push-notifications-send" class="h-10 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wide">Send notification</button>
                 </div>
-                <p id="push-notifications-status" class="min-h-[1rem] text-[10px] leading-snug text-gray-500 dark:text-gray-400" aria-live="polite"></p>
+                <p id="push-notifications-status" class="min-h-[1rem] text-[10px] leading-snug text-gray-500 dark:text-gray-400" aria-live="polite">Only devices saved for this environment that accept this type are included. A device that has not chosen types still receives Incidents and Delays.</p>
             </div>`;
 
         const body = panel.querySelector('#push-notifications-body');
@@ -27642,7 +27663,11 @@ const Admin = {
                 : (audience.value === 'region'
                     ? region.value
                     : (audience.value === 'user' ? ((userId.value || '').trim() || 'that user') : route.value));
-            if (!window.confirm(`Send this ${environment.value} ${category.value || 'incidents'} notification to ${targetLabel}?`)) return;
+            const kind = category.value || 'incidents';
+            const liveWarning = environment.value === 'production' && isLab
+                ? 'This goes to live nexttrain.co.za commuters, not this preview. '
+                : '';
+            if (!window.confirm(`${liveWarning}Send this ${environment.value} ${kind} notification to ${targetLabel}? Only devices saved for ${environment.value} that accept ${kind} are included.`)) return;
             setBusy(true);
             status.textContent = 'Sending notification...';
             try {
@@ -27659,6 +27684,10 @@ const Admin = {
         fillRoutes();
         syncAudience();
         link.placeholder = defaultLink();
+        panel.querySelectorAll('#push-notifications-body select').forEach((select) => {
+            Admin.bindPremiumSelect(select);
+            Admin.liftPremiumSelect(select);
+        });
     },
 
     setupDiagnosticsManager: () => {

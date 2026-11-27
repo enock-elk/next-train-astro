@@ -314,6 +314,48 @@ const NOT_A_NAME = new Set([
     'okay', 'new', 'the', 'and', 'thanks', 'thank', 'please', 'sunday', 'ticket',
 ]);
 
+/** Display names that are not a person's name. Pleasure and Karabo still pass. */
+const NOT_A_GIVEN = new Set([
+    ...NOT_A_NAME,
+    'pancakes', 'pancake', 'pizza', 'burger', 'coffee', 'chocolate', 'coolguy', 'coolgirl',
+    'qwerty', 'king', 'queen', 'boss', 'dude', 'girl', 'boy', 'guy', 'star', 'baby', 'honey',
+    'sweet', 'sunny', 'train', 'metro', 'next', 'guest', 'passenger', 'anonymous', 'cool',
+    'super', 'morning', 'afternoon', 'evening', 'night', 'today', 'tomorrow', 'hello',
+    'prasa', 'metrorail', 'nexttrain', 'commuter', 'team', 'marketing', 'random', 'unknown',
+    'friend', 'buddy', 'champ', 'legend', 'love',
+]);
+
+function looksLikeGivenName(word) {
+    const lower = String(word || '').toLowerCase();
+    if (!/^[a-z][a-z'’-]{2,16}$/.test(lower)) return false;
+    if (NOT_A_GIVEN.has(lower) || ROLE_LOCAL.has(lower)) return false;
+    if (FIRST_NAMES.has(lower)) return true;
+    if (/(.)\1{2,}/.test(lower)) return false;
+    if (/^(cool|super|pro|big|lil|hey|yo|the|my)[a-z]{2,}$/.test(lower)) return false;
+    return true;
+}
+
+function johannesburgHour(now) {
+    try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Africa/Johannesburg',
+            hour: 'numeric',
+            hourCycle: 'h23',
+        }).formatToParts(new Date(now));
+        const hour = Number(parts.find((part) => part.type === 'hour')?.value);
+        if (Number.isFinite(hour)) return hour;
+    } catch { /* use a Johannesburg offset below */ }
+    return (new Date(now).getUTCHours() + 2) % 24;
+}
+
+/** Good morning before noon, Good afternoon until 17:00, otherwise Good evening. Johannesburg. */
+export function dayPartGreeting(now = Date.now()) {
+    const hour = johannesburgHour(now);
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    return 'Good evening';
+}
+
 /** First names we will treat as certain when they are the start of an email. */
 const FIRST_NAMES = new Set([
     'enock', 'thandeka', 'sipho', 'thabo', 'kudzi', 'nomsa', 'lerato', 'ayanda',
@@ -401,23 +443,36 @@ function greetingFromAlias(alias) {
     if (titled && !NOT_A_NAME.has(titled[2].toLowerCase())) return honorificName(titled[1], titled[2]);
     const words = text.split(/\s+/);
     if (words.length > 2) return '';
-    if (!FIRST_NAMES.has(words[0].toLowerCase())) return '';
-    return firstNameGreeting(words[0]);
+    const first = words[0];
+    if (!FIRST_NAMES.has(first.toLowerCase()) && !looksLikeGivenName(first)) return '';
+    return firstNameGreeting(first);
 }
 
-/** A greeting only when the name is clear. Never returns the email address. */
-export function certainGreeting({ alias = '', emails = [], texts = [] } = {}) {
+function personFromDear(value) {
+    const text = String(value || '').trim();
+    const titled = text.match(/^Dear ((?:Mr|Mrs|Ms|Miss) [A-Z][a-z'’-]{2,20})$/);
+    if (titled) return titled[1];
+    const first = text.match(/^Dear ([A-Z][a-z'’-]{2,20})$/);
+    return first ? first[1] : '';
+}
+
+/** A time-of-day greeting when the name is clear. Never returns the email address. */
+export function certainGreeting({ alias = '', emails = [], texts = [], now = Date.now() } = {}) {
+    let dear = '';
     for (const text of texts) {
-        const fromText = greetingFromText(text);
-        if (fromText) return fromText;
+        dear = greetingFromText(text);
+        if (dear) break;
     }
-    const fromAlias = greetingFromAlias(alias);
-    if (fromAlias) return fromAlias;
-    for (const email of emails) {
-        const fromEmail = greetingFromEmail(email);
-        if (fromEmail) return fromEmail;
+    if (!dear) dear = greetingFromAlias(alias);
+    if (!dear) {
+        for (const email of emails) {
+            dear = greetingFromEmail(email);
+            if (dear) break;
+        }
     }
-    return '';
+    const person = personFromDear(dear);
+    if (!person) return '';
+    return `${dayPartGreeting(now)}, ${person}`;
 }
 
 export function buildSuggestPayload(items, options = {}) {
@@ -438,6 +493,7 @@ export function buildSuggestPayload(items, options = {}) {
         alias: options.alias || '',
         emails: list.map((item) => item?.email).filter(Boolean),
         texts: list.filter((item) => !item?.isFromAdmin).map((item) => item?.text || item?.message || ''),
+        now: options.now,
     });
     const thread = threadMessages(withQuotedNoticeText(list, options.quotedNotices));
     const similar = pickSimilarReplies(options.allItems || items || [], list, {
@@ -666,7 +722,7 @@ export async function loadSuggestFiles(files, fetchImpl = globalThis.fetch) {
 
 function sanitizeGreeting(value) {
     const text = String(value || '').trim();
-    if (/^Dear (?:(?:Mr|Mrs|Ms|Miss) )?[A-Z][a-z'’-]{2,20}$/.test(text)) return text;
+    if (/^Good (?:morning|afternoon|evening)(?:, (?:(?:Mr|Mrs|Ms|Miss) )?[A-Z][a-z'’-]{2,20})?$/.test(text)) return text;
     return '';
 }
 
@@ -757,7 +813,7 @@ export function communityStyleRules() {
     return [
         'You draft a short reply an operator can post in a Next Train community room.',
         'Answer only the one message in the thread.',
-        'Write like a person in that room. Short paragraphs. No email greeting. Do not open with Hi there, or Dear.',
+        'Open with the Certain greeting on its own first line. That line is Good morning, Good afternoon, or Good evening, plus their name when the note gives one, such as Good morning, Karabo. Then one blank line, then the answer. Do not open with Hi there, or Dear.',
         'Do not summarise their message. Do not open with "Thank you for your message where you\'re asking about".',
         'Do not end with "Thank you for using Next Train."',
         'Do not add a sign-off or the operator\'s name.',
@@ -845,7 +901,7 @@ export function liaisonRules(region) {
         'Return JSON only. action is "draft" or "halt". draft.reply is only the commuter-facing message. The operator will edit it, then send. Do not send it yourself.',
         'Do not put the device id, thread labels, or code fences inside draft.reply.',
         'Do not add a sign-off. The app adds the operator name when the reply is sent.',
-        'If the user text gives a Certain greeting, use that exact first line, such as Dear Enock, or Dear Mr Kazembe. If it says none, use Hi there,. Never invent a name, and never turn an email address into a greeting yourself.',
+        'If the user text gives a Certain greeting, use that exact first line, such as Good morning, Enock, or Good afternoon, Mr Kazembe. If it says none, use Good morning, Good afternoon, or Good evening, with no name. Never invent a name, and never turn an email address into a greeting yourself.',
         'After the greeting line, leave two blank lines, then the body.',
         'The first body line acknowledges what they wrote. Do not open cold.',
         'When thanking them for a question about a train, a fare, a station, or a timetable, the first body line is "Thank you for your message where you\'re asking about …". Do not write "Thanks for asking about …" or "Thank you for asking about …".',
@@ -919,7 +975,7 @@ export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
             : 'Latest commuter message is within 7 days. Do not apologize for a delay.',
         clean.greeting
             ? `Certain greeting: ${clean.greeting}. Use that exact first line.`
-            : 'Certain greeting: none. Use Hi there,. Do not invent a name.',
+            : 'Certain greeting: none. Use Good morning, Good afternoon, or Good evening, with no name. Do not invent a name.',
         '',
         'Thread:',
     ];
@@ -1207,6 +1263,38 @@ export function guardDraft(reply, region) {
     return { ok: true };
 }
 
+const OPENING_LINE_RE = /^(?:dear\s+(?:(?:mr|mrs|ms|miss)\s+)?[a-z][a-z'’-]{1,24}|hi there|good morning|good afternoon|good evening)(?:,\s*[a-z][a-z'’-]{1,24}(?:\s+[a-z][a-z'’-]{1,24})?)?,?$/i;
+
+function withoutOpeningLine(reply) {
+    const lines = String(reply || '').trim().split('\n');
+    if (!lines.length || !OPENING_LINE_RE.test(lines[0].trim())) return String(reply || '').trim();
+    let index = 1;
+    while (index < lines.length && !lines[index].trim()) index += 1;
+    return lines.slice(index).join('\n').trim();
+}
+
+function communityThreadAlias(thread) {
+    const row = (Array.isArray(thread) ? thread : []).find((item) => item && item.from !== 'admin' && item.text);
+    const match = String(row?.text || '').match(/^([^:\n]{2,60}):\s+\S/);
+    return match ? match[1].trim() : '';
+}
+
+function withTimeGreeting(reply, surface, options, thread) {
+    const now = options?.now || Date.now();
+    const alias = String(options?.alias || '').trim()
+        || (surface === 'community' ? communityThreadAlias(thread) : '');
+    const named = certainGreeting({
+        alias,
+        emails: options?.emails || [],
+        texts: options?.texts || [],
+        now,
+    });
+    const line = named || dayPartGreeting(now);
+    const body = withoutOpeningLine(reply);
+    const gap = surface === 'community' ? '\n\n' : '\n\n\n';
+    return body ? `${line}${gap}${body}` : line;
+}
+
 export function applyDraftGuard(result, region, thread, options = {}) {
     const surface = options.surface === 'community' ? 'community' : 'feedback';
     const base = result && result.action ? result : parseSuggestResult(result);
@@ -1238,6 +1326,7 @@ export function applyDraftGuard(result, region, thread, options = {}) {
     if (!guard.ok) {
         return { action: 'halt', reply: '', reason: guard.reason, questions: guard.questions };
     }
+    reply = withTimeGreeting(reply, surface, options, thread);
     return { action: 'draft', reply, reason: '', questions: [] };
 }
 

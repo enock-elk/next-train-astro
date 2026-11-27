@@ -718,31 +718,37 @@ export async function updateAccountDisplayName(raw) {
     if (fallbackCheck && !fallbackCheck.ok) throw new Error(fallbackCheck.message);
     const displayName = custom || fallbackCheck.name;
     const photoURL = resolveAuthPhotoURL(user);
-    if (window.firebaseUpdateProfile) {
-        const profilePatch = { displayName };
-        if (photoURL) profilePatch.photoURL = photoURL;
-        try { await window.firebaseUpdateProfile(user, profilePatch); } catch { /* RTDB is source for chat */ }
-    }
-    if (window.firebaseDb) {
+    const profileWrite = window.firebaseUpdateProfile
+        ? window.firebaseUpdateProfile(user, photoURL ? { displayName, photoURL } : { displayName }).catch(() => {})
+        : Promise.resolve();
+    const nameWrite = (async () => {
+        if (!window.firebaseDb) return;
         const profileRow = {
             displayName,
             displayNameCustom: !!custom,
             updatedAt: Date.now(),
         };
         try {
-            const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`));
-            const existing = snap.exists() ? (snap.val() || {}) : null;
+            const [nameSnap, historySnap] = await Promise.all([
+                window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/displayName`)),
+                window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/nameHistory`)),
+            ]);
+            const existing = {
+                displayName: nameSnap.exists() ? nameSnap.val() : '',
+                nameHistory: historySnap.exists() ? (historySnap.val() || {}) : {},
+            };
             Object.assign(profileRow, priorNamePatch(existing, displayName, profileRow.updatedAt));
         } catch { /* the new name still saves */ }
         if (photoURL) profileRow.photoURL = photoURL;
-        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
-        try {
-            await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`), {
+        await Promise.all([
+            window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow),
+            window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`), {
                 displayName,
                 updatedAt: Date.now(),
-            });
-        } catch { /* directory is optional until rules are deployed */ }
-    }
+            }).catch(() => {}),
+        ]);
+    })();
+    await Promise.all([profileWrite, nameWrite]);
     publishUser(user, { displayName, displayNameCustom: !!custom, photoURL });
     window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     return displayName;
@@ -1412,6 +1418,7 @@ function setAccountProfileOpen(open) {
         if (input && document.activeElement !== input) {
             input.value = $account.get().displayName || '';
         }
+        paintAccountProfileHero();
     }
 }
 
@@ -1477,6 +1484,82 @@ export function closeAccountModal() {
 }
 
 /** Sync Settings → Account row from $account */
+const PROFILE_EMOJI_CHOICES = ['😀', '😁', '😊', '🙂', '😉', '😎', '🤓', '😺', '🚆', '⭐', '🌟', '💙', '💚', '🙌', '👍', '🙏', '🔥', '✨'];
+
+function paintAccountProfileHero() {
+    const host = document.getElementById('account-profile-avatar');
+    const joined = document.getElementById('account-profile-joined');
+    const picker = document.getElementById('account-emoji-picker');
+    if (!host && !joined && !picker) return;
+    const state = $account.get();
+    const signed = state?.status === 'signed-in';
+    const photo = signed ? String(state.photoURL || '') : '';
+    const emoji = safeStorage.getItem('ntAvatarEmoji') || '';
+    const name = String(state?.displayName || '').trim();
+    if (host) {
+        host.replaceChildren();
+        host.className = 'flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8eefc] text-xl font-bold text-[#4C8DFF]';
+        const showPhoto = safeStorage.getItem('ntShowPhotoInAlerts') === '1';
+        if (photo && showPhoto) {
+            const img = document.createElement('img');
+            img.src = photo;
+            img.alt = '';
+            img.referrerPolicy = 'no-referrer';
+            img.className = 'h-full w-full object-cover';
+            host.appendChild(img);
+        } else if (emoji) {
+            host.textContent = emoji;
+            host.classList.add('text-3xl', 'font-normal');
+        } else {
+            const letter = Array.from(name || 'You')[0] || 'Y';
+            host.textContent = letter.toLocaleUpperCase();
+        }
+    }
+    if (joined) {
+        const raw = signed ? window.firebaseAuth?.currentUser?.metadata?.creationTime : '';
+        const ms = raw ? Date.parse(raw) : 0;
+        if (Number.isFinite(ms) && ms > 0) {
+            let label = '';
+            try {
+                label = new Intl.DateTimeFormat('en-ZA', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'Africa/Johannesburg',
+                }).format(new Date(ms));
+            } catch { label = ''; }
+            joined.textContent = label ? `Joined ${label}` : '';
+        } else {
+            joined.textContent = '';
+        }
+    }
+    const hidden = document.getElementById('account-emoji-value');
+    if (hidden) hidden.value = emoji;
+    if (picker && picker.childElementCount === 0) {
+        const letter = document.createElement('button');
+        letter.type = 'button';
+        letter.setAttribute('data-account-emoji', '');
+        letter.className = 'h-10 min-w-10 rounded-full bg-white px-2 text-sm font-bold text-gray-700 dark:bg-[#2c2c2e] dark:text-gray-100';
+        letter.textContent = 'Abc';
+        letter.setAttribute('aria-label', 'Use a letter');
+        picker.appendChild(letter);
+        PROFILE_EMOJI_CHOICES.forEach((face) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-account-emoji', face);
+            btn.className = 'h-10 w-10 rounded-full bg-white text-xl dark:bg-[#2c2c2e]';
+            btn.textContent = face;
+            btn.setAttribute('aria-label', face);
+            picker.appendChild(btn);
+        });
+    }
+    picker?.querySelectorAll('[data-account-emoji]').forEach((btn) => {
+        const on = (btn.getAttribute('data-account-emoji') || '') === emoji;
+        btn.classList.toggle('ring-2', on);
+        btn.classList.toggle('ring-[#4C8DFF]', on);
+    });
+}
+
 export function syncAccountSettingsUi(state = $account.get()) {
     if (typeof document === 'undefined') return;
     const nameEl = document.getElementById('settings-account-name');
@@ -1603,6 +1686,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }).catch(() => {});
     }
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
+    paintAccountProfileHero();
     const paxLabel = $userProfile.get() || document.getElementById('settings-profile-display')?.textContent || 'Adult';
     const accountPax = document.getElementById('account-passenger-type-display');
     if (accountPax) accountPax.textContent = paxLabel;
@@ -2166,16 +2250,60 @@ export function bindAccountUi() {
         const photo = document.getElementById('account-photo-alerts');
         const nameErr = document.getElementById('account-name-error');
         if (nameErr) nameErr.textContent = '';
+        const check = refuseDisplayName(input?.value || '');
+        if (!check.ok) {
+            if (nameErr) nameErr.textContent = check.message;
+            showErr(check.message);
+            return;
+        }
         setBusy(true);
+        let showPhoto = false;
+        let emoji = '';
+        let createdAt = 0;
+        let publishPublicProfile = async () => {};
+        let prefsPromise = Promise.resolve();
         try {
-            const next = await updateAccountDisplayName(input?.value || '');
-            if (input) input.value = next;
-            const { publishPublicProfile, setShowPhotoInAlerts } = await import('./rider-marks.js');
-            await setShowPhotoInAlerts(!!photo?.checked);
-            await publishPublicProfile({ displayName: next });
-            await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
-            if (photo) delete photo.dataset.dirty;
+            const marks = await import('./rider-marks.js');
+            publishPublicProfile = marks.publishPublicProfile;
+            showPhoto = !!photo?.checked;
+            emoji = marks.setAvatarEmoji(document.getElementById('account-emoji-value')?.value || '');
+            safeStorage.setItem('ntShowPhotoInAlerts', showPhoto ? '1' : '0');
+            const user = window.firebaseAuth?.currentUser;
+            createdAt = user?.metadata?.creationTime ? Date.parse(user.metadata.creationTime) : 0;
+            paintAccountProfileHero();
+            const { paintOwnCommunityIdentity } = await import('./community.js');
+            paintOwnCommunityIdentity();
+            prefsPromise = Promise.all([
+                marks.setShowPhotoInAlerts(showPhoto, { publish: false }),
+                pushSignedInPrefs({ showPhotoInAlerts: showPhoto }),
+            ]);
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
+        } catch (e) {
+            const msg = e?.message || 'Could not save.';
+            if (nameErr) nameErr.textContent = msg;
+            showErr(msg);
+            setBusy(false);
+            return;
+        }
+        setBusy(false);
+        try {
+            const user = window.firebaseAuth?.currentUser;
+            const profileBody = {
+                showPhoto,
+                photoURL: showPhoto ? ($account.get()?.photoURL || user?.photoURL || '') : '',
+                avatarEmoji: emoji,
+                createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+            };
+            const namePromise = updateAccountDisplayName(input?.value || '');
+            const profilePromise = check.name
+                ? publishPublicProfile({ ...profileBody, displayName: check.name })
+                : namePromise.then((saved) => publishPublicProfile({ ...profileBody, displayName: saved || '' }));
+            const [next] = await Promise.all([namePromise, prefsPromise, profilePromise]);
+            if (input && next) input.value = next;
+            if (photo) delete photo.dataset.dirty;
+            const { paintOwnCommunityIdentity } = await import('./community.js');
+            paintOwnCommunityIdentity();
+            paintAccountProfileHero();
         } catch (e) {
             const msg = e?.message || 'Could not save.';
             if ((msg === DISPLAY_NAME_REFUSE_MSG || msg === DISPLAY_NAME_MIN_MSG) && typeof window.showToast === 'function') {
@@ -2183,8 +2311,6 @@ export function bindAccountUi() {
             }
             if (nameErr) nameErr.textContent = msg;
             showErr(msg);
-        } finally {
-            setBusy(false);
         }
     });
 
@@ -2332,16 +2458,50 @@ export function bindAccountUi() {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
         if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal');
     });
+    document.getElementById('account-emoji-picker')?.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-account-emoji]');
+        if (!btn) return;
+        const hidden = document.getElementById('account-emoji-value');
+        if (hidden) hidden.value = btn.getAttribute('data-account-emoji') || '';
+        import('./rider-marks.js').then((m) => {
+            const emoji = m.setAvatarEmoji(hidden?.value || '');
+            paintAccountProfileHero();
+            const createdAt = window.firebaseAuth?.currentUser?.metadata?.creationTime
+                ? Date.parse(window.firebaseAuth.currentUser.metadata.creationTime)
+                : 0;
+            m.publishPublicProfile({
+                avatarEmoji: emoji,
+                createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+                photoURL: $account.get()?.photoURL || '',
+            }).catch(() => {});
+            return import('./community.js');
+        }).then((m) => m?.paintOwnCommunityIdentity?.()).catch(() => {});
+    });
+    const applyPhotoChoice = (on) => {
+        safeStorage.setItem('ntShowPhotoInAlerts', on ? '1' : '0');
+        paintAccountProfileHero();
+        const createdAt = window.firebaseAuth?.currentUser?.metadata?.creationTime
+            ? Date.parse(window.firebaseAuth.currentUser.metadata.creationTime)
+            : 0;
+        import('./rider-marks.js').then((m) => m.publishPublicProfile({
+            showPhoto: !!on,
+            photoURL: $account.get()?.photoURL || '',
+            createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+        })).catch(() => {});
+        import('./community.js').then((m) => m.paintOwnCommunityIdentity?.()).catch(() => {});
+    };
     document.getElementById('account-photo-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
-        if (t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
+        if (t.closest?.('label') || t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
         const cb = document.getElementById('account-photo-alerts');
         if (!cb) return;
         cb.checked = !cb.checked;
         cb.dataset.dirty = '1';
+        applyPhotoChoice(cb.checked);
     });
     document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
         e.target.dataset.dirty = '1';
+        applyPhotoChoice(!!e.target.checked);
     });
     const persistMarksVisibility = async (on) => {
         try {

@@ -1910,6 +1910,13 @@ html.dark[data-colour-pack="earthy"] #planner-train-sheet-fare {
   background-color: #efe6d4 !important;
   color: #1e3a8a !important;
 }
+.nt-alert-card:has(.nt-link-preview, .nt-community-share-card, .nt-alert-share-card) .nt-placeholder-link,
+.community-bubble:has(.nt-link-preview, .nt-community-share-card, .nt-alert-share-card) .nt-placeholder-link,
+.nt-link-preview ~ .nt-rich-body .nt-placeholder-link,
+.nt-community-share-card ~ .nt-rich-body .nt-placeholder-link,
+.nt-alert-share-card ~ .nt-rich-body .nt-placeholder-link {
+  display: none;
+}
 .nt-link-preview {
   display: flex;
   flex-direction: column;
@@ -3190,16 +3197,19 @@ html.dark .community-avatar-disc {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-avatar, #e2e8f0) 70%, transparent);
 }
 .community-avatar-letter { font-size: 0.75rem; font-weight: 700; line-height: 1; }
+.community-avatar-emoji { font-size: 0.95rem; line-height: 1; }
 .community-avatar-mark { width: 0.625rem; height: 0.625rem; border-radius: 999px; }
 .cm-message-tools {
   position: absolute;
-  top: 0.1rem;
-  right: 0.15rem;
+  top: auto;
+  bottom: 0.15rem;
+  right: -1.7rem;
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;
+  z-index: 2;
 }
-.cm-thread .community-post-row.justify-end .cm-message-tools { right: auto; left: 0.15rem; }
+.cm-thread .community-post-row.justify-end .cm-message-tools { right: auto; left: -1.7rem; }
 .cm-options-side {
   width: 1.5rem;
   height: 1.5rem;

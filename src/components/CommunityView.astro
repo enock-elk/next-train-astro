@@ -769,9 +769,10 @@
     right: 0;
     left: auto;
   }
-  /* The list slides down to close. The blue bar stays in front of that card. */
-  #community-reactions-modal {
-    z-index: 100;
+  /* Under the side menu (z-100) and its scrim (z-90). The blue bar stays in front. */
+  #community-reactions-modal,
+  #community-profile-card {
+    z-index: 85;
   }
   html:has(#community-reactions-modal:not(.hidden)) #bottom-nav.bottom-nav-bar {
     z-index: 160;

@@ -49,6 +49,8 @@ import {
     marksPublicSnapshot,
     readMarks,
     renderBubbleMarksHtml,
+    readAvatarEmoji,
+    sanitizeAvatarEmoji,
     showMarksInCommunity,
     showPhotoInAlerts,
 } from './rider-marks.js';
@@ -449,26 +451,31 @@ function avatarInk(color) {
 }
 
 /** Letter in this person's colour. A small disc when the name has no letter. No person emoji. */
-function avatarMarkHtml(name, color) {
+function avatarMarkHtml(name, color, large = false) {
     const ink = avatarInk(color);
     const letter = avatarInitial(name);
     if (!letter) {
-        return `<span class="community-avatar-mark" style="background:${ink}" aria-hidden="true"></span>`;
+        const dot = large ? '1.1rem' : '0.625rem';
+        return `<span class="community-avatar-mark" style="background:${ink};width:${dot};height:${dot}" aria-hidden="true"></span>`;
     }
-    return `<span class="community-avatar-letter" style="color:${ink}">${escapeHTML(letter)}</span>`;
+    return `<span class="community-avatar-letter" style="color:${ink};font-size:${large ? '1.25rem' : '0.75rem'}">${escapeHTML(letter)}</span>`;
 }
 
-function renderAvatarHtml(photoURL, name, color) {
+function renderAvatarHtml(photoURL, name, color, emoji, large = false) {
     const ink = avatarInk(color);
-    const mark = avatarMarkHtml(name, color);
+    const face = sanitizeAvatarEmoji(emoji);
+    const mark = face
+        ? `<span class="community-avatar-emoji" style="font-size:${large ? '1.75rem' : '0.95rem'}" aria-hidden="true">${escapeHTML(face)}</span>`
+        : avatarMarkHtml(name, color, large);
+    const size = large ? '3.25rem' : '1.625rem';
     const safePhoto = profilePhotosOn() ? sanitizeCommunityPhotoUrl(photoURL) : '';
     if (safePhoto) {
-        return `<span class="relative inline-flex w-[1.625rem] h-[1.625rem] shrink-0">
-            <img src="${escapeHTML(safePhoto)}" alt="" class="w-[1.625rem] h-[1.625rem] rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
-            <span class="avatar-fallback community-avatar-disc hidden absolute inset-0 w-[1.625rem] h-[1.625rem] rounded-full flex items-center justify-center" style="--nt-avatar:${ink}">${mark}</span>
+        return `<span class="relative inline-flex shrink-0" style="width:${size};height:${size}">
+            <img src="${escapeHTML(safePhoto)}" alt="" class="rounded-full object-cover bg-gray-200 dark:bg-gray-700" style="width:${size};height:${size}" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
+            <span class="avatar-fallback community-avatar-disc hidden absolute inset-0 rounded-full flex items-center justify-center" style="--nt-avatar:${ink};width:${size};height:${size}">${mark}</span>
         </span>`;
     }
-    return `<span class="community-avatar-disc w-[1.625rem] h-[1.625rem] rounded-full flex items-center justify-center text-sm shrink-0" style="--nt-avatar:${ink}">${mark}</span>`;
+    return `<span class="community-avatar-disc rounded-full flex items-center justify-center text-sm shrink-0" style="--nt-avatar:${ink};width:${size};height:${size}">${mark}</span>`;
 }
 
 async function publicCommuterPhoto(acct) {
@@ -1792,6 +1799,15 @@ const COMMUNITY_REACT_ALL = `<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none
 let communityReactFilter = 'all';
 
 function reactorPhoto(uid) {
+    const acct = $account.get();
+    if (acct?.status === 'signed-in' && acct.uid === uid && showPhotoInAlerts()) {
+        const own = sanitizeCommunityPhotoUrl(acct.photoURL || '');
+        if (own) return own;
+    }
+    const profile = publicProfiles.get(uid);
+    if (profile && !profile.missing && profile.showPhoto === true && profile.photoURL) {
+        return profile.photoURL;
+    }
     const rows = cachedFeedPosts || [];
     for (let i = rows.length - 1; i >= 0; i -= 1) {
         if (rows[i]?.uid === uid && rows[i].photoURL) return rows[i].photoURL;
@@ -1799,12 +1815,150 @@ function reactorPhoto(uid) {
     return '';
 }
 
+function reactorEmoji(uid) {
+    const acct = $account.get();
+    if (acct?.status === 'signed-in' && acct.uid === uid) return readAvatarEmoji();
+    return sanitizeAvatarEmoji(publicProfiles.get(uid)?.avatarEmoji || '');
+}
+
+function accountCreatedMs() {
+    const raw = window.firebaseAuth?.currentUser?.metadata?.creationTime;
+    const ms = raw ? Date.parse(raw) : 0;
+    return Number.isFinite(ms) && ms > 0 ? ms : 0;
+}
+
+function formatJoinedDate(ms) {
+    const n = Number(ms);
+    if (!n) return '';
+    const date = new Date(n);
+    if (Number.isNaN(date.getTime())) return '';
+    try {
+        return new Intl.DateTimeFormat('en-ZA', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'Africa/Johannesburg',
+        }).format(date);
+    } catch {
+        return '';
+    }
+}
+
+function closePublicProfileCard() {
+    const sheet = document.getElementById('community-profile-card');
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    closeSmoothModal('community-profile-card');
+}
+
+function ensurePublicProfileCard() {
+    let sheet = document.getElementById('community-profile-card');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'community-profile-card';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[85] hidden flex flex-col justify-end bg-black/50';
+    sheet.innerHTML = `
+        <div data-sheet-card class="mx-auto w-full max-w-md rounded-t-2xl border-t border-gray-200 bg-white px-5 pb-6 pt-3 shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+            <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></div>
+            <div class="flex items-center gap-4">
+                <div data-profile-avatar class="community-avatar"></div>
+                <div class="min-w-0">
+                    <p data-profile-name class="truncate text-base font-bold text-gray-900 dark:text-white"></p>
+                    <p data-profile-joined class="mt-0.5 text-sm text-gray-500 dark:text-gray-400"></p>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', (event) => {
+        if (event.target === sheet) closePublicProfileCard();
+    });
+    return sheet;
+}
+
+function paintPublicProfileCard(uid) {
+    const sheet = ensurePublicProfileCard();
+    const acct = $account.get();
+    const own = !!(acct?.status === 'signed-in' && acct.uid && acct.uid === uid);
+    const profile = publicProfiles.get(uid);
+    const name = own
+        ? (String(acct.displayName || '').trim() || 'You')
+        : reactorName(uid);
+    const photo = reactorPhoto(uid);
+    const emoji = reactorEmoji(uid);
+    const color = nameColorFor(authorColorKey(uid, name));
+    const created = own
+        ? (accountCreatedMs() || Number(profile?.createdAt) || 0)
+        : Number(profile?.createdAt) || 0;
+    const joined = formatJoinedDate(created);
+    const avatar = sheet.querySelector('[data-profile-avatar]');
+    const nameEl = sheet.querySelector('[data-profile-name]');
+    const joinedEl = sheet.querySelector('[data-profile-joined]');
+    if (avatar) avatar.innerHTML = renderAvatarHtml(photo, name, color, emoji, true);
+    if (nameEl) nameEl.textContent = name;
+    if (joinedEl) {
+        joinedEl.textContent = joined ? `Joined ${joined}` : '';
+        joinedEl.classList.toggle('hidden', !joined);
+    }
+}
+
+function openPublicProfileCard(uid) {
+    const id = String(uid || '').trim();
+    if (!id) return;
+    closeReactionSheet();
+    const who = document.getElementById('community-reactions-modal');
+    if (who && !who.classList.contains('hidden')) closeSmoothModal('community-reactions-modal');
+    const sheet = ensurePublicProfileCard();
+    paintPublicProfileCard(id);
+    if (sheet.classList.contains('hidden')) openSmoothModal('community-profile-card');
+    placeSheetAboveNav(sheet);
+    requestAnimationFrame(() => placeSheetAboveNav(sheet));
+    loadPublicProfiles([id]).then((changed) => {
+        if (!changed || !sheet.isConnected || sheet.classList.contains('hidden')) return;
+        paintPublicProfileCard(id);
+    }).catch(() => {});
+}
+
+/** Drop community sheets that would paint over the side menu. */
+export function closeCommunityOverlaysForHub() {
+    closeReactionSheet();
+    closePublicProfileCard();
+    const who = document.getElementById('community-reactions-modal');
+    if (who && !who.classList.contains('hidden')) closeSmoothModal('community-reactions-modal');
+}
+
+/** The signed-in rider's photo and emoji, without another profile read. */
+export function paintOwnCommunityIdentity() {
+    const acct = $account.get();
+    const uid = acct?.status === 'signed-in' ? acct.uid : '';
+    if (!uid) return;
+    const prev = publicProfiles.get(uid) || {};
+    publicProfiles.set(uid, {
+        ...prev,
+        displayName: acct.displayName || prev.displayName || '',
+        showPhoto: showPhotoInAlerts(),
+        photoURL: showPhotoInAlerts() ? (acct.photoURL || prev.photoURL || '') : '',
+        avatarEmoji: readAvatarEmoji(),
+        createdAt: Number(prev.createdAt) || accountCreatedMs() || 0,
+        missing: false,
+        fetchedAt: Date.now(),
+    });
+    const routeId = document.getElementById('community-route-select')?.value || '';
+    if (routeId && typeof applyFeedFilter === 'function') {
+        try { applyFeedFilter(routeId); } catch { /* the next room paint still uses the cache */ }
+    }
+    const who = document.getElementById('community-reactions-modal');
+    if (who && !who.classList.contains('hidden')) {
+        void paintCommunityReactionsModal(who.dataset.postId || '');
+    }
+    const card = document.getElementById('community-profile-card');
+    if (card && !card.classList.contains('hidden')) paintPublicProfileCard(uid);
+}
+
 function ensureCommunityReactionsModal() {
     let sheet = document.getElementById('community-reactions-modal');
     if (sheet) return sheet;
     sheet = document.createElement('div');
     sheet.id = 'community-reactions-modal';
-    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[100] hidden flex flex-col justify-end bg-black/50';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[85] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
         <div data-sheet-card class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
@@ -1900,7 +2054,7 @@ function drawCommunityReactionsModal(sheet, people) {
         const emoji = WA_REACTIONS.find((r) => r.id === row.emojiId)?.emoji || '';
         const color = nameColorFor(authorColorKey(row.uid, name));
         return `<div class="flex items-center gap-3 px-2 py-2" data-community-react-person="${escapeHTML(row.uid)}">
-            ${renderAvatarHtml(reactorPhoto(row.uid), name, color)}
+            ${renderAvatarHtml(reactorPhoto(row.uid), name, color, reactorEmoji(row.uid))}
             <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${escapeHTML(name)}</span>
             <span class="text-xl leading-none" aria-hidden="true">${emoji}</span>
         </div>`;
@@ -2683,6 +2837,7 @@ function authorPresentation(post, isOwn) {
         return {
             displayName: 'You',
             photoURL: showPhotoInAlerts() ? (acct?.photoURL || '') : '',
+            emoji: readAvatarEmoji(),
             marks: showMarksInCommunity() ? marksPublicSnapshot(readMarks()) : null,
         };
     }
@@ -2695,7 +2850,8 @@ function authorPresentation(post, isOwn) {
         if (showMarks && points > Number(profile.points || 0)) hintPublicPoints(post.uid, points);
         return {
             displayName: syncedDisplayName(post.uid, profile, post, latest),
-            photoURL: showPhoto ? (post.photoURL || latest?.photoURL || '') : '',
+            photoURL: showPhoto ? (profile.photoURL || post.photoURL || latest?.photoURL || '') : '',
+            emoji: sanitizeAvatarEmoji(profile.avatarEmoji || ''),
             marks: showMarks && points > 0
                 ? { points, tier: profile.tier || latest?.tier || post?.marks?.tier || '' }
                 : null,
@@ -2705,6 +2861,7 @@ function authorPresentation(post, isOwn) {
     return {
         displayName: syncedDisplayName(post.uid, null, post, latest),
         photoURL: newestHidPhoto ? '' : (post.photoURL || ''),
+        emoji: '',
         marks: publicMarksFromPost(post, latest),
     };
 }
@@ -2713,7 +2870,8 @@ async function loadPublicProfiles(uids) {
     const now = Date.now();
     const need = [...new Set((uids || []).filter(Boolean))].filter((uid) => {
         const hit = publicProfiles.get(uid);
-        const freshFor = Number(hit?.points) === 0 ? 60 * 1000 : 10 * 60 * 1000;
+        const waitingForPhoto = hit?.showPhoto === true && !hit?.photoURL;
+        const freshFor = (Number(hit?.points) === 0 || waitingForPhoto) ? 60 * 1000 : 10 * 60 * 1000;
         return !hit || now - hit.fetchedAt > freshFor;
     });
     if (!need.length) return false;
@@ -3023,6 +3181,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const isOwn = !!(myUid && post.uid && post.uid === myUid);
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
+    const emoji = shown.emoji || '';
     const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
     const versionChip = grouped ? '' : communityVersionChip(post, routeId);
     const versionShown = grouped ? '' : versionForPost(post);
@@ -3050,7 +3209,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         ? ''
         : grouped
             ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
-            : `<div class="community-avatar">${renderAvatarHtml(photoURL, displayName, nameColor)}</div>`;
+            : `<div class="community-avatar">${renderAvatarHtml(photoURL, displayName, nameColor, emoji)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
     const marksSnap = shown.marks;
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
@@ -3070,6 +3229,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         marksSnap?.points || '',
         nameColor,
         photoURL,
+        emoji,
         versionShown,
         communityReactionStamp(post.postId),
         post.pendingSend ? '1' : '0',
@@ -5365,6 +5525,21 @@ export function bindCommunityUi() {
             const version = versionChip.getAttribute('data-admin-changelog') || versionChip.textContent || '';
             Admin?.openAdminChangelogLookup?.(version, Admin.changelogContextFromEl?.(versionChip));
             return;
+        }
+
+        const profileHit = t.closest?.('#community-profile-card')
+            ? null
+            : t.closest?.('.community-avatar, .community-bubble-name, .community-bubble-name-row, [data-community-react-person]');
+        if (profileHit && !t.closest?.('.cm-options-toggle, .cm-message-tools, .fb-version-chip, [data-admin-changelog]') && Date.now() >= reactionGuardUntil) {
+            const person = t.closest?.('[data-community-react-person]');
+            const row = t.closest?.('.community-post-row');
+            const uid = person?.getAttribute('data-community-react-person') || row?.getAttribute('data-uid') || '';
+            if (uid) {
+                e.preventDefault();
+                e.stopPropagation();
+                openPublicProfileCard(uid);
+                return;
+            }
         }
 
         const seeMore = t.closest?.('[data-community-see-more]');

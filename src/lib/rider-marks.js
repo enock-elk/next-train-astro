@@ -8,6 +8,7 @@
 import { DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
+import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 
 const STORAGE_KEY = 'ntRiderMarksV1';
 const STORAGE_KEY_GUEST = 'ntRiderMarksV1:guest';
@@ -473,26 +474,43 @@ export async function publishPublicProfile(extra = {}) {
         if (!auth) return;
         const state = extra.state || readMarks();
         let points = Number(state.points) || 0;
+        let remote = null;
         try {
             const current = await fetch(
                 `${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(auth.uid)}.json?auth=${encodeURIComponent(auth.token)}`
             );
-            if (current.ok) {
-                const remote = await current.json();
-                const remotePoints = Number(remote?.points);
-                if (Number.isFinite(remotePoints)) points = Math.max(points, remotePoints);
-            }
+            if (current.ok) remote = await current.json();
         } catch {
-            /* keep the local total */
+            remote = null;
         }
+        const remotePoints = Number(remote?.points);
+        if (Number.isFinite(remotePoints)) points = Math.max(points, remotePoints);
+        const showPhoto = extra.showPhoto != null ? !!extra.showPhoto : showPhotoInAlerts();
+        const photoSource = extra.photoURL != null
+            ? extra.photoURL
+            : (showPhoto ? (remote?.photoURL || '') : '');
+        let photoURL = '';
+        if (showPhoto && photoSource) {
+            photoURL = sanitizeCommunityPhotoUrl(photoSource) || '';
+            if (photoURL.length > 2000) photoURL = '';
+        }
+        const emoji = extra.avatarEmoji != null
+            ? sanitizeAvatarEmoji(extra.avatarEmoji)
+            : (readAvatarEmoji() || sanitizeAvatarEmoji(remote?.avatarEmoji || ''));
         const body = {
             points,
             tier: tierForPoints(points).id,
             showMarks: showMarksInCommunity(),
-            showPhoto: showPhotoInAlerts(),
+            showPhoto,
             updatedAt: Date.now(),
         };
-        const name = String(extra.displayName || '').trim();
+        if (showPhoto && photoURL) body.photoURL = photoURL;
+        else if (!showPhoto) body.photoURL = null;
+        if (emoji) body.avatarEmoji = emoji;
+        else if (extra.avatarEmoji != null) body.avatarEmoji = null;
+        const created = Number(remote?.createdAt) || Number(extra.createdAt) || 0;
+        if (created > 0) body.createdAt = created;
+        const name = String(extra.displayName || remote?.displayName || '').trim();
         if (name) body.displayName = name.slice(0, 80);
         await fetch(
             `${DYNAMIC_BASE_URL}public_profile/${encodeURIComponent(auth.uid)}.json?auth=${encodeURIComponent(auth.token)}`,
@@ -572,6 +590,28 @@ export async function hydrateRemoteMarks({ persist = false } = {}) {
     }
 }
 
+const AVATAR_EMOJI_KEY = 'ntAvatarEmoji';
+
+/** One emoji, or empty. Letters and long strings stay off the disc. */
+export function sanitizeAvatarEmoji(raw) {
+    const text = Array.from(String(raw || '').replace(/\s+/g, '')).slice(0, 8).join('');
+    if (!text || text.length > 16) return '';
+    if (/[\p{L}\p{N}]/u.test(text)) return '';
+    if (!/\p{Extended_Pictographic}/u.test(text)) return '';
+    return text;
+}
+
+export function readAvatarEmoji() {
+    return sanitizeAvatarEmoji(safeStorage.getItem(AVATAR_EMOJI_KEY) || '');
+}
+
+export function setAvatarEmoji(raw) {
+    const clean = sanitizeAvatarEmoji(raw);
+    if (clean) safeStorage.setItem(AVATAR_EMOJI_KEY, clean);
+    else safeStorage.removeItem(AVATAR_EMOJI_KEY);
+    return clean;
+}
+
 /** Photo on public commuter surfaces is off until the rider opts in. */
 export function showPhotoInAlerts() {
     return safeStorage.getItem(PHOTO_PREF_KEY) === '1';
@@ -582,23 +622,22 @@ export function showMarksInCommunity() {
     return safeStorage.getItem(MARKS_COMMUNITY_PREF_KEY) !== '0';
 }
 
-export async function setShowPhotoInAlerts(on) {
+export async function setShowPhotoInAlerts(on, opts = {}) {
     safeStorage.setItem(PHOTO_PREF_KEY, on ? '1' : '0');
     const uid = authUid();
     if (!uid || typeof window === 'undefined') return;
-    try {
-        if (!window.firebaseAuth) await bootFirebase();
-        const user = window.firebaseAuth?.currentUser;
-        if (user && !user.isAnonymous && user.uid === uid && window.firebaseDb) {
-            await window.firebaseDbUpdate(
+    const writes = [];
+    if (window.firebaseAuth && window.firebaseDb) {
+        const user = window.firebaseAuth.currentUser;
+        if (user && !user.isAnonymous && user.uid === uid) {
+            writes.push(window.firebaseDbUpdate(
                 window.firebaseDbRef(window.firebaseDb, `users/${uid}/prefs`),
                 { showPhotoInAlerts: !!on, updatedAt: Date.now() }
-            );
+            ).catch(() => {}));
         }
-    } catch {
-        /* local pref is enough */
     }
-    await publishPublicProfile();
+    if (opts.publish !== false) writes.push(publishPublicProfile());
+    await Promise.all(writes);
 }
 
 export async function setShowMarksInCommunity(on) {

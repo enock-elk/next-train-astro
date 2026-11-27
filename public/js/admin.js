@@ -14132,7 +14132,7 @@ const Admin = {
                         : '';
                     const link = /^https:\/\//i.test(String(message.linkUrl || '')) ? String(message.linkUrl) : '';
                     const linkHtml = link ? `<a class="cm-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link.replace(/^https:\/\//, '').slice(0, 64))}</a>` : '';
-                    return `<div class="community-post-row ${mine ? 'justify-end' : 'justify-start gap-1'}${isReply ? ' is-reply' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                    return `<div class="community-post-row ${mine ? 'justify-end' : 'justify-start gap-1'}${isReply ? ' is-reply' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
                         ${avatar}
                         <div class="community-bubble-wrap">
                             <div class="community-bubble ${mine ? 'community-bubble-own' : 'community-bubble-other'} ${message.hidden ? 'is-hidden' : ''}">
@@ -14155,8 +14155,8 @@ const Admin = {
                                     </div>
                                 </div>
                             </div>
+                            <span class="cm-message-tools">${authorHint}${category}<button type="button" class="cm-options-toggle cm-options-side" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button></span>
                         </div>
-                        <span class="cm-message-tools">${authorHint}${category}<button type="button" class="cm-options-toggle cm-options-side" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button></span>
                     </div>`;
                 };
 
@@ -14895,6 +14895,7 @@ const Admin = {
                                 surface: 'community',
                                 region,
                                 routeId,
+                                alias: target.displayName || '',
                                 note: guidance ? `${roomNote}\n\nOperator guidance for this draft:\n${guidance}` : roomNote,
                                 thread: [{
                                     from: 'commuter',
@@ -14905,15 +14906,21 @@ const Admin = {
                         });
                         const data = await res.json().catch(() => ({}));
                         if (!res.ok) throw new Error(data.error || 'Could not draft a reply.');
-                        if (data.action === 'halt') {
+                        const guarded = window.ntReplySuggest?.applyDraftGuard
+                            ? window.ntReplySuggest.applyDraftGuard(data, region, [{
+                                from: 'commuter',
+                                text: `${target.displayName || 'Passenger'}: ${target.body || ''}`,
+                            }], { surface: 'community', alias: target.displayName || '' })
+                            : data;
+                        if (guarded.action === 'halt') {
                             if (note) {
-                                note.textContent = data.reason || 'Co-Pilot needs a fact before it can draft this.';
+                                note.textContent = guarded.reason || 'Co-Pilot needs a fact before it can draft this.';
                                 note.classList.remove('hidden');
                             }
                             guide?.classList.remove('hidden');
                             return;
                         }
-                        const draft = String(data.reply || '').replace(/<[^>]+>/g, '').trim();
+                        const draft = String(guarded.reply || '').replace(/<[^>]+>/g, '').trim();
                         if (!draft) throw new Error('Co-Pilot returned an empty draft.');
                         if (input) {
                             input.value = draft.slice(0, 1300);
@@ -18186,7 +18193,10 @@ const Admin = {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Could not draft a reply.');
-            const guarded = api.applyDraftGuard(data, payload.region, payload.thread);
+            const guarded = api.applyDraftGuard(data, payload.region, payload.thread, {
+                surface: payload.surface,
+                alias: payload.alias,
+            });
             const html = api.composerHtmlFromResult(guarded);
             if (!html) {
                 Admin.showSuggestHalt(guarded);
@@ -19983,8 +19993,10 @@ const Admin = {
             }
             const url = prompt("Enter the full URL (e.g., https://nexttrain.co.za):", "https://");
             if (!url) return;
-            const label = selectedText || "Link";
-            const html = `<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline underline-offset-2">${label}</a>`;
+            const label = selectedText || url;
+            const hideLabel = !selectedText || selectedText === url;
+            const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+            const html = `<a href="${esc(url)}" target="_blank" rel="noopener" class="text-blue-500 dark:text-blue-400 underline underline-offset-2${hideLabel ? ' nt-placeholder-link' : ''}">${esc(label)}</a>`;
             document.execCommand('insertHTML', false, html);
         }
     },
@@ -26879,8 +26891,13 @@ const Admin = {
                             .replace(/&#39;/gi, "'")
                             .trim();
 
+                        const inboxShareHtml = (value) => {
+                            if (/<[a-z]/i.test(value) && typeof window.ntEmbedShareCards === 'function') return window.ntEmbedShareCards(value);
+                            if (typeof window.ntShareTextHtml === 'function') return window.ntShareTextHtml(value);
+                            return secureEscape(value);
+                        };
                         let rawText = plainBody
-                            ? (typeof window.ntShareTextHtml === 'function' ? window.ntShareTextHtml(plainBody) : secureEscape(plainBody))
+                            ? inboxShareHtml(plainBody)
                             : (quoteBlockHtml ? '' : 'No content');
 
                         // Link emails and numbers in the text only. Share chips are already HTML.

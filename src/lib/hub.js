@@ -18,7 +18,7 @@ import {
 import { rememberPicture, profilePhotosOn, shouldHoldPicture } from './data-saver.js';
 import { imageMetaForUrl } from './picture-preview.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
-import { embedCommunityShareCards, renderTextWithShareChips, stripCommunityShareUrls } from './share-chips.js';
+import { embedCommunityShareCards, embedOwnShareCards, renderTextWithShareChips, stripCommunityShareUrls } from './share-chips.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -634,6 +634,7 @@ export function openAppHub() {
         setTimeout(() => overlay.classList.remove('opacity-0'), 10);
     }
     document.body.classList.add('sidenav-open', 'modal-active');
+    import('./community.js').then((m) => m.closeCommunityOverlaysForHub?.()).catch(() => {});
     collapsePrefsAccordion();
     if (location.hash !== '#sidenav') {
         try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
@@ -2059,9 +2060,10 @@ function renderMessagesThread(list) {
         const laid = mine
             ? inboxMediaFromHtml(commuterFeedbackText(raw), extraUrls)
             : inboxMediaFromHtml(sanitizeHTML(stripAdminSignoff(raw)), extraUrls);
-        const body = mine
-            ? renderTextWithShareChips(laid.body)
-            : (laid.body || '');
+        const bodySource = laid.body || '';
+        const body = /<[a-z][\s\S]*>/i.test(bodySource)
+            ? embedOwnShareCards(bodySource)
+            : renderTextWithShareChips(bodySource);
         const imageCount = laid.imageCount || 0;
         const media = `${laid.media
             ? laid.media.replace(

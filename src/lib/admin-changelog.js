@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.27.1': [
+        'Co-Pilot opens with Good morning, Good afternoon, or Good evening, and the person\'s name when it reads as a real name. A display name like pancakes stays unnamed. An admin can post a link without the word Link under the preview. The reaction list sits behind the side menu. A profile photo and a chosen emoji show on Community from the public profile, in the same session, without rewriting old messages. Profile save no longer reads the whole account. The profile shows the photo and the day the account was created. Tapping a name or avatar opens that public card, and the version chip still opens build notes. Community Monitor options sit at the bottom of the bubble. Feedback Hub previews community and alert links, including a notice that has ended. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.26.6': [
         'The route Community preview passes the production type check, so the build can finish. No commuter What\'s New. forceShow stays false.',
     ],

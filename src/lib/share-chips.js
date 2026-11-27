@@ -212,13 +212,34 @@ export function embedCommunityShareCards(html) {
         const card = communityShareCardHtml(href);
         return card || tag;
     });
-    out = out.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
-        const url = raw.replace(/[),.;]+$/, '');
+    out = out.replace(/(^|[\s>(])(https?:\/\/[^\s<>"']+)/gi, (raw, lead, urlPart) => {
+        const url = urlPart.replace(/[),.;]+$/, '');
         const card = communityShareCardHtml(url);
         if (!card) return raw;
-        return `${card}${raw.slice(url.length)}`;
+        return `${lead}${card}${urlPart.slice(url.length)}`;
     });
     return out;
+}
+
+/** A notice address becomes the same card, including one that has already ended. */
+export function embedAlertShareCards(html) {
+    let out = String(html || '');
+    out = out.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const parsed = alertShareFromHref(href);
+        return parsed ? alertShareCardHtml(href, parsed) : tag;
+    });
+    out = out.replace(/(^|[\s>(])(https?:\/\/[^\s<>"']+)/gi, (raw, lead, urlPart) => {
+        const url = urlPart.replace(/[),.;]+$/, '');
+        const parsed = alertShareFromHref(url);
+        if (!parsed) return raw;
+        return `${lead}${alertShareCardHtml(url, parsed)}${urlPart.slice(url.length)}`;
+    });
+    return out;
+}
+
+/** Community and alert addresses, whether the message is plain text or HTML. */
+export function embedOwnShareCards(html) {
+    return embedAlertShareCards(embedCommunityShareCards(html));
 }
 
 /** Drop community message addresses from alert text once the card is showing. */
@@ -367,6 +388,7 @@ export async function openShareUrl(href) {
 
 if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
     window.ntShareTextHtml = renderTextWithShareChips;
+    window.ntEmbedShareCards = embedOwnShareCards;
     window.ntShareChipHtml = shareChipHtml;
     window.ntOpenShareUrl = openShareUrl;
     window.__ntShareChipBound = true;
@@ -378,6 +400,11 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
             event.preventDefault();
             event.stopPropagation();
             if (communityCard.classList.contains('is-ended')) return;
+            if (communityCard.closest('#messages-thread-modal, #feedback-modal')) {
+                const { closeSmoothModal } = await import('./ui.js');
+                closeSmoothModal('messages-thread-modal');
+                closeSmoothModal('feedback-modal');
+            }
             const routeId = communityCard.getAttribute('data-community-share-route') || '';
             const postId = communityCard.getAttribute('data-community-share-post') || '';
             if (!routeId || !postId) return;
@@ -394,6 +421,11 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
             event.preventDefault();
             event.stopPropagation();
             if (alertCard.dataset.alertShareLive !== '1') return;
+            if (alertCard.closest('#messages-thread-modal, #feedback-modal')) {
+                const { closeSmoothModal } = await import('./ui.js');
+                closeSmoothModal('messages-thread-modal');
+                closeSmoothModal('feedback-modal');
+            }
             const { focusSharedAlert } = await import('./alerts-channel.js');
             const state = await focusSharedAlert?.(
                 alertCard.getAttribute('data-alert-share-id') || '',

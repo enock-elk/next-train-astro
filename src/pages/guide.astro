@@ -352,7 +352,12 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
             return;
           }
           if (isGuide) return;
-          var isSeoLanding = /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path);
+          var isSeoLanding = /\/routes(\/|\.html|$)/i.test(path)
+            || /\/stations\//i.test(path)
+            || /\/regions\//i.test(path)
+            || /\/corridors\//i.test(path)
+            || /festive-season/i.test(path)
+            || /public-holidays/i.test(path);
           if (isSeoLanding) {
             e.preventDefault();
             var dest = a.href;

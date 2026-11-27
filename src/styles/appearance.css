@@ -1166,6 +1166,11 @@ html.dark .nt-offline-strip {
   background: linear-gradient(90deg, #bfdbfe 0%, #60a5fa 52%, #2563eb 100%);
   color: #1e3a8a;
 }
+#maintenance-banner.nt-maint-tone-red,
+.nt-maint-strip.nt-maint-tone-red {
+  background: linear-gradient(90deg, #f87171 0%, #ef4444 52%, #b91c1c 100%);
+  color: #fff7f7;
+}
 .nt-maint-inner {
   display: inline-flex;
   align-items: center;

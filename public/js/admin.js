@@ -1175,6 +1175,7 @@ const Admin = {
             columns: '<rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/><path d="M6.5 7h0M17.5 7h0"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
             bell: '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+            speaker: '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 6a8.5 8.5 0 010 12"/>',
             settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
         };
         const body = paths[name];
@@ -8435,6 +8436,7 @@ const Admin = {
         const body = document.getElementById('alert-body');
         if (hub) hub.classList.toggle('hidden', mode !== 'hub');
         if (body) body.classList.toggle('hidden', mode !== 'inapp');
+        if (mode !== 'hub') document.getElementById('alert-speech')?.classList.add('hidden');
         Admin.paintDrillTitle(mode === 'inapp' ? 'In-app alerts' : 'Service Alerts');
         if (mode === 'inapp' && typeof window.injectRichTextStyles === 'function') {
             window.injectRichTextStyles();
@@ -20856,6 +20858,7 @@ const Admin = {
             ? await Admin.fetchPollResultsSnapshot(alertData.id || key, secret)
             : (alertData.pollResults || null);
 
+        const reactionCounts = Admin.alertReactionCounts(alertData);
         const archived = {
             ...alertData,
             kind: 'notice',
@@ -20863,6 +20866,8 @@ const Admin = {
             clearedFrom: target,
             archiveReason: alertData.archiveReason || 'cleared',
             pollResults: pollResults || alertData.pollResults || null,
+            reactions: Object.keys(reactionCounts).length ? reactionCounts : (alertData.reactions || null),
+            reactionCounts: Object.keys(reactionCounts).length ? reactionCounts : (alertData.reactionCounts || null),
         };
         const archKey = `${target}/${alertData.id || key}_${Date.now()}`;
         const archiveUrl = `${dynamicEndpoint}notices_archive/${archKey}.json?auth=${secret}`;
@@ -21438,6 +21443,22 @@ const Admin = {
                         <span>Notifications</span>
                     </span>
                 </button>
+                <button type="button" id="alert-hub-speech" class="admin-inner-tile">
+                    <span class="flex flex-col items-center">
+                        ${Admin.tileIcon('speaker', 'text-violet-600 dark:text-violet-400')}
+                        <span>Read aloud</span>
+                    </span>
+                </button>
+            </div>
+            <div id="alert-speech" class="hidden mt-3 space-y-2">
+                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase" for="alert-speech-text">Paste any text</label>
+                <textarea id="alert-speech-text" rows="8" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white outline-none" placeholder="Paste the notice, the briefing, or any other words to read."></textarea>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" id="alert-speech-play" class="min-h-[44px] rounded-lg bg-violet-600 text-white text-[11px] font-black uppercase tracking-wider focus:outline-none">Play</button>
+                    <button type="button" id="alert-speech-pause" class="min-h-[44px] rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-[11px] font-black uppercase tracking-wider focus:outline-none">Pause</button>
+                    <button type="button" id="alert-speech-stop" class="min-h-[44px] rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-[11px] font-black uppercase tracking-wider focus:outline-none">Stop</button>
+                </div>
+                <p id="alert-speech-status" class="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Not playing</p>
             </div>
             
             <div id="alert-body" class="hidden mt-4 space-y-4">
@@ -22502,9 +22523,10 @@ const Admin = {
                 return;
             }
             const target = item.clearedFrom || item.target || 'all';
+            const targets = item.targets?.length ? item.targets : [target];
             Admin._alertRepostDraft = true;
             if (alertTarget) {
-                Admin.setSelectedAlertTargets([target], { fetch: false });
+                Admin.setSelectedAlertTargets(targets, { fetch: false });
             }
             existingAlertId = null;
             fillAlertComposeFromItem(item, { mode: 'repost' });
@@ -22513,7 +22535,7 @@ const Admin = {
         };
 
         /** GSM Review: open Compose with the live notice content (keeps id for update). */
-        Admin.loadAlertForReview = async (target, noticeId) => {
+        Admin.loadAlertForReview = async (target, noticeId, targets = null) => {
             if (!target || !noticeId) return;
             const reviewKey = `${target}:${noticeId}`;
             if (Admin._reviewedAlertKey === reviewKey || Admin._loadingAlertReviewId === reviewKey) return;
@@ -22521,8 +22543,10 @@ const Admin = {
             try {
                 Admin._skipAlertFetchOnce = true;
                 Admin._alertRepostDraft = false;
+                const selected = Array.isArray(targets) && targets.length ? targets : [target];
+                Admin._alertEditTargets = selected.slice();
                 if (typeof Admin.setSelectedAlertTargets === 'function') {
-                    Admin.setSelectedAlertTargets([target], { fetch: false });
+                    Admin.setSelectedAlertTargets(selected, { fetch: false });
                 }
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 8000);
@@ -22541,7 +22565,12 @@ const Admin = {
                 fillAlertComposeFromItem(hit, { mode: 'review' });
                 if (sendBtn) sendBtn.textContent = 'Update Alert';
                 const countEl = document.getElementById('alert-live-count');
-                if (countEl) countEl.textContent = `Reviewing live post ${existingAlertId} on ${Admin.alertTargetLabel(target)}.`;
+                if (countEl) {
+                    const scope = selected.length > 1
+                        ? `${selected.length} routes`
+                        : Admin.alertTargetLabel(target);
+                    countEl.textContent = `Reviewing live post ${existingAlertId} on ${scope}.`;
+                }
                 Admin._reviewedAlertKey = reviewKey;
                 if (typeof showToast === 'function') showToast('Alert loaded for review.', 'success');
             } catch (e) {
@@ -22610,6 +22639,23 @@ const Admin = {
                 if (typeof Admin.deepLinkToPanel === 'function') Admin.deepLinkToPanel('push-notifications-panel');
             };
         }
+        const hubSpeech = document.getElementById('alert-hub-speech');
+        if (hubSpeech) {
+            hubSpeech.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = document.getElementById('alert-speech');
+                if (!panel) return;
+                const open = panel.classList.toggle('hidden') === false;
+                if (open) document.getElementById('alert-speech-text')?.focus();
+            };
+        }
+        const speechText = document.getElementById('alert-speech-text');
+        document.getElementById('alert-speech-play')?.addEventListener('click', () => {
+            Admin.playAdminSpeech(speechText?.value || '', { owner: 'paste', resume: true });
+        });
+        document.getElementById('alert-speech-pause')?.addEventListener('click', () => Admin.pauseAdminSpeech());
+        document.getElementById('alert-speech-stop')?.addEventListener('click', () => Admin.stopAdminSpeech());
 
         if (srcToggleBtn) {
             srcToggleBtn.onclick = () => {
@@ -22969,7 +23015,19 @@ const Admin = {
                             errors.push(`${Admin.alertTargetLabel(t)}: ${err.message || 'failed'}`);
                         }
                     }
+                    if (isUpdate && Array.isArray(Admin._alertEditTargets)) {
+                        const keep = new Set(targets);
+                        for (const dropped of Admin._alertEditTargets) {
+                            if (keep.has(dropped)) continue;
+                            try {
+                                await Admin.archiveActiveNotice(dropped, secret, null, payload.id);
+                            } catch (err) {
+                                errors.push(`${Admin.alertTargetLabel(dropped)}: ${err.message || 'could not remove'}`);
+                            }
+                        }
+                    }
                     existingAlertId = null;
+                    Admin._alertEditTargets = null;
                     Admin._alertRepostDraft = false;
                     Admin._pendingReviewItemId = null;
                     Admin._reviewPostedAt = null;
@@ -23082,6 +23140,79 @@ const Admin = {
         };
     },
 
+    alertReactionCounts: (item) => {
+        const bag = item?.reactions && typeof item.reactions === 'object'
+            ? item.reactions
+            : (item?.reactionCounts && typeof item.reactionCounts === 'object' ? item.reactionCounts : {});
+        const keys = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
+        const counts = {};
+        keys.forEach((key) => {
+            const n = Number(bag[key]) || 0;
+            if (n > 0) counts[key] = n;
+        });
+        return counts;
+    },
+
+    alertReactionSummaryHtml: (item) => {
+        const emoji = {
+            like: '\uD83D\uDC4D',
+            love: '\u2764\uFE0F',
+            laugh: '\uD83D\uDE02',
+            wow: '\uD83D\uDE2E',
+            sad: '\uD83D\uDE22',
+            pray: '\uD83D\uDE4F',
+        };
+        const counts = Admin.alertReactionCounts(item);
+        const parts = Object.keys(emoji).filter((key) => counts[key]).map((key) => `${emoji[key]} ${counts[key]}`);
+        if (!parts.length) return '';
+        return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">${parts.join(' · ')}</span>`;
+    },
+
+    /** One card per alert id. Copies on several routes stay one alert. */
+    groupAlertCopies: (items) => {
+        const rows = Array.isArray(items) ? items : [];
+        if (rows.length && rows.every((item) => Array.isArray(item?.copies))) return rows;
+        const groups = [];
+        const byId = new Map();
+        rows.forEach((item) => {
+            if (!item) return;
+            const disruption = item.kind === 'disruption';
+            const id = String(item.id || item._key || '');
+            if (disruption || !id) {
+                const only = item.target || item.clearedFrom || item.routeId || '';
+                groups.push({
+                    ...item,
+                    targets: only ? [only] : [],
+                    copies: [item],
+                    reactions: Admin.alertReactionCounts(item),
+                });
+                return;
+            }
+            let group = byId.get(id);
+            if (!group) {
+                group = { ...item, targets: [], copies: [], reactions: {} };
+                byId.set(id, group);
+                groups.push(group);
+            }
+            const target = item.target || item.clearedFrom || item.routeId || '';
+            if (target && !group.targets.includes(target)) group.targets.push(target);
+            group.copies.push(item);
+            const counts = Admin.alertReactionCounts(item);
+            Object.entries(counts).forEach(([key, n]) => {
+                group.reactions[key] = (group.reactions[key] || 0) + n;
+            });
+        });
+        return groups;
+    },
+
+    alertScopeLabel: (item) => {
+        const targets = Array.isArray(item?.targets) && item.targets.length
+            ? item.targets
+            : [item?.target || item?.clearedFrom || item?.routeId].filter(Boolean);
+        if (!targets.length) return '-';
+        return targets.map((target) => Admin.alertTargetLabel(target)).join(', ');
+    },
+
     fetchActiveAlerts: async () => {
         const statusEl = document.getElementById('alert-active-status');
         const listEl = document.getElementById('alert-active-list');
@@ -23109,15 +23240,16 @@ const Admin = {
                 }
             }
             items.sort((a, b) => Number(b.postedAt || b.timestamp || 0) - Number(a.postedAt || a.timestamp || 0));
+            const groupedItems = Admin.groupAlertCopies(items);
             const secret = await Admin.getAuthKey();
-            await Promise.all(items.map(async (item) => {
+            await Promise.all(groupedItems.map(async (item) => {
                 if (!item?.poll?.active || !item.id) return;
                 const tallies = await Admin.fetchPollResultsSnapshot(item.id, secret);
                 if (tallies) item.pollResults = tallies;
             }));
-            Admin._cachedActiveAlerts = items;
-            Admin.renderActiveAlertsList(items);
-            if (statusEl) statusEl.textContent = items.length ? `${items.length} live` : 'None live';
+            Admin._cachedActiveAlerts = groupedItems;
+            Admin.renderActiveAlertsList(groupedItems);
+            if (statusEl) statusEl.textContent = groupedItems.length ? `${groupedItems.length} live` : 'None live';
         } catch (e) {
             console.warn('fetchActiveAlerts failed', e);
             if (statusEl) statusEl.textContent = 'Failed';
@@ -23128,7 +23260,7 @@ const Admin = {
     renderActiveAlertsList: (items) => {
         const listEl = document.getElementById('alert-active-list');
         if (!listEl) return;
-        const rows = Array.isArray(items) ? items : (Admin._cachedActiveAlerts || []);
+        const rows = Admin.groupAlertCopies(Array.isArray(items) ? items : (Admin._cachedActiveAlerts || []));
         Admin._cachedActiveAlerts = rows;
         if (!rows.length) {
             listEl.innerHTML = `<div class="text-center py-8 text-xs text-gray-400">No active alerts.</div>`;
@@ -23157,7 +23289,8 @@ const Admin = {
                 : (item.poll && item.poll.active
                     ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Poll</span>`
                     : '');
-            const scope = escapeHTML(Admin.alertTargetLabel(item.target || item.clearedFrom || '-'));
+            const scope = escapeHTML(Admin.alertScopeLabel(item));
+            const reactHtml = Admin.alertReactionSummaryHtml(item);
             const idSafe = escapeHTML(String(item.id || item._key || idx));
             return `
                 <div class="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm" data-active-idx="${idx}">
@@ -23165,6 +23298,7 @@ const Admin = {
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${sevLabel}</span>
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${scope}</span>
                         ${pollHint}
+                        ${reactHtml}
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-2">${escapeHTML(plain)}</p>
                     <p class="text-[9px] font-mono text-gray-400 mb-2 truncate">${idSafe} - ${escapeHTML(whenStr)}</p>
@@ -23178,22 +23312,30 @@ const Admin = {
             btn.onclick = () => {
                 const idx = Number(btn.getAttribute('data-active-idx'));
                 const item = rows[idx];
-                if (!item || !item.target || !(item.id || item._key)) return;
+                const target = item.targets?.[0] || item.target;
+                if (!item || !target || !(item.id || item._key)) return;
                 Admin._alertEditFromActive = true;
-                Admin.loadAlertForReview(item.target, item.id || item._key);
+                Admin.loadAlertForReview(target, item.id || item._key, item.targets);
             };
         });
         listEl.querySelectorAll('.alert-active-delete').forEach((btn) => {
             btn.onclick = async () => {
                 const idx = Number(btn.getAttribute('data-active-idx'));
                 const item = rows[idx];
-                if (!item || !item.target || !(item.id || item._key)) return;
-                const ok = await Admin.secureConfirm('Delete alert', 'Delete this live alert for everyone?');
+                const targets = item.targets?.length ? item.targets : [item.target].filter(Boolean);
+                if (!item || !targets.length || !(item.id || item._key)) return;
+                const ask = targets.length > 1
+                    ? `Delete this alert on ${targets.length} routes?`
+                    : 'Delete this live alert for everyone?';
+                const ok = await Admin.secureConfirm('Delete alert', ask);
                 if (!ok) return;
                 const secret = await Admin.getAuthKey();
                 if (!secret) return;
                 try {
-                    const archived = await Admin.archiveActiveNotice(item.target, secret, item, item.id || item._key);
+                    let archived = null;
+                    for (const target of targets) {
+                        archived = await Admin.archiveActiveNotice(target, secret, null, item.id || item._key) || archived;
+                    }
                     if (!archived) {
                         if (typeof showToast === 'function') showToast('Could not delete this alert.', 'error');
                         return;
@@ -23278,7 +23420,7 @@ const Admin = {
         if (!listEl) return;
         const all = Array.isArray(items) ? items : (Admin._cachedAlertArchive || []);
         Admin._cachedAlertArchive = all;
-        const rows = Admin.filterAlertArchiveItems(all);
+        const rows = Admin.groupAlertCopies(Admin.filterAlertArchiveItems(all));
         if (!all.length) {
             listEl.innerHTML = `<div class="text-center py-8 text-xs text-gray-400">Archive is empty.</div>`;
             return;
@@ -23318,7 +23460,8 @@ const Admin = {
                 : (item.poll && item.poll.active
                     ? `<span class="text-[9px] font-bold text-purple-500">Had poll</span>`
                     : '');
-            const scope = escapeHTML(String(item.clearedFrom || item.target || item.routeId || '-'));
+            const scope = escapeHTML(Admin.alertScopeLabel(item));
+            const reactHtml = Admin.alertReactionSummaryHtml(item);
             const idSafe = escapeHTML(String(item.id || item._archKey || idx));
 
             return `
@@ -23328,6 +23471,7 @@ const Admin = {
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${sevEmoji} ${sevLabel}</span>
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${escapeHTML(reason)}</span>
                         ${pollHint}
+                        ${reactHtml}
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
                     <div class="flex justify-between gap-2 text-[9px] font-mono text-gray-400">
@@ -23532,7 +23676,8 @@ const Admin = {
         const posted = item.repostedAt || item.postedAt || item.timestamp;
         const postedStr = posted ? Admin.formatDate(posted) : '-';
         const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
-        const timestampHtml = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
+        const reactHtml = Admin.alertReactionSummaryHtml(item);
+        const timestampHtml = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}${reactHtml ? `<br>Reactions: ${reactHtml}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span><br><span class="text-[10px]">Routes: ${escapeHTML(Admin.alertScopeLabel(item))}</span>`;
         const prefixHtml = item.reconstructed
             ? `<span class="inline-block bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Reconstructed from quote</span>`
             : item.archivedAt
@@ -27962,6 +28107,7 @@ const Admin = {
                     </button>
 
                     <div id="sched-qa-body" class="p-3 hidden space-y-3 overflow-visible">
+                        <div id="sched-qa-where" class="hidden rounded-lg border border-red-200 dark:border-red-800 bg-white/80 dark:bg-red-950/40 p-2.5 text-red-900 dark:text-red-100"></div>
                         <p class="text-[9px] text-violet-800 dark:text-violet-400 font-medium leading-snug">
                             Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
                             delta variance, missing coordinates, junk leftover rows (a lone 12 or 7.20), day mismatches, and more.
@@ -28965,7 +29111,21 @@ const Admin = {
                 note.className = 'ml-2 normal-case tracking-normal text-[10px] font-bold';
                 label.appendChild(note);
             }
+            const whereLines = String(status?.lines || '').split('\n').map((line) => line.trim()).filter(Boolean);
             if (note) note.textContent = `${errors} error${errors === 1 ? '' : 's'} · ${warnings} warning${warnings === 1 ? '' : 's'}`;
+            const whereBox = document.getElementById('sched-qa-where');
+            if (whereBox) {
+                const when = status?.at && typeof Admin.formatDate === 'function' ? Admin.formatDate(status.at) : '';
+                const items = whereLines.length
+                    ? whereLines.map((line) => `<li class="${/^(Errors|Warnings)$/i.test(line) ? 'mt-1 font-black uppercase tracking-wider text-[9px]' : ''}">${escapeHTML(line)}</li>`).join('')
+                    : '<li>This scan stored the counts only. Run QA report to list each route.</li>';
+                whereBox.classList.remove('hidden');
+                whereBox.innerHTML = `<p class="text-[10px] font-black uppercase tracking-wider">Where this scan found them${when ? ` · ${escapeHTML(when)}` : ''}</p><ul class="mt-1 space-y-0.5 text-[11px] font-semibold leading-snug">${items}</ul>`;
+            }
+            if (errors > 0 && body) {
+                body.classList.remove('hidden');
+                chevron?.classList.remove('-rotate-90');
+            }
         };
         (async () => {
             try {
@@ -29207,6 +29367,14 @@ const Admin = {
                         dataAge: db?.lastUpdated || null,
                     };
                     renderReport(report);
+                    if (typeof window.summarizeQaFindings === 'function') {
+                        paintQaFlag({
+                            errors: report.summary?.errors || 0,
+                            warnings: report.summary?.warnings || 0,
+                            at: Date.now(),
+                            lines: window.summarizeQaFindings(report.findings || [], 900),
+                        });
+                    }
                     if (typeof showToast === 'function') {
                         showToast(`QA: ${report.summary.errors} errors, ${report.summary.warnings} warnings`, report.summary.errors ? 'error' : 'success', 2500);
                     }
@@ -29694,6 +29862,7 @@ const Admin = {
                                     <option value="amber">Amber</option>
                                     <option value="green">Green</option>
                                     <option value="blue">Blue</option>
+                                    <option value="red">Red</option>
                                 </select>
                             </label>
                         </div>
@@ -31846,6 +32015,7 @@ const Admin = {
                 const typeIcon = `<span class="inline-flex text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" title="${ticket.type || 'task'}">${Admin.icon(typeIconName, 'w-3.5 h-3.5')}</span>`;
 
                 // Native SVG icons replacing FontAwesome
+                const speakIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H3v6h3l5 4V5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.5 8.5a5 5 0 010 7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.5 6a8.5 8.5 0 010 12"/></svg>`;
                 const editIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>`;
                 const trashIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>`;
                 const leftArrowIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>`;
@@ -31888,6 +32058,9 @@ const Admin = {
                             <div class="flex items-center gap-0.5 shrink-0">
                                 ${moveControls}
                                 <div class="w-px h-4 bg-slate-200 dark:bg-slate-600 my-auto mx-0.5"></div>
+                                <button type="button" class="text-slate-400 hover:text-violet-600 p-2 rounded hover:bg-violet-50 dark:hover:bg-slate-700 transition-colors focus:outline-none" data-roadmap-speak="${safeTicketId}" onclick="event.stopPropagation(); Admin.toggleRoadmapSpeech('${safeTicketId}')" title="Read this description">
+                                    ${speakIcon}
+                                </button>
                                 <button class="text-slate-400 hover:text-blue-500 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.openTicketModal('${safeTicketId}')" title="Edit Ticket">
                                     ${editIcon}
                                 </button>
@@ -32080,7 +32253,10 @@ const Admin = {
                     </div>
                     
                     <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800 custom-scrollbar text-left">
-                        <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 text-left">Description</h4>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left">Description</h4>
+                            <button type="button" id="roadmap-desc-speak" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-[10px] font-black uppercase tracking-wider focus:outline-none">Play</button>
+                        </div>
                         <div id="roadmap-ticket-desc" class="text-left text-sm leading-relaxed text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-pre-wrap break-words">${safeDesc}</div>
                         ${outreachHtml}
                         ${originalBtn}
@@ -32095,6 +32271,11 @@ const Admin = {
                 closeSmoothModal('admin-ticket-view-modal');
                 setTimeout(() => Admin.openTicketModal(ticketId), 300); // Wait for transition
             };
+
+            const speakDesc = document.getElementById('roadmap-desc-speak');
+            if (speakDesc) {
+                speakDesc.onclick = () => Admin.toggleRoadmapSpeech(safeTicketId);
+            }
 
             document.getElementById('view-export-btn').onclick = () => {
                 // Ensure array format for compatibility with the export engine
@@ -32342,6 +32523,134 @@ const Admin = {
             if (ok && typeof showToast === 'function') showToast(`Downloaded ${dataToExport.length} ticket(s)`, "success");
         };
     }
+};
+
+Admin._speechGen = 0;
+Admin._speechChunks = [];
+Admin._speechIndex = 0;
+Admin._speechPaused = false;
+Admin._speechOwner = '';
+
+Admin._speechPlain = (value) => String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&(?:#x[0-9a-f]+|#\d+|[a-z]+);/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+Admin._speechChunksOf = (text) => {
+    const parts = [];
+    let rest = text;
+    while (rest.length > 240) {
+        let cut = rest.lastIndexOf('. ', 240);
+        if (cut < 80) cut = rest.lastIndexOf(' ', 240);
+        if (cut < 40) cut = 240;
+        parts.push(rest.slice(0, cut + 1).trim());
+        rest = rest.slice(cut + 1).trim();
+    }
+    if (rest) parts.push(rest);
+    return parts;
+};
+
+Admin._paintSpeechStatus = (text) => {
+    const status = document.getElementById('alert-speech-status');
+    if (status && Admin._speechOwner === 'paste') status.textContent = text;
+    else if (status && !Admin._speechOwner) status.textContent = text === 'Stopped' || text === 'Finished' ? text : status.textContent;
+    const speakBtn = document.getElementById('roadmap-desc-speak');
+    if (speakBtn) {
+        const on = Admin._speechOwner.startsWith('roadmap:') && (window.speechSynthesis?.speaking || Admin._speechPaused);
+        speakBtn.textContent = on && !Admin._speechPaused ? 'Pause' : 'Play';
+    }
+};
+
+Admin.stopAdminSpeech = () => {
+    Admin._speechGen += 1;
+    Admin._speechPaused = false;
+    Admin._speechOwner = '';
+    Admin._speechChunks = [];
+    Admin._speechIndex = 0;
+    try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
+    Admin._paintSpeechStatus('Stopped');
+};
+
+Admin.pauseAdminSpeech = () => {
+    if (!window.speechSynthesis) return;
+    Admin._speechPaused = true;
+    try { window.speechSynthesis.pause(); } catch { /* ignore */ }
+    Admin._paintSpeechStatus('Paused');
+};
+
+Admin._speakNextChunk = () => {
+    if (Admin._speechPaused) return;
+    if (Admin._speechIndex >= Admin._speechChunks.length) {
+        Admin._speechOwner = '';
+        Admin._paintSpeechStatus('Finished');
+        return;
+    }
+    const token = Admin._speechGen;
+    const utter = new SpeechSynthesisUtterance(Admin._speechChunks[Admin._speechIndex]);
+    utter.rate = 1;
+    utter.onend = () => {
+        if (token !== Admin._speechGen || Admin._speechPaused) return;
+        Admin._speechIndex += 1;
+        Admin._speakNextChunk();
+    };
+    utter.onerror = (ev) => {
+        if (token !== Admin._speechGen) return;
+        const reason = String(ev?.error || '');
+        if (reason === 'interrupted' || reason === 'canceled') return;
+        Admin._speechOwner = '';
+        Admin._speechPaused = false;
+        Admin._paintSpeechStatus('Could not play that');
+    };
+    Admin._paintSpeechStatus(`Playing ${Admin._speechIndex + 1} of ${Admin._speechChunks.length}`);
+    window.speechSynthesis.speak(utter);
+};
+
+Admin.playAdminSpeech = (text, opts = {}) => {
+    const words = Admin._speechPlain(text);
+    if (words.length < 2) {
+        if (typeof showToast === 'function') showToast('Nothing to read.', 'info');
+        return;
+    }
+    if (!window.speechSynthesis) {
+        if (typeof showToast === 'function') showToast('This browser cannot read aloud.', 'error');
+        return;
+    }
+    try { window.ntStopOperatorSpeech?.(); } catch { /* ignore */ }
+    const owner = String(opts.owner || 'paste');
+    const nextChunks = Admin._speechChunksOf(words);
+    const sameText = Admin._speechChunks.join('\n') === nextChunks.join('\n');
+    const same = Admin._speechOwner === owner && sameText && (window.speechSynthesis.speaking || Admin._speechPaused);
+    if (same && opts.resume && Admin._speechPaused) {
+        Admin._speechPaused = false;
+        try {
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            else Admin._speakNextChunk();
+        } catch { /* ignore */ }
+        Admin._paintSpeechStatus('Playing');
+        return;
+    }
+    if (same && opts.toggle) {
+        if (Admin._speechPaused) {
+            Admin.playAdminSpeech(text, { ...opts, resume: true, toggle: false });
+        } else {
+            Admin.pauseAdminSpeech();
+        }
+        return;
+    }
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    Admin._speechGen += 1;
+    Admin._speechChunks = nextChunks;
+    Admin._speechIndex = 0;
+    Admin._speechPaused = false;
+    Admin._speechOwner = owner;
+    Admin._speakNextChunk();
+};
+
+Admin.toggleRoadmapSpeech = (ticketId) => {
+    const ticket = (Admin.cachedRoadmapData || []).find((row) => String(row.id) === String(ticketId));
+    const text = ticket?.description || '';
+    Admin.playAdminSpeech(text, { owner: `roadmap:${ticketId}`, toggle: true, resume: true });
 };
 
 window.Admin = Admin;

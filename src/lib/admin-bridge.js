@@ -72,7 +72,7 @@ import {
 import {
     loadAllSchedules, pendingScheduleLoad, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
-import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
+import { runScheduleQaReport, scanScheduleSheet, summarizeQaFindings, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 import { ADMIN_CHANGELOG, adminBuildSnapshot, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
 import { formatFeedbackDiagLine, stationChoiceLabel } from './feedback-diag-line.js';
@@ -239,6 +239,7 @@ export function exposeAdminGlobals() {
     window.executeRegionSwap = executeRegionSwap;
     window.guardianFetch = guardianFetch;
     window.runScheduleQaReport = runScheduleQaReport;
+    window.summarizeQaFindings = summarizeQaFindings;
     window.scanScheduleSheet = scanScheduleSheet;
     window.QA_ISSUE_TYPES = QA_ISSUE_TYPES;
     window.runZoneDistanceAudit = runZoneDistanceAudit;

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.27.2': [
+        'A reaction on your own community message toasts when you are away from that room, and gives a short haptic while you are looking at it. The stuck-start help page comes back to the app when the app is ready. An in-app browser is asked once to open the phone browser. A community room that is already read stays still. It follows the bottom only for a new message while you are there, or when you send. Roadmap cards read the description out loud, with pause and play. Service Alerts has a Read aloud tile for any pasted text. Schedule Data QA lists the route and issue behind the error count. One alert posted to several routes stays one card, and an edit updates every selected route. Archived alerts keep their reaction counts. Maintenance banners can be red. The route Community preview is a little taller, and the guide bar leaves when a timetable page opens. Deploy firebase-database.rules.json so a reaction toast can be saved. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.27.1': [
         'Co-Pilot opens with Good morning, Good afternoon, or Good evening, and the person\'s name when it reads as a real name. A display name like pancakes stays unnamed. An admin can post a link without the word Link under the preview. The reaction list sits behind the side menu. A profile photo and a chosen emoji show on Community from the public profile, in the same session, without rewriting old messages. Profile save no longer reads the whole account. The profile shows the photo and the day the account was created. Tapping a name or avatar opens that public card, and the version chip still opens build notes. Community Monitor options sit at the bottom of the bubble. Feedback Hub previews community and alert links, including a notice that has ended. No commuter What\'s New. forceShow stays false.',
     ],

@@ -3314,6 +3314,7 @@ function maintenanceToneClass(raw) {
     const key = String(raw || '').trim().toLowerCase();
     if (key === 'green') return 'nt-maint-tone-green';
     if (key === 'blue') return 'nt-maint-tone-blue';
+    if (key === 'red') return 'nt-maint-tone-red';
     return '';
 }
 

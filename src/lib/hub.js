@@ -3429,6 +3429,17 @@ export function initHub() {
                 try { hideSheetOverlay(overlay); } catch { /* ignore */ }
                 try { window.location.assign(dest); } catch { /* ignore */ }
             };
+            const sheetFrame = document.getElementById('nt-inapp-sheet-frame');
+            sheetFrame?.addEventListener('load', () => {
+                if (overlay.classList.contains('hidden')) return;
+                let href = '';
+                try { href = sheetFrame.contentWindow?.location?.href || ''; } catch { return; }
+                if (!href || href.startsWith('about:')) return;
+                let path = '';
+                try { path = new URL(href).pathname.replace(/\/+$/, '') || '/'; } catch { return; }
+                if (/\/guide\.html?$/i.test(path) || /\/map\.html?$/i.test(path)) return;
+                window.__ntOpenSeoPage(href);
+            });
         }
         const mode = isMapSheetUrl(url) ? 'map' : 'guide';
         applySheetChrome(overlay, mode, title);

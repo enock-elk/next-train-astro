@@ -300,6 +300,54 @@ export function findingsFromPairDeltas(pairDeltas, ctx = {}, opts = {}) {
     return findings;
 }
 
+/**
+ * Compact "where" lines for the diagnostics header.
+ * Groups every error, then every warning, by route and issue code.
+ * Stays inside the 900 character schedule_qa_status.lines limit.
+ */
+export function summarizeQaFindings(findings = [], maxLen = 900) {
+    const label = (row) => {
+        const route = String(row?.routeName || row?.routeId || 'Unknown route').replace(/\s+/g, ' ').trim() || 'Unknown route';
+        const code = String(row?.code || 'ISSUE').replace(/\s+/g, ' ').trim() || 'ISSUE';
+        return `${route} · ${code}`;
+    };
+    const buckets = (severity) => {
+        const map = new Map();
+        (findings || []).forEach((row) => {
+            if (row?.severity !== severity) return;
+            const key = label(row);
+            map.set(key, (map.get(key) || 0) + 1);
+        });
+        return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    };
+    const lines = [];
+    const pushGroup = (title, rows) => {
+        if (!rows.length) return;
+        lines.push(title);
+        rows.forEach(([key, count]) => lines.push(`${key} ×${count}`));
+    };
+    pushGroup('Errors', buckets('error'));
+    pushGroup('Warnings', buckets('warn'));
+    let text = '';
+    let kept = 0;
+    const limit = Math.max(80, Number(maxLen) || 900);
+    for (const line of lines) {
+        const next = text ? `${text}\n${line}` : line;
+        if (next.length > limit - 24) {
+            const more = lines.length - kept;
+            if (more > 0) {
+                const tail = `+${more} more`;
+                const withTail = text ? `${text}\n${tail}` : tail;
+                if (withTail.length <= limit) text = withTail;
+            }
+            break;
+        }
+        text = next;
+        kept += 1;
+    }
+    return text.slice(0, limit);
+}
+
 /** Keep delta-variance warnings together, largest minute spread first. */
 export function sortQaFindings(findings = []) {
     const severityRank = { error: 0, warn: 1, info: 2 };

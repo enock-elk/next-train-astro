@@ -5,6 +5,7 @@
  *   route_community/{routeId}/posts/{postId}
  *   route_community/{routeId}/posts/{postId}/replies/{replyId}
  *   route_community/{routeId}/post_reactions/{postId}/{uid} = { emoji, at }
+ *   reaction_inbox/{authorUid}/{postId} = { emoji, at, from, routeId, name }
  *   moderation_queue/{reportId}
  *
  * Shadow-ban policy: rules reject writes; client still shows the author's
@@ -101,6 +102,8 @@ let reactionsListenRouteId = null;
 /** @type {(() => void)[]} */
 let reactionPostUnsubs = [];
 let reactionPostKey = '';
+/** First snapshot per post is the room as it already is. Later changes can haptic. */
+const reactionPrimed = new Set();
 let reactionsPollTimer = null;
 let reactionPaintTimer = null;
 let reactionsFetchedAt = 0;
@@ -654,6 +657,7 @@ function stopReactionPostListeners() {
     });
     reactionPostUnsubs = [];
     reactionPostKey = '';
+    reactionPrimed.clear();
     if (reactionPaintTimer) {
         clearTimeout(reactionPaintTimer);
         reactionPaintTimer = null;
@@ -690,7 +694,16 @@ function startReactionsPoll(routeId) {
         if (safeStorage.getItem('activeTab') !== 'community') return;
         const viewing = document.getElementById('community-route-select')?.value || postsListenRouteId;
         if (viewing !== routeId) return;
-        const map = await fetchPostReactions(routeId, cachedFeedPosts.map((p) => p.postId));
+        const ids = cachedFeedPosts.map((p) => p.postId);
+        const prev = { ...cachedReactionsByPost };
+        const map = await fetchPostReactions(routeId, ids);
+        ids.forEach((postId) => {
+            const primedKey = `${routeId}:${postId}`;
+            if (reactionPrimed.has(primedKey) && ownPostReactionAdded(routeId, postId, prev[postId], map?.[postId])) {
+                triggerHaptic();
+            }
+            reactionPrimed.add(primedKey);
+        });
         await applyReactionsMap(routeId, map);
     };
     tick();
@@ -723,9 +736,14 @@ function syncVisibleReactionListeners(routeId) {
         );
         const unsub = window.firebaseDbOnValue(ref, (snap) => {
             if (reactionsListenRouteId !== routeId) return;
+            const primedKey = `${routeId}:${postId}`;
+            const prev = cachedReactionsByPost[postId];
+            const primed = reactionPrimed.has(primedKey);
+            reactionPrimed.add(primedKey);
             const val = snap?.val?.() || null;
             if (val && typeof val === 'object') cachedReactionsByPost[postId] = val;
             else delete cachedReactionsByPost[postId];
+            if (primed && ownPostReactionAdded(routeId, postId, prev, val)) triggerHaptic();
             scheduleReactionPaint(routeId);
         }, () => { /* a missing post stays quiet */ });
         reactionPostUnsubs.push(unsub);
@@ -1570,10 +1588,141 @@ export async function togglePostReaction(routeId, postId, emojiId) {
         if (removing) delete cachedReactionsByPost[postId][acct.uid];
         else cachedReactionsByPost[postId][acct.uid] = { emoji: emojiId, at: Date.now() };
 
+        void writeReactionInbox(routeId, postId, emojiId, removing);
         return { ok: true, removed: removing };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not react.' };
     }
+}
+
+/** A capitalised name, or two words. Handles and inboxes stay unnamed. */
+export function reactionSpeakerName(raw) {
+    const name = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (name.length < 2 || name.length > 40) return '';
+    if (/@|\d{3,}|https?:/i.test(name)) return '';
+    const first = name.split(' ')[0];
+    if (!/^[A-Z]/.test(first)) return '';
+    return name.split(' ').slice(0, 2).join(' ');
+}
+
+/** Toast copy for reactions on the signed-in person's own messages. */
+export function reactionNoticeLine(rows) {
+    const names = [];
+    (rows || []).forEach((row) => {
+        const name = reactionSpeakerName(row?.name);
+        if (name && !names.includes(name)) names.push(name);
+    });
+    if (!names.length) return 'Someone reacted to your message';
+    if (names.length === 1) return `${names[0]} reacted to your message`;
+    if (names.length === 2) return `${names[0]} and ${names[1]} reacted to your messages`;
+    const extra = names.length - 1;
+    return `${names[0]} and ${extra} others reacted to your messages`;
+}
+
+function ownPostReactionAdded(routeId, postId, prev, next) {
+    if (viewingCommunityRouteId() !== routeId) return false;
+    const acct = $account.get();
+    const uid = acct?.status === 'signed-in' ? acct.uid : '';
+    if (!uid) return false;
+    const post = findCachedPost(postId);
+    if (!post || post.uid !== uid) return false;
+    const before = prev && typeof prev === 'object' ? prev : {};
+    const after = next && typeof next === 'object' ? next : {};
+    return Object.entries(after).some(([who, entry]) => {
+        if (!who || who === uid || !entry?.emoji) return false;
+        const old = before[who];
+        return !old || old.emoji !== entry.emoji;
+    });
+}
+
+async function writeReactionInbox(routeId, postId, emojiId, removing) {
+    const acct = $account.get();
+    if (acct?.status !== 'signed-in' || !acct.uid) return;
+    const post = findCachedPost(postId);
+    const author = String(post?.uid || '');
+    if (!author || author === acct.uid) return;
+    const q = await authQuery();
+    if (!q) return;
+    const url = `${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(author)}/${encodeURIComponent(postId)}.json${q}`;
+    try {
+        if (removing) {
+            await fetch(url, { method: 'DELETE' });
+            return;
+        }
+        const name = String(acct.displayName || '').trim().slice(0, 80);
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emoji: emojiId,
+                at: Date.now(),
+                from: acct.uid,
+                routeId,
+                ...(name ? { name } : {}),
+            }),
+        });
+    } catch { /* the reaction on the message is already saved */ }
+}
+
+async function clearReactionInboxRows(uid, postIds) {
+    const q = await authQuery();
+    if (!q || !uid || !postIds?.length) return;
+    await Promise.all(postIds.map((id) => fetch(
+        `${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(uid)}/${encodeURIComponent(id)}.json${q}`,
+        { method: 'DELETE' }
+    ).catch(() => {})));
+}
+
+async function clearReactionInboxForRoute(routeId) {
+    const acct = $account.get();
+    if (!routeId || acct?.status !== 'signed-in' || !acct.uid) return;
+    const q = await authQuery();
+    if (!q) return;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(acct.uid)}.json${q}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const ids = Object.entries(data && typeof data === 'object' ? data : [])
+            .filter(([, row]) => row && row.routeId === routeId)
+            .map(([id]) => id);
+        ids.forEach((id) => reactionInboxSeen.delete(id));
+        await clearReactionInboxRows(acct.uid, ids);
+    } catch { /* the next unread pass can try again */ }
+}
+
+async function pullOwnReactionInbox() {
+    const acct = $account.get();
+    if (acct?.status !== 'signed-in' || !acct.uid) return;
+    const q = await authQuery();
+    if (!q) return;
+    let data = null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(acct.uid)}.json${q}`);
+        if (!res.ok) return;
+        data = await res.json();
+    } catch { return; }
+    if (!data || typeof data !== 'object') return;
+    const viewing = viewingCommunityRouteId();
+    const here = [];
+    const away = [];
+    Object.entries(data).forEach(([postId, row]) => {
+        if (!row || typeof row !== 'object') return;
+        if (row.from && row.from === acct.uid) return;
+        if (viewing && row.routeId === viewing) here.push(postId);
+        else away.push([postId, row]);
+    });
+    if (here.length) void clearReactionInboxRows(acct.uid, here);
+    const fresh = away.filter(([id, row]) => reactionInboxSeen.get(id) !== Number(row.at));
+    if (!fresh.length) return;
+    fresh.forEach(([id, row]) => reactionInboxSeen.set(id, Number(row.at)));
+    const newest = fresh.slice().sort((a, b) => Number(b[1].at) - Number(a[1].at))[0];
+    showToast(reactionNoticeLine(fresh.map(([, row]) => row)), 'info', 5000, '', {
+        action: true,
+        onClick: () => {
+            queueCommunityFocus(newest[1].routeId, newest[0]);
+            if (typeof window.switchTab === 'function') window.switchTab('community');
+        },
+    });
 }
 
 function summarizeReactions(postId) {
@@ -2238,6 +2387,7 @@ function jumpCommunitySend(listEl) {
     communityScrollGuardUntil = Date.now() + 8000;
     if (!scroller) return true;
     scroller.scrollTop = communityRowScrollTarget(scroller, row, 'end');
+    if (id) communityFollowedTailId = String(id);
     if (communityOpenAnchor) {
         communityOpenAnchor.scrollTop = scroller.scrollTop;
         communityOpenAnchor.taken = true;
@@ -2477,6 +2627,12 @@ function communityActionTarget() {
 const publicProfiles = new Map();
 let feedAuthorMeta = new Map();
 let communityFeedPinned = true;
+/** Last post id we already followed to the bottom. Image growth must not count. */
+let communityFollowedTailId = '';
+const reactionInboxSeen = new Map();
+let reactionInboxClearedRoute = '';
+/** Gap above the bottom at the last scroll, before a later resize. */
+let communityTailGap = 0;
 let communityEasePostId = '';
 let communitySendHoldId = '';
 let communityScrollGuardUntil = 0;
@@ -2504,6 +2660,8 @@ function beginCommunityOpenAnchor(routeId) {
         mode: 'latest',
         scrollTop: 0,
     };
+    communityFollowedTailId = '';
+    communityTailGap = 0;
     communityUnreadBanner = null;
     communityRoomSynced = '';
     communitySeenArmed = '';
@@ -2982,10 +3140,29 @@ function pinCommunityFeedToLatest() {
     scroller.scrollTop = scroller.scrollHeight;
 }
 
+/** Follow a new last message only when the reader was already near the bottom. */
+function followCommunityTailIfNew(listEl, scroller) {
+    if (!listEl || !scroller || !communityFeedPinned) return false;
+    if (Date.now() < communityScrollGuardUntil) return false;
+    const tail = listEl.querySelector('.community-post-row:last-of-type')?.getAttribute('data-post-id') || '';
+    if (!tail || tail === communityFollowedTailId) return false;
+    if (communityTailGap >= 160) {
+        communityFeedPinned = false;
+        return false;
+    }
+    communityFollowedTailId = tail;
+    communityScrollGuardUntil = Date.now() + 400;
+    scroller.scrollTop = scroller.scrollHeight;
+    if (communityOpenAnchor) communityOpenAnchor.scrollTop = scroller.scrollTop;
+    communityTailGap = 0;
+    return true;
+}
+
 function placeCommunityOpen(routeId, listEl) {
     const scroller = listEl?.closest?.('.community-feed-scroll');
     const anchor = communityOpenAnchor;
     if (!scroller || !anchor || anchor.routeId !== routeId || anchor.taken) return false;
+    if (anchor.placed) return true;
     const rows = listEl.querySelectorAll('.community-post-row');
     const divider = listEl.querySelector('[data-community-unread-divider]');
     const hasRows = rows.length > 0;
@@ -3012,6 +3189,9 @@ function placeCommunityOpen(routeId, listEl) {
     anchor.mode = target.mode;
     anchor.scrollTop = scroller.scrollTop;
     anchor.placed = true;
+    const tail = listEl.querySelector('.community-post-row:last-of-type')?.getAttribute('data-post-id') || '';
+    if (tail) communityFollowedTailId = tail;
+    communityTailGap = Math.max(0, scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight);
     return true;
 }
 
@@ -3075,6 +3255,7 @@ function bindCommunityFeedPin() {
             return;
         }
         const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        communityTailGap = gap;
         communityFeedPinned = gap < 160;
     }, { passive: true });
     if (scroller.dataset.sizeBound === '1' || typeof ResizeObserver === 'undefined') return;
@@ -3088,23 +3269,14 @@ function bindCommunityFeedPin() {
         }
         const anchor = communityOpenAnchor;
         if (scroller.classList.contains('is-parking')) return;
-        if (anchor && anchor.placed && !anchor.taken) {
+        // Park once. A later image, font, or reaction pill must not move a room
+        // that is already placed, including a room where everything is read.
+        if (anchor && !anchor.placed) {
             placeCommunityOpen(paintedCommunityRouteId, list);
             return;
         }
         if (!communityFeedPinned || !anchor?.placed) return;
-        if (Date.now() < communityScrollGuardUntil) return;
-        const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-        const parked = Number(anchor.scrollTop) || 0;
-        const moved = Math.abs(scroller.scrollTop - parked) > 80;
-        if (moved && gap >= 160) {
-            communityFeedPinned = false;
-            anchor.taken = true;
-            return;
-        }
-        communityScrollGuardUntil = Date.now() + 400;
-        scroller.scrollTop = scroller.scrollHeight;
-        anchor.scrollTop = scroller.scrollTop;
+        followCommunityTailIfNew(list, scroller);
     });
     watcher.observe(list);
 }
@@ -3445,17 +3617,15 @@ function applyFeedFilter(routeId) {
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
     else if (!communityFeedIsOpen() || scroller?.classList.contains('is-parking')) {
         /* Preload, or the first open, paints here and parks once when the tab is shown. */
-    } else if (anchor && anchor.placed && !anchor.taken) {
-        placeCommunityOpen(routeId, listEl);
-    } else if (anchor && anchor.placed && communityFeedPinned && anchor.mode !== 'unread') {
-        pinCommunityFeedToLatest();
     } else if (anchor && anchor.placed && anchor.taken) {
         if (scroller) {
             communityScrollGeneration += 1;
             communityScrollGuardUntil = Date.now() + 400;
             restoreFeedViewport(scroller, viewport);
         }
-    } else if (!anchor || anchor.placed) pinCommunityFeedToLatest();
+    } else if (anchor && anchor.placed) {
+        followCommunityTailIfNew(listEl, scroller);
+    } else if (!anchor) pinCommunityFeedToLatest();
     rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
     const uids = posts.map((p) => p.uid);
@@ -3616,6 +3786,10 @@ function rememberPaintedCommunityRoute(routeId) {
     const selected = document.getElementById('community-route-select')?.value || '';
     if (selected !== routeId) return;
     paintedCommunityRouteId = routeId;
+    if (reactionInboxClearedRoute !== routeId) {
+        reactionInboxClearedRoute = routeId;
+        void clearReactionInboxForRoute(routeId);
+    }
     if (profileRepaintRoute === routeId) return;
     if (communityRoomSynced !== routeId) return;
     if (feedSilentRepaint && communitySeenArmed === routeId) return;
@@ -3943,6 +4117,7 @@ export async function refreshCommunityUnreadBadge() {
     cachedUnreadByRoute = next;
     noteUnreadCounted();
     paintUnreadFromCache();
+    void pullOwnReactionInbox();
     return Object.values(next).reduce((sum, n) => sum + n, 0);
 }
 

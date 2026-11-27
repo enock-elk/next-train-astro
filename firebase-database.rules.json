@@ -345,6 +345,16 @@
       }
     },
 
+    "reaction_inbox": {
+      "$authorUid": {
+        ".read": "auth != null && auth.uid === $authorUid && auth.token.firebase.sign_in_provider != 'anonymous'",
+        "$postId": {
+          ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && ((auth.uid === $authorUid) || (auth.uid !== $authorUid && (!data.exists() || data.child('from').val() === auth.uid) && (!newData.exists() || newData.child('from').val() === auth.uid)))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['emoji', 'at', 'from', 'routeId']) && newData.child('from').val() === auth.uid && newData.child('emoji').isString() && (newData.child('emoji').val() === 'thumb' || newData.child('emoji').val() === 'heart' || newData.child('emoji').val() === 'laugh' || newData.child('emoji').val() === 'wow' || newData.child('emoji').val() === 'sad' || newData.child('emoji').val() === 'pray') && newData.child('at').isNumber() && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length <= 80 && (!newData.hasChild('name') || (newData.child('name').isString() && newData.child('name').val().length <= 80)) && root.child('route_community').child(newData.child('routeId').val()).child('posts').child($postId).child('uid').val() === $authorUid)"
+        }
+      }
+    },
+
     "route_community": {
       "$routeId": {
         "posts": {

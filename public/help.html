@@ -446,6 +446,59 @@
     }
     btn.disabled = false;
   });
+
+  if (reasonKey === 'boot') {
+    var probeLeft = 8;
+    var home = BASE || '/';
+    var frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    frame.title = '';
+    frame.style.cssText = 'position:fixed;left:-120vw;top:0;width:390px;height:800px;border:0;opacity:0;pointer-events:none;';
+    frame.src = home + (home.indexOf('?') === -1 ? '?' : '&') + 'bootprobe=1';
+    document.body.appendChild(frame);
+    function stopProbe() {
+      probeLeft = 0;
+      try { frame.remove(); } catch (e) {}
+    }
+    function formBusy() {
+      var contact = document.getElementById('contact');
+      var note = document.getElementById('note');
+      if (document.activeElement === contact || document.activeElement === note) return true;
+      if ((contact && contact.value.trim()) || (note && note.value.trim())) return true;
+      var resetBtn = document.getElementById('btn-reset');
+      if (resetBtn && resetBtn.disabled) return true;
+      return false;
+    }
+    function probeReady() {
+      if (probeLeft <= 0) return;
+      if (formBusy()) { stopProbe(); return; }
+      try { if (sessionStorage.getItem('nt_boot_probe_done') === '1') { stopProbe(); return; } } catch (e) {}
+      probeLeft -= 1;
+      var ready = false;
+      try {
+        var win = frame.contentWindow;
+        var doc = frame.contentDocument;
+        var shell = !!(doc && doc.documentElement && doc.documentElement.classList.contains('nt-shell-ready'));
+        ready = !!(win && (win._appStabilized || shell));
+      } catch (e) { ready = false; }
+      if (ready) {
+        try {
+          sessionStorage.setItem('nt_boot_probe_done', '1');
+          sessionStorage.setItem('nt_boot_ready', '1');
+        } catch (e) {}
+        location.replace(home);
+        return;
+      }
+      if (probeLeft <= 0) stopProbe();
+    }
+    [3000, 7000, 12000, 18000, 26000, 34000, 42000, 50000].forEach(function (ms) {
+      setTimeout(probeReady, ms);
+    });
+    document.getElementById('btn-reset')?.addEventListener('click', stopProbe);
+    document.getElementById('contact')?.addEventListener('focus', stopProbe);
+    document.getElementById('note')?.addEventListener('focus', stopProbe);
+  }
 })();
   </script>
 </body>

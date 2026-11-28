@@ -4452,6 +4452,7 @@ const Admin = {
         Admin._usdZarRate().then((fx) => {
             Admin._fx = fx;
             Admin._paintAdMoney();
+            Admin._paintAdPeriodTile();
         }).catch(() => {});
     },
 
@@ -4521,7 +4522,7 @@ const Admin = {
         }
         if (fxEl) {
             const showing = (Admin._revenueInZar || Admin._dealInZar) && rate > 0;
-            const fxWhen = Admin._prettyIsoDay(Admin._fx.date) || Admin._fx.date || '';
+            const fxWhen = Admin._prettyIsoDay(Admin._fx?.date) || Admin._fx?.date || '';
             fxEl.textContent = showing
                 ? `R${rate.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per US dollar${fxWhen ? ` · ${fxWhen}` : ''}`
                 : '';
@@ -4548,15 +4549,32 @@ const Admin = {
         if (!el) return;
         const data = Admin._adRevenue || {};
         const days = Admin._inclusiveIsoDays(data.start, data.end);
-        const hits = Number(data.hits) || 0;
-        el.textContent = days > 0 ? Admin.formatNumber(Math.round(hits / days)) : '--';
+        const revenue = Number(data.revenue);
+        const rate = Number(Admin._fx?.rate);
+        if (!(days > 0) || !Number.isFinite(revenue) || !(rate > 0)) {
+            el.textContent = '--';
+            if (days > 0 && Number.isFinite(revenue) && !Admin._periodFxAsked) {
+                Admin._periodFxAsked = true;
+                Admin._usdZarRate().then((fx) => {
+                    Admin._fx = fx;
+                    Admin._periodFxAsked = false;
+                    Admin._paintAdPeriodTile();
+                    Admin._paintAdMoney();
+                }).catch(() => { Admin._periodFxAsked = false; });
+            }
+            return;
+        }
+        el.textContent = Admin._formatZar(revenue / days, rate);
     },
 
     openAdPeriodStats: async () => {
+        if (Admin._adRevenueFlight) {
+            try { await Admin._adRevenueFlight; } catch { /* the note already says why */ }
+        }
         const data = Admin._adRevenue || {};
         const days = Admin._inclusiveIsoDays(data.start, data.end);
         if (!days || !Number.isFinite(Number(data.hits))) {
-            if (typeof showToast === 'function') showToast('Search a period first.', 'info');
+            if (typeof showToast === 'function') showToast('This month is still loading.', 'info');
             return;
         }
         let modal = document.getElementById('ad-period-modal');
@@ -4798,10 +4816,13 @@ const Admin = {
         const clustered = Admin._clusterAdDays(chart?.labels, chart?.series, bucket);
         slot.innerHTML = clustered.series.length
             ? Admin._paintAdChart(clustered.series, clustered.labels, false)
-            : '<span class="text-sm text-gray-400">Search a period to see impressions.</span>';
+            : '<span class="text-sm text-gray-400">No impressions in this period.</span>';
     },
 
-    openAdImpressions: () => {
+    openAdImpressions: async () => {
+        if (!Admin._adChart?.series?.length && Admin._adRevenueFlight) {
+            try { await Admin._adRevenueFlight; } catch { /* empty state stays */ }
+        }
         Admin.paintAdImpressions();
         Admin.deepLinkToPanel('ad-impressions-panel');
     },
@@ -4941,6 +4962,22 @@ const Admin = {
             }
             Admin._adRevenue = data;
             set('ad-revenue-hits', Admin.formatNumber(data.hits || 0));
+            const labels = Array.isArray(data.labels) ? data.labels : [];
+            const series = Array.isArray(data.series) ? data.series : [];
+            const startLabel = document.getElementById('ad-revenue-start')?.value || data.start || '';
+            const endLabel = document.getElementById('ad-revenue-end')?.value || data.end || '';
+            Admin._adChart = {
+                series,
+                labels,
+                start: startLabel,
+                end: endLabel,
+            };
+            const chart = document.getElementById('ad-revenue-chart');
+            if (chart) chart.innerHTML = series.length
+                ? Admin._paintAdChart(series, labels, true)
+                : '<span class="text-xs text-gray-400">No impressions in this period.</span>';
+            const fullOpen = document.getElementById('ad-impressions-panel')?.style.display !== 'none';
+            if (fullOpen) Admin.paintAdImpressions();
             Admin._paintAdMoney();
             Admin._paintAdPeriodTile();
             const sync = document.getElementById('ad-revenue-sync');
@@ -4961,20 +4998,6 @@ const Admin = {
                     </div>
                     <div class="mt-1 flex justify-between"><span>Desktop ${desktop.toFixed(2)}%</span><span>Mobile ${mobile.toFixed(2)}%</span></div>`;
             }
-            const labels = Array.isArray(data.labels) ? data.labels : [];
-            const series = Array.isArray(data.series) ? data.series : [];
-            const startLabel = document.getElementById('ad-revenue-start')?.value || data.start || '';
-            const endLabel = document.getElementById('ad-revenue-end')?.value || data.end || '';
-            Admin._adChart = {
-                series,
-                labels,
-                start: startLabel,
-                end: endLabel,
-            };
-            const chart = document.getElementById('ad-revenue-chart');
-            if (chart) chart.innerHTML = Admin._paintAdChart(series, labels, true);
-            const fullOpen = document.getElementById('ad-impressions-panel')?.style.display !== 'none';
-            if (fullOpen) Admin.paintAdImpressions();
             const geos = document.getElementById('ad-revenue-geos');
             if (geos) {
                 const names = (typeof Intl !== 'undefined' && Intl.DisplayNames)
@@ -4992,6 +5015,10 @@ const Admin = {
             if (note) note.textContent = windows > 1 ? `Combined from ${windows} periods.` : '';
         } catch (e) {
             if (note) note.textContent = String(e?.message || 'Could not load ad stats').slice(0, 180);
+            const chart = document.getElementById('ad-revenue-chart');
+            if (chart && !Admin._adChart?.series?.length) {
+                chart.innerHTML = '<span class="text-xs text-gray-400">Could not load this month.</span>';
+            }
         }
     },
 
@@ -5108,7 +5135,7 @@ const Admin = {
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Deal</span>
                             <span id="ad-revenue-deal" class="text-lg font-black text-gray-800 dark:text-gray-200">$4 CPM</span>
                         </div>
-                        <div id="ad-revenue-period-tile" role="button" tabindex="0" class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center cursor-pointer hover:border-blue-400" title="Averages for this search">
+                        <div id="ad-revenue-period-tile" role="button" tabindex="0" class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center cursor-pointer hover:border-blue-400" title="Average rands each day. Tap for impressions, dollars, and rands.">
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Per day</span>
                             <span id="ad-revenue-period" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
                         </div>
@@ -5154,10 +5181,11 @@ const Admin = {
                     if (startInput) startInput.value = bounds.start;
                     if (endInput) endInput.value = bounds.end;
                     paintAdRange(id);
-                    Admin.loadAdRevenue();
+                    Admin._adRevenueFlight = Admin.loadAdRevenue();
                 };
                 Admin._adRangeId = 'month';
                 paintAdRange('month');
+                Admin._adRevenueFlight = Admin.loadAdRevenue();
                 rangeBtn?.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -5195,7 +5223,7 @@ const Admin = {
                     }
                     rangeList?.classList.add('hidden');
                     rangeBtn?.setAttribute('aria-expanded', 'false');
-                    Admin.loadAdRevenue();
+                    Admin._adRevenueFlight = Admin.loadAdRevenue();
                 });
                 const bindMoney = (id, which) => {
                     const tile = document.getElementById(id);
@@ -5222,7 +5250,6 @@ const Admin = {
                 document.getElementById('ad-revenue-landscape')?.addEventListener('click', () => Admin.openGraphLandscape('ads'));
                 document.getElementById('ad-revenue-export')?.addEventListener('click', () => Admin.offerChartExport('ads'));
                 document.getElementById('ad-revenue-chart')?.addEventListener('click', () => Admin.openAdImpressions());
-                Admin.loadAdRevenue();
             }
             
             // Full-height analytics drill: part of admin navigation, not an overlay modal.
@@ -6713,10 +6740,13 @@ const Admin = {
     },
 
     openGraphLandscape: async (which) => {
+        if (which === 'ads' && !Admin._adChart?.series?.length && Admin._adRevenueFlight) {
+            try { await Admin._adRevenueFlight; } catch { /* empty state stays */ }
+        }
         const svg = Admin._wideChartSvg(which);
         if (!svg) {
             if (typeof showToast === 'function') {
-                showToast(which === 'ads' ? 'Search a period to see impressions.' : 'The graph is still loading.', 'info');
+                showToast(which === 'ads' ? 'No impressions in this period.' : 'The graph is still loading.', 'info');
             }
             return;
         }

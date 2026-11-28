@@ -766,6 +766,33 @@
     opacity: 0.65;
     white-space: nowrap;
   }
+  /* The clock sits on the bottom edge of the text, the same distance from the
+     bubble corner whether it shares the last line or drops under a full one. */
+  #view-community .community-msg-line {
+    position: relative;
+  }
+  #view-community .community-msg-time-gap {
+    display: inline-block;
+    width: calc(5.2ch + 0.55rem);
+    height: 0.9rem;
+    font-size: 0.65rem;
+    vertical-align: bottom;
+  }
+  #view-community .community-msg-line:has(.community-msg-receipt) .community-msg-time-gap {
+    width: calc(5.2ch + 1.9rem);
+  }
+  #view-community .community-msg-time {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    float: none;
+    margin: 0;
+    height: 0.9rem;
+    line-height: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
   .community-msg-receipt {
     display: inline-flex;
     width: 1.05rem;

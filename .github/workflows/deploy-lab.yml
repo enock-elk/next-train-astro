@@ -101,7 +101,10 @@ jobs:
             echo "or add the secrets and re-run this workflow to publish lab.nexttrain.co.za."
             exit 0
           fi
-          npm exec --yes wrangler@3 pages deploy dist \
+          # npm exec treats flags after the package spec as its own options
+          # and drops them, so wrangler never sees --project-name. The --
+          # separator forwards the Pages flags.
+          npm exec --yes --package=wrangler@3 -- wrangler pages deploy dist \
             --project-name="$CF_PROJECT_NAME" \
             --branch=lab \
             --commit-dirty=true

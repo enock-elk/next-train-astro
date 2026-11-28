@@ -1410,12 +1410,13 @@ export function whatsappReplyUrl(phone, body) {
     return `${base}?text=${encodeURIComponent(text)}`;
 }
 
-export function mailtoReplyUrl(email, body) {
+export function mailtoReplyUrl(email, body, subject = EMAIL_SUBJECT) {
     const addr = String(email || '').trim();
     if (!addr.includes('@') || /[\s<>"']/.test(addr)) return '';
     const text = emailOutreachBody(body).slice(0, OUTREACH_BODY_MAX);
     if (!text) return `mailto:${addr}`;
-    return `mailto:${addr}?subject=${encodeURIComponent(EMAIL_SUBJECT)}&body=${encodeURIComponent(text)}`;
+    const line = String(subject || EMAIL_SUBJECT).trim() || EMAIL_SUBJECT;
+    return `mailto:${addr}?subject=${encodeURIComponent(line)}&body=${encodeURIComponent(text)}`;
 }
 
 export function htmlAttrUrl(url) {

@@ -15299,7 +15299,10 @@ const Admin = {
             '',
             'Thank you for trying out Next Train!',
         ].join('\n');
-        const href = `mailto:${email}?subject=${encodeURIComponent('Next Train | Account Deletion')}&body=${encodeURIComponent(body)}`;
+        const subject = 'Next Train | Account Deletion';
+        const href = window.ntReplySuggest?.mailtoReplyUrl
+            ? window.ntReplySuggest.mailtoReplyUrl(email, body, subject)
+            : `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.replace(/\n/g, '<br>'))}`;
         try { window.location.href = href; } catch { /* ignore */ }
         return true;
     },

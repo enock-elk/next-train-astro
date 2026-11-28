@@ -464,6 +464,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!adminSrc.includes('Deleted accounts') || !adminSrc.includes('We have successfully removed the live profile.')) {
     fail('deleted accounts stay on the deletions tab with one letter');
   }
+  if (!adminSrc.includes("mailtoReplyUrl(email, body, subject)") || !adminSrc.includes("body.replace(/\\n/g, '<br>')")) {
+    fail('the deletion letter uses the same br breaks as a feedback email');
+  }
   const guidePage = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
   if (!guidePage.includes('festive-season.html') || !guidePage.includes('Community tab')) {
     fail('guide must link the festive page and mention the Community tab');

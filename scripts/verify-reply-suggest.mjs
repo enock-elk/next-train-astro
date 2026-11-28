@@ -48,7 +48,7 @@ import {
     comfortAssistText,
     assistHtmlFromText,
 } from '../src/lib/text-assist.js';
-import { handleRequest } from '../workers/nexttrain-reply/worker.js';
+import { handleRequest, speechPieces } from '../workers/nexttrain-reply/worker.js';
 import { fetchLinkPreview, isPublicPreviewUrl, parseLinkPreviewHtml, previewFromMicrolink } from '../src/lib/link-preview.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -91,28 +91,33 @@ ok(!contactBlockForRegion('WC').includes('011 013 0306'), 'WC contact block has 
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
 ok(liaisonRules('KZN').includes('Thank you for using Next Train'), 'drafts close with the standard line');
 ok(liaisonRules('KZN').includes('two blank lines'), 'greeting leaves two blank lines');
-ok(liaisonRules('KZN').includes('Dear Enock'), 'a certain first name is Dear Firstname');
-ok(liaisonRules('KZN').includes('Dear Mr Kazembe'), 'a certain surname is Dear Mr Surname');
-ok(certainGreeting({ emails: ['enockelk@gmail.com'] }) === 'Dear Enock', 'enockelk is Dear Enock');
-ok(certainGreeting({ emails: ['j.kazembe@gmail.com'] }) === 'Dear Mr Kazembe', 'an initial plus surname is Dear Mr Kazembe');
-ok(certainGreeting({ texts: ['My name is Thabo Mokoena'] }) === 'Dear Thabo', 'a stated first name is used');
-ok(certainGreeting({ texts: ['I am Mr Kazembe'] }) === 'Dear Mr Kazembe', 'a stated surname keeps the title');
-ok(certainGreeting({ alias: 'Kudzi' }) === 'Dear Kudzi', 'a real alias is a certain first name');
+const MORNING = Date.parse('2026-11-27T08:30:00+02:00');
+ok(liaisonRules('KZN').includes('Good morning, Enock'), 'a certain first name is a time greeting');
+ok(liaisonRules('KZN').includes('Good afternoon, Mr Kazembe'), 'a certain surname keeps the title in the time greeting');
+ok(certainGreeting({ emails: ['enockelk@gmail.com'], now: MORNING }) === 'Good morning, Enock', 'enockelk is Good morning, Enock');
+ok(certainGreeting({ emails: ['j.kazembe@gmail.com'], now: MORNING }) === 'Good morning, Mr Kazembe', 'an initial plus surname keeps the title');
+ok(certainGreeting({ texts: ['My name is Thabo Mokoena'], now: MORNING }) === 'Good morning, Thabo', 'a stated first name is used');
+ok(certainGreeting({ texts: ['I am Mr Kazembe'], now: MORNING }) === 'Good morning, Mr Kazembe', 'a stated surname keeps the title');
+ok(certainGreeting({ alias: 'Kudzi', now: MORNING }) === 'Good morning, Kudzi', 'a real alias is a certain first name');
 ok(certainGreeting({ emails: ['info@nexttrain.co.za'] }) === '', 'a role inbox is not a name');
 ok(certainGreeting({ emails: ['qwerty@gmail.com'] }) === '', 'a random inbox is not a name');
 ok(certainGreeting({ emails: ['marketing.team@gmail.com'] }) === '', 'two ordinary words are not a name');
-ok(certainGreeting({ emails: ['thandeka05nxumalo@gmail.com'] }) === 'Dear Thandeka', 'a first name glued to a surname is Dear Thandeka');
-ok(certainGreeting({ emails: ['enock.kazembe@gmail.com'] }) === 'Dear Enock', 'firstname.surname is Dear Firstname');
-ok(certainGreeting({ emails: ['kazembe.enock@gmail.com'] }) === 'Dear Enock', 'surname.firstname still finds the first name');
+ok(certainGreeting({ emails: ['thandeka05nxumalo@gmail.com'], now: MORNING }) === 'Good morning, Thandeka', 'a first name glued to a surname is Good morning, Thandeka');
+ok(certainGreeting({ emails: ['enock.kazembe@gmail.com'], now: MORNING }) === 'Good morning, Enock', 'firstname.surname is Good morning, Firstname');
+ok(certainGreeting({ emails: ['kazembe.enock@gmail.com'], now: MORNING }) === 'Good morning, Enock', 'surname.firstname still finds the first name');
 ok(certainGreeting({ texts: ['I am good thanks'] }) === '', 'I am good is not a name');
 ok(certainGreeting({ texts: ['I am waiting for the Sunday train'] }) === '', 'I am waiting is not a name');
-ok(certainGreeting({ texts: ['Please write to enockelk@gmail.com'] }) === 'Dear Enock', 'an email inside the message can name them');
+ok(certainGreeting({ texts: ['Please write to enockelk@gmail.com'], now: MORNING }) === 'Good morning, Enock', 'an email inside the message can name them');
 ok(certainGreeting({ alias: 'Coolguy' }) === '', 'a made-up alias is not a certain name');
-ok(certainGreeting({ alias: 'Mr Kazembe' }) === 'Dear Mr Kazembe', 'an alias with Mr uses the surname');
+ok(certainGreeting({ alias: 'pancakes' }) === '', 'pancakes is not a name');
+ok(certainGreeting({ alias: 'Pleasure', now: MORNING }) === 'Good morning, Pleasure', 'Pleasure is greeted by name');
+ok(certainGreeting({ alias: 'Karabo', now: MORNING }) === 'Good morning, Karabo', 'Karabo is greeted by name');
+ok(certainGreeting({ alias: 'Enock LK', now: MORNING }) === 'Good morning, Enock', 'a first name with initials uses the first name');
+ok(certainGreeting({ alias: 'Mr Kazembe', now: MORNING }) === 'Good morning, Mr Kazembe', 'an alias with Mr uses the surname');
 const named = buildSuggestPayload([
     { deviceId: 'usr_named', email: 'enockelk@gmail.com', text: 'The Sunday train please', timestamp: 10 },
-], { deviceId: 'usr_named' });
-ok(named.greeting === 'Dear Enock', 'the draft payload carries Dear Enock');
+], { deviceId: 'usr_named', now: MORNING });
+ok(named.greeting === 'Good morning, Enock', 'the draft payload carries Good morning, Enock');
 ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address stays out of the draft payload');
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
 ok(liaisonRules('GP').includes('not able to assist with this one'), 'ops issues get a short independence line');
@@ -364,7 +369,7 @@ const pollDraft = applyDraftGuard({
 }, 'GP', quoted.thread);
 ok(pollDraft.action === 'draft', 'a poll reply still drafts');
 const pollLines = pollDraft.reply.split('\n');
-ok(pollLines[0] === 'Hi there,', 'poll thank-you keeps the greeting');
+ok(/^Good (morning|afternoon|evening)$/.test(pollLines[0]), 'poll thank-you keeps the time greeting');
 ok(pollLines[3] === 'Thank you for replying to our poll.', 'poll thank-you is its own line under the greeting');
 const falsePoll = applyDraftGuard({
     action: 'draft',
@@ -428,6 +433,9 @@ const mail = mailtoReplyUrl('rider@example.com', rich);
 ok(mail.startsWith('mailto:rider@example.com?'), 'email opens to their address');
 ok(decodeURIComponent(mail.split('subject=')[1].split('&')[0]) === 'Metrorail Next Train | Feedback Response', 'email subject is the feedback response line');
 ok(decodeURIComponent(mail.split('body=')[1]) === 'Hi there,<br><br>Thanks for sharing your thoughts.', 'email body keeps paragraphs as br tags and drops the sign-off');
+const deletionMail = mailtoReplyUrl('rider@example.com', 'Hello Angelo,\n\nWe received your request to delete your Next Train account.\n\nThank you for trying out Next Train!', 'Next Train | Account Deletion');
+ok(decodeURIComponent(deletionMail.split('subject=')[1].split('&')[0]) === 'Next Train | Account Deletion', 'a deletion letter can keep its own subject');
+ok(decodeURIComponent(deletionMail.split('body=')[1]) === 'Hello Angelo,<br><br>We received your request to delete your Next Train account.<br><br>Thank you for trying out Next Train!', 'a deletion letter uses br for the Zoho paragraph gaps');
 ok(!decodeURIComponent(mail.split('body=')[1]).includes('- Enock'), 'email body has no operator sign-off');
 const weekAgo = Date.parse('2026-10-01T00:00:00Z');
 const today = Date.parse('2026-10-15T00:00:00Z');
@@ -468,6 +476,10 @@ ok(worker.includes('gemini-3.5-flash-lite'), 'reply worker uses 3.5 Flash-Lite')
 ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 Flash-Lite');
 ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
 ok(worker.includes("pathname === '/speak'"), 'read-aloud has its own operator route');
+ok(worker.includes('const SPEAK_MAX = 24000'), 'a long paste is not cut at 900 characters');
+ok(worker.includes('export function speechPieces'), 'a long paste is split into Chirp-sized pieces');
+ok(worker.includes('READALOUD'), 'saved readings go to the read-aloud bucket');
+ok(worker.includes('/speak/archive'), 'saved readings have an operator archive');
 ok(worker.includes('en-US-Chirp3-HD-Achernar'), 'read-aloud uses Chirp 3 HD Achernar');
 ok(worker.includes("pathname === '/voice'"), 'each operator can save a Chirp voice');
 ok(worker.includes('normalizeVoicePrefs'), 'an unknown voice falls back on the worker');
@@ -640,6 +652,16 @@ ok(loadedPng?.mimeType === 'image/png' && loadedPng.data, 'a chat photo is read 
 const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]);
 const loadedPdf = await loadSuggestFile({ url: pdfUrl, from: 'commuter' }, async () => new Response(pdfBytes, { status: 200 }));
 ok(loadedPdf?.mimeType === 'application/pdf', 'a chat PDF is read from its bytes');
+const longPaste = `${'Word. '.repeat(400)}${'Tail. '.repeat(400)}`;
+const pieces = speechPieces(longPaste);
+ok(pieces.length > 1, 'a paste past one Chirp request is more than one piece');
+ok(pieces.every((part) => part.length <= 3000), 'each piece stays inside the Chirp limit');
+ok(pieces.join(' ').replace(/\s+/g, ' ').trim() === longPaste.replace(/\s+/g, ' ').trim(), 'splitting a paste does not drop words');
+const shortCut = speechPieces('Admin sign-in is a real gate. The browser check opens the login box.');
+ok(shortCut.length === 1 && shortCut[0].includes('login box'), 'a short note stays one piece');
+ok(readFileSync(join(ROOT, 'src/lib/operator-speech.js'), 'utf8').includes('const SPEAK_MAX = 24000'), 'the phone sends the whole paste');
+ok(adminJs.includes('id="alert-speech-dock"') && adminJs.includes('id="alert-speech-tab-archive"'), 'read aloud keeps the controls under the text and has an archive');
+ok(adminJs.includes('archive: true'), 'playing from read aloud keeps the audio');
 
 if (failures.length) {
     console.error('verify-reply-suggest FAILED:\n - ' + failures.join('\n - '));

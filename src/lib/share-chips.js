@@ -7,6 +7,7 @@
 import { DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { noticeQuotePlain } from './feedback-quote.js';
 import {
+    alertPhotoIndex,
     parseAlertSharePath,
     parseCommunitySharePath,
     parsePlannerDeepLink,
@@ -211,13 +212,34 @@ export function embedCommunityShareCards(html) {
         const card = communityShareCardHtml(href);
         return card || tag;
     });
-    out = out.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
-        const url = raw.replace(/[),.;]+$/, '');
+    out = out.replace(/(^|[\s>(])(https?:\/\/[^\s<>"']+)/gi, (raw, lead, urlPart) => {
+        const url = urlPart.replace(/[),.;]+$/, '');
         const card = communityShareCardHtml(url);
         if (!card) return raw;
-        return `${card}${raw.slice(url.length)}`;
+        return `${lead}${card}${urlPart.slice(url.length)}`;
     });
     return out;
+}
+
+/** A notice address becomes the same card, including one that has already ended. */
+export function embedAlertShareCards(html) {
+    let out = String(html || '');
+    out = out.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const parsed = alertShareFromHref(href);
+        return parsed ? alertShareCardHtml(href, parsed) : tag;
+    });
+    out = out.replace(/(^|[\s>(])(https?:\/\/[^\s<>"']+)/gi, (raw, lead, urlPart) => {
+        const url = urlPart.replace(/[),.;]+$/, '');
+        const parsed = alertShareFromHref(url);
+        if (!parsed) return raw;
+        return `${lead}${alertShareCardHtml(url, parsed)}${urlPart.slice(url.length)}`;
+    });
+    return out;
+}
+
+/** Community and alert addresses, whether the message is plain text or HTML. */
+export function embedOwnShareCards(html) {
+    return embedAlertShareCards(embedCommunityShareCards(html));
 }
 
 /** Drop community message addresses from alert text once the card is showing. */
@@ -266,6 +288,14 @@ export async function loadSharedNotice(source, id) {
     };
 }
 
+/** The photo in the link, or the first poster when the link is the whole notice. */
+export function alertShareImageUrl(images, photo) {
+    const list = Array.isArray(images) ? images : [];
+    const index = alertPhotoIndex(photo);
+    const raw = String((index && list[index - 1]) || list[0] || '');
+    return (/^https:\/\//i.test(raw) || raw.startsWith('/')) ? raw : '';
+}
+
 function paintAlertShareCard(el, loaded) {
     const titleOf = (notice) => {
         const plain = noticeQuotePlain(notice);
@@ -281,8 +311,7 @@ function paintAlertShareCard(el, loaded) {
     const images = Array.isArray(loaded.notice.imageUrls) && loaded.notice.imageUrls.length
         ? loaded.notice.imageUrls
         : (loaded.notice.imageUrl ? [loaded.notice.imageUrl] : []);
-    const rawImage = String(images[0] || '');
-    const image = /^https:\/\//i.test(rawImage) || rawImage.startsWith('/') ? rawImage : '';
+    const image = alertShareImageUrl(images, el.getAttribute('data-alert-share-photo'));
     const ended = !!loaded.ended;
     el.classList.toggle('is-ended', ended);
     el.classList.toggle('is-live', !ended);
@@ -303,17 +332,24 @@ export function hydrateAlertShareCards(root) {
     });
 }
 
-export function shareChipHtml(href) {
+export function shareChipHtml(href, opts = null) {
     const described = describeShareUrl(href);
     if (!described) return '';
-    return `<button type="button" class="community-share-chip" data-share-url="${escapeAttr(described.href)}" data-share-kind="${described.kind}">${escapeAttr(described.label)}</button>`;
+    const label = escapeAttr(described.label);
+    const url = escapeAttr(described.href);
+    const kind = escapeAttr(described.kind);
+    if (opts?.asLink) {
+        return `<a class="community-share-chip" href="${url}" data-share-url="${url}" data-share-kind="${kind}">${label}</a>`;
+    }
+    return `<button type="button" class="community-share-chip" data-share-url="${url}" data-share-kind="${kind}">${label}</button>`;
 }
 
 const URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
 /** Escape plain text and turn Next Train shares into chips. Other https links stay links. */
-export function renderTextWithShareChips(text) {
+export function renderTextWithShareChips(text, opts = null) {
     const raw = String(text || '');
+    const asLink = !!opts?.asLink;
     let html = '';
     let last = 0;
     for (const match of raw.matchAll(URL_RE)) {
@@ -321,9 +357,9 @@ export function renderTextWithShareChips(text) {
         const url = full.replace(/[),.;]+$/, '');
         const trail = full.slice(url.length);
         html += escapeAttr(raw.slice(last, match.index));
-        const alert = alertShareFromHref(url);
-        const communityCard = communityShareCardHtml(url);
-        const chip = alert ? alertShareCardHtml(url, alert) : (communityCard || shareChipHtml(url));
+        const alert = asLink ? null : alertShareFromHref(url);
+        const communityCard = asLink ? '' : communityShareCardHtml(url);
+        const chip = alert ? alertShareCardHtml(url, alert) : (communityCard || shareChipHtml(url, opts));
         if (chip) html += chip;
         else if (/^https:\/\//i.test(url)) {
             html += `<a class="community-msg-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeAttr(url.replace(/^https:\/\//, ''))}</a>`;
@@ -359,6 +395,7 @@ export async function openShareUrl(href) {
 
 if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
     window.ntShareTextHtml = renderTextWithShareChips;
+    window.ntEmbedShareCards = embedOwnShareCards;
     window.ntShareChipHtml = shareChipHtml;
     window.ntOpenShareUrl = openShareUrl;
     window.__ntShareChipBound = true;
@@ -370,6 +407,11 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
             event.preventDefault();
             event.stopPropagation();
             if (communityCard.classList.contains('is-ended')) return;
+            if (communityCard.closest('#messages-thread-modal, #feedback-modal')) {
+                const { closeSmoothModal } = await import('./ui.js');
+                closeSmoothModal('messages-thread-modal');
+                closeSmoothModal('feedback-modal');
+            }
             const routeId = communityCard.getAttribute('data-community-share-route') || '';
             const postId = communityCard.getAttribute('data-community-share-post') || '';
             if (!routeId || !postId) return;
@@ -386,6 +428,11 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
             event.preventDefault();
             event.stopPropagation();
             if (alertCard.dataset.alertShareLive !== '1') return;
+            if (alertCard.closest('#messages-thread-modal, #feedback-modal')) {
+                const { closeSmoothModal } = await import('./ui.js');
+                closeSmoothModal('messages-thread-modal');
+                closeSmoothModal('feedback-modal');
+            }
             const { focusSharedAlert } = await import('./alerts-channel.js');
             const state = await focusSharedAlert?.(
                 alertCard.getAttribute('data-alert-share-id') || '',
@@ -402,7 +449,7 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
             return;
         }
         const chip = event.target?.closest?.('.community-share-chip');
-        if (!chip) return;
+        if (!chip || chip.tagName === 'A') return;
         event.preventDefault();
         event.stopPropagation();
         chip.closest('.community-post-row')?.classList.remove('is-pressing');

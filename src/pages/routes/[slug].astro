@@ -18,8 +18,10 @@ import {
   seoIntroParagraphs,
   slugifyStation,
   WC_PUBLIC_HOLIDAYS_PATH,
+  FESTIVE_SEASON_PATH,
 } from '../../lib/seo-routes.js';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
+import SeoRouteCommunity from '../../components/SeoRouteCommunity.astro';
 import JhbFit from '../../components/JhbFit.astro';
 import {
   buildRouteSeoTimetable,
@@ -83,6 +85,7 @@ const description = routeMetaDescription(origin, dest, province, {
 const canonicalPath = `/routes/${seed.slug}.html`;
 const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const liveBoardHref = withBase(buildRouteBoardAppPath(route.id));
+const liveCommunityHref = withBase(`/?rt=${encodeURIComponent(route.id)}&r=${encodeURIComponent(route.region)}&src=seo&v=community`);
 const liveGridWeekdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'weekday'));
 const liveGridWeekdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'weekday'));
 const liveGridSaturdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'saturday'));
@@ -171,6 +174,8 @@ const related = [
         ))}
       </div>
 
+      <SeoRouteCommunity routeId={route.id} routeName={name} communityHref={liveCommunityHref} />
+
       <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-3 py-2.5">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Saturday</p>
@@ -213,7 +218,9 @@ const related = [
         </p>
         <p>
           <span class="font-semibold text-slate-800 dark:text-slate-100">Festive season.</span>
-          Most regions use a scaled-down timetable from the week of the early 20s of December through the first week of January. That sheet is not the usual weekday, Saturday, or public holiday timetable. The 21 December 2026 to 1 January 2027 times are not on this page yet. Next Train will update this route when PRASA releases the scaled-down timetable.
+          Most regions use a scaled-down timetable from the week of the early 20s of December through the first week of January. That sheet is not the usual weekday, Saturday, or public holiday timetable. The 21 December 2026 to 1 January 2027 times are not on this page yet.
+          <a href={withBase(FESTIVE_SEASON_PATH)} class="text-blue-700 dark:text-blue-300 hover:underline">Festive season timetable</a>.
+          Next Train will update this route when PRASA releases the scaled-down timetable.
         </p>
       </div>
 

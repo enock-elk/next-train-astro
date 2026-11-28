@@ -21,6 +21,8 @@ assert.equal(MARK_POINTS.delay_report, 2);
 assert.equal(MARK_POINTS.delay_confirm, 1);
 assert.equal(MARK_POINTS.first_community_post, 5);
 assert.equal(MARK_POINTS.community_message, 2);
+assert.equal(MARK_POINTS.community_reaction, 1);
+assert.equal(MARK_POINTS.alert_reaction, 1);
 assert.equal(MARK_POINTS.streak_3day, 5);
 assert.equal(MARK_POINTS.streak_5day, 8);
 assert.deepEqual(MARK_TIERS.map((t) => t.min), [0, 80, 250, 600]);

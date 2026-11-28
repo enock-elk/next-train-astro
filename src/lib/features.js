@@ -120,6 +120,16 @@ export function isLabEnvironment() {
 }
 
 /**
+ * Hosts the notification form already treats as Lab / previews.
+ * This is not a lab feature flag: isLabEnvironment stays limited to lab.
+ */
+export function isPreviewHost() {
+    if (typeof location === 'undefined') return false;
+    const host = String(location.hostname || '').toLowerCase();
+    return host.endsWith('.pages.dev') || host.endsWith('.github.io');
+}
+
+/**
  * Skip GPS / path / speed checks. Off so lab actually vets shares.
  */
 export function relaxLiveShareGuards() {

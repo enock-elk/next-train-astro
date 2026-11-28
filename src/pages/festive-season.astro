@@ -1,0 +1,143 @@
+---
+/**
+ * Festive-season holding page. Do not print last year's train numbers as this year's times.
+ * PRASA has not released the December 2026 to January 2027 scaled-down timetable.
+ */
+import ContentLayout from '../layouts/ContentLayout.astro';
+import SeoPageHeader from '../components/SeoPageHeader.astro';
+import SeoCrossLinks from '../components/SeoCrossLinks.astro';
+import { withBase } from '../lib/config.js';
+import {
+  FESTIVE_SEASON_PATH,
+  FESTIVE_SEASON_SLUG,
+  WC_PUBLIC_HOLIDAYS_PATH,
+  displayRouteName,
+  listSeoRegions,
+  listSeoRoutes,
+} from '../lib/seo-routes.js';
+
+const title = 'Metrorail festive season timetable December 2026 | Next Train';
+const description = 'December 2026 Metrorail scaled-down timetable is not out yet. Next Train will publish festive train times for Gauteng, Cape Town, Durban and East London.';
+const canonicalPath = `/${FESTIVE_SEASON_PATH}`;
+const regions = listSeoRegions();
+const routes = listSeoRoutes();
+const guideHref = withBase('guide.html');
+const appHref = withBase('/?src=seo');
+const holidayHref = withBase(WC_PUBLIC_HOLIDAYS_PATH);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'Has PRASA released the December 2026 scaled-down Metrorail timetable?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'No. PRASA has not released the official scaled-down timetable for December 2026 to January 2027. Next Train will publish the times on this page and on each route page as soon as they are ready.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Where can commuters ask about Christmas and New Year trains?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Open Next Train and use the Community tab. Commuters on the same route can ask a question, answer one, and see what other people are reporting while the festive timetable is still unconfirmed.',
+      },
+    },
+  ],
+};
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  themeColor="#1d4ed8"
+  forceLight={true}
+  seoPageType="festive"
+  seoSlug={FESTIVE_SEASON_SLUG}
+>
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
+  <SeoPageHeader />
+
+  <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+    <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
+      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
+        <a href={withBase('routes.html')} class="hover:underline">Metrorail routes</a>
+        <span class="text-slate-400 dark:text-slate-500"> / </span>
+        Festive season
+      </p>
+
+      <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+        Metrorail festive season timetable, December 2026 to January 2027
+      </h1>
+      <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+        PRASA has not released the official scaled-down timetable for December 2026 to January 2027.
+        Next Train will publish the times on this page and on each route page as soon as they are ready.
+        Until then, the route pages below show the published weekday, Saturday, and public holiday sheets.
+      </p>
+
+      <section class="mt-8">
+        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+          Christmas, New Year, and the December holidays
+        </h2>
+        <div class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 text-sm leading-relaxed space-y-3">
+          <p>
+            Commuters look up Christmas Day trains, New Year's Day trains, the December holidays, and a scaled-down PRASA timetable for Gauteng (Pretoria and Johannesburg), Cape Town, Durban, and East London.
+          </p>
+          <p>
+            A festive timetable is not the normal weekday sheet, and it is not the same as a Saturday or a public holiday sheet.
+            PRASA usually publishes fewer trains for the week of the early 20s of December through the first week of January.
+            This page does not list last year's departure times. Those clocks are not this year's service.
+          </p>
+          <p>
+            Western Cape public holidays that already have a published sheet stay on the
+            <a href={holidayHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">Western Cape public holiday timetable</a>.
+            That page is not the festive scaled-down timetable.
+          </p>
+        </div>
+      </section>
+
+      {regions.map((region) => {
+        const regionRoutes = routes.filter((entry) => entry.route.region === region.region);
+        if (!regionRoutes.length) return null;
+        return (
+          <section class="mt-8">
+            <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+              <a href={withBase(`regions/${region.slug}.html`)} class="hover:underline">{region.regionLabel}</a>
+            </h2>
+            <ul class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 divide-y divide-slate-100 dark:divide-slate-800">
+              {regionRoutes.map((entry) => (
+                <li>
+                  <a
+                    href={withBase(`routes/${entry.seed.slug}.html`)}
+                    class="block px-4 py-3 font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+                  >
+                    {displayRouteName(entry.route)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+
+      <section class="mt-8">
+        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+          Ask other commuters
+        </h2>
+        <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          The Community tab in Next Train is where people on the same route ask a question, answer one, and see real-time issues other commuters are reporting.
+          Use it while the scaled-down times are still unconfirmed.
+          <a href={appHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">Open Next Train</a>
+          and see the
+          <a href={guideHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">guide</a>
+          for how the app works.
+        </p>
+      </section>
+
+      <SeoCrossLinks current="festive" />
+    </div>
+  </main>
+</ContentLayout>

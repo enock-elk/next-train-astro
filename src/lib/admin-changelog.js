@@ -5,6 +5,72 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.10': [
+        'Classic light bottom nav is a white bar. Idle tabs are gray, and the active tab is near-black on a light gray chip. Earthy light stays a cream bar, with a quieter idle tab and ink on a warm chip. Classic dark and Earthy dark stay dark bars. The active tab is a filled icon, a heavier label, and a chip you can see on that bar. The header title stays on its own colour. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.9': [
+        'Read aloud was stopping after 900 characters. A long paste is read in full, up to 24,000 characters. The text fills the screen and the play controls stay along the bottom. Current and Archive sit at the top. Playing from Current keeps the audio and the text. An archive row opens that reading in Current and plays the saved audio. The audio is stored in Cloudflare R2. Deploy the reply worker so the archive bucket is created. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.8': [
+        'Ad and user graph titles put the date range on its own line. Admin dates that were 30/04/2026 now read 30 Apr 2026. The ad tile that showed the first hit opens the average impressions and revenue for the searched days, in dollars and rands. The rand rate loads when Live Telemetry opens. Landscape keeps the weekly or monthly ad graph that was on screen. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.7': [
+        'Community Monitor selects a message from the route header. The floating i and options control is gone. The community refresh button reloads the open room. Pull to refresh keeps the same circle and turns it blue when the pull is long enough. Ad impressions cluster the searched period into daily, weekly, or monthly. A trip link on someone else’s message has the same shaded button as the sender’s. A reaction on an alert, or on someone else’s community message, adds 1 point once for that item. Delete for me hides another person’s message on this phone only. The roadmap has a to-do for an @ mark beside unread when a room mentions you. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.6': [
+        'Schedule QA stays closed and opens from an errors and warnings button. The list is split by region, and each region can be checked on its own. The user graph uses matching icon buttons. Read aloud is its own screen, with one play and pause button and a stop button. A clip that already played on this phone is kept for the next play. Closing Read aloud leaves the Dev Hub home clear. An author can delete their own community message for 10 hours. The attach button sits inside the message field, on the right, and Play appears only when there is text. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.5': [
+        'The route community preview type-checks, so the preview build can finish. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.4': [
+        'Ad revenue uses one menu: All, This month, Last month, then each older month by name back to May 2026. On the first of a new month, This month covers that month and the month before last month is added by name. A community account card opens from the name and the avatar. It pulls down to close, and it closes when you leave Community. The card shows the day the account was created. A route page community preview shows a trip link as the same chip as the app. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.3': [
+        'The account deletion letter uses the same line breaks as a feedback email, so Zoho keeps the paragraphs. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.2': [
+        'A person who deletes their own account leaves the active account list and stays on Deleted accounts, on the same user ID. Signing in again uses that original ID and the original created time. The deletion letter is one text. It still opens in the mail app, so it sends from enock@nexttrain.co.za when that mailbox is the one on the phone. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.28.1': [
+        'An admin who selects a deleted community message can open View deleted message. The copy is kept privately from this build on. A message removed before that has no copy. Opening a community room shows the messages already saved on this phone while the live room catches up. The opening spinner stays only when this phone has nothing saved for that room. Deploy firebase-database.rules.json before an admin can read a saved copy. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.27.2': [
+        'A reaction on your own community message toasts when you are away from that room, and gives a short haptic while you are looking at it. The stuck-start help page comes back to the app when the app is ready. An in-app browser is asked once to open the phone browser. A community room that is already read stays still. It follows the bottom only for a new message while you are there, or when you send. Roadmap cards read the description out loud, with pause and play. Service Alerts has a Read aloud tile for any pasted text. Schedule Data QA lists the route and issue behind the error count. One alert posted to several routes stays one card, and an edit updates every selected route. Archived alerts keep their reaction counts. Maintenance banners can be red. The route Community preview is a little taller, and the guide bar leaves when a timetable page opens. Deploy firebase-database.rules.json so a reaction toast can be saved. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.27.1': [
+        'Co-Pilot opens with Good morning, Good afternoon, or Good evening, and the person\'s name when it reads as a real name. A display name like pancakes stays unnamed. An admin can post a link without the word Link under the preview. The reaction list sits behind the side menu. A profile photo and a chosen emoji show on Community from the public profile, in the same session, without rewriting old messages. Profile save no longer reads the whole account. The profile shows the photo and the day the account was created. Tapping a name or avatar opens that public card, and the version chip still opens build notes. Community Monitor options sit at the bottom of the bubble. Feedback Hub previews community and alert links, including a notice that has ended. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.26.6': [
+        'The route Community preview passes the production type check, so the build can finish. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.26.5': [
+        'Guide section icons are redrawn so the commuters mark reads as two people. A route page shows a live Community room near the top. Opening it lands in that room, and a new phone asks for a region when they leave. An admin looking at a deletion request is prompted to email the person. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.26.4': [
+        'Community Monitor bubbles use the same name colours and avatar discs as Community. The attach control sits above Post. A preview phone is saved as Lab, so a Lab send reaches it and a Production send from a preview warns that it reaches live commuters. Notification menus use the app dropdown. An admin tap on an alert reaction lists who reacted and can look them up. Crowded graph numbers are spaced out, and the analytics controls sit under the chart. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.26.3': [
+        'Community Monitor messages use the commuter bubble, name row, and clock. Search, person lookup, and Refresh sit in Search and filters. A long URL in a message, route preview, or report wraps inside the phone. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.26.2': [
+        'Switching Community rooms shows a short spinner instead of a blank wallpaper. An offline phone says it does not have this line\'s messages yet, or that the line had none last time it was online. It no longer invites the commuter to be first when the room was never loaded. A failed read says the messages did not come through. Saved messages stay on the phone. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.26.1': [
+        'Community preloads the current route after the board is stable. Opening the tab parks once: the latest message sits at the bottom when the room fills the screen, a short room stays at the top, and a tall unread block opens with the unread line near the top. Later paints do not scroll that view until the person scrolls or sends. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.25.1': [
+        'Scheduled-alert RTDB calls use only the userinfo.email and firebase.database scopes. A 401 names the service account email. Admin lookup, the user sheet, and inbox identity show users/{uid}/photoURL even when the commuter hid the photo on Community. A new display name needs 3 characters and a letter or number. An existing short name is left as it is. Community opens on the latest messages when the unread line still fits, or on the unread line when it does not, and later paints leave that view until the person scrolls or sends. The unread check runs once about 5 seconds after the board is stable. The pull-to-refresh pill hides the closed blue ring. The homepage description names weekdays, Saturdays, and public holidays. A festive season page says the December 2026 scaled-down timetable is not released yet and links the route pages. The guide and route pages mention the Community tab. Route pages load up to three recent messages after open, outside the snippet. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.23.2': [
+        'Live Telemetry keeps the small graph clear. Total, Ads, Stats, Compare, Landscape, Export, and the earlier and later buttons live on the full graph, in two rows with a filled state when Total, Ads, or Compare is on. Community Monitor uses the commuter bubble, the name, and the version button. Suggestions, an image address, and the https field sit behind +. Message options open above the composer. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.23.1': [
+        'A scheduled-alert write that Firebase refuses names the RTDB path, so the next mail says notices or notices_scheduled. Community opens with the unread line at the top, or on the newest messages when nothing is unread. A send paints that message and stays on it until the request settles. The user graph has a Total button that adds up the hours, days, or weeks on screen, and the spreadsheet uses that same line. Total turns off when the range changes. Empty future hours stay empty. Deploy firebase-database.rules.json if the live rules are still behind this file. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.22.1': [
+        'A community notice card for /og/a/.../4 paints that poster. It was painting the first image on the notice. The preview worker already returned the numbered photo. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.21.2': [
         'Community shows the operator version chip beside the name, a Sending toast on each post, a short ease to the message you just sent, and a short ease when you open a quote. Action toasts can repeat. User Accounts counts every account and loads older pages with See more. Maintenance icon and colour use the custom menu, with the icon drawn on each row. Fare correction cards are shorter. Community, inbox, and alert reaction sheets pull down to close. Schedule Data QA runs hourly and turns the header red when the stored scan has errors. A successful routing_fails upload stays a flow line. A probe timer says timed out. A hung fetch stops at its own timer. The cache matrix notes when the edge schedule is older than Firebase. Deploy firebase-database.rules.json so schedule_qa_status can be written. No commuter What\'s New. forceShow stays false.',
     ],

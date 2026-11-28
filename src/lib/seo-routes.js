@@ -535,6 +535,10 @@ export function getSeoRegionBySlug(slug) {
 export const WC_PUBLIC_HOLIDAYS_SLUG = 'western-cape-public-holidays';
 export const WC_PUBLIC_HOLIDAYS_PATH = `regions/${WC_PUBLIC_HOLIDAYS_SLUG}.html`;
 
+/** National festive holding page. Times stay off it until PRASA publishes a scaled-down sheet. */
+export const FESTIVE_SEASON_SLUG = 'festive-season';
+export const FESTIVE_SEASON_PATH = `${FESTIVE_SEASON_SLUG}.html`;
+
 /**
  * 2026 Western Cape public-holiday service. Only WC has *_pub sheets.
  * Sunday-mapped holidays have no trains. Do not list GP / KZN / EC holiday grids.

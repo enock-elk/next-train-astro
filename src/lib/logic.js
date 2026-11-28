@@ -1701,6 +1701,21 @@ function markSchedulesCoreReady() {
     const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
     if (!$currentRouteId.get() || isWelcomeActive) return;
     window._appStabilized = true;
+    if (!window.__ntCommunityStablePoll) {
+        window.__ntCommunityStablePoll = true;
+        const preloadCommunity = () => {
+            import('./community.js')
+                .then((mod) => mod.preloadCommunityRoom?.())
+                .catch(() => {});
+        };
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(preloadCommunity, { timeout: 1500 });
+        else setTimeout(preloadCommunity, 400);
+        setTimeout(() => {
+            import('./community.js')
+                .then((mod) => mod.refreshCommunityUnreadBadge?.())
+                .catch(() => {});
+        }, 5000);
+    }
     try {
         sessionStorage.removeItem('nt_safe_mode_inline');
         sessionStorage.removeItem('nt_lifeboat_auto');
@@ -2901,8 +2916,6 @@ export function initSessionPullRefresh() {
             hint.setAttribute('aria-hidden', 'true');
             hint.innerHTML = `<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
                 <circle class="nt-pull-ring" cx="24" cy="24" r="${PULL_RING_R}" fill="none" stroke-width="3" stroke-linecap="round" transform="rotate(-90 24 24)"></circle>
-                <path class="nt-pull-arrow" d="M30.5 18.5a8.2 8.2 0 1 1-2.4-3.6" fill="none" stroke-width="2.2" stroke-linecap="round"></path>
-                <path class="nt-pull-arrow" d="M28 11.5v5.2h-5.2" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
             </svg>`;
             document.body.appendChild(hint);
         }

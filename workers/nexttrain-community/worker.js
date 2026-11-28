@@ -23,6 +23,7 @@ import {
     COMMUNITY_ADMIN_BODY_MAX,
     COMMUNITY_BODY_MAX,
     COMMUNITY_BUCKET_DEPTH,
+    communityDeletedArchive,
     communityTombstonePatch,
     sanitizeCommunityAttachments,
     sanitizeCommunityBucketImageUrl,
@@ -182,12 +183,21 @@ function toBase64Url(obj) {
     return btoa(s).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
+/** Documented admin bypass. Messaging on this token makes RTDB score the caller as a user. */
+const RTDB_ADMIN_SCOPE = 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database';
+const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
+
+function rtdbAuthNote(email, status) {
+    if (Number(status) !== 401 || !email) return '';
+    return ` as ${email}`;
+}
+
 async function getGoogleAccessToken(clientEmail, privateKey, scope) {
     const header = { alg: 'RS256', typ: 'JWT' };
     const now = Math.floor(Date.now() / 1000);
     const payload = {
         iss: clientEmail,
-        scope: scope || 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
+        scope: scope || RTDB_ADMIN_SCOPE,
         aud: 'https://oauth2.googleapis.com/token',
         exp: now + 3600,
         iat: now,
@@ -327,7 +337,7 @@ async function rtdbWrite(env, path, value) {
     });
     if (!res.ok) {
         const t = await res.text();
-        throw new Error(`RTDB write failed (${res.status}): ${t.slice(0, 200)}`);
+        throw new Error(`RTDB write failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}: ${t.slice(0, 200)}`);
     }
     return true;
 }
@@ -345,7 +355,7 @@ async function rtdbUpdate(env, updates) {
     });
     if (!res.ok) {
         const t = await res.text();
-        throw new Error(`RTDB update failed (${res.status}): ${t.slice(0, 200)}`);
+        throw new Error(`RTDB update failed (${res.status})${rtdbAuthNote(email, res.status)}: ${t.slice(0, 200)}`);
     }
     return true;
 }
@@ -365,7 +375,7 @@ async function rtdbQuery(env, path, params = {}) {
         if (value != null && value !== '') url.searchParams.set(name, String(value));
     });
     const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
+    if (!res.ok) throw new Error(`RTDB read failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}`);
     return res.json();
 }
 
@@ -375,7 +385,7 @@ async function rtdbDelete(env, path) {
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     const token = await getGoogleAccessToken(email, key);
     const res = await fetch(rtdbJsonUrl(base, path, token), { method: 'DELETE' });
-    if (!res.ok) throw new Error(`RTDB delete failed (${res.status})`);
+    if (!res.ok) throw new Error(`RTDB delete failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}`);
 }
 
 function createRtdbClient(env) {
@@ -397,7 +407,7 @@ function createRtdbClient(env) {
             const res = await request(path, {
                 headers: withEtag ? { 'X-Firebase-ETag': 'true' } : {},
             });
-            if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
+            if (!res.ok) throw new Error(`RTDB read failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}`);
             return {
                 value: await res.json(),
                 etag: res.headers.get('ETag'),
@@ -414,7 +424,7 @@ function createRtdbClient(env) {
             if (res.status === 412) return { matched: false };
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`RTDB conditional write failed (${res.status}): ${text.slice(0, 200)}`);
+                throw new Error(`RTDB conditional write failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}: ${text.slice(0, 160)}`);
             }
             return { matched: true };
         },
@@ -422,7 +432,7 @@ function createRtdbClient(env) {
             const res = await request(path, { method: 'DELETE' });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`RTDB delete failed (${res.status}): ${text.slice(0, 200)}`);
+                throw new Error(`RTDB delete failed (${res.status}) at ${path}${rtdbAuthNote(email, res.status)}: ${text.slice(0, 200)}`);
             }
             return { matched: true };
         },
@@ -1131,7 +1141,7 @@ export async function deliverPushNotifications(env, raw, options = {}) {
 
     const accessToken = options.sendOne
         ? null
-        : await getGoogleAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY);
+        : await getGoogleAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY, FCM_SCOPE);
     const sendOne = options.sendOne
         || ((registrationId, subscription) => (
             sendOneFcm(env, accessToken, registrationId, request, subscription.registrationType)
@@ -1744,7 +1754,209 @@ async function lookupAuthAccountName(env, uid) {
         providerName: String(picked?.displayName || '').trim().slice(0, 80),
         providerId: String(picked?.providerId || providers[0]?.providerId || '').slice(0, 40),
         email: String(user.email || '').trim().slice(0, 160),
+        createdAt: Number(user.createdAt) || 0,
     };
+}
+
+/** The day on the public card. The earliest stamp we still have for that account. */
+export function publicJoinedMs({ profile, user, directory, auth } = {}) {
+    return earliestAccountMs(
+        profile?.createdAt,
+        user?.accountCreatedAt,
+        user?.createdAt,
+        directory?.accountCreatedAt,
+        directory?.createdAt,
+        auth?.createdAt,
+    );
+}
+
+function earliestAccountMs(...values) {
+    const nums = values.map((value) => Number(value)).filter((n) => Number.isFinite(n) && n > 1e11);
+    return nums.length ? Math.min(...nums) : 0;
+}
+
+/** The Firebase uid stays the id. createdAt is the earliest stamp we still have. */
+export function buildDeletedAccountRecord({ uid, profile, directory, pub, prior, auth, now = Date.now() } = {}) {
+    const id = String(uid || '').slice(0, 128);
+    const created = earliestAccountMs(
+        profile?.accountCreatedAt,
+        profile?.createdAt,
+        directory?.accountCreatedAt,
+        directory?.createdAt,
+        prior?.accountCreatedAt,
+        prior?.createdAt,
+        auth?.createdAt,
+    ) || now;
+    const joined = earliestAccountMs(profile?.joinedAt, directory?.joinedAt, prior?.joinedAt, created) || created;
+    const deviceIds = {
+        ...(profile?.deviceIds && typeof profile.deviceIds === 'object' ? profile.deviceIds : {}),
+        ...(prior?.deviceIds && typeof prior.deviceIds === 'object' ? prior.deviceIds : {}),
+    };
+    const names = {};
+    const keepName = (raw, at) => {
+        const name = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (!name || /^(passenger|you|admin|anonymous)$/i.test(name)) return;
+        const when = Number(at) || now;
+        if (!names[name] || when < names[name]) names[name] = when;
+    };
+    keepName(profile?.displayName, profile?.updatedAt || profile?.createdAt);
+    keepName(profile?.providerName, profile?.createdAt);
+    keepName(directory?.displayName, directory?.createdAt);
+    keepName(prior?.displayName, prior?.requestedAt);
+    keepName(auth?.providerName, created);
+    if (profile?.nameHistory && typeof profile.nameHistory === 'object') {
+        Object.values(profile.nameHistory).forEach((row) => keepName(row?.name, row?.at));
+    }
+    if (prior?.retainedNames && typeof prior.retainedNames === 'object') {
+        Object.entries(prior.retainedNames).forEach(([name, at]) => keepName(name, at));
+    }
+    const points = Math.max(
+        0,
+        Math.min(100000, Math.floor(Number(pub?.points) || Number(profile?.marks?.points) || Number(prior?.points) || 0)),
+    );
+    const record = {
+        uid: id,
+        email: String(profile?.email || directory?.email || prior?.email || auth?.email || '').trim().slice(0, 160) || null,
+        displayName: String(profile?.displayName || directory?.displayName || prior?.displayName || '').trim().slice(0, 80) || null,
+        provider: String(profile?.provider || directory?.provider || prior?.provider || auth?.providerId || '').slice(0, 40) || null,
+        providerName: String(profile?.providerName || directory?.providerName || auth?.providerName || '').trim().slice(0, 80) || null,
+        region: String(profile?.region || directory?.region || prior?.region || '').trim().slice(0, 8) || null,
+        lastRouteId: String(profile?.lastRouteId || directory?.lastRouteId || prior?.lastRouteId || '').trim().slice(0, 40) || null,
+        appVersion: String(profile?.appVersion || directory?.appVersion || prior?.appVersion || '').trim().slice(0, 24) || null,
+        deviceIds,
+        retainedNames: names,
+        points,
+        createdAt: created,
+        accountCreatedAt: created,
+        joinedAt: joined,
+        requestedAt: Number(prior?.requestedAt) || now,
+        deletedAt: now,
+        status: 'done',
+        reason: String(prior?.reason || profile?.deletionRequestedReason || 'user_request').slice(0, 40),
+    };
+    const deviceId = String(profile?.chatDeviceId || prior?.deviceId || Object.keys(deviceIds)[0] || '').slice(0, 80);
+    if (deviceId) record.deviceId = deviceId;
+    Object.keys(record).forEach((key) => {
+        if (record[key] == null || record[key] === '') delete record[key];
+    });
+    record.uid = id;
+    record.status = 'done';
+    record.createdAt = created;
+    record.accountCreatedAt = created;
+    record.joinedAt = joined;
+    record.requestedAt = Number(prior?.requestedAt) || now;
+    record.deletedAt = now;
+    return record;
+}
+
+async function readAccountPieces(env, uid) {
+    const [profile, directory, pub, prior] = await Promise.all([
+        rtdbGet(env, `users/${uid}`).catch(() => null),
+        rtdbGet(env, `account_directory/${uid}`).catch(() => null),
+        rtdbGet(env, `public_profile/${uid}`).catch(() => null),
+        rtdbGet(env, `account_deletions/${uid}`).catch(() => null),
+    ]);
+    let auth = null;
+    try { auth = await lookupAuthAccountName(env, uid); } catch { auth = null; }
+    return { profile, directory, pub, prior, auth };
+}
+
+async function bearerUser(request, env) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        const error = new Error('Missing Authorization');
+        error.status = 401;
+        throw error;
+    }
+    try {
+        return await verifyIdToken(env, authHeader.slice(7).trim());
+    } catch (e) {
+        const error = new Error(e.message || 'Unauthorized');
+        error.status = 401;
+        throw error;
+    }
+}
+
+/** Move one account off the live list. The Firebase Auth user, and its uid, stay. */
+async function handleAccountDelete(request, env) {
+    let user;
+    try { user = await bearerUser(request, env); } catch (e) {
+        return json(env, request, e.status || 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    const uid = String(user.uid || '');
+    const email = String(user.email || '').trim().toLowerCase();
+    if (!isSafeRtdbKey(uid)) return json(env, request, 400, { ok: false, error: 'Invalid account' });
+    if (ADMIN_EMAILS.has(email)) return json(env, request, 403, { ok: false, error: 'This account cannot be deleted in the app.' });
+    if (!hasFirebaseAdminEnv(env)) return json(env, request, 500, { ok: false, error: 'Firebase Admin env incomplete' });
+    try {
+        const pieces = await readAccountPieces(env, uid);
+        const record = buildDeletedAccountRecord({ uid, ...pieces, now: Date.now() });
+        await rtdbUpdate(env, {
+            [`account_deletions/${uid}`]: record,
+            [`users/${uid}`]: null,
+            [`account_directory/${uid}`]: null,
+            [`public_profile/${uid}`]: null,
+        });
+        return json(env, request, 200, { ok: true, uid, email: record.email || '', createdAt: record.createdAt });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not delete that account.' });
+    }
+}
+
+/** Same uid comes back. The deletion row stays, with the original created time. */
+async function handleAccountRestore(request, env) {
+    let user;
+    try { user = await bearerUser(request, env); } catch (e) {
+        return json(env, request, e.status || 401, { ok: false, error: e.message || 'Unauthorized' });
+    }
+    const uid = String(user.uid || '');
+    if (!isSafeRtdbKey(uid)) return json(env, request, 400, { ok: false, error: 'Invalid account' });
+    if (!hasFirebaseAdminEnv(env)) return json(env, request, 500, { ok: false, error: 'Firebase Admin env incomplete' });
+    try {
+        const prior = await rtdbGet(env, `account_deletions/${uid}`);
+        if (!prior || prior.status !== 'done') return json(env, request, 200, { ok: true, restored: false });
+        const created = earliestAccountMs(prior.accountCreatedAt, prior.createdAt) || Date.now();
+        const now = Date.now();
+        const profile = await rtdbGet(env, `users/${uid}`).catch(() => null);
+        const updates = {
+            [`account_deletions/${uid}/returnedAt`]: now,
+            [`account_directory/${uid}/createdAt`]: created,
+            [`account_directory/${uid}/accountCreatedAt`]: created,
+            [`account_directory/${uid}/joinedAt`]: earliestAccountMs(prior.joinedAt, created) || created,
+            [`account_directory/${uid}/updatedAt`]: now,
+        };
+        if (prior.email) updates[`account_directory/${uid}/email`] = prior.email;
+        if (prior.displayName) updates[`account_directory/${uid}/displayName`] = prior.displayName;
+        if (prior.provider) updates[`account_directory/${uid}/provider`] = prior.provider;
+        if (prior.region) updates[`account_directory/${uid}/region`] = prior.region;
+        if (prior.lastRouteId) updates[`account_directory/${uid}/lastRouteId`] = prior.lastRouteId;
+        if (prior.appVersion) updates[`account_directory/${uid}/appVersion`] = prior.appVersion;
+        if (!profile) {
+            updates[`users/${uid}`] = {
+                displayName: prior.displayName || '',
+                email: prior.email || null,
+                createdAt: created,
+                accountCreatedAt: created,
+                joinedAt: earliestAccountMs(prior.joinedAt, created) || created,
+                deviceIds: prior.deviceIds && typeof prior.deviceIds === 'object' ? prior.deviceIds : {},
+                provider: prior.provider || null,
+                providerName: prior.providerName || null,
+                flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
+                trustScore: 0,
+                updatedAt: now,
+            };
+        } else {
+            const liveCreated = earliestAccountMs(profile.accountCreatedAt, profile.createdAt);
+            if (!liveCreated || liveCreated > created) {
+                updates[`users/${uid}/createdAt`] = created;
+                updates[`users/${uid}/accountCreatedAt`] = created;
+            }
+        }
+        await rtdbUpdate(env, updates);
+        return json(env, request, 200, { ok: true, restored: true, uid, createdAt: created });
+    } catch (e) {
+        return json(env, request, 500, { ok: false, error: e.message || 'Could not restore that account.' });
+    }
 }
 
 async function handleAdminAccountName(request, env) {
@@ -2235,6 +2447,11 @@ async function handleCommunityDelete(request, env) {
         return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
     }
     const actor = !isAdmin || body.as === 'author' ? 'author' : 'admin';
+    const archiveKey = replyId || postId;
+    const archivePath = `community_deleted/${routeId}/${archiveKey}`;
+    const archive = mode === 'tombstone'
+        ? communityDeletedArchive(current, { actor, routeId, postId, replyId, now: Date.now() })
+        : null;
     try {
         if (isAdmin) {
             if (mode === 'purge') {
@@ -2244,16 +2461,23 @@ async function handleCommunityDelete(request, env) {
                     throw new Error(`RTDB delete failed (${removed.status}): ${t.slice(0, 200)}`);
                 }
                 const extras = replyId
-                    ? [`community_activity/${routeId}/${replyId}`]
+                    ? [`community_activity/${routeId}/${replyId}`, archivePath]
                     : [
                         `route_community/${routeId}/post_reactions/${postId}`,
                         `community_activity/${routeId}/${postId}`,
-                        ...Object.keys(current.replies || {}).filter((id) => isSafeRtdbKey(id)).map((id) => `community_activity/${routeId}/${id}`),
+                        archivePath,
+                        ...Object.keys(current.replies || {}).filter((id) => isSafeRtdbKey(id)).flatMap((id) => [
+                            `community_activity/${routeId}/${id}`,
+                            `community_deleted/${routeId}/${id}`,
+                        ]),
                     ];
                 await Promise.all(extras.map((extra) => rtdbUserRequest(env, extra, idToken, { method: 'DELETE' }).catch(() => {})));
                 return json(env, request, 200, { ok: true, mode: 'purge' });
             }
             const patch = communityTombstonePatch(actor);
+            if (archive && hasFirebaseAdminEnv(env)) {
+                await rtdbUpdate(env, { [archivePath]: archive });
+            }
             const patched = await rtdbUserRequest(env, path, idToken, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -2270,6 +2494,7 @@ async function handleCommunityDelete(request, env) {
         }
         const patch = communityTombstonePatch(actor);
         const updates = {};
+        if (archive) updates[archivePath] = archive;
         Object.entries(patch).forEach(([key, value]) => {
             updates[`${path}/${key}`] = value;
         });
@@ -2280,6 +2505,28 @@ async function handleCommunityDelete(request, env) {
     }
 }
 
+async function handlePublicJoined(request, env) {
+    const uid = String(new URL(request.url).searchParams.get('uid') || '').trim();
+    if (!isSafeRtdbKey(uid) || uid.length > 128) return json(env, request, 400, { createdAt: 0 });
+    if (!hasFirebaseAdminEnv(env)) return json(env, request, 200, { createdAt: 0 });
+    const profile = await rtdbGet(env, `public_profile/${uid}`).catch(() => null);
+    const have = Number(profile?.createdAt) || 0;
+    if (have > 1e11) return json(env, request, 200, { createdAt: have });
+    const [user, directory] = await Promise.all([
+        rtdbGet(env, `users/${uid}`).catch(() => null),
+        rtdbGet(env, `account_directory/${uid}`).catch(() => null),
+    ]);
+    let ms = publicJoinedMs({ profile, user, directory });
+    if (!ms) {
+        const auth = await lookupAuthAccountName(env, uid).catch(() => null);
+        ms = publicJoinedMs({ profile, user, directory, auth });
+    }
+    if (ms && profile && typeof profile === 'object') {
+        await rtdbUpdate(env, { [`public_profile/${uid}/createdAt`]: ms }).catch(() => {});
+    }
+    return json(env, request, 200, { createdAt: ms || 0 });
+}
+
 export default {
     async fetch(request, env) {
         if (request.method === 'OPTIONS') {
@@ -2288,6 +2535,9 @@ export default {
         const url = new URL(request.url);
         if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
             return json(env, request, 200, { ok: true, service: 'nexttrain-community' });
+        }
+        if (request.method === 'GET' && url.pathname === '/community/joined') {
+            return handlePublicJoined(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/alerts/image') {
             return handleAlertImageUpload(request, env);
@@ -2321,6 +2571,12 @@ export default {
         }
         if (request.method === 'POST' && url.pathname === '/admin/account-name') {
             return handleAdminAccountName(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/account/delete') {
+            return handleAccountDelete(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/account/restore') {
+            return handleAccountRestore(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/community/message') {
             return handleCommunityDelete(request, env);

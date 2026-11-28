@@ -89,6 +89,37 @@ export function communityTombstonePatch(by, now = Date.now()) {
     };
 }
 
+/**
+ * Private copy of a message that is about to become a tombstone.
+ * The public post is readable by everyone, so this record lives under
+ * community_deleted and is not part of the tombstone patch.
+ */
+export function communityDeletedArchive(current, { actor, routeId, postId, replyId, now = Date.now() } = {}) {
+    if (!current || typeof current !== 'object') return null;
+    const body = String(current.body || '').slice(0, COMMUNITY_BODY_MAX);
+    if (!body || body === DELETED_MESSAGE || body === DELETED_BY_ADMIN) return null;
+    const uid = String(current.uid || '').slice(0, 128);
+    const route = String(routeId || '').slice(0, 80);
+    const post = String(postId || '').slice(0, 80);
+    if (!uid || !route || !post) return null;
+    const record = {
+        body,
+        uid,
+        timestamp: Number(current.timestamp) || now,
+        deletedAt: now,
+        deletedBy: actor === 'admin' ? 'admin' : 'author',
+        routeId: route,
+        postId: post,
+    };
+    const name = String(current.displayName || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (name) record.displayName = name;
+    const link = sanitizeCommunityLinkUrl(current.linkUrl);
+    if (link) record.linkUrl = link.slice(0, 400);
+    const reply = String(replyId || '').slice(0, 80);
+    if (reply) record.replyId = reply;
+    return record;
+}
+
 const COMMUNITY_BUCKET_IMAGE = /^\/community-images\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
 /** A photo already stored in the community R2 bucket. Alert photos stay on /alerts/. */

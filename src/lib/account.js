@@ -18,7 +18,7 @@
  */
 import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
-import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION } from './config.js';
+import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION, COMMUNITY_WORKER_URL, COMMUNITY_WORKER_FALLBACK_URL } from './config.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { safeStorage, applyCanonicalDeviceId } from './utils.js';
 import {
@@ -32,7 +32,9 @@ import {
     clampDisplayName,
     resolveAccountDisplayName,
     refuseDisplayName,
+    displayNameMeetsMinimum,
     DISPLAY_NAME_REFUSE_MSG,
+    DISPLAY_NAME_MIN_MSG,
 } from './display-name.js';
 import { paintDataSaverUi, readDataSaver, writeDataSaver } from './data-saver.js';
 
@@ -535,12 +537,23 @@ export async function ensureUserProfile(user, opts = {}) {
     const customName = refused.ok ? refused.name : '';
 
     try {
+        const deletedRecord = await restoreDeletedAccount(user);
         const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, userPath));
         const existing = snap.exists() ? (snap.val() || {}) : null;
-        const displayName = resolveAccountDisplayName(user, {
+        const storedName = clampDisplayName(existing?.displayName);
+        let displayName = resolveAccountDisplayName(user, {
             displayName: customName || existing?.displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
         });
+        let askForDisplayName = false;
+        if (existing && storedName && !customName) {
+            if (!displayNameMeetsMinimum(storedName) || !displayNameMeetsMinimum(displayName)) {
+                displayName = storedName;
+            }
+        } else if (displayName && !displayNameMeetsMinimum(displayName)) {
+            displayName = '';
+            askForDisplayName = !existing || !storedName;
+        }
         const localPrefs = readLocalAccountPrefs();
         const priorIds = existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : null;
         const mergedDeviceIds = { ...(priorIds || {}) };
@@ -563,7 +576,11 @@ export async function ensureUserProfile(user, opts = {}) {
             if (age === Number.MAX_SAFE_INTEGER) return;
             if (!presenceMs || age < presenceMs) presenceMs = age;
         });
-        const accountCreatedAt = stampMs(existing?.accountCreatedAt) || stampMs(existing?.createdAt) || now;
+        const accountCreatedAt = stampMs(existing?.accountCreatedAt)
+            || stampMs(existing?.createdAt)
+            || stampMs(deletedRecord?.accountCreatedAt)
+            || stampMs(deletedRecord?.createdAt)
+            || now;
         const joinedAt = Math.min(accountCreatedAt, presenceMs || accountCreatedAt);
         const chatDeviceId = adopted || pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
@@ -579,8 +596,8 @@ export async function ensureUserProfile(user, opts = {}) {
                 ...(provider ? { provider } : {}),
                 photoURL,
                 email: user.email || null,
-                createdAt: now,
-                accountCreatedAt: now,
+                createdAt: accountCreatedAt,
+                accountCreatedAt,
                 joinedAt,
                 deviceIds: { ...mergedDeviceIds },
                 flags: {
@@ -656,7 +673,7 @@ export async function ensureUserProfile(user, opts = {}) {
                     displayName: displayName || null,
                     ...(legalName ? { providerName: legalName } : {}),
                     email: user.email || existing?.email || null,
-                    createdAt: existing?.createdAt || now,
+                    createdAt: existing?.createdAt || accountCreatedAt,
                     accountCreatedAt,
                     joinedAt,
                     provider: String(provider || '').slice(0, 40) || null,
@@ -683,6 +700,7 @@ export async function ensureUserProfile(user, opts = {}) {
                 .then((m) => m.publishPublicProfile({ displayName }))
                 .catch(() => {});
         }
+        if (askForDisplayName) askForADisplayName();
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
@@ -700,33 +718,42 @@ export async function updateAccountDisplayName(raw) {
     const check = refuseDisplayName(raw);
     if (!check.ok) throw new Error(check.message);
     const custom = check.name;
-    const displayName = custom || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    const fallback = formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    const fallbackCheck = custom ? null : refuseDisplayName(fallback);
+    if (fallbackCheck && !fallbackCheck.ok) throw new Error(fallbackCheck.message);
+    const displayName = custom || fallbackCheck.name;
     const photoURL = resolveAuthPhotoURL(user);
-    if (window.firebaseUpdateProfile) {
-        const profilePatch = { displayName };
-        if (photoURL) profilePatch.photoURL = photoURL;
-        try { await window.firebaseUpdateProfile(user, profilePatch); } catch { /* RTDB is source for chat */ }
-    }
-    if (window.firebaseDb) {
+    const profileWrite = window.firebaseUpdateProfile
+        ? window.firebaseUpdateProfile(user, photoURL ? { displayName, photoURL } : { displayName }).catch(() => {})
+        : Promise.resolve();
+    const nameWrite = (async () => {
+        if (!window.firebaseDb) return;
         const profileRow = {
             displayName,
             displayNameCustom: !!custom,
             updatedAt: Date.now(),
         };
         try {
-            const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`));
-            const existing = snap.exists() ? (snap.val() || {}) : null;
+            const [nameSnap, historySnap] = await Promise.all([
+                window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/displayName`)),
+                window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/nameHistory`)),
+            ]);
+            const existing = {
+                displayName: nameSnap.exists() ? nameSnap.val() : '',
+                nameHistory: historySnap.exists() ? (historySnap.val() || {}) : {},
+            };
             Object.assign(profileRow, priorNamePatch(existing, displayName, profileRow.updatedAt));
         } catch { /* the new name still saves */ }
         if (photoURL) profileRow.photoURL = photoURL;
-        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
-        try {
-            await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`), {
+        await Promise.all([
+            window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow),
+            window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`), {
                 displayName,
                 updatedAt: Date.now(),
-            });
-        } catch { /* directory is optional until rules are deployed */ }
-    }
+            }).catch(() => {}),
+        ]);
+    })();
+    await Promise.all([profileWrite, nameWrite]);
     publishUser(user, { displayName, displayNameCustom: !!custom, photoURL });
     window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     return displayName;
@@ -875,7 +902,42 @@ function notifyOperatorsOfDeletion(draft) {
     openDeletionMail(draft);
 }
 
-/** Flag the profile and email operators. Does not wipe Firebase Auth. */
+function accountWorkerBase() {
+    return COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
+}
+
+async function accountIdToken(user) {
+    if (window.firebaseGetIdToken && user) {
+        try { return await window.firebaseGetIdToken(user, true); } catch { return ''; }
+    }
+    return '';
+}
+
+/** A deleted account signs in again on the same Firebase uid. The history row stays. */
+async function restoreDeletedAccount(user) {
+    if (!user?.uid || user.isAnonymous) return null;
+    let row = null;
+    try {
+        const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `account_deletions/${user.uid}`));
+        row = snap.exists() ? (snap.val() || null) : null;
+    } catch { return null; }
+    if (!row || row.status !== 'done' || row.returnedAt) return row;
+    const token = await accountIdToken(user);
+    if (!token) return row;
+    try {
+        await fetch(`${accountWorkerBase()}/account/restore`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: '{}',
+        });
+    } catch { /* the profile write below still keeps the original time */ }
+    return row;
+}
+
+/** Move the live profile onto the deleted list. Does not wipe Firebase Auth, so the uid stays. */
 export async function requestAccountDeletion() {
     const state = $account.get();
     if (isAdminEmail(state.email)) {
@@ -891,6 +953,26 @@ export async function requestAccountDeletion() {
     }
     const now = Date.now();
     const draft = deletionRequestDraft(user);
+    const token = await accountIdToken(user);
+    if (token) {
+        try {
+            const res = await fetch(`${accountWorkerBase()}/account/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: '{}',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.ok) {
+                trackAnalyticsEvent('account_delete', { location: 'account_delete' });
+                await signOutAccount();
+                closeAccountModal();
+                return { removed: true };
+            }
+        } catch { /* the request stays on the operator queue */ }
+    }
     const deviceId = getDeviceId();
     let existing = null;
     try {
@@ -935,6 +1017,7 @@ export async function requestAccountDeletion() {
     await signOutAccount();
     closeAccountModal();
     if (!wrote) openDeletionMail(draft);
+    return { removed: false };
 }
 
 export async function signInWithEmail(email, password) {
@@ -1380,6 +1463,14 @@ export async function pushAccountRecentTrips() {
     }
 }
 
+function askForADisplayName() {
+    if (typeof window.showToast === 'function') window.showToast(DISPLAY_NAME_MIN_MSG);
+    const welcome = document.getElementById('welcome-modal');
+    if (welcome && !welcome.classList.contains('hidden')) return;
+    openAccountModal();
+    setAccountProfileOpen(true);
+}
+
 function setAccountProfileOpen(open) {
     if (open) setAccountPane('profile');
     else if (getAccountPane() === 'profile') setAccountPane('hub', { skipHistory: true });
@@ -1388,6 +1479,7 @@ function setAccountProfileOpen(open) {
         if (input && document.activeElement !== input) {
             input.value = $account.get().displayName || '';
         }
+        paintAccountProfileHero();
     }
 }
 
@@ -1453,6 +1545,82 @@ export function closeAccountModal() {
 }
 
 /** Sync Settings → Account row from $account */
+const PROFILE_EMOJI_CHOICES = ['😀', '😁', '😊', '🙂', '😉', '😎', '🤓', '😺', '🚆', '⭐', '🌟', '💙', '💚', '🙌', '👍', '🙏', '🔥', '✨'];
+
+function paintAccountProfileHero() {
+    const host = document.getElementById('account-profile-avatar');
+    const joined = document.getElementById('account-profile-joined');
+    const picker = document.getElementById('account-emoji-picker');
+    if (!host && !joined && !picker) return;
+    const state = $account.get();
+    const signed = state?.status === 'signed-in';
+    const photo = signed ? String(state.photoURL || '') : '';
+    const emoji = safeStorage.getItem('ntAvatarEmoji') || '';
+    const name = String(state?.displayName || '').trim();
+    if (host) {
+        host.replaceChildren();
+        host.className = 'flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8eefc] text-xl font-bold text-[#4C8DFF]';
+        const showPhoto = safeStorage.getItem('ntShowPhotoInAlerts') === '1';
+        if (photo && showPhoto) {
+            const img = document.createElement('img');
+            img.src = photo;
+            img.alt = '';
+            img.referrerPolicy = 'no-referrer';
+            img.className = 'h-full w-full object-cover';
+            host.appendChild(img);
+        } else if (emoji) {
+            host.textContent = emoji;
+            host.classList.add('text-3xl', 'font-normal');
+        } else {
+            const letter = Array.from(name || 'You')[0] || 'Y';
+            host.textContent = letter.toLocaleUpperCase();
+        }
+    }
+    if (joined) {
+        const raw = signed ? window.firebaseAuth?.currentUser?.metadata?.creationTime : '';
+        const ms = raw ? Date.parse(raw) : 0;
+        if (Number.isFinite(ms) && ms > 0) {
+            let label = '';
+            try {
+                label = new Intl.DateTimeFormat('en-ZA', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'Africa/Johannesburg',
+                }).format(new Date(ms));
+            } catch { label = ''; }
+            joined.textContent = label ? `Joined ${label}` : '';
+        } else {
+            joined.textContent = '';
+        }
+    }
+    const hidden = document.getElementById('account-emoji-value');
+    if (hidden) hidden.value = emoji;
+    if (picker && picker.childElementCount === 0) {
+        const letter = document.createElement('button');
+        letter.type = 'button';
+        letter.setAttribute('data-account-emoji', '');
+        letter.className = 'h-10 min-w-10 rounded-full bg-white px-2 text-sm font-bold text-gray-700 dark:bg-[#2c2c2e] dark:text-gray-100';
+        letter.textContent = 'Abc';
+        letter.setAttribute('aria-label', 'Use a letter');
+        picker.appendChild(letter);
+        PROFILE_EMOJI_CHOICES.forEach((face) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-account-emoji', face);
+            btn.className = 'h-10 w-10 rounded-full bg-white text-xl dark:bg-[#2c2c2e]';
+            btn.textContent = face;
+            btn.setAttribute('aria-label', face);
+            picker.appendChild(btn);
+        });
+    }
+    picker?.querySelectorAll('[data-account-emoji]').forEach((btn) => {
+        const on = (btn.getAttribute('data-account-emoji') || '') === emoji;
+        btn.classList.toggle('ring-2', on);
+        btn.classList.toggle('ring-[#4C8DFF]', on);
+    });
+}
+
 export function syncAccountSettingsUi(state = $account.get()) {
     if (typeof document === 'undefined') return;
     const nameEl = document.getElementById('settings-account-name');
@@ -1579,6 +1747,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }).catch(() => {});
     }
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
+    paintAccountProfileHero();
     const paxLabel = $userProfile.get() || document.getElementById('settings-profile-display')?.textContent || 'Adult';
     const accountPax = document.getElementById('account-passenger-type-display');
     if (accountPax) accountPax.textContent = paxLabel;
@@ -2126,9 +2295,9 @@ export function bindAccountUi() {
             }
             paintAccountPoints();
         } catch (e) {
-            if (e?.message === DISPLAY_NAME_REFUSE_MSG) {
-                if (typeof window.showToast === 'function') window.showToast(DISPLAY_NAME_REFUSE_MSG);
-                showErr(DISPLAY_NAME_REFUSE_MSG);
+            if (e?.message === DISPLAY_NAME_REFUSE_MSG || e?.message === DISPLAY_NAME_MIN_MSG) {
+                if (typeof window.showToast === 'function') window.showToast(e.message);
+                showErr(e.message);
             } else {
                 showErr(friendlyAuthError(e));
             }
@@ -2142,25 +2311,67 @@ export function bindAccountUi() {
         const photo = document.getElementById('account-photo-alerts');
         const nameErr = document.getElementById('account-name-error');
         if (nameErr) nameErr.textContent = '';
+        const check = refuseDisplayName(input?.value || '');
+        if (!check.ok) {
+            if (nameErr) nameErr.textContent = check.message;
+            showErr(check.message);
+            return;
+        }
         setBusy(true);
+        let showPhoto = false;
+        let emoji = '';
+        let createdAt = 0;
+        let publishPublicProfile = async () => {};
+        let prefsPromise = Promise.resolve();
         try {
-            const next = await updateAccountDisplayName(input?.value || '');
-            if (input) input.value = next;
-            const { publishPublicProfile, setShowPhotoInAlerts } = await import('./rider-marks.js');
-            await setShowPhotoInAlerts(!!photo?.checked);
-            await publishPublicProfile({ displayName: next });
-            await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
-            if (photo) delete photo.dataset.dirty;
+            const marks = await import('./rider-marks.js');
+            publishPublicProfile = marks.publishPublicProfile;
+            showPhoto = !!photo?.checked;
+            emoji = marks.setAvatarEmoji(document.getElementById('account-emoji-value')?.value || '');
+            safeStorage.setItem('ntShowPhotoInAlerts', showPhoto ? '1' : '0');
+            const user = window.firebaseAuth?.currentUser;
+            createdAt = user?.metadata?.creationTime ? Date.parse(user.metadata.creationTime) : 0;
+            paintAccountProfileHero();
+            const { paintOwnCommunityIdentity } = await import('./community.js');
+            paintOwnCommunityIdentity();
+            prefsPromise = Promise.all([
+                marks.setShowPhotoInAlerts(showPhoto, { publish: false }),
+                pushSignedInPrefs({ showPhotoInAlerts: showPhoto }),
+            ]);
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
-            if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
-                window.showToast(DISPLAY_NAME_REFUSE_MSG);
+            if (nameErr) nameErr.textContent = msg;
+            showErr(msg);
+            setBusy(false);
+            return;
+        }
+        setBusy(false);
+        try {
+            const user = window.firebaseAuth?.currentUser;
+            const profileBody = {
+                showPhoto,
+                photoURL: showPhoto ? ($account.get()?.photoURL || user?.photoURL || '') : '',
+                avatarEmoji: emoji,
+                createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+            };
+            const namePromise = updateAccountDisplayName(input?.value || '');
+            const profilePromise = check.name
+                ? publishPublicProfile({ ...profileBody, displayName: check.name })
+                : namePromise.then((saved) => publishPublicProfile({ ...profileBody, displayName: saved || '' }));
+            const [next] = await Promise.all([namePromise, prefsPromise, profilePromise]);
+            if (input && next) input.value = next;
+            if (photo) delete photo.dataset.dirty;
+            const { paintOwnCommunityIdentity } = await import('./community.js');
+            paintOwnCommunityIdentity();
+            paintAccountProfileHero();
+        } catch (e) {
+            const msg = e?.message || 'Could not save.';
+            if ((msg === DISPLAY_NAME_REFUSE_MSG || msg === DISPLAY_NAME_MIN_MSG) && typeof window.showToast === 'function') {
+                window.showToast(msg);
             }
             if (nameErr) nameErr.textContent = msg;
             showErr(msg);
-        } finally {
-            setBusy(false);
         }
     });
 
@@ -2241,8 +2452,10 @@ export function bindAccountUi() {
         if ((deleteType?.value || '') !== 'DELETE') return;
         setBusy(true);
         try {
-            await requestAccountDeletion();
-            if (typeof window.showToast === 'function') window.showToast('Deletion request sent');
+            const result = await requestAccountDeletion();
+            if (typeof window.showToast === 'function') {
+                window.showToast(result?.removed ? 'Account deleted' : 'Deletion request sent');
+            }
         } catch (e) {
             showErr(e?.message || 'Could not send the deletion request.');
         } finally {
@@ -2308,16 +2521,50 @@ export function bindAccountUi() {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
         if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal');
     });
+    document.getElementById('account-emoji-picker')?.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-account-emoji]');
+        if (!btn) return;
+        const hidden = document.getElementById('account-emoji-value');
+        if (hidden) hidden.value = btn.getAttribute('data-account-emoji') || '';
+        import('./rider-marks.js').then((m) => {
+            const emoji = m.setAvatarEmoji(hidden?.value || '');
+            paintAccountProfileHero();
+            const createdAt = window.firebaseAuth?.currentUser?.metadata?.creationTime
+                ? Date.parse(window.firebaseAuth.currentUser.metadata.creationTime)
+                : 0;
+            m.publishPublicProfile({
+                avatarEmoji: emoji,
+                createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+                photoURL: $account.get()?.photoURL || '',
+            }).catch(() => {});
+            return import('./community.js');
+        }).then((m) => m?.paintOwnCommunityIdentity?.()).catch(() => {});
+    });
+    const applyPhotoChoice = (on) => {
+        safeStorage.setItem('ntShowPhotoInAlerts', on ? '1' : '0');
+        paintAccountProfileHero();
+        const createdAt = window.firebaseAuth?.currentUser?.metadata?.creationTime
+            ? Date.parse(window.firebaseAuth.currentUser.metadata.creationTime)
+            : 0;
+        import('./rider-marks.js').then((m) => m.publishPublicProfile({
+            showPhoto: !!on,
+            photoURL: $account.get()?.photoURL || '',
+            createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+        })).catch(() => {});
+        import('./community.js').then((m) => m.paintOwnCommunityIdentity?.()).catch(() => {});
+    };
     document.getElementById('account-photo-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
-        if (t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
+        if (t.closest?.('label') || t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
         const cb = document.getElementById('account-photo-alerts');
         if (!cb) return;
         cb.checked = !cb.checked;
         cb.dataset.dirty = '1';
+        applyPhotoChoice(cb.checked);
     });
     document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
         e.target.dataset.dirty = '1';
+        applyPhotoChoice(!!e.target.checked);
     });
     const persistMarksVisibility = async (on) => {
         try {

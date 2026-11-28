@@ -1,5 +1,55 @@
 # Changelog
 
+## V10_11.28.10 — no release notes
+
+## V10_11.28.9 — no release notes
+
+## V10_11.28.8 — no release notes
+
+## V10_11.28.7 — no release notes
+
+## V10_11.28.6 — no release notes
+
+## V10_11.28.5 — no release notes
+
+## V10_11.28.4 — no release notes
+
+## V10_11.28.3 — no release notes
+
+## V10_11.28.2 — no release notes
+
+## V10_11.28.1 — no release notes
+
+## V10_11.27.2 — no release notes
+
+## V10_11.27.1 — no release notes
+
+## V10_11.26.6 — no release notes
+
+## V10_11.26.5 — no release notes
+
+## V10_11.26.4 — no release notes
+
+## V10_11.26.3 — no release notes
+
+## V10_11.26.2 — no release notes
+
+## V10_11.26.1 — no release notes
+
+## V10_11.25.1 — no release notes
+
+## V10_11.23.2 — no release notes
+
+- The full user graph holds its controls, and Community Monitor follows the commuter bubbles.
+
+## V10_11.23.1 — no release notes
+
+- Community opens on unread messages or the latest ones, a send shows immediately, and the operator graph can add up the buckets on screen. A refused scheduled-alert write names the database path. Deploy the database rules if the live rules are still behind this file.
+
+## V10_11.22.1 — no release notes
+
+- A shared notice link that names one poster shows that poster on the community card.
+
 ## V10_11.21.2 — no release notes
 
 - Operator community chips, send motion, account paging, maintenance menus, shorter fare cards, pull-to-dismiss reaction sheets, hourly schedule QA, and two log labels. Live site still needs Deploy production. Database rules need `npm run firebase:rules` for `schedule_qa_status`.

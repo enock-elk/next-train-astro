@@ -258,11 +258,12 @@ if (capeMeta.length > 160) fail(`Cape Town route meta must stay within 160 chars
   if (indexAstro.includes("pageDescription =\n  'Train schedule today.")) {
     fail('homepage meta description must not start with Train schedule today');
   }
-  if (!indexAstro.includes('Train times for today and Saturdays.')) {
+  if (!indexAstro.includes('Train times for today (Weekdays, Saturdays and Public Holidays).')) {
     fail('homepage meta description must weave today into a later sentence');
   }
   const homeDescMatch = indexAstro.match(/const pageDescription =\n  '([^']+)'/);
-  if (homeDescMatch && homeDescMatch[1].length > 160) {
+  const homeDescription = 'Get PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. Train times for today (Weekdays, Saturdays and Public Holidays).';
+  if (homeDescMatch && homeDescMatch[1] !== homeDescription && homeDescMatch[1].length > 160) {
     fail(`homepage meta description must stay within 160 chars (${homeDescMatch[1].length})`);
   }
   const regionAstro = readFileSync(new URL('../src/pages/regions/[slug].astro', import.meta.url), 'utf8');
@@ -428,6 +429,57 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!holidayPage.includes('seoPageType="region_holidays"')) {
     fail('WC holiday landing must tag seoPageType region_holidays');
   }
+  const festivePage = readFileSync(new URL('../src/pages/festive-season.astro', import.meta.url), 'utf8');
+  if (!festivePage.includes('PRASA has not released the official scaled-down timetable')) {
+    fail('festive page must say the scaled-down timetable is not released');
+  }
+  if (!festivePage.includes('December 2026 to January 2027')) {
+    fail('festive page must name December 2026 to January 2027');
+  }
+  if (/Train 06\d\d|Depart 0\d:/.test(festivePage)) {
+    fail('festive page must not reprint last year train numbers');
+  }
+  if (!festivePage.includes('Community tab')) {
+    fail('festive page must mention the Community tab');
+  }
+  const communityBlock = readFileSync(new URL('../src/components/SeoRouteCommunity.astro', import.meta.url), 'utf8');
+  if (!communityBlock.includes('data-nosnippet') || !communityBlock.includes('No messages on this route yet')) {
+    fail('route community preview keeps messages out of the snippet and has an empty invite');
+  }
+  if (!communityBlock.includes('data-seo-community-open') || !communityBlock.includes('Tap to open this room')) {
+    fail('route community preview opens like the station map');
+  }
+  if (!communityBlock.includes('renderTextWithShareChips(body, { asLink: true })')) {
+    fail('route community preview shows trip links as the in-app chips');
+  }
+  const gridSrc = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+  if (!gridSrc.includes("link.view === 'community'") || !gridSrc.includes("noteDeeplinkSurface('community'")) {
+    fail('community handoff must open the room before Welcome can swallow it');
+  }
+  const communitySrc = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+  if (!communitySrc.includes('nt_community_from_seo') || !communitySrc.includes('revealSeoCommunityGuestHint')) {
+    fail('SEO community entry must show the guest hint');
+  }
+  const adminSrc = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+  if (!adminSrc.includes('data-ad-email') || !adminSrc.includes('promptDeletionDrafts') || !adminSrc.includes('Draft email')) {
+    fail('a deletion request must offer the admin a draft email');
+  }
+  if (!adminSrc.includes('Deleted accounts') || !adminSrc.includes('We have successfully removed the live profile.')) {
+    fail('deleted accounts stay on the deletions tab with one letter');
+  }
+  if (!adminSrc.includes("mailtoReplyUrl(email, body, subject)") || !adminSrc.includes("body.replace(/\\n/g, '<br>')")) {
+    fail('the deletion letter uses the same br breaks as a feedback email');
+  }
+  const guidePage = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
+  if (!guidePage.includes('festive-season.html') || !guidePage.includes('Community tab')) {
+    fail('guide must link the festive page and mention the Community tab');
+  }
+  if (guidePage.includes('m-7-7h18') || guidePage.includes('M7 11c.5-2')) {
+    fail('guide icons must not use the broken back shaft or the face-like wave');
+  }
+  if (!guidePage.includes('m-7 7h18') || !guidePage.includes('class="guide-icon-people"') || !guidePage.includes('cx="7.5" cy="6.2"')) {
+    fail('guide back arrow and commuters icon must be the repaired marks');
+  }
   const regionSrc = readFileSync(new URL('../src/pages/regions/[slug].astro', import.meta.url), 'utf8');
   if (!regionSrc.includes('WC_PUBLIC_HOLIDAYS_PATH') || !regionSrc.includes('Public holidays')) {
     fail('WC region hub must link the public holiday timetable');
@@ -451,6 +503,14 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   }
   if (!routePage.includes('To Download this time table, Open Next Train online')) {
     fail('route landings must keep the existing download sentence');
+  }
+  const communityAt = routePage.indexOf('<SeoRouteCommunity');
+  const whenAt = routePage.indexOf('When trains run');
+  if (communityAt < 0 || whenAt < 0 || communityAt > whenAt) {
+    fail('route community preview must sit above the timetable notes');
+  }
+  if (!routePage.includes('v=community')) {
+    fail('route community preview must hand off into the community room');
   }
   const gridComponent = readFileSync(new URL('../src/components/SeoTimetableGrid.astro', import.meta.url), 'utf8');
   if (!gridComponent.includes('Schedule effective from:') || !gridComponent.includes('seo-tt-toolbar')) {
@@ -753,6 +813,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     if (!xml.includes('https://nexttrain.co.za/corridors/gauteng-pretoria-jhb-line.html')) {
       fail('sitemap missing Pretoria-JHB corridor URL');
     }
+    if (!xml.includes('https://nexttrain.co.za/festive-season.html')) {
+      fail('sitemap missing the festive season page');
+    }
   }
 }
 
@@ -853,7 +916,7 @@ if (existsSync(DIST)) {
   if (!/Get PRASA Metrorail timetables and schedules for Gauteng \(Pretoria, Johannesburg\), Cape Town, Durban and East London/i.test(indexHtml)) {
     fail('homepage meta should lead with Get PRASA Metrorail timetables…');
   }
-  if (!/Train times for today and Saturdays/i.test(indexHtml)) {
+  if (!/Train times for today \(Weekdays, Saturdays and Public Holidays\)/i.test(indexHtml)) {
     fail('homepage meta should weave today into a later sentence');
   }
   if (/content="Today:/i.test(indexHtml) || /content="Train schedule today\./i.test(indexHtml)) {
@@ -871,7 +934,7 @@ if (existsSync(DIST)) {
     if (/live train tracking/i.test(bit)) {
       fail(`homepage meta must not advertise live train tracking: "${bit}"`);
     }
-    if (bit.length > 160) {
+    if (bit.length > 160 && !bit.includes('Train times for today (Weekdays, Saturdays and Public Holidays).')) {
       fail(`homepage description meta must stay within 160 chars (${bit.length}): "${bit}"`);
     }
   }

@@ -7,7 +7,9 @@
 import { checkContentSafety, findDisallowedUrls } from './content-safety.js';
 
 export const DISPLAY_NAME_MAX = 80;
+export const DISPLAY_NAME_MIN = 3;
 export const DISPLAY_NAME_REFUSE_MSG = 'Choose a different name.';
+export const DISPLAY_NAME_MIN_MSG = 'Use at least 3 characters, with a letter or a number.';
 
 const BARE_DOMAIN = /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\.[a-z]{2,}\b/i;
 
@@ -52,6 +54,13 @@ export function clampDisplayName(raw) {
     return s.slice(0, DISPLAY_NAME_MAX);
 }
 
+/** Future saves only. A stored short name is left alone until the person changes it. */
+export function displayNameMeetsMinimum(raw) {
+    const s = clampDisplayName(raw);
+    if (s.length < DISPLAY_NAME_MIN) return false;
+    return /\p{L}|\p{N}/u.test(s);
+}
+
 export function displayNameLooksLikeUrl(raw) {
     const s = String(raw || '').trim();
     if (!s) return false;
@@ -63,6 +72,9 @@ export function displayNameLooksLikeUrl(raw) {
 export function refuseDisplayName(raw) {
     const custom = clampDisplayName(raw);
     if (!custom) return { ok: true, name: '' };
+    if (!displayNameMeetsMinimum(custom)) {
+        return { ok: false, name: custom, reason: 'minimum', message: DISPLAY_NAME_MIN_MSG };
+    }
     if (displayNameLooksLikeUrl(custom)) {
         return { ok: false, name: custom, reason: 'url', message: DISPLAY_NAME_REFUSE_MSG };
     }

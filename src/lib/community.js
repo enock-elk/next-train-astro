@@ -5,6 +5,8 @@
  *   route_community/{routeId}/posts/{postId}
  *   route_community/{routeId}/posts/{postId}/replies/{replyId}
  *   route_community/{routeId}/post_reactions/{postId}/{uid} = { emoji, at }
+ *   reaction_inbox/{authorUid}/{postId} = { emoji, at, from, routeId, name }
+ *   community_deleted/{routeId}/{messageId}  admin-only copy of a removed message
  *   moderation_queue/{reportId}
  *
  * Shadow-ban policy: rules reject writes; client still shows the author's
@@ -45,10 +47,13 @@ import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } 
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isCommunityOpenInRegion, isCommunityTabKilled, isListedCommunityRoute } from './features.js';
 import {
     awardCommunityMarks,
+    awardMark,
     contributionDayKey,
     marksPublicSnapshot,
     readMarks,
     renderBubbleMarksHtml,
+    readAvatarEmoji,
+    sanitizeAvatarEmoji,
     showMarksInCommunity,
     showPhotoInAlerts,
 } from './rider-marks.js';
@@ -99,6 +104,8 @@ let reactionsListenRouteId = null;
 /** @type {(() => void)[]} */
 let reactionPostUnsubs = [];
 let reactionPostKey = '';
+/** First snapshot per post is the room as it already is. Later changes can haptic. */
+const reactionPrimed = new Set();
 let reactionsPollTimer = null;
 let reactionPaintTimer = null;
 let reactionsFetchedAt = 0;
@@ -449,26 +456,31 @@ function avatarInk(color) {
 }
 
 /** Letter in this person's colour. A small disc when the name has no letter. No person emoji. */
-function avatarMarkHtml(name, color) {
+function avatarMarkHtml(name, color, large = false) {
     const ink = avatarInk(color);
     const letter = avatarInitial(name);
     if (!letter) {
-        return `<span class="community-avatar-mark" style="background:${ink}" aria-hidden="true"></span>`;
+        const dot = large ? '1.1rem' : '0.625rem';
+        return `<span class="community-avatar-mark" style="background:${ink};width:${dot};height:${dot}" aria-hidden="true"></span>`;
     }
-    return `<span class="community-avatar-letter" style="color:${ink}">${escapeHTML(letter)}</span>`;
+    return `<span class="community-avatar-letter" style="color:${ink};font-size:${large ? '1.25rem' : '0.75rem'}">${escapeHTML(letter)}</span>`;
 }
 
-function renderAvatarHtml(photoURL, name, color) {
+function renderAvatarHtml(photoURL, name, color, emoji, large = false) {
     const ink = avatarInk(color);
-    const mark = avatarMarkHtml(name, color);
+    const face = sanitizeAvatarEmoji(emoji);
+    const mark = face
+        ? `<span class="community-avatar-emoji" style="font-size:${large ? '1.75rem' : '0.95rem'}" aria-hidden="true">${escapeHTML(face)}</span>`
+        : avatarMarkHtml(name, color, large);
+    const size = large ? '3.25rem' : '1.625rem';
     const safePhoto = profilePhotosOn() ? sanitizeCommunityPhotoUrl(photoURL) : '';
     if (safePhoto) {
-        return `<span class="relative inline-flex w-[1.625rem] h-[1.625rem] shrink-0">
-            <img src="${escapeHTML(safePhoto)}" alt="" class="w-[1.625rem] h-[1.625rem] rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
-            <span class="avatar-fallback community-avatar-disc hidden absolute inset-0 w-[1.625rem] h-[1.625rem] rounded-full flex items-center justify-center" style="--nt-avatar:${ink}">${mark}</span>
+        return `<span class="relative inline-flex shrink-0" style="width:${size};height:${size}">
+            <img src="${escapeHTML(safePhoto)}" alt="" class="rounded-full object-cover bg-gray-200 dark:bg-gray-700" style="width:${size};height:${size}" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
+            <span class="avatar-fallback community-avatar-disc hidden absolute inset-0 rounded-full flex items-center justify-center" style="--nt-avatar:${ink};width:${size};height:${size}">${mark}</span>
         </span>`;
     }
-    return `<span class="community-avatar-disc w-[1.625rem] h-[1.625rem] rounded-full flex items-center justify-center text-sm shrink-0" style="--nt-avatar:${ink}">${mark}</span>`;
+    return `<span class="community-avatar-disc rounded-full flex items-center justify-center text-sm shrink-0" style="--nt-avatar:${ink};width:${size};height:${size}">${mark}</span>`;
 }
 
 async function publicCommuterPhoto(acct) {
@@ -544,11 +556,49 @@ function findCachedPost(postId) {
     return cachedFeedPosts.find((p) => p.postId === postId) || null;
 }
 
+const COMMUNITY_HIDE_KEY = 'ntCommunityHideForMeV1';
+const COMMUNITY_HIDE_CAP = 400;
+
+function communityHideBag() {
+    const uid = myCommunityUid();
+    if (!uid) return null;
+    try {
+        const all = JSON.parse(safeStorage.getItem(COMMUNITY_HIDE_KEY) || '{}');
+        const bag = all && typeof all === 'object' ? all[uid] : null;
+        return bag && typeof bag === 'object' ? bag : {};
+    } catch {
+        return {};
+    }
+}
+
+function communityHiddenForMe(id) {
+    const key = String(id || '');
+    if (!key) return false;
+    const bag = communityHideBag();
+    return !!(bag && bag[key]);
+}
+
+function rememberCommunityHidden(id) {
+    const uid = myCommunityUid();
+    const key = String(id || '');
+    if (!uid || !key) return false;
+    let all = {};
+    try { all = JSON.parse(safeStorage.getItem(COMMUNITY_HIDE_KEY) || '{}') || {}; } catch { all = {}; }
+    if (!all[uid] || typeof all[uid] !== 'object') all[uid] = {};
+    all[uid][key] = Date.now();
+    const ids = Object.entries(all[uid]).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, COMMUNITY_HIDE_CAP);
+    all[uid] = Object.fromEntries(ids);
+    safeStorage.setItem(COMMUNITY_HIDE_KEY, JSON.stringify(all));
+    cachedFeedPosts = cachedFeedPosts.filter((row) => String(row?.postId || '') !== key);
+    return true;
+}
+
 function postsVisibleFilter(list, myUid) {
     return (list || [])
         .filter((p) => p && typeof p === 'object' && (p.body || p.linkUrl || (Array.isArray(p.attachments) && p.attachments.length)))
         .filter((p) => {
             if (p.pendingReview) return false;
+            if (communityHiddenForMe(p.postId)) return false;
             if (p.hidden && p.uid !== myUid && !isCommunityTombstone(p)) return false;
             if (p.shadowOnly && p.uid !== myUid) return false;
             return true;
@@ -647,6 +697,7 @@ function stopReactionPostListeners() {
     });
     reactionPostUnsubs = [];
     reactionPostKey = '';
+    reactionPrimed.clear();
     if (reactionPaintTimer) {
         clearTimeout(reactionPaintTimer);
         reactionPaintTimer = null;
@@ -683,7 +734,16 @@ function startReactionsPoll(routeId) {
         if (safeStorage.getItem('activeTab') !== 'community') return;
         const viewing = document.getElementById('community-route-select')?.value || postsListenRouteId;
         if (viewing !== routeId) return;
-        const map = await fetchPostReactions(routeId, cachedFeedPosts.map((p) => p.postId));
+        const ids = cachedFeedPosts.map((p) => p.postId);
+        const prev = { ...cachedReactionsByPost };
+        const map = await fetchPostReactions(routeId, ids);
+        ids.forEach((postId) => {
+            const primedKey = `${routeId}:${postId}`;
+            if (reactionPrimed.has(primedKey) && ownPostReactionAdded(routeId, postId, prev[postId], map?.[postId])) {
+                triggerHaptic();
+            }
+            reactionPrimed.add(primedKey);
+        });
         await applyReactionsMap(routeId, map);
     };
     tick();
@@ -716,9 +776,14 @@ function syncVisibleReactionListeners(routeId) {
         );
         const unsub = window.firebaseDbOnValue(ref, (snap) => {
             if (reactionsListenRouteId !== routeId) return;
+            const primedKey = `${routeId}:${postId}`;
+            const prev = cachedReactionsByPost[postId];
+            const primed = reactionPrimed.has(primedKey);
+            reactionPrimed.add(primedKey);
             const val = snap?.val?.() || null;
             if (val && typeof val === 'object') cachedReactionsByPost[postId] = val;
             else delete cachedReactionsByPost[postId];
+            if (primed && ownPostReactionAdded(routeId, postId, prev, val)) triggerHaptic();
             scheduleReactionPaint(routeId);
         }, () => { /* a missing post stays quiet */ });
         reactionPostUnsubs.push(unsub);
@@ -799,6 +864,10 @@ async function startRealtimePosts(routeId) {
                     ? postsVisibleFilter(Object.values(data), myUid)
                     : [];
                 const merged = mergeOverlayPosts(routeId, list);
+                if (!merged.length && communityIsOffline() && cachedFeedPosts.length) {
+                    resolve(true);
+                    return;
+                }
                 cachedFeedPosts.forEach((old) => {
                     const now = merged.find((row) => String(row?.postId) === String(old?.postId));
                     if (old && now && !isCommunityTombstone(old) && isCommunityTombstone(now)) noteDeletedOwnPost(old);
@@ -828,15 +897,14 @@ async function startRealtimePosts(routeId) {
     }
 }
 
-export async function fetchRoutePosts(routeId, opts = {}) {
-    const miss = opts.strict ? null : [];
-    if (!routeId || !navigator.onLine) return miss;
+export async function fetchRoutePosts(routeId) {
+    if (!routeId || !navigator.onLine) return null;
     try {
         const q = await authQuery();
         const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts.json${q ? `${q}&` : '?'}orderBy="timestamp"&limitToLast=${FEED_LIMIT}`
         );
-        if (!res.ok) return miss;
+        if (!res.ok) return null;
         const data = await res.json();
         if (!data) return [];
         const acct = $account.get();
@@ -844,7 +912,7 @@ export async function fetchRoutePosts(routeId, opts = {}) {
         const list = postsVisibleFilter(Object.values(data), myUid);
         return mergeOverlayPosts(routeId, list);
     } catch {
-        return miss;
+        return null;
     }
 }
 
@@ -1065,10 +1133,6 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
     }
     showToast('Sending', 'info', 1800, '', { action: true });
 
-    const place = await captureSenderStation();
-    const placeFields = place?.station
-        ? { station: place.station, stationAutoLocated: place.stationAutoLocated === true }
-        : {};
     const replyToPayload = replyDraft?.postId && !isCommunityTombstone(findCachedPost(replyDraft.postId)) ? {
         replyTo: {
             postId: replyDraft.postId,
@@ -1083,6 +1147,10 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         return { ok: false, message: safety.message, reason: safety.reason };
     }
     if (!operator && safety.verdict === 'review') {
+        const place = await captureSenderStation();
+        const placeFields = place?.station
+            ? { station: place.station, stationAutoLocated: place.stationAutoLocated === true }
+            : {};
         const held = await queueAutoModeration({
             source: 'community_post',
             reason: safety.reason,
@@ -1136,7 +1204,6 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
         replyCount: 0,
         appVersion: APP_VERSION,
         photoURL: null,
-        ...placeFields,
         ...communitySenderContext(routeId),
         ...(attachments.length ? { attachments: attachments.map((url) => ({ kind: 'image', url })) } : {}),
         ...(linkUrl ? { linkUrl } : {}),
@@ -1147,7 +1214,15 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get(),
     if (typeof options.onStage === 'function') {
         try { options.onStage({ ...payload, pendingSend: true }); } catch { /* the composer can stay if paint fails */ }
     }
-    payload.photoURL = await publicCommuterPhoto(acct);
+    const [place, photoURL] = await Promise.all([
+        captureSenderStation(),
+        publicCommuterPhoto(acct),
+    ]);
+    if (place?.station) {
+        payload.station = place.station;
+        payload.stationAutoLocated = place.stationAutoLocated === true;
+    }
+    payload.photoURL = photoURL || null;
 
     const banned = await isShadowBanned(acct.uid);
     if (banned) {
@@ -1553,10 +1628,145 @@ export async function togglePostReaction(routeId, postId, emojiId) {
         if (removing) delete cachedReactionsByPost[postId][acct.uid];
         else cachedReactionsByPost[postId][acct.uid] = { emoji: emojiId, at: Date.now() };
 
+        void writeReactionInbox(routeId, postId, emojiId, removing);
+        const authorId = findCachedPost(postId)?.uid || '';
+        if (!removing && authorId && authorId !== acct.uid) {
+            awardMark('community_reaction', { key: `react:community:${routeId}:${postId}` });
+        }
         return { ok: true, removed: removing };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not react.' };
     }
+}
+
+/** A capitalised name, or two words. Handles and inboxes stay unnamed. */
+export function reactionSpeakerName(raw) {
+    const name = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (name.length < 2 || name.length > 40) return '';
+    if (/@|\d{3,}|https?:/i.test(name)) return '';
+    const first = name.split(' ')[0];
+    if (!/^[A-Z]/.test(first)) return '';
+    return name.split(' ').slice(0, 2).join(' ');
+}
+
+/** Toast copy for reactions on the signed-in person's own messages. */
+export function reactionNoticeLine(rows) {
+    const names = [];
+    (rows || []).forEach((row) => {
+        const name = reactionSpeakerName(row?.name);
+        if (name && !names.includes(name)) names.push(name);
+    });
+    if (!names.length) return 'Someone reacted to your message';
+    if (names.length === 1) return `${names[0]} reacted to your message`;
+    if (names.length === 2) return `${names[0]} and ${names[1]} reacted to your messages`;
+    const extra = names.length - 1;
+    return `${names[0]} and ${extra} others reacted to your messages`;
+}
+
+function ownPostReactionAdded(routeId, postId, prev, next) {
+    if (viewingCommunityRouteId() !== routeId) return false;
+    const acct = $account.get();
+    const uid = acct?.status === 'signed-in' ? acct.uid : '';
+    if (!uid) return false;
+    const post = findCachedPost(postId);
+    if (!post || post.uid !== uid) return false;
+    const before = prev && typeof prev === 'object' ? prev : {};
+    const after = next && typeof next === 'object' ? next : {};
+    return Object.entries(after).some(([who, entry]) => {
+        if (!who || who === uid || !entry?.emoji) return false;
+        const old = before[who];
+        return !old || old.emoji !== entry.emoji;
+    });
+}
+
+async function writeReactionInbox(routeId, postId, emojiId, removing) {
+    const acct = $account.get();
+    if (acct?.status !== 'signed-in' || !acct.uid) return;
+    const post = findCachedPost(postId);
+    const author = String(post?.uid || '');
+    if (!author || author === acct.uid) return;
+    const q = await authQuery();
+    if (!q) return;
+    const url = `${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(author)}/${encodeURIComponent(postId)}.json${q}`;
+    try {
+        if (removing) {
+            await fetch(url, { method: 'DELETE' });
+            return;
+        }
+        const name = String(acct.displayName || '').trim().slice(0, 80);
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emoji: emojiId,
+                at: Date.now(),
+                from: acct.uid,
+                routeId,
+                ...(name ? { name } : {}),
+            }),
+        });
+    } catch { /* the reaction on the message is already saved */ }
+}
+
+async function clearReactionInboxRows(uid, postIds) {
+    const q = await authQuery();
+    if (!q || !uid || !postIds?.length) return;
+    await Promise.all(postIds.map((id) => fetch(
+        `${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(uid)}/${encodeURIComponent(id)}.json${q}`,
+        { method: 'DELETE' }
+    ).catch(() => {})));
+}
+
+async function clearReactionInboxForRoute(routeId) {
+    const acct = $account.get();
+    if (!routeId || acct?.status !== 'signed-in' || !acct.uid) return;
+    const q = await authQuery();
+    if (!q) return;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(acct.uid)}.json${q}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const ids = Object.entries(data && typeof data === 'object' ? data : [])
+            .filter(([, row]) => row && row.routeId === routeId)
+            .map(([id]) => id);
+        ids.forEach((id) => reactionInboxSeen.delete(id));
+        await clearReactionInboxRows(acct.uid, ids);
+    } catch { /* the next unread pass can try again */ }
+}
+
+async function pullOwnReactionInbox() {
+    const acct = $account.get();
+    if (acct?.status !== 'signed-in' || !acct.uid) return;
+    const q = await authQuery();
+    if (!q) return;
+    let data = null;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}reaction_inbox/${encodeURIComponent(acct.uid)}.json${q}`);
+        if (!res.ok) return;
+        data = await res.json();
+    } catch { return; }
+    if (!data || typeof data !== 'object') return;
+    const viewing = viewingCommunityRouteId();
+    const here = [];
+    const away = [];
+    Object.entries(data).forEach(([postId, row]) => {
+        if (!row || typeof row !== 'object') return;
+        if (row.from && row.from === acct.uid) return;
+        if (viewing && row.routeId === viewing) here.push(postId);
+        else away.push([postId, row]);
+    });
+    if (here.length) void clearReactionInboxRows(acct.uid, here);
+    const fresh = away.filter(([id, row]) => reactionInboxSeen.get(id) !== Number(row.at));
+    if (!fresh.length) return;
+    fresh.forEach(([id, row]) => reactionInboxSeen.set(id, Number(row.at)));
+    const newest = fresh.slice().sort((a, b) => Number(b[1].at) - Number(a[1].at))[0];
+    showToast(reactionNoticeLine(fresh.map(([, row]) => row)), 'info', 5000, '', {
+        action: true,
+        onClick: () => {
+            queueCommunityFocus(newest[1].routeId, newest[0]);
+            if (typeof window.switchTab === 'function') window.switchTab('community');
+        },
+    });
 }
 
 function summarizeReactions(postId) {
@@ -1650,6 +1860,7 @@ function paintCommunityAdminMenu(post) {
     const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const item = (cls, label, icon, extra = '') => `<button type="button" class="${cls} flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none dark:text-gray-100 dark:hover:bg-gray-700" ${extra} role="menuitem">${icon}<span>${label}</span></button>`;
     menu.innerHTML = [
+        tombstone ? item('community-sheet-deleted-view', 'View deleted message', communityMenuIcon('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')) : '',
         mine && !tombstone ? item('community-sheet-edit', 'Edit', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')) : '',
         tombstone ? '' : item('community-sheet-suggest', 'Suggest reply', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')),
         item('community-sheet-lookup', 'Look up rider', communityMenuIcon('<circle cx="11" cy="8" r="3"/><path d="M5 19a6 6 0 0112 0"/><circle cx="18" cy="18" r="3"/><path d="M20.2 20.2L22 22"/>')),
@@ -1660,6 +1871,43 @@ function paintCommunityAdminMenu(post) {
             : '',
     ].filter(Boolean).join('');
     btn.classList.remove('hidden');
+}
+
+function closeDeletedCommunitySheet() {
+    document.getElementById('community-deleted-sheet')?.classList.add('hidden');
+}
+
+async function showDeletedCommunityMessage(post, routeId) {
+    const sheet = document.getElementById('community-deleted-sheet');
+    const nameEl = document.getElementById('community-deleted-sheet-name');
+    const bodyEl = document.getElementById('community-deleted-sheet-body');
+    if (!sheet || !bodyEl || !isAdminAuthed() || !post) return;
+    const id = String(post.postId || '');
+    const route = String(routeId || post.routeId || '');
+    if (nameEl) nameEl.textContent = String(post.displayName || '');
+    bodyEl.textContent = 'Loading…';
+    sheet.classList.remove('hidden');
+    if (!id || !route) {
+        bodyEl.textContent = 'No copy was saved for this message.';
+        return;
+    }
+    const token = await ensureAuthToken();
+    if (!token) {
+        bodyEl.textContent = 'Sign in again to read this.';
+        return;
+    }
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}community_deleted/${encodeURIComponent(route)}/${encodeURIComponent(id)}.json?auth=${encodeURIComponent(token)}`);
+        const data = res.ok ? await res.json() : null;
+        if (!data || typeof data.body !== 'string' || !data.body.trim()) {
+            bodyEl.textContent = 'No copy was saved for this message.';
+            return;
+        }
+        if (nameEl && data.displayName) nameEl.textContent = String(data.displayName);
+        bodyEl.textContent = data.body;
+    } catch {
+        bodyEl.textContent = 'Could not load that message.';
+    }
 }
 
 function communityCaptionText(post) {
@@ -1681,13 +1929,21 @@ function syncCommunityCopyButton(post) {
     btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
 }
 
+const AUTHOR_DELETE_MS = 10 * 60 * 60 * 1000;
+
+function authorDeleteOpen(post) {
+    const ts = Number(post?.timestamp) || 0;
+    return ts > 0 && (Date.now() - ts) < AUTHOR_DELETE_MS;
+}
+
 function syncCommunitySelectActions(post) {
     const acct = $account.get();
     const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const tombstone = isCommunityTombstone(post);
     document.getElementById('community-select-speak')?.classList.toggle('hidden', !isAdminAuthed() || !post);
     document.getElementById('community-select-report')?.classList.toggle('hidden', !post || mine || tombstone);
-    document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone);
+    document.getElementById('community-select-hide-me')?.classList.toggle('hidden', !post || mine || tombstone || acct?.status !== 'signed-in');
+    document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone || !authorDeleteOpen(post));
     syncCommunityCopyButton(post);
     paintCommunityAdminMenu(post);
 }
@@ -1782,6 +2038,15 @@ const COMMUNITY_REACT_ALL = `<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none
 let communityReactFilter = 'all';
 
 function reactorPhoto(uid) {
+    const acct = $account.get();
+    if (acct?.status === 'signed-in' && acct.uid === uid && showPhotoInAlerts()) {
+        const own = sanitizeCommunityPhotoUrl(acct.photoURL || '');
+        if (own) return own;
+    }
+    const profile = publicProfiles.get(uid);
+    if (profile && !profile.missing && profile.showPhoto === true && profile.photoURL) {
+        return profile.photoURL;
+    }
     const rows = cachedFeedPosts || [];
     for (let i = rows.length - 1; i >= 0; i -= 1) {
         if (rows[i]?.uid === uid && rows[i].photoURL) return rows[i].photoURL;
@@ -1789,12 +2054,193 @@ function reactorPhoto(uid) {
     return '';
 }
 
+function reactorEmoji(uid) {
+    const acct = $account.get();
+    if (acct?.status === 'signed-in' && acct.uid === uid) return readAvatarEmoji();
+    return sanitizeAvatarEmoji(publicProfiles.get(uid)?.avatarEmoji || '');
+}
+
+function accountCreatedMs() {
+    const raw = window.firebaseAuth?.currentUser?.metadata?.creationTime;
+    const ms = raw ? Date.parse(raw) : 0;
+    return Number.isFinite(ms) && ms > 0 ? ms : 0;
+}
+
+async function ensurePublicJoined(uid) {
+    const id = String(uid || '').trim();
+    if (!id) return 0;
+    const have = Number(publicProfiles.get(id)?.createdAt) || 0;
+    if (have > 0) return have;
+    const acct = $account.get();
+    const own = acct?.status === 'signed-in' && acct.uid === id;
+    let ms = own ? accountCreatedMs() : 0;
+    if (!ms && isAdminAuthed()) {
+        try {
+            const q = await authQuery();
+            if (q) {
+                const res = await fetch(`${DYNAMIC_BASE_URL}users/${encodeURIComponent(id)}.json${q}`);
+                if (res.ok) {
+                    const row = await res.json();
+                    const stamps = [row?.accountCreatedAt, row?.createdAt]
+                        .map((value) => Number(value))
+                        .filter((value) => Number.isFinite(value) && value > 0);
+                    if (stamps.length) ms = Math.min(...stamps);
+                }
+            }
+        } catch { /* the public card still asks the worker */ }
+    }
+    if (!ms) {
+        try {
+            const base = communityWorkerBase();
+            if (base) {
+                const res = await fetch(`${base}/community/joined?uid=${encodeURIComponent(id)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const created = Number(data?.createdAt) || 0;
+                    if (created > 0) ms = created;
+                }
+            }
+        } catch { /* the name still shows */ }
+    }
+    if (ms > 0) {
+        const prev = publicProfiles.get(id) || {};
+        publicProfiles.set(id, { ...prev, createdAt: ms, missing: false, fetchedAt: prev.fetchedAt || Date.now() });
+    }
+    return ms;
+}
+
+function formatJoinedDate(ms) {
+    const n = Number(ms);
+    if (!n) return '';
+    const date = new Date(n);
+    if (Number.isNaN(date.getTime())) return '';
+    try {
+        return new Intl.DateTimeFormat('en-ZA', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'Africa/Johannesburg',
+        }).format(date);
+    } catch {
+        return '';
+    }
+}
+
+function closePublicProfileCard() {
+    const sheet = document.getElementById('community-profile-card');
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    closeSmoothModal('community-profile-card');
+}
+
+function ensurePublicProfileCard() {
+    let sheet = document.getElementById('community-profile-card');
+    if (sheet) return sheet;
+    sheet = document.createElement('div');
+    sheet.id = 'community-profile-card';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[85] hidden flex flex-col justify-end bg-black/50';
+    sheet.innerHTML = `
+        <div data-sheet-card class="mx-auto w-full max-w-md rounded-t-2xl border-t border-gray-200 bg-white px-5 pb-6 pt-3 shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+            <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></div>
+            <div class="flex items-center gap-4">
+                <div data-profile-avatar class="community-avatar"></div>
+                <div class="min-w-0">
+                    <p data-profile-name class="truncate text-base font-bold text-gray-900 dark:text-white"></p>
+                    <p data-profile-joined class="mt-0.5 text-sm text-gray-500 dark:text-gray-400"></p>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', (event) => {
+        if (event.target === sheet) closePublicProfileCard();
+    });
+    return sheet;
+}
+
+function paintPublicProfileCard(uid) {
+    const sheet = ensurePublicProfileCard();
+    const acct = $account.get();
+    const own = !!(acct?.status === 'signed-in' && acct.uid && acct.uid === uid);
+    const profile = publicProfiles.get(uid);
+    const name = own
+        ? (String(acct.displayName || '').trim() || 'You')
+        : reactorName(uid);
+    const photo = reactorPhoto(uid);
+    const emoji = reactorEmoji(uid);
+    const color = nameColorFor(authorColorKey(uid, name));
+    const created = own
+        ? (accountCreatedMs() || Number(profile?.createdAt) || 0)
+        : Number(profile?.createdAt) || 0;
+    const joined = formatJoinedDate(created);
+    const avatar = sheet.querySelector('[data-profile-avatar]');
+    const nameEl = sheet.querySelector('[data-profile-name]');
+    const joinedEl = sheet.querySelector('[data-profile-joined]');
+    if (avatar) avatar.innerHTML = renderAvatarHtml(photo, name, color, emoji, true);
+    if (nameEl) nameEl.textContent = name;
+    if (joinedEl) {
+        joinedEl.textContent = joined ? `Joined ${joined}` : '';
+        joinedEl.classList.toggle('hidden', !joined);
+    }
+}
+
+function openPublicProfileCard(uid) {
+    const id = String(uid || '').trim();
+    if (!id) return;
+    closeReactionSheet();
+    const who = document.getElementById('community-reactions-modal');
+    if (who && !who.classList.contains('hidden')) closeSmoothModal('community-reactions-modal');
+    const sheet = ensurePublicProfileCard();
+    paintPublicProfileCard(id);
+    if (sheet.classList.contains('hidden')) openSmoothModal('community-profile-card');
+    placeSheetAboveNav(sheet);
+    requestAnimationFrame(() => placeSheetAboveNav(sheet));
+    loadPublicProfiles([id]).catch(() => false).then(() => ensurePublicJoined(id)).then(() => {
+        if (!sheet.isConnected || sheet.classList.contains('hidden')) return;
+        paintPublicProfileCard(id);
+    }).catch(() => {});
+}
+
+/** Drop community sheets that would paint over the side menu. */
+export function closeCommunityOverlaysForHub() {
+    closeReactionSheet();
+    closePublicProfileCard();
+    const who = document.getElementById('community-reactions-modal');
+    if (who && !who.classList.contains('hidden')) closeSmoothModal('community-reactions-modal');
+}
+
+/** The signed-in rider's photo and emoji, without another profile read. */
+export function paintOwnCommunityIdentity() {
+    const acct = $account.get();
+    const uid = acct?.status === 'signed-in' ? acct.uid : '';
+    if (!uid) return;
+    const prev = publicProfiles.get(uid) || {};
+    publicProfiles.set(uid, {
+        ...prev,
+        displayName: acct.displayName || prev.displayName || '',
+        showPhoto: showPhotoInAlerts(),
+        photoURL: showPhotoInAlerts() ? (acct.photoURL || prev.photoURL || '') : '',
+        avatarEmoji: readAvatarEmoji(),
+        createdAt: Number(prev.createdAt) || accountCreatedMs() || 0,
+        missing: false,
+        fetchedAt: Date.now(),
+    });
+    const routeId = document.getElementById('community-route-select')?.value || '';
+    if (routeId && typeof applyFeedFilter === 'function') {
+        try { applyFeedFilter(routeId); } catch { /* the next room paint still uses the cache */ }
+    }
+    const who = document.getElementById('community-reactions-modal');
+    if (who && !who.classList.contains('hidden')) {
+        void paintCommunityReactionsModal(who.dataset.postId || '');
+    }
+    const card = document.getElementById('community-profile-card');
+    if (card && !card.classList.contains('hidden')) paintPublicProfileCard(uid);
+}
+
 function ensureCommunityReactionsModal() {
     let sheet = document.getElementById('community-reactions-modal');
     if (sheet) return sheet;
     sheet = document.createElement('div');
     sheet.id = 'community-reactions-modal';
-    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[100] hidden flex flex-col justify-end bg-black/50';
+    sheet.className = 'nt-sheet-above-nav fixed inset-x-0 top-0 z-[85] hidden flex flex-col justify-end bg-black/50';
     sheet.innerHTML = `
         <div data-sheet-card class="mx-auto flex max-h-[78vh] w-full max-w-md flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
             <div class="flex justify-center pt-2" aria-hidden="true"><span class="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600"></span></div>
@@ -1890,7 +2336,7 @@ function drawCommunityReactionsModal(sheet, people) {
         const emoji = WA_REACTIONS.find((r) => r.id === row.emojiId)?.emoji || '';
         const color = nameColorFor(authorColorKey(row.uid, name));
         return `<div class="flex items-center gap-3 px-2 py-2" data-community-react-person="${escapeHTML(row.uid)}">
-            ${renderAvatarHtml(reactorPhoto(row.uid), name, color)}
+            ${renderAvatarHtml(reactorPhoto(row.uid), name, color, reactorEmoji(row.uid))}
             <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${escapeHTML(name)}</span>
             <span class="text-xl leading-none" aria-hidden="true">${emoji}</span>
         </div>`;
@@ -2063,7 +2509,28 @@ function flashCommunityBubble(row) {
     bubble?.classList.add('nt-quote-flash');
 }
 
+function jumpCommunitySend(listEl) {
+    const id = communitySendHoldId;
+    if (!id || !listEl) return false;
+    const row = listEl.querySelector(`[data-post-id="${String(id).replace(/"/g, '')}"]`);
+    if (!row) return false;
+    const scroller = row.closest('.community-feed-scroll');
+    communityFeedPinned = true;
+    communityScrollGeneration += 1;
+    communityScrollGuardUntil = Date.now() + 8000;
+    if (!scroller) return true;
+    scroller.scrollTop = communityRowScrollTarget(scroller, row, 'end');
+    if (id) communityFollowedTailId = String(id);
+    if (communityOpenAnchor) {
+        communityOpenAnchor.scrollTop = scroller.scrollTop;
+        communityOpenAnchor.taken = true;
+        communityOpenAnchor.placed = true;
+    }
+    return true;
+}
+
 function easePaintedOwnPost(listEl) {
+    if (jumpCommunitySend(listEl)) return true;
     const id = communityEasePostId;
     if (!id || !listEl) return false;
     const row = listEl.querySelector(`[data-post-id="${String(id).replace(/"/g, '')}"]`);
@@ -2152,6 +2619,7 @@ function clearCommunitySelection() {
     document.getElementById('community-select-menu')?.classList.add('hidden');
     document.getElementById('community-select-speak')?.classList.add('hidden');
     document.getElementById('community-select-report')?.classList.add('hidden');
+    document.getElementById('community-select-hide-me')?.classList.add('hidden');
     document.getElementById('community-select-delete')?.classList.add('hidden');
     document.getElementById('community-select-menu-btn')?.classList.add('hidden');
     syncCommunityCopyButton(null);
@@ -2293,10 +2761,21 @@ function communityActionTarget() {
 const publicProfiles = new Map();
 let feedAuthorMeta = new Map();
 let communityFeedPinned = true;
+/** Last post id we already followed to the bottom. Image growth must not count. */
+let communityFollowedTailId = '';
+const reactionInboxSeen = new Map();
+let reactionInboxClearedRoute = '';
+/** Gap above the bottom at the last scroll, before a later resize. */
+let communityTailGap = 0;
 let communityEasePostId = '';
+let communitySendHoldId = '';
 let communityScrollGuardUntil = 0;
 let communityScrollGeneration = 0;
 let communityOpenAnchor = null;
+let communityPreloadRoute = '';
+let communityPreloadReady = '';
+let communityPreloadFlight = null;
+let communityRenderJob = null;
 let communityUnreadBanner = null;
 let unreadDividerTimer = 0;
 let communityRoomSynced = '';
@@ -2311,8 +2790,12 @@ function beginCommunityOpenAnchor(routeId) {
         routeId,
         seen: cursor.established ? cursor.lastSeen : 0,
         placed: false,
+        taken: false,
+        mode: 'latest',
         scrollTop: 0,
     };
+    communityFollowedTailId = '';
+    communityTailGap = 0;
     communityUnreadBanner = null;
     communityRoomSynced = '';
     communitySeenArmed = '';
@@ -2342,15 +2825,65 @@ function slimCachedPost(post) {
     };
 }
 
-function readRoomCache(routeId) {
-    if (!routeId) return [];
+function readRoomCacheRecord(routeId) {
+    if (!routeId) return null;
     try {
         const data = JSON.parse(safeStorage.getItem(ROOM_CACHE_PREFIX + routeId) || 'null');
-        const posts = Array.isArray(data?.posts) ? data.posts : [];
-        return posts.filter((post) => post && post.postId);
+        return data && typeof data === 'object' ? data : null;
     } catch {
-        return [];
+        return null;
     }
+}
+
+function readRoomCache(routeId) {
+    const posts = readRoomCacheRecord(routeId)?.posts;
+    return Array.isArray(posts) ? posts.filter((post) => post && post.postId) : [];
+}
+
+function roomCacheConfirmedEmpty(routeId) {
+    const data = readRoomCacheRecord(routeId);
+    if (!data || readRoomCache(routeId).length) return false;
+    if (data.confirmedEmpty === false) return false;
+    return data.confirmedEmpty === true || Array.isArray(data.posts);
+}
+
+function communityIsOffline() {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+export function communityEmptyCopy({ offline, confirmedEmpty, loaded }) {
+    if (offline) {
+        if (confirmedEmpty) {
+            return {
+                title: "You're offline",
+                body: "This line had no messages last time you were online. Check again when you're back online.",
+            };
+        }
+        return {
+            title: "You're offline",
+            body: "This phone doesn't have this line's messages yet. They'll show when you're back online.",
+        };
+    }
+    if (!loaded) {
+        return {
+            title: "Couldn't load this line",
+            body: "The messages didn't come through. Try again in a moment.",
+        };
+    }
+    return {
+        title: 'No posts on this line yet',
+        body: 'Be the first to share a heads-up, or ask a question.',
+    };
+}
+
+function communityEmptyHtml(routeId) {
+    const copy = communityEmptyCopy({
+        offline: communityIsOffline(),
+        confirmedEmpty: roomCacheConfirmedEmpty(routeId),
+        loaded: communityRoomSynced === routeId,
+    });
+    return `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">${copy.title}</p>
+                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">${copy.body}</p>`;
 }
 
 let lastRoomCacheSig = '';
@@ -2358,11 +2891,13 @@ let lastRoomCacheSig = '';
 function writeRoomCache(routeId, posts) {
     if (!routeId) return;
     const slim = (posts || []).map(slimCachedPost).filter(Boolean).slice(-FEED_LIMIT);
-    const sig = `${routeId}:${slim.map((post) => `${post.postId}|${post.timestamp}|${post.deleted ? 1 : 0}|${String(post.body || '').length}`).join(';')}`;
+    if (!slim.length && communityIsOffline()) return;
+    const confirmedEmpty = slim.length === 0 && !communityIsOffline() && communityRoomSynced === routeId;
+    const sig = `${routeId}:${confirmedEmpty ? 'empty' : ''}:${slim.map((post) => `${post.postId}|${post.timestamp}|${post.deleted ? 1 : 0}|${String(post.body || '').length}`).join(';')}`;
     if (sig === lastRoomCacheSig) return;
     lastRoomCacheSig = sig;
     try {
-        safeStorage.setItem(ROOM_CACHE_PREFIX + routeId, JSON.stringify({ posts: slim }));
+        safeStorage.setItem(ROOM_CACHE_PREFIX + routeId, JSON.stringify({ posts: slim, confirmedEmpty }));
     } catch {
         /* this visit still has the messages in memory */
     }
@@ -2412,6 +2947,11 @@ function settleCommunityRoomSeen(routeId) {
     clearTimeout(unreadDividerTimer);
     unreadDividerTimer = 0;
     if (communityUnreadBanner?.routeId === routeId) communityUnreadBanner.cleared = true;
+    if (communityOpenAnchor?.routeId === routeId) {
+        communityOpenAnchor.mode = 'latest';
+        communityOpenAnchor.taken = true;
+        communityOpenAnchor.placed = true;
+    }
     if (routeId) markCommunityRouteSeen(routeId);
 }
 
@@ -2589,6 +3129,7 @@ function authorPresentation(post, isOwn) {
         return {
             displayName: 'You',
             photoURL: showPhotoInAlerts() ? (acct?.photoURL || '') : '',
+            emoji: readAvatarEmoji(),
             marks: showMarksInCommunity() ? marksPublicSnapshot(readMarks()) : null,
         };
     }
@@ -2601,7 +3142,8 @@ function authorPresentation(post, isOwn) {
         if (showMarks && points > Number(profile.points || 0)) hintPublicPoints(post.uid, points);
         return {
             displayName: syncedDisplayName(post.uid, profile, post, latest),
-            photoURL: showPhoto ? (post.photoURL || latest?.photoURL || '') : '',
+            photoURL: showPhoto ? (profile.photoURL || post.photoURL || latest?.photoURL || '') : '',
+            emoji: sanitizeAvatarEmoji(profile.avatarEmoji || ''),
             marks: showMarks && points > 0
                 ? { points, tier: profile.tier || latest?.tier || post?.marks?.tier || '' }
                 : null,
@@ -2611,6 +3153,7 @@ function authorPresentation(post, isOwn) {
     return {
         displayName: syncedDisplayName(post.uid, null, post, latest),
         photoURL: newestHidPhoto ? '' : (post.photoURL || ''),
+        emoji: '',
         marks: publicMarksFromPost(post, latest),
     };
 }
@@ -2619,7 +3162,8 @@ async function loadPublicProfiles(uids) {
     const now = Date.now();
     const need = [...new Set((uids || []).filter(Boolean))].filter((uid) => {
         const hit = publicProfiles.get(uid);
-        const freshFor = Number(hit?.points) === 0 ? 60 * 1000 : 10 * 60 * 1000;
+        const waitingForPhoto = hit?.showPhoto === true && !hit?.photoURL;
+        const freshFor = (Number(hit?.points) === 0 || waitingForPhoto) ? 60 * 1000 : 10 * 60 * 1000;
         return !hit || now - hit.fetchedAt > freshFor;
     });
     if (!need.length) return false;
@@ -2634,8 +3178,10 @@ async function loadPublicProfiles(uids) {
             if (row.displayName) rememberPublicName(uid, row.displayName, Number(row.updatedAt) || Date.now());
             if (Number(row.points) > 0) rememberPublicPoints(uid, row.points);
             else if ((bestPublicPoints.get(uid) || 0) > Number(row.points || 0)) hintPublicPoints(uid, bestPublicPoints.get(uid));
+            const prev = publicProfiles.get(uid);
             publicProfiles.set(uid, {
                 ...row,
+                createdAt: Number(row.createdAt) || Number(prev?.createdAt) || 0,
                 missing: !data,
                 fetchedAt: Date.now(),
             });
@@ -2681,38 +3227,171 @@ function hintPublicPoints(uid, points) {
     }).catch(() => {});
 }
 
+function communityFeedScroller() {
+    return document.querySelector('#view-community .community-feed-scroll');
+}
+
+function communityFeedIsOpen() {
+    return safeStorage.getItem('activeTab') === 'community'
+        && !!document.getElementById('view-community')?.classList.contains('active');
+}
+
+function setCommunityRoomLoading(on) {
+    const el = document.getElementById('community-feed-loading');
+    if (!el) return;
+    el.classList.toggle('hidden', !on);
+}
+
+function armCommunityParking() {
+    communityFeedScroller()?.classList.add('is-parking');
+    setCommunityRoomLoading(true);
+}
+
+/** Where WhatsApp would open this room. Null until the feed has a real height. */
+export function communityOpenTarget({ scrollHeight, clientHeight, dividerTop, hasDivider, hasRows }) {
+    const height = Number(clientHeight) || 0;
+    const full = Number(scrollHeight) || 0;
+    if (height < 40) return null;
+    const maxTop = Math.max(0, full - height);
+    if (!hasRows && !hasDivider) return { top: 0, mode: 'short', pinned: true };
+    if (maxTop <= 1) return { top: 0, mode: 'short', pinned: true };
+    if (hasDivider) {
+        const top = Number(dividerTop) || 0;
+        const unreadSpan = Math.max(0, full - top);
+        if (unreadSpan > height + 8) {
+            return { top: Math.max(0, top - 12), mode: 'unread', pinned: false };
+        }
+        return { top: maxTop, mode: 'both', pinned: true };
+    }
+    return { top: maxTop, mode: 'latest', pinned: true };
+}
+
 function pinCommunityFeedToLatest() {
-    const scroller = document.querySelector('#view-community .community-feed-scroll');
-    if (!scroller || !communityFeedPinned) return;
+    const scroller = communityFeedScroller();
+    if (!scroller || !communityFeedPinned || scroller.classList.contains('is-parking')) return;
+    if (scroller.clientHeight < 40) return;
     if (Date.now() < communityScrollGuardUntil) return;
     communityScrollGeneration += 1;
     communityScrollGuardUntil = Date.now() + 450;
     scroller.scrollTop = scroller.scrollHeight;
 }
 
+/** Follow a new last message only when the reader was already near the bottom. */
+function followCommunityTailIfNew(listEl, scroller) {
+    if (!listEl || !scroller || !communityFeedPinned) return false;
+    if (Date.now() < communityScrollGuardUntil) return false;
+    const tail = listEl.querySelector('.community-post-row:last-of-type')?.getAttribute('data-post-id') || '';
+    if (!tail || tail === communityFollowedTailId) return false;
+    if (communityTailGap >= 160) {
+        communityFeedPinned = false;
+        return false;
+    }
+    communityFollowedTailId = tail;
+    communityScrollGuardUntil = Date.now() + 400;
+    scroller.scrollTop = scroller.scrollHeight;
+    if (communityOpenAnchor) communityOpenAnchor.scrollTop = scroller.scrollTop;
+    communityTailGap = 0;
+    return true;
+}
+
 function placeCommunityOpen(routeId, listEl) {
     const scroller = listEl?.closest?.('.community-feed-scroll');
     const anchor = communityOpenAnchor;
-    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.placed) return false;
-    const rows = [...listEl.querySelectorAll('.community-post-row')];
+    if (!scroller || !anchor || anchor.routeId !== routeId || anchor.taken) return false;
+    if (anchor.placed) return true;
+    const rows = listEl.querySelectorAll('.community-post-row');
     const divider = listEl.querySelector('[data-community-unread-divider]');
-    if (!rows.length && !divider) return false;
-    communityScrollGeneration += 1;
-    communityScrollGuardUntil = Date.now() + 500;
-    const place = () => {
-        if (divider && divider.isConnected) {
-            const top = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-            scroller.scrollTop = Math.max(0, top - 8);
-            communityFeedPinned = false;
-        } else {
-            communityFeedPinned = true;
-            scroller.scrollTop = scroller.scrollHeight;
-        }
-        anchor.scrollTop = scroller.scrollTop;
-    };
-    place();
-    if (communityRoomSynced === routeId) anchor.placed = true;
+    const hasRows = rows.length > 0;
+    const hasDivider = !!(divider && divider.isConnected);
+    if (!hasRows && !hasDivider && listEl.querySelector('.animate-pulse')) return false;
+    let dividerTop = 0;
+    if (hasDivider) {
+        dividerTop = divider.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    }
+    const target = communityOpenTarget({
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+        dividerTop,
+        hasDivider,
+        hasRows,
+    });
+    if (!target) return false;
+    if (Math.abs(scroller.scrollTop - target.top) > 1) {
+        communityScrollGeneration += 1;
+        communityScrollGuardUntil = Date.now() + 500;
+        scroller.scrollTop = target.top;
+    }
+    communityFeedPinned = target.pinned;
+    anchor.mode = target.mode;
+    anchor.scrollTop = scroller.scrollTop;
+    anchor.placed = true;
+    const tail = listEl.querySelector('.community-post-row:last-of-type')?.getAttribute('data-post-id') || '';
+    if (tail) communityFollowedTailId = tail;
+    communityTailGap = Math.max(0, scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight);
     return true;
+}
+
+let communityRevealTries = 0;
+
+function revealCommunityOpen(routeId) {
+    const listEl = document.getElementById('community-feed-list');
+    const scroller = communityFeedScroller();
+    if (!listEl || !scroller || !communityFeedIsOpen()) return;
+    if (communityOpenAnchor?.routeId !== routeId) return;
+    const parked = placeCommunityOpen(routeId, listEl);
+    if (!parked && listEl.querySelector('.animate-pulse') && communityRevealTries < 8) {
+        communityRevealTries += 1;
+        requestAnimationFrame(() => revealCommunityOpen(routeId));
+        return;
+    }
+    if (!parked && scroller.clientHeight < 40 && communityRevealTries < 4) {
+        communityRevealTries += 1;
+        requestAnimationFrame(() => revealCommunityOpen(routeId));
+        return;
+    }
+    communityRevealTries = 0;
+    scroller.classList.remove('is-parking');
+    setCommunityRoomLoading(false);
+}
+
+/** Paint the saved room and drop the cover. A live sync still follows. */
+function paintCachedRoomNow(routeId) {
+    if (!routeId || feedSilentRepaint) return false;
+    if (
+        communityOpenAnchor?.routeId === routeId
+        && communityOpenAnchor.placed
+        && cachedFeedPosts.length
+    ) {
+        if (communityFeedIsOpen()) revealCommunityOpen(routeId);
+        return true;
+    }
+    const stored = readRoomCache(routeId);
+    if (!stored.length) return false;
+    if (!communityOpenAnchor || communityOpenAnchor.routeId !== routeId) beginCommunityOpenAnchor(routeId);
+    cachedFeedPosts = mergeOverlayPosts(routeId, stored);
+    communityFeedPinned = !unreadBannerFor(routeId, cachedFeedPosts);
+    applyFeedFilter(routeId);
+    if (communityFeedIsOpen()) revealCommunityOpen(routeId);
+    return true;
+}
+
+/** Set the open position in this turn, before the tab paints. */
+export function parkCommunityOpen() {
+    const scroller = communityFeedScroller();
+    if (!scroller) return;
+    const routeId = communityOpenAnchor?.routeId
+        || communityPreloadRoute
+        || document.getElementById('community-route-select')?.value
+        || getLastCommunityRoom()
+        || '';
+    try {
+        if (routeId && (isCommunityWarm(routeId) || paintCachedRoomNow(routeId))) {
+            if (isCommunityWarm(routeId)) revealCommunityOpen(routeId);
+            return;
+        }
+    } catch { /* a bad saved room still opens from the live sync */ }
+    scroller.classList.add('is-parking');
+    setCommunityRoomLoading(true);
 }
 
 function bindCommunityFeedPin() {
@@ -2720,12 +3399,23 @@ function bindCommunityFeedPin() {
     if (!scroller || scroller.dataset.pinBound === '1') return;
     scroller.dataset.pinBound = '1';
     scroller.addEventListener('scroll', () => {
+        if (communitySendHoldId) {
+            communityFeedPinned = true;
+            return;
+        }
         if (Date.now() < communityScrollGuardUntil) return;
+        const anchor = communityOpenAnchor;
+        if (anchor && anchor.routeId === paintedCommunityRouteId && !anchor.taken) {
+            const parked = Number(anchor.scrollTop) || 0;
+            if (Math.abs(scroller.scrollTop - parked) > 80) anchor.taken = true;
+            if (anchor.placed && !anchor.taken) return;
+        }
         if (communityUnreadBanner && !communityUnreadBanner.cleared && communityUnreadBanner.routeId === paintedCommunityRouteId) {
             communityFeedPinned = false;
             return;
         }
         const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        communityTailGap = gap;
         communityFeedPinned = gap < 160;
     }, { passive: true });
     if (scroller.dataset.sizeBound === '1' || typeof ResizeObserver === 'undefined') return;
@@ -2733,17 +3423,20 @@ function bindCommunityFeedPin() {
     const list = scroller.querySelector('#community-feed-list');
     if (!list) return;
     const watcher = new ResizeObserver(() => {
-        if (!communityFeedPinned || !communityOpenAnchor?.placed) return;
-        if (Date.now() < communityScrollGuardUntil) return;
-        const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-        const parked = Number(communityOpenAnchor.scrollTop) || 0;
-        const moved = Math.abs(scroller.scrollTop - parked) > 80;
-        if (moved && gap >= 160) {
-            communityFeedPinned = false;
+        if (communitySendHoldId) {
+            jumpCommunitySend(list);
             return;
         }
-        scroller.scrollTop = scroller.scrollHeight;
-        communityOpenAnchor.scrollTop = scroller.scrollTop;
+        const anchor = communityOpenAnchor;
+        if (scroller.classList.contains('is-parking')) return;
+        // Park once. A later image, font, or reaction pill must not move a room
+        // that is already placed, including a room where everything is read.
+        if (anchor && !anchor.placed) {
+            placeCommunityOpen(paintedCommunityRouteId, list);
+            return;
+        }
+        if (!communityFeedPinned || !anchor?.placed) return;
+        followCommunityTailIfNew(list, scroller);
     });
     watcher.observe(list);
 }
@@ -2820,6 +3513,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
     const isOwn = !!(myUid && post.uid && post.uid === myUid);
     const shown = authorPresentation(post, isOwn);
     const photoURL = shown.photoURL || '';
+    const emoji = shown.emoji || '';
     const displayName = shown.displayName || (isOwn ? 'You' : 'Passenger');
     const versionChip = grouped ? '' : communityVersionChip(post, routeId);
     const versionShown = grouped ? '' : versionForPost(post);
@@ -2847,7 +3541,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         ? ''
         : grouped
             ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
-            : `<div class="community-avatar">${renderAvatarHtml(photoURL, displayName, nameColor)}</div>`;
+            : `<div class="community-avatar">${renderAvatarHtml(photoURL, displayName, nameColor, emoji)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
     const marksSnap = shown.marks;
     const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
@@ -2867,6 +3561,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
         marksSnap?.points || '',
         nameColor,
         photoURL,
+        emoji,
         versionShown,
         communityReactionStamp(post.postId),
         post.pendingSend ? '1' : '0',
@@ -3006,15 +3701,14 @@ function applyFeedFilter(routeId) {
     bindCommunityFeedPin();
 
     if (!posts.length) {
-        if (communityRoomSynced === routeId) writeRoomCache(routeId, []);
+        if (communityRoomSynced === routeId && !communityIsOffline()) writeRoomCache(routeId, []);
         lastCommunityFeedHtml = '';
         lastCommunityFeedRoute = routeId;
         listEl.innerHTML = '';
         wireCommunityChatGestures(listEl);
         if (emptyEl) {
             emptyEl.classList.remove('hidden');
-            emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
-                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up, or ask a question.</p>`;
+            emptyEl.innerHTML = communityEmptyHtml(routeId);
         }
         const focusingEmpty = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
         if (focusingEmpty) void revealCommunityFocus(routeId);
@@ -3076,24 +3770,22 @@ function applyFeedFilter(routeId) {
     const focusing = pendingCommunityFocus && pendingCommunityFocus.routeId === routeId && pendingCommunityFocus.postId;
     const heldId = communityFlashPostId;
     const heldRow = heldId ? listEl.querySelector(`[data-post-id="${String(heldId).replace(/"/g, '')}"]`) : null;
-    const opening = communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed && profileRepaintRoute !== routeId;
-    if (easePaintedOwnPost(listEl)) {
-        /* the sent row eases into view ahead of the unread anchor */
+    const anchor = communityOpenAnchor?.routeId === routeId ? communityOpenAnchor : null;
+    if (jumpCommunitySend(listEl)) {
+        /* the outgoing row stays on screen while the send is still going */
     } else if (focusing) void revealCommunityFocus(routeId);
     else if (heldRow && Date.now() < communityFocusHold) revealCommunityRow(heldRow, { keepHold: true });
-    else if (!feedPaint.rebuilt) {
-        if (opening) {
-            if (!placeCommunityOpen(routeId, listEl)) restoreFeedViewport(scroller, viewport);
-        } else if (communityFeedPinned && communityOpenAnchor?.placed) pinCommunityFeedToLatest();
-    } else if (opening) {
-        if (!placeCommunityOpen(routeId, listEl)) restoreFeedViewport(scroller, viewport);
-    } else if (communityOpenAnchor?.routeId === routeId && communityOpenAnchor.placed && !communityFeedPinned) {
+    else if (!communityFeedIsOpen() || scroller?.classList.contains('is-parking')) {
+        /* Preload, or the first open, paints here and parks once when the tab is shown. */
+    } else if (anchor && anchor.placed && anchor.taken) {
         if (scroller) {
             communityScrollGeneration += 1;
             communityScrollGuardUntil = Date.now() + 400;
             restoreFeedViewport(scroller, viewport);
         }
-    } else pinCommunityFeedToLatest();
+    } else if (anchor && anchor.placed) {
+        followCommunityTailIfNew(listEl, scroller);
+    } else if (!anchor) pinCommunityFeedToLatest();
     rememberPaintedCommunityRoute(routeId);
     if (profileRepaintRoute === routeId) return;
     const uids = posts.map((p) => p.uid);
@@ -3254,6 +3946,10 @@ function rememberPaintedCommunityRoute(routeId) {
     const selected = document.getElementById('community-route-select')?.value || '';
     if (selected !== routeId) return;
     paintedCommunityRouteId = routeId;
+    if (reactionInboxClearedRoute !== routeId) {
+        reactionInboxClearedRoute = routeId;
+        void clearReactionInboxForRoute(routeId);
+    }
     if (profileRepaintRoute === routeId) return;
     if (communityRoomSynced !== routeId) return;
     if (feedSilentRepaint && communitySeenArmed === routeId) return;
@@ -3581,6 +4277,7 @@ export async function refreshCommunityUnreadBadge() {
     cachedUnreadByRoute = next;
     noteUnreadCounted();
     paintUnreadFromCache();
+    void pullOwnReactionInbox();
     return Object.values(next).reduce((sum, n) => sum + n, 0);
 }
 
@@ -3631,11 +4328,79 @@ export function startCommunityUnreadWatch() {
     });
 }
 
+function isCommunityWarm(routeId) {
+    const list = document.getElementById('community-feed-list');
+    return !!(
+        routeId
+        && communityPreloadReady === routeId
+        && communityOpenAnchor?.routeId === routeId
+        && list
+        && !list.querySelector('.animate-pulse')
+    );
+}
+
+function finishCommunityRender(routeId) {
+    if (routeId && communityRoomSynced === routeId) communityPreloadReady = routeId;
+    const selected = document.getElementById('community-route-select')?.value || '';
+    if (selected && selected !== routeId) return;
+    if (!communityFeedIsOpen()) return;
+    revealCommunityOpen(routeId);
+}
+
+function seenCursorForRoute(routeId) {
+    const remote = accountSeenCache.map ? accountSeenCache.map[routeId] : null;
+    const cursor = communityUnreadCursor(safeStorage.getItem(unreadSeenKey(routeId)), remote);
+    return cursor.established ? cursor.lastSeen : 0;
+}
+
+function prepareCommunityOpen(routeId) {
+    const seen = seenCursorForRoute(routeId);
+    const anchor = communityOpenAnchor;
+    if (!anchor || anchor.routeId !== routeId) {
+        beginCommunityOpenAnchor(routeId);
+        if (communityOpenAnchor) communityOpenAnchor.seen = seen;
+        return;
+    }
+    const seenChanged = anchor.seen !== seen;
+    if (seenChanged || anchor.taken || anchor.placed) {
+        anchor.seen = seen;
+        anchor.placed = false;
+        anchor.taken = false;
+        anchor.mode = 'latest';
+        anchor.scrollTop = 0;
+        if (seenChanged) communityUnreadBanner = null;
+    }
+}
+
+export function preloadCommunityRoom(routeId) {
+    if (typeof document === 'undefined') return Promise.resolve();
+    if (safeStorage.getItem('activeTab') === 'community') return Promise.resolve();
+    const id = resolveCommunityRoute(routeId || getLastCommunityRoom() || $currentRouteId.get() || '');
+    if (!id || !communityRoomAllowed(id)) return Promise.resolve();
+    if (communityPreloadReady === id && postsListenRouteId === id && postsSnapSeen) return Promise.resolve();
+    if (communityPreloadFlight?.routeId === id) return communityPreloadFlight.promise;
+    communityPreloadRoute = id;
+    const promise = renderCommunityFeed(id)
+        .then(() => refreshCommunityUnreadBadge())
+        .catch(() => {})
+        .finally(() => {
+            if (communityPreloadFlight?.routeId === id) communityPreloadFlight = null;
+        });
+    communityPreloadFlight = { routeId: id, promise };
+    return promise;
+}
+
 export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts = {}) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
     if (!listEl) return;
+    if (communityFeedIsOpen() && routeId && communityOpenAnchor?.routeId && communityOpenAnchor.routeId !== routeId) {
+        stopRealtimePosts();
+        if (!paintCachedRoomNow(routeId)) armCommunityParking();
+    } else if (communityFeedIsOpen() && routeId) {
+        paintCachedRoomNow(routeId);
+    }
     try { await fetchFeatures(); } catch { /* defaults */ }
     if (!communityRoomAllowed(routeId)) routeId = resolveCommunityRoute('');
     else routeId = resolveCommunityRoute(routeId);
@@ -3643,21 +4408,45 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
         if (titleEl) titleEl.textContent = 'Community';
         listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">No community is open for this region.</p>`;
         if (emptyEl) emptyEl.classList.add('hidden');
+        if (communityFeedIsOpen()) communityFeedScroller()?.classList.remove('is-parking');
+        setCommunityRoomLoading(false);
+        return;
+    }
+    if (!opts.owner && communityRenderJob?.routeId === routeId && !opts.forceRest) {
+        await communityRenderJob.promise;
+        finishCommunityRender(routeId);
         return;
     }
 
+    let releaseRender = () => {};
+    const renderGate = new Promise((resolve) => { releaseRender = resolve; });
+    communityRenderJob = { routeId, promise: renderGate };
+    try {
+        await renderCommunityFeedNow(routeId, opts, { listEl, emptyEl, titleEl });
+    } finally {
+        finishCommunityRender(routeId);
+        releaseRender();
+        if (communityRenderJob?.promise === renderGate) communityRenderJob = null;
+    }
+}
+
+async function renderCommunityFeedNow(routeId, opts, els) {
+    const { listEl, emptyEl, titleEl } = els;
     if (titleEl) titleEl.textContent = routeLabel(routeId);
     paintCategoryFilters();
-    const sameOpenRoom = communityOpenAnchor?.routeId === routeId && communityOpenAnchor.placed;
-    if (!feedSilentRepaint && !sameOpenRoom) beginCommunityOpenAnchor(routeId);
+    if (communityFeedIsOpen() && communityOpenAnchor?.routeId !== routeId) armCommunityParking();
+    const sameRoom = communityOpenAnchor?.routeId === routeId && !opts.forceRest;
+    if (!feedSilentRepaint && !sameRoom) beginCommunityOpenAnchor(routeId);
 
     const forceRest = !!opts.forceRest;
-    const stored = !feedSilentRepaint && !sameOpenRoom ? readRoomCache(routeId) : [];
+    const stored = !feedSilentRepaint && !sameRoom ? readRoomCache(routeId) : [];
     if (stored.length) {
         cachedFeedPosts = mergeOverlayPosts(routeId, stored);
         communityFeedPinned = !unreadBannerFor(routeId, cachedFeedPosts);
         applyFeedFilter(routeId);
-    } else if (!feedSilentRepaint && !sameOpenRoom) {
+        if (communityFeedIsOpen()) revealCommunityOpen(routeId);
+    } else if (!feedSilentRepaint && !sameRoom) {
+        cachedFeedPosts = [];
         communityFeedPinned = true;
         listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
         if (emptyEl) emptyEl.classList.add('hidden');
@@ -3665,7 +4454,7 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
 
     const acct = $account.get();
     const seenReady = accountSeenCache.uid === (acct?.uid || '') && accountSeenCache.map;
-    if (!feedSilentRepaint && !sameOpenRoom && acct?.status === 'signed-in' && acct.uid && !seenReady) {
+    if (!feedSilentRepaint && !sameRoom && acct?.status === 'signed-in' && acct.uid && !seenReady) {
         try { await readAccountCommunitySeen(); } catch { /* the phone cursor still opens the room */ }
         if (communityOpenAnchor?.routeId === routeId && !communityOpenAnchor.placed) {
             const remote = accountSeenCache.map ? accountSeenCache.map[routeId] : null;
@@ -3674,8 +4463,18 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
             if (seen !== communityOpenAnchor.seen) {
                 communityOpenAnchor.seen = seen;
                 communityUnreadBanner = null;
+                communityOpenAnchor.placed = false;
+                communityOpenAnchor.taken = false;
+                applyFeedFilter(routeId);
             }
         }
+    }
+
+    // An offline phone must not wait on the live window, and an empty result is
+    // not proof the room has no messages.
+    if (communityIsOffline()) {
+        if (!cachedFeedPosts.length) applyFeedFilter(routeId);
+        return;
     }
 
     // Prefer the live window. A second REST download of the same posts is skipped
@@ -3693,6 +4492,10 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
 
     stopRealtimePosts();
     const posts = await fetchRoutePosts(routeId);
+    if (!Array.isArray(posts)) {
+        if (!cachedFeedPosts.length) applyFeedFilter(routeId);
+        return;
+    }
     cachedFeedPosts = posts;
     startRealtimeReactions(routeId);
     const reactionsMap = await fetchPostReactions(routeId, posts.map((p) => p.postId));
@@ -3903,6 +4706,14 @@ function paintCommunityCharHint() {
         : `${left} characters left`;
 }
 
+function syncComposerSpeak() {
+    const btn = document.getElementById('community-composer-speak');
+    const composer = document.getElementById('community-composer');
+    if (!btn || !composer) return;
+    const words = String(composer.value || '').trim();
+    btn.classList.toggle('hidden', !isAdminAuthed() || words.length < 2);
+}
+
 function syncComposerChrome() {
     const composer = document.getElementById('community-composer');
     if (!composer) return;
@@ -3910,10 +4721,10 @@ function syncComposerChrome() {
     const operator = isAdminAuthed();
     composer.maxLength = COMPOSER_HOLD_MAX;
     document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
-    document.getElementById('community-composer-speak')?.classList.toggle('hidden', !operator);
     composer.classList.toggle('community-composer-with-clip', operator);
     syncCommunityCopilot();
     restoreComposerDraft(composer);
+    syncComposerSpeak();
     paintCommunityCharHint();
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
@@ -4258,6 +5069,28 @@ export function openRouteCommunity(opts = {}) {
     void openRouteCommunityNow(opts);
 }
 
+/** SEO room handoff: guests can read, and the existing hint points them at sign-in. */
+let seoCommunityGuestVisit = false;
+
+function revealSeoCommunityGuestHint(guestHint) {
+    if (!guestHint || typeof sessionStorage === 'undefined') return;
+    try {
+        if (sessionStorage.getItem('nt_community_from_seo') === '1') {
+            seoCommunityGuestVisit = true;
+            sessionStorage.removeItem('nt_community_from_seo');
+        }
+    } catch { return; }
+    if (!seoCommunityGuestVisit || guestHintDismissedThisOpen || $account.get()?.status === 'signed-in') return;
+    guestHint.classList.remove('hidden');
+    if (guestHint.dataset.seoHintBound === '1') return;
+    guestHint.dataset.seoHintBound = '1';
+    const unsub = $account.subscribe((state) => {
+        if (state?.status !== 'signed-in') return;
+        guestHint.classList.add('hidden');
+        try { unsub(); } catch { /* ignore */ }
+    });
+}
+
 let publishedCommunityName = '';
 
 /** Write this account's current name so older messages in every room pick it up. */
@@ -4272,7 +5105,6 @@ function publishOwnCommunityName() {
 }
 
 async function openRouteCommunityNow(opts = {}) {
-    try { await fetchFeatures(); } catch { /* defaults */ }
     const requested = pendingCommunityFocus?.routeId || opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
     const routeId = resolveCommunityRoute(requested);
     const routeSel = document.getElementById('community-route-select');
@@ -4303,23 +5135,41 @@ async function openRouteCommunityNow(opts = {}) {
         return;
     }
 
+    revealSeoCommunityGuestHint(guestHint);
+    prepareCommunityOpen(activeRoute);
+    const warm = isCommunityWarm(activeRoute);
+    if (warm) {
+        applyFeedFilter(activeRoute);
+        revealCommunityOpen(activeRoute);
+    } else if (!paintCachedRoomNow(activeRoute)) {
+        armCommunityParking();
+    }
+
     publishOwnCommunityName();
 
     triggerHaptic();
-    renderCommunityFeed(activeRoute);
+    if (!warm) renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
     refreshCommunitySendMax().finally(() => paintCommunityQuotaHint());
     startQuotaHintWatch();
+    try { await fetchFeatures(); } catch { /* defaults */ }
+    if (activeRoute && !communityRoomAllowed(activeRoute) && safeStorage.getItem('activeTab') === 'community') {
+        renderCommunityFeed(activeRoute);
+    }
 }
 
 export function leaveCommunityRoom() {
     if (paintedCommunityRouteId) settleCommunityRoomSeen(paintedCommunityRouteId);
     dismissCommunitySuggest();
-    stopRealtimePosts();
     leaveCommunityPresence();
+    armCommunityParking();
+    if (communityOpenAnchor) {
+        communityOpenAnchor.placed = false;
+        communityOpenAnchor.taken = false;
+    }
 }
 
-/** Destroy chat listeners when the Community tab is not visible (Blaze control). */
+/** Stop the room listener when the app is backgrounded. Leaving the tab keeps the preloaded room. */
 function bindCommunityVisibilityTeardown() {
     if (typeof document === 'undefined' || window.__ntCommunityVisBound) return;
     window.__ntCommunityVisBound = true;
@@ -4338,8 +5188,23 @@ function bindCommunityVisibilityTeardown() {
                 startRealtimeReactions(rid);
                 joinCommunityPresence(rid);
             }
+        } else {
+            preloadCommunityRoom();
         }
     });
+    if (!window.__ntCommunityNetBound) {
+        window.__ntCommunityNetBound = true;
+        window.addEventListener('offline', () => {
+            if (safeStorage.getItem('activeTab') !== 'community' || cachedFeedPosts.length) return;
+            const rid = document.getElementById('community-route-select')?.value || '';
+            if (rid) applyFeedFilter(rid);
+        });
+        window.addEventListener('online', () => {
+            if (safeStorage.getItem('activeTab') !== 'community') return;
+            const rid = resolveCommunityRoute(document.getElementById('community-route-select')?.value || '');
+            if (rid && communityRoomAllowed(rid)) renderCommunityFeed(rid);
+        });
+    }
 }
 
 let communityWaitCancel = null;
@@ -4565,6 +5430,7 @@ async function handlePostSubmit() {
             closeCommunityAttach();
             composerExtrasCleared = true;
             communityEasePostId = post.postId;
+            communitySendHoldId = post.postId;
             communityFeedPinned = true;
             upsertOutgoingPost(post);
         },
@@ -4652,6 +5518,7 @@ async function handlePostSubmit() {
     if (btn) btn.disabled = false;
     paintCommunityQuotaHint();
     } finally {
+        communitySendHoldId = '';
         communityPostBusy = false;
     }
 }
@@ -4661,8 +5528,9 @@ async function expandReplies(postId, routeId, container) {
     container.innerHTML = `<p class="text-[10px] text-gray-400 py-1">Loading…</p>`;
     const replies = await fetchReplies(routeId, postId);
 
-    let html = replies.length
-        ? replies.map((r) => {
+    const visibleReplies = replies.filter((r) => !communityHiddenForMe(r.replyId || r.postId));
+    let html = visibleReplies.length
+        ? visibleReplies.map((r) => {
             const parts = communityMediaParts(r);
             return `
             <div class="text-left">
@@ -4714,11 +5582,27 @@ export function bindCommunityUi() {
         e.preventDefault();
         clearCommunitySelection();
     });
+    document.getElementById('community-deleted-sheet-close')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeDeletedCommunitySheet();
+    });
+    document.getElementById('community-deleted-sheet')?.addEventListener('click', (e) => {
+        if (e.target?.id === 'community-deleted-sheet') closeDeletedCommunitySheet();
+    });
     document.getElementById('community-composer-speak')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         if (!isAdminAuthed()) return;
         const words = document.getElementById('community-composer')?.value || '';
+        const state = typeof window.ntOperatorSpeechState === 'function' ? window.ntOperatorSpeechState() : 'idle';
+        if (state === 'playing') {
+            window.ntPauseOperatorSpeech?.();
+            return;
+        }
+        if (state === 'paused') {
+            window.ntResumeOperatorSpeech?.();
+            return;
+        }
         speakOperatorCopy(words).then((result) => {
             if (result?.hidden) return;
             if (!result?.ok && result?.message) showToast(result.message, 'error');
@@ -4730,6 +5614,15 @@ export function bindCommunityUi() {
         if (!isAdminAuthed()) return;
         const post = selectedCommunity?.post;
         if (!post) return;
+        const state = typeof window.ntOperatorSpeechState === 'function' ? window.ntOperatorSpeechState() : 'idle';
+        if (state === 'playing') {
+            window.ntPauseOperatorSpeech?.();
+            return;
+        }
+        if (state === 'paused') {
+            window.ntResumeOperatorSpeech?.();
+            return;
+        }
         speakOperatorCopy(communityCaptionText(post)).then((result) => {
             if (result?.hidden) return;
             if (!result?.ok && result?.message) showToast(result.message, 'error');
@@ -4784,6 +5677,7 @@ export function bindCommunityUi() {
     document.getElementById('community-suggest-again')?.addEventListener('click', () => { suggestCommunityReply(); });
     document.getElementById('community-composer')?.addEventListener('input', () => {
         paintCommunityCharHint();
+        syncComposerSpeak();
         if (!document.getElementById('community-composer')?.value) setCommunityGuideReady(false);
     });
     const closeCommunityGuide = () => document.getElementById('community-guide-modal')?.classList.add('hidden');
@@ -4912,9 +5806,16 @@ export function bindCommunityUi() {
         }
     });
     window.addEventListener('resize', () => fitCommunityRouteLabels());
-    document.getElementById('community-refresh-btn')?.addEventListener('click', () => {
+    document.getElementById('community-refresh-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('community-refresh-btn');
+        const icon = btn?.querySelector('svg');
+        icon?.classList.add('animate-spin');
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
-        renderCommunityFeed(rid);
+        try {
+            await renderCommunityFeed(rid, { forceRest: true });
+        } finally {
+            icon?.classList.remove('animate-spin');
+        }
     });
     document.getElementById('community-signin-cta')?.addEventListener('click', async () => {
         const composer = document.getElementById('community-composer');
@@ -5006,6 +5907,21 @@ export function bindCommunityUi() {
             return;
         }
 
+        const profileHit = t.closest?.('#community-profile-card')
+            ? null
+            : t.closest?.('.community-avatar:not(.community-avatar-spacer), .community-bubble-name, [data-community-react-person]');
+        if (profileHit && !t.closest?.('.cm-options-toggle, .cm-message-tools, .fb-version-chip, [data-admin-changelog]') && Date.now() >= reactionGuardUntil) {
+            const person = t.closest?.('[data-community-react-person]');
+            const row = t.closest?.('.community-post-row');
+            const uid = person?.getAttribute('data-community-react-person') || row?.getAttribute('data-uid') || '';
+            if (uid) {
+                e.preventDefault();
+                e.stopPropagation();
+                openPublicProfileCard(uid);
+                return;
+            }
+        }
+
         const seeMore = t.closest?.('[data-community-see-more]');
         if (seeMore) {
             e.preventDefault();
@@ -5069,6 +5985,20 @@ export function bindCommunityUi() {
             return;
         }
 
+        const hideForMe = t.closest?.('#community-select-hide-me');
+        if (hideForMe) {
+            e.preventDefault();
+            const target = communityActionTarget();
+            const acct = $account.get();
+            const ownMessage = !!(acct?.status === 'signed-in' && target.post?.uid && target.post.uid === acct.uid);
+            const routeId = target.routeId || document.getElementById('community-route-select')?.value || '';
+            if (!target.postId || ownMessage || acct?.status !== 'signed-in') return;
+            rememberCommunityHidden(target.postId);
+            clearCommunitySelection();
+            if (routeId) applyFeedFilter(routeId);
+            return;
+        }
+
         const sheetReport = t.closest?.('.community-sheet-report');
         if (sheetReport) {
             e.preventDefault();
@@ -5103,7 +6033,7 @@ export function bindCommunityUi() {
             if (as === 'author') {
                 const acct = $account.get();
                 const ownMessage = !!(acct?.status === 'signed-in' && target.post?.uid && target.post.uid === acct.uid);
-                if (!ownMessage) return;
+                if (!ownMessage || !authorDeleteOpen(target.post)) return;
             }
             closeReactionSheet();
             document.getElementById('community-select-menu')?.classList.add('hidden');
@@ -5136,6 +6066,17 @@ export function bindCommunityUi() {
             } catch (err) {
                 showToast(err?.message || 'Could not delete this message.', 'error');
             }
+            return;
+        }
+
+        const sheetDeleted = t.closest?.('.community-sheet-deleted-view');
+        if (sheetDeleted) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const target = communityActionTarget();
+            closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
+            void showDeletedCommunityMessage(target.post, target.routeId);
             return;
         }
 
@@ -5269,6 +6210,16 @@ export function bindCommunityUi() {
 }
 
 if (typeof window !== 'undefined') {
+    if (!window.__ntCommunityPreloadRoute) {
+        window.__ntCommunityPreloadRoute = true;
+        let communityPreloadTimer = 0;
+        $currentRouteId.subscribe((id) => {
+            if (!window._appStabilized) return;
+            if (safeStorage.getItem('activeTab') === 'community') return;
+            clearTimeout(communityPreloadTimer);
+            communityPreloadTimer = setTimeout(() => preloadCommunityRoom(id), 400);
+        });
+    }
     window.addEventListener('nt-features-updated', () => {
         if (safeStorage.getItem('activeTab') !== 'community') return;
         const routeId = document.getElementById('community-route-select')?.value || '';
@@ -5283,6 +6234,8 @@ if (typeof window !== 'undefined') {
         if (routeId) applyFeedFilter(routeId);
     });
     window.openRouteCommunity = openRouteCommunity;
+    window.parkCommunityOpen = parkCommunityOpen;
+    window.preloadCommunityRoom = preloadCommunityRoom;
     window.queueCommunityFocus = queueCommunityFocus;
     window.renderCommunityFeed = renderCommunityFeed;
     window.leaveCommunityRoom = leaveCommunityRoom;

@@ -9,11 +9,12 @@ import {
   listSeoRegions,
   listSeoCorridors,
   WC_PUBLIC_HOLIDAYS_PATH,
+  FESTIVE_SEASON_PATH,
 } from '../lib/seo-routes.js';
 
 interface Props {
   region?: string;
-  current?: 'index' | 'region' | 'corridor' | 'route' | 'holidays';
+  current?: 'index' | 'region' | 'corridor' | 'route' | 'holidays' | 'festive';
 }
 
 const region = ['GP', 'WC', 'KZN', 'EC'].includes(Astro.props.region || '')
@@ -65,6 +66,16 @@ const corridors = region ? listSeoCorridors().filter((c) => c.region === region)
           class="text-blue-700 dark:text-blue-300 hover:underline"
         >
           Western Cape public holiday timetable
+        </a>
+      </li>
+    )}
+    {current !== 'festive' && (
+      <li>
+        <a
+          href={withBase(FESTIVE_SEASON_PATH)}
+          class="text-blue-700 dark:text-blue-300 hover:underline"
+        >
+          Festive season scaled-down timetable
         </a>
       </li>
     )}

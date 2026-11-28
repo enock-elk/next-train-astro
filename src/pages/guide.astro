@@ -2,7 +2,7 @@
 import ContentLayout from '../layouts/ContentLayout.astro';
 import SeoFeaturedRoutes from '../components/SeoFeaturedRoutes.astro';
 import { FARE_CONFIG, normalizeBase, withBase } from '../lib/config.js';
-import { WC_PUBLIC_HOLIDAYS_PATH } from '../lib/seo-routes.js';
+import { FESTIVE_SEASON_PATH, WC_PUBLIC_HOLIDAYS_PATH } from '../lib/seo-routes.js';
 
 const title = "User Guide & FAQ | Metrorail Next Train (Updated for 2026)";
 const description = "Updated for 2026. Learn how to use Metrorail Next Train to find train times near me. Check live timetables, ticket prices, and routes for Pretoria, Johannesburg, Cape Town, Durban, and East London.";
@@ -36,7 +36,10 @@ const monthlyTicketFaqText =
     "A monthly ticket bought during the month, for example on the 5th, is valid only for that calendar month. It does not last for the next 30 days. Monthly tickets for the current month stay on sale until about the 10th of that month.";
 
 const festiveFaqText =
-    "December schedules are not the usual weekday, Saturday, or public holiday sheets. Most regions have a dedicated scaled-down timetable for the festive season. It typically starts in the week of the early 20s of December and runs through the first week of January. Next Train does not have the 21 December 2026 to 1 January 2027 scaled-down timetables yet. The times published now stay the weekday, Saturday, and public holiday sheets. Next Train will update the schedules when PRASA releases the festive timetable.";
+    "December schedules are not the usual weekday, Saturday, or public holiday sheets. Most regions have a dedicated scaled-down timetable for the festive season. It typically starts in the week of the early 20s of December and runs through the first week of January. PRASA has not released the official scaled-down timetable for December 2026 to January 2027. Next Train will publish the times on https://nexttrain.co.za/festive-season.html and on each route page as soon as they are ready. The times published now stay the weekday, Saturday, and public holiday sheets.";
+
+const communityFaqText =
+    "Next Train has a Community tab. Commuters on the same route can ask a question, answer one, and see real-time issues other people are reporting. Open Next Train, pick your route, then tap Community. No account is required to read. Signing in lets you post.";
 
 const faqJsonLd = {
   "@context": "https://schema.org",
@@ -72,6 +75,14 @@ const faqJsonLd = {
       "acceptedAnswer": {
         "@type": "Answer",
         "text": festiveFaqText
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I ask other Metrorail commuters for help in Next Train?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": communityFaqText
       }
     },
     {
@@ -117,7 +128,7 @@ const faqJsonLd = {
   ]
 };
 
-const iconWave = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11c.5-2 1.5-3 3-3s2.5 1 3 3 1.5 3 3 3 2.5-1 3-3M4 14c.4 2.2 2.2 4 5 4h1c2.5 0 4-1.2 5-3"/><circle cx="9" cy="7" r="2.2"/><circle cx="15.5" cy="7.5" r="1.8"/></svg>`;
+const iconPeople = `<svg class="guide-icon-people" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="6.2" r="2.7"/><path d="M2.6 18.2v-1.1C2.6 14.2 4.7 12.6 7.5 12.6s4.9 1.6 4.9 4.5v1.1H2.6z"/><circle cx="16.7" cy="7.4" r="2.3"/><path d="M12.9 18.8v-.8c0-2.3 1.7-3.8 3.8-3.8s3.8 1.5 3.8 3.8v.8h-7.6z"/></svg>`;
 const iconRoute = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><path stroke-linecap="round" d="M8.5 19H15a3 3 0 000-6H9a3 3 0 010-6h6.5"/><circle cx="18" cy="5" r="2.5"/></svg>`;
 const iconBook = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A2.5 2.5 0 016.5 3H20v16.5H6.5A2.5 2.5 0 004 17V5.5z"/><path stroke-linecap="round" d="M8 7h8M8 11h6"/></svg>`;
 const iconClock = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5V12l3 2"/></svg>`;
@@ -209,6 +220,10 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
       width: 1.15rem;
       height: 1.15rem;
     }
+    .guide-section-icon svg.guide-icon-people {
+      width: 1.45rem;
+      height: 1.45rem;
+    }
     .guide-inline-icon {
       display: inline-flex;
       align-items: center;
@@ -297,7 +312,7 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
 <!-- Back Button Overlay — closes in-app sheet when embedded; else goes home -->
     <div class="fixed top-4 left-4 z-50">
         <a id="guide-home-btn" href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm backdrop-blur-md bg-opacity-90 dark:bg-opacity-90">
-            <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
+            <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Home
         </a>
     </div>
@@ -337,7 +352,12 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
             return;
           }
           if (isGuide) return;
-          var isSeoLanding = /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path);
+          var isSeoLanding = /\/routes(\/|\.html|$)/i.test(path)
+            || /\/stations\//i.test(path)
+            || /\/regions\//i.test(path)
+            || /\/corridors\//i.test(path)
+            || /festive-season/i.test(path)
+            || /public-holidays/i.test(path);
           if (isSeoLanding) {
             e.preventDefault();
             var dest = a.href;
@@ -379,7 +399,7 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
             <!-- Section 1: Introduction -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="guide-section-icon" set:html={iconWave} />
+                    <span class="guide-section-icon" set:html={iconPeople} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Built by Commuters, for Commuters</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
@@ -392,7 +412,7 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
                         <li><strong>KwaZulu-Natal:</strong> Durban Yard, Umlazi, Bridge City / KwaMashu, and Crossmoor.</li>
                         <li><strong>Eastern Cape:</strong> East London and Berlin.</li>
                     </ul>
-                    <p>The home board shows the next departure each way from your station, estimated fare for your passenger type, and a full timetable you can download. Shared corridors also list trains from neighbouring routes (for example From De Wildt while you are on Pretoria to Mabopane). Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors. Commuters can send a delay note, and some testers can share a trip location. Use Feedback in Options when something looks wrong.</p>
+                    <p>The home board shows the next departure each way from your station, estimated fare for your passenger type, and a full timetable you can download. Shared corridors also list trains from neighbouring routes (for example From De Wildt while you are on Pretoria to Mabopane). The Community tab is where commuters on the same route ask a question, answer one, and see real-time issues other people are reporting. Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors. Commuters can send a delay note, and some testers can share a trip location. Use Feedback in Options when something looks wrong.</p>
                 </div>
                 <SeoFeaturedRoutes />
             </section>
@@ -606,7 +626,18 @@ const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" vie
                         <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
                             <p>December schedules are <strong>not</strong> the usual weekday, Saturday, or public holiday sheets. Most regions have a dedicated <strong>scaled-down timetable</strong> for the festive season.</p>
                             <p class="mt-2">That timetable typically starts in the week of the <strong>early 20s of December</strong> and runs through the <strong>first week of January</strong>.</p>
-                            <p class="mt-2">Next Train does not have the <strong>21 December 2026 to 1 January 2027</strong> scaled-down timetables yet. The times on each route page stay the published weekday, Saturday, and public holiday sheets. Next Train will update the schedules when PRASA releases the festive timetable.</p>
+                            <p class="mt-2">PRASA has not released the official scaled-down timetable for <strong>December 2026 to January 2027</strong>. Next Train will publish the times on the <a href={withBase(FESTIVE_SEASON_PATH)} class="text-blue-600 dark:text-blue-400 underline">festive season timetable</a> and on each route page as soon as they are ready. The times on each route page stay the published weekday, Saturday, and public holiday sheets.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
+                        <summary class="cursor-pointer flex items-center justify-between p-4 font-bold text-gray-900 dark:text-white select-none focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            Can I ask other commuters for help?
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                            <p>Next Train has a <strong>Community</strong> tab. Commuters on the same route can ask a question, answer one, and see real-time issues other people are reporting.</p>
+                            <p class="mt-2">Open Next Train, pick your route, then tap Community. You can read without an account. Signing in lets you post.</p>
                         </div>
                     </details>
 

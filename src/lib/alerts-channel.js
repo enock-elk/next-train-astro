@@ -11,6 +11,7 @@ import { showCopyToast, showToast, triggerHaptic, openSmoothModal, closeSmoothMo
 import { alertSharePath } from './share-links.js';
 import { embedCommunityShareCards, stripCommunityShareUrls } from './share-chips.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { awardMark } from './rider-marks.js';
 import { $account } from './account.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
@@ -831,6 +832,30 @@ function openAlertReactionBreakdown(notice) {
         document.body.appendChild(sheet);
         sheet.querySelector('[data-breakdown-scrim]')?.addEventListener('click', hideAlertReactionBreakdown);
         sheet.addEventListener('click', (e) => {
+            const lookup = e.target.closest?.('[data-alert-react-lookup]');
+            if (lookup) {
+                e.preventDefault();
+                e.stopPropagation();
+                const uid = lookup.getAttribute('data-alert-react-lookup') || '';
+                hideAlertReactionBreakdown();
+                if (uid && typeof window.Admin?.openUserTrustLookup === 'function') {
+                    window.Admin.openUserTrustLookup({ uid });
+                }
+                return;
+            }
+            const who = e.target.closest?.('[data-alert-react-who]');
+            if (who) {
+                e.preventDefault();
+                e.stopPropagation();
+                const host = sheet.querySelector('[data-alert-react-people]');
+                const emoji = who.getAttribute('data-alert-react-who') || '';
+                sheet.querySelectorAll('[data-alert-react-who]').forEach((el) => {
+                    el.classList.toggle('ring-1', el === who);
+                    el.classList.toggle('ring-blue-400', el === who);
+                });
+                if (host && sheet._alertNotice) void paintAlertReactionPeople(host, sheet._alertNotice, emoji);
+                return;
+            }
             const btn = e.target.closest?.('[data-alert-react]');
             if (!btn) return;
             e.preventDefault();
@@ -848,17 +873,27 @@ function openAlertReactionBreakdown(notice) {
     if (title) title.textContent = total === 1 ? '1 reaction' : `${total} reactions`;
     const chips = sheet.querySelector('[data-breakdown-chips]');
     if (chips) {
-        chips.innerHTML = rows.map((row) => (
-            row.mine
-                ? `<button type="button" data-alert-react="${escapeHTML(row.key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ring-1 ring-blue-400" aria-label="Remove reaction">${row.emoji} <span class="tabular-nums">${row.count}</span></button>`
-                : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
-        )).join('');
+        const admin = isAdminAuthed();
+        chips.innerHTML = rows.map((row) => {
+            const face = `${row.emoji} <span class="tabular-nums">${row.count}</span>`;
+            if (admin) {
+                return `<button type="button" data-alert-react-who="${escapeHTML(row.key)}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white${row.mine ? ' ring-1 ring-blue-400' : ''}" aria-label="Who reacted ${escapeHTML(row.emoji)}">${face}</button>`;
+            }
+            return row.mine
+                ? `<button type="button" data-alert-react="${escapeHTML(row.key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ring-1 ring-blue-400" aria-label="Remove reaction">${face}</button>`
+                : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white">${face}</span>`;
+        }).join('');
     }
     const people = sheet.querySelector('[data-alert-react-people]');
+    sheet._alertNotice = notice;
     if (people) {
         people.classList.add('hidden');
         people.innerHTML = '';
-        if (isAdminAuthed()) void paintAlertReactionPeople(people, notice);
+        if (isAdminAuthed()) {
+            people.classList.remove('hidden');
+            people.innerHTML = '<p class="px-1 py-2 text-sm text-gray-500">Loading who reacted...</p>';
+            void paintAlertReactionPeople(people, notice, '');
+        }
     }
     sheet.classList.remove('hidden');
     if (!reactionBreakdownPushed) {
@@ -1242,33 +1277,48 @@ async function writeAlertReactionPerson(path, emoji, token, removing) {
     } catch { /* the count is already saved; names appear after the rules deploy */ }
 }
 
-async function paintAlertReactionPeople(host, notice) {
+async function paintAlertReactionPeople(host, notice, emojiKey = '') {
     if (!host || !isAdminAuthed()) return;
     const token = await ensureReactAuthToken();
-    if (!token) return;
+    if (!token) {
+        host.innerHTML = '<p class="px-1 py-2 text-sm text-gray-500">Sign in again to see who reacted.</p>';
+        host.classList.remove('hidden');
+        return;
+    }
     const path = notice._reactPath || `${notice._sourceKey}/${notice.id}`;
     let data = null;
     try {
         const res = await fetch(`${DYNAMIC_BASE_URL}alert_reaction_people/${encodeURIComponent(alertPeopleKey(path))}.json?auth=${encodeURIComponent(token)}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            host.innerHTML = '<p class="px-1 py-2 text-sm text-gray-500">Could not load who reacted.</p>';
+            host.classList.remove('hidden');
+            return;
+        }
         data = await res.json();
     } catch {
+        host.innerHTML = '<p class="px-1 py-2 text-sm text-gray-500">Could not load who reacted.</p>';
+        host.classList.remove('hidden');
         return;
     }
-    if (!data || typeof data !== 'object') return;
-    const rows = Object.values(data).filter((row) => row && ALERT_REACTION_EMOJI[row.emoji]);
-    if (!rows.length) return;
-    host.innerHTML = rows.map((row) => {
+    const rows = Object.entries(data && typeof data === 'object' ? data : [])
+        .filter(([, row]) => row && ALERT_REACTION_EMOJI[row.emoji] && (!emojiKey || row.emoji === emojiKey));
+    host.classList.remove('hidden');
+    if (!rows.length) {
+        host.innerHTML = '<p class="px-1 py-2 text-sm text-gray-500">No names saved for this reaction yet.</p>';
+        return;
+    }
+    host.innerHTML = rows.map(([uid, row]) => {
         const name = escapeHTML(String(row.name || 'Passenger').slice(0, 80));
         const letter = escapeHTML((String(row.name || 'P').trim().charAt(0) || 'P').toUpperCase());
         const emoji = ALERT_REACTION_EMOJI[row.emoji] || '';
+        const safeUid = escapeHTML(String(uid || ''));
         return `<div class="flex items-center gap-3 px-1 py-2">
             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">${letter}</span>
             <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">${name}</span>
             <span class="text-lg leading-none" aria-hidden="true">${emoji}</span>
+            <button type="button" class="shrink-0 text-xs font-bold text-blue-600 dark:text-blue-400" data-alert-react-lookup="${safeUid}">Look up</button>
         </div>`;
     }).join('');
-    host.classList.remove('hidden');
 }
 
 async function writeAlertReactionCount(path, emoji, token, delta) {
@@ -1319,6 +1369,7 @@ export async function submitAlertReaction(notice, emoji) {
         }
         paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
         await writeAlertReactionPerson(path, emoji, token, removing);
+        if (!removing) awardMark('alert_reaction', { key: `react:alert:${path}` });
         triggerHaptic();
         hideAlertReactionPicker();
         clearAlertSelection();

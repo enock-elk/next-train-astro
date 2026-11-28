@@ -454,7 +454,32 @@ export async function applyRouteDeepLink() {
         ensureRoutePinnedForRegion(region, { persistRegion: true });
         $currentRouteId.set(link.routeId);
     }
-    noteDeeplinkSurface('home', { loadDefaults: false });
+    const openCommunity = link.view === 'community';
+    // Home would treat the later Community switch as leaving the link, and Welcome would swallow it.
+    if (!openCommunity) noteDeeplinkSurface('home', { loadDefaults: false });
+    if (openCommunity) {
+        slowToast.cancel();
+        import('./community.js').then((m) => {
+            if (seoHandoff) {
+                try { sessionStorage.setItem('nt_community_from_seo', '1'); } catch { /* ignore */ }
+            }
+            // Welcome can copy the saved region back over the in-memory browse. Put the linked region back
+            // without writing it into storage, then open that room.
+            if (region && $userRegion.get() !== region) {
+                let previous = '';
+                try { previous = safeStorage.getItem('userRegion') || ''; } catch { /* ignore */ }
+                $userRegion.set(region);
+                try {
+                    if (previous && previous !== region) safeStorage.setItem('userRegion', previous);
+                    else if (!previous) safeStorage.removeItem('userRegion');
+                } catch { /* ignore */ }
+            }
+            // Set the surface in this turn, immediately before the switch.
+            noteDeeplinkSurface('community', { loadDefaults: false });
+            m.queueCommunityFocus?.(link.routeId, '');
+            switchTab('community');
+        }).catch(() => {});
+    }
     import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
@@ -505,7 +530,7 @@ export async function applyRouteDeepLink() {
         painted = true;
         try { unsub(); } catch { /* ignore */ }
         slowToast.cancel();
-        showToast('Connection timeout: Could not load this timetable.', 'error');
+        if (!openCommunity) showToast('Connection timeout: Could not load this timetable.', 'error');
     }, 12000);
     unsub = $schedules.subscribe((scheds) => {
         if (painted || !sheetsReady(scheds)) return;

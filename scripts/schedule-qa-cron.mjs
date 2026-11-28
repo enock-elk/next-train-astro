@@ -3,7 +3,7 @@
  * summary. The workflow posts that summary to the community worker.
  * Run: node scripts/schedule-qa-cron.mjs
  */
-import { runScheduleQaReport } from '../src/lib/schedule-qa.js';
+import { runScheduleQaReport, summarizeQaFindings } from '../src/lib/schedule-qa.js';
 
 const url = 'https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/full-database.json';
 const res = await fetch(url);
@@ -33,12 +33,7 @@ function parsePublicSheet(rows) {
     return { headers, rows: body, stationColumnName: 'STATION' };
 }
 const report = runScheduleQaReport(db, null, parsePublicSheet);
-const lines = (report.findings || [])
-    .filter((row) => row.severity === 'error')
-    .slice(0, 5)
-    .map((row) => `${row.code || ''} ${row.routeId || ''} ${row.message || ''}`.replace(/\s+/g, ' ').trim().slice(0, 160))
-    .join('\n')
-    .slice(0, 900);
+const lines = summarizeQaFindings(report.findings || [], 900);
 const summary = {
     errors: report.summary?.errors || 0,
     warnings: report.summary?.warnings || 0,

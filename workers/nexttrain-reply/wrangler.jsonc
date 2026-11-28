@@ -15,6 +15,12 @@
 			"remote": true
 		}
 	],
+	"r2_buckets": [
+		{
+			"binding": "READALOUD",
+			"bucket_name": "nexttrain-readaloud"
+		}
+	],
 	"vars": {
 		"FIREBASE_WEB_API_KEY": "AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY",
 		"ALLOWED_ORIGINS": "https://lab.nexttrain.co.za,https://nexttrain.co.za,https://www.nexttrain.co.za,https://enock-elk.github.io,https://enockelk.github.io,http://localhost:4321"

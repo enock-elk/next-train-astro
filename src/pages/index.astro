@@ -18,7 +18,7 @@ import { APP_VERSION, withBase } from '../lib/config.js';
 const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';
 /** Lead with the brand promise; weave "today" later. Keep within ~160 SERP chars. */
 const pageDescription =
-  'Get PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. Train times for today and Saturdays.';
+  'Get PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. Train times for today (Weekdays, Saturdays and Public Holidays).';
 const ogTitle = 'Metrorail Next Train | 2026 PRASA Train Times';
 const ogDescription = pageDescription;
 const twitterDescription = pageDescription;
@@ -291,6 +291,31 @@ const faqLd = {
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
+    let webviewToastTries = 0;
+    const maybeWebviewToast = () => {
+        try {
+            if (sessionStorage.getItem('nt_webview_toast') === '1') return;
+            const ua = navigator.userAgent || '';
+            const standalone = (window.matchMedia && (
+                window.matchMedia('(display-mode: standalone)').matches
+                || window.matchMedia('(display-mode: fullscreen)').matches
+            )) || window.navigator.standalone === true;
+            if (standalone) return;
+            if (/za\.co\.nexttrain\.app/i.test(`${document.referrer || ''} ${ua}`)) return;
+            const inApp = /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|TikTok|BytedanceWebview|musical_ly|Twitter|LinkedInApp|Line\/|Snapchat|MicroMessenger/i.test(ua);
+            const androidWebView = /Android/i.test(ua) && /;\s*wv\)/i.test(ua);
+            if (!inApp && !androidWebView) return;
+            if (typeof window.showToast !== 'function') {
+                if (webviewToastTries < 12) {
+                    webviewToastTries += 1;
+                    setTimeout(maybeWebviewToast, 400);
+                }
+                return;
+            }
+            sessionStorage.setItem('nt_webview_toast', '1');
+            window.showToast('Open this in your browser for better performance.', 'info', 4200);
+        } catch (e) { /* ignore */ }
+    };
     const revealAppShell = (force = false) => {
         if (window.__ntHoldBootCover && force !== true) return;
         const main = document.getElementById('main-content');
@@ -299,6 +324,24 @@ const faqLd = {
         if (overlay) overlay.style.display = 'none';
         try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
+        maybeWebviewToast();
+        maybeBootReadyToast();
+    };
+    let bootReadyTries = 0;
+    const maybeBootReadyToast = () => {
+        try {
+            if (window.parent !== window) return;
+            if (sessionStorage.getItem('nt_boot_ready') !== '1') return;
+            if (typeof window.showToast !== 'function') {
+                if (bootReadyTries < 20) {
+                    bootReadyTries += 1;
+                    setTimeout(maybeBootReadyToast, 300);
+                }
+                return;
+            }
+            sessionStorage.removeItem('nt_boot_ready');
+            window.showToast('Next Train loaded.', 'success', 2800, '', { force: true });
+        } catch (e) { /* ignore */ }
     };
     const revealWhenBoardReady = () => revealAppShell();
     // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)

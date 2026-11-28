@@ -8,7 +8,7 @@ import { safeStorage } from './utils.js';
 import { $currentRouteId, $deviceId, $userRegion } from '../store.js';
 import { $account } from './account.js';
 import { bootFirebase } from './firebase-boot.js';
-import { FEATURE_KEYS, isFeatureEnabled, fetchFeatures, isLabEnvironment } from './features.js';
+import { FEATURE_KEYS, isFeatureEnabled, fetchFeatures, isLabEnvironment, isPreviewHost } from './features.js';
 import { NOTIFY_PREF_KEY, getNotifyPref, getNotifyCategories, syncNotifyUi } from './prefs.js';
 import { noticeToastCopy } from './notice-toast.js';
 
@@ -131,7 +131,7 @@ async function persistToken(token, { enabled = true, registrationType = 'token' 
         categories,
         enabled: !!enabled,
         appVersion: APP_VERSION,
-        lab: isLabEnvironment(),
+        lab: isLabEnvironment() || isPreviewHost(),
         userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 180) : '',
     };
     if (acct.status === 'signed-in' && acct.uid) payload.accountUid = acct.uid;

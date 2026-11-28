@@ -236,7 +236,7 @@ ok(timetableGrid.includes("snap.prefer"), 'a preferred timetable chip wins over 
 const chips = readFileSync(join(ROOT, 'src/lib/share-chips.js'), 'utf8');
 ok(chips.includes('setLiveTrainFollow') === false && chips.includes('applyLiveTrainDeepLink'), 'a live chip uses the existing live-share open');
 ok(!chips.includes('allowHiddenTabs'), 'share chips do not bypass Map with a hidden-tab flag');
-const { describeShareUrl, renderTextWithShareChips } = await import('../src/lib/share-chips.js');
+const { describeShareUrl, renderTextWithShareChips, alertShareImageUrl } = await import('../src/lib/share-chips.js');
 const plannerChip = describeShareUrl('https://nexttrain.co.za/og/share?plan=KEMPTON+PARK%7EGERMISTON&t=15%3A26&d=wd&r=GP');
 ok(plannerChip?.label === 'Kempton Park → Germiston • 15:26', 'a planner share becomes the stations and time');
 const routeChip = describeShareUrl('https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd');
@@ -247,12 +247,24 @@ const rendered = renderTextWithShareChips('See https://nexttrain.co.za/og/share?
 const visible = rendered.replace(/<[^>]+>/g, '');
 ok(rendered.includes('JHB ↔ Randfontein') && rendered.includes('Saturday') && !visible.includes('https://'), 'the pasted timetable URL is replaced by the route chip');
 ok(rendered.includes('data-share-url='), 'the route chip stays clickable');
+const seoShare = renderTextWithShareChips('https://nexttrain.co.za/og/share?plan=AKASIABOOM%7EWALTOO&t=16%3A05&d=wd&r=GP', { asLink: true });
+ok(seoShare.startsWith('<a class="community-share-chip"') && seoShare.includes('Akasiaboom → Waltoo • 16:05') && !seoShare.replace(/<[^>]+>/g, '').includes('https://'), 'an SEO community preview uses the same trip chip as the app');
 const communityLink = renderTextWithShareChips('See https://nexttrain.co.za/og/c/jhb-germiston/cp_mwn84zjm_4cze9f');
 ok(communityLink.includes('nt-community-share-card'), 'a community message link becomes a text card');
 ok(communityLink.includes('data-community-share-route="jhb-germiston"'), 'the card keeps the room');
 ok(communityLink.includes('data-community-share-post="cp_mwn84zjm_4cze9f"'), 'the card keeps the message');
 ok(!communityLink.includes('<img'), 'a community message card does not embed a picture');
 ok(!communityLink.replace(/<[^>]+>/g, '').includes('https://'), 'the pasted community address is replaced by the card');
+const posters = [
+    'https://nexttrain.co.za/a.jpg',
+    'https://nexttrain.co.za/b.jpg',
+    'https://nexttrain.co.za/c.jpg',
+    'https://nexttrain.co.za/d.jpg',
+];
+ok(alertShareImageUrl(posters, 4) === posters[3], 'a /4 notice link uses the fourth poster');
+ok(alertShareImageUrl(posters, 0) === posters[0], 'a notice link with no photo uses the first poster');
+const photoCard = renderTextWithShareChips('https://nexttrain.co.za/og/a/all_GP/1795168748314/4');
+ok(photoCard.includes('data-alert-share-photo="4"'), 'the community card keeps the photo index');
 
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');

@@ -24,7 +24,7 @@ import {
     stationRowIndexes,
 } from './grid-column-edit.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
-import { speakOperatorCopy, stopOperatorSpeech, pauseOperatorSpeech, resumeOperatorSpeech, restartOperatorSpeech, operatorSpeechState } from './operator-speech.js';
+import { speakOperatorCopy, stopOperatorSpeech, pauseOperatorSpeech, resumeOperatorSpeech, restartOperatorSpeech, seekOperatorSpeech, operatorSpeechState, listReadAloudArchive, openReadAloudArchive, deleteReadAloudArchive } from './operator-speech.js';
 import { extraSheetKey, suggestedSheetTab, normalizeRouteSheetDates } from './route-sheets.js';
 import {
     applyDraftGuard,
@@ -50,6 +50,7 @@ import {
     seriesTrend,
     viewabilityTrend,
 } from '../../workers/nexttrain-telemetry/chart-math.js';
+import { adRevenueRangeBounds, adRevenueRangeChoices } from './ad-range.js';
 import { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl } from './link-preview.js';
 import {
     alertDraftFromBriefCard,
@@ -72,7 +73,7 @@ import {
 import {
     loadAllSchedules, pendingScheduleLoad, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
-import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
+import { runScheduleQaReport, scanScheduleSheet, summarizeQaFindings, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 import { ADMIN_CHANGELOG, adminBuildSnapshot, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
 import { formatFeedbackDiagLine, stationChoiceLabel } from './feedback-diag-line.js';
@@ -171,6 +172,7 @@ export function exposeAdminGlobals() {
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
     window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, equivalentPeriodTrend, equivalentViewability, seriesTrend, viewabilityTrend };
+    window.ntAdRange = { adRevenueRangeBounds, adRevenueRangeChoices };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl };
     window.samePreviewUrl = samePreviewUrl;
     window.ntOperatorBrief = {
@@ -223,7 +225,11 @@ export function exposeAdminGlobals() {
     window.ntPauseOperatorSpeech = pauseOperatorSpeech;
     window.ntResumeOperatorSpeech = resumeOperatorSpeech;
     window.ntRestartOperatorSpeech = restartOperatorSpeech;
+    window.ntSeekOperatorSpeech = seekOperatorSpeech;
     window.ntOperatorSpeechState = operatorSpeechState;
+    window.ntListReadAloudArchive = listReadAloudArchive;
+    window.ntOpenReadAloudArchive = openReadAloudArchive;
+    window.ntDeleteReadAloudArchive = deleteReadAloudArchive;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;
@@ -239,6 +245,7 @@ export function exposeAdminGlobals() {
     window.executeRegionSwap = executeRegionSwap;
     window.guardianFetch = guardianFetch;
     window.runScheduleQaReport = runScheduleQaReport;
+    window.summarizeQaFindings = summarizeQaFindings;
     window.scanScheduleSheet = scanScheduleSheet;
     window.QA_ISSUE_TYPES = QA_ISSUE_TYPES;
     window.runZoneDistanceAudit = runZoneDistanceAudit;

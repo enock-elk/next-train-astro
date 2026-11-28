@@ -25,6 +25,22 @@
   #community-composer.community-composer-with-clip {
     padding-right: 2.75rem;
   }
+  .community-composer-plus {
+    position: absolute;
+    right: 0.45rem;
+    bottom: 0.45rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: #111827;
+    color: #fff;
+  }
+  .community-composer-plus.hidden { display: none; }
+  html.dark .community-composer-plus { background: #f3f4f6; color: #111827; }
   #community-composer {
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
@@ -124,6 +140,9 @@
                 <button type="button" id="community-select-delete" class="community-sheet-delete hidden p-2 rounded-full text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 focus:outline-none" aria-label="Delete" data-delete-mode="tombstone" data-delete-as="author">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/><path d="M7 7l1 13a1 1 0 001 1h6a1 1 0 001-1l1-13"/></svg>
                 </button>
+                <button type="button" id="community-select-hide-me" class="hidden p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Delete for me">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v6M14 11v6"/></svg>
+                </button>
                 <button type="button" id="community-select-report" class="community-sheet-report hidden p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Report">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg>
                 </button>
@@ -141,9 +160,15 @@
         </div>
 
         <!-- Wallpaper lives on the pane so IME / composer resize does not retile it -->
-        <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-[8rem] min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent">
-            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
-            <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
+        <div class="community-feed-slot relative z-[1] flex flex-1 basis-0 min-h-[8rem] min-h-0 flex-col">
+            <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent is-parking">
+                <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
+                <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
+            </div>
+            <div id="community-feed-loading" class="community-feed-loading hidden absolute inset-0 z-[2] px-6 text-center pointer-events-none" role="status" aria-live="polite">
+                <svg class="w-10 h-10 animate-spin mx-auto text-blue-500 mb-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="text-sm font-bold text-gray-600 dark:text-gray-400 animate-pulse">Opening this room...</p>
+            </div>
         </div>
 
         <div id="community-composer-dock" class="relative z-[1] shrink-0 px-3 pt-2 pb-2 bg-transparent">
@@ -178,13 +203,17 @@
                             <p id="community-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                         </div>
                     </div>
+                    <div class="relative">
                     <textarea id="community-composer" rows="2" maxlength="8000" class="block w-full min-h-[3.75rem] max-h-[10rem] py-2.5 pl-3.5 pr-3 rounded-[1.35rem] bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-auto" placeholder="Please be kind and respectful."></textarea>
-                    <button type="button" id="community-attach-btn" class="hidden absolute right-1.5 bottom-1.5 w-9 h-9 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700 flex items-center justify-center focus:outline-none" aria-label="Attach">
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                    <button type="button" id="community-attach-btn" class="community-composer-plus hidden" aria-label="Attach">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                     </button>
+                    </div>
                 </div>
                 <div class="flex shrink-0 flex-col justify-end gap-1">
-                    <button type="button" id="community-composer-speak" class="hidden h-8 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Play</button>
+                    <button type="button" id="community-composer-speak" data-speech="toggle" class="hidden h-8 w-8 rounded-xl border border-gray-300 bg-white text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" aria-label="Play">
+                        <svg data-speech-icon class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
                     <button type="button" id="community-guide-open" class="hidden h-8 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Guide</button>
                     <button type="button" id="community-post-btn" class="h-[2.75rem] px-3.5 min-w-[3.25rem] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
                 </div>
@@ -227,6 +256,19 @@
     </div>
 </div>
 
+<div id="community-deleted-sheet" class="fixed inset-0 z-[160] hidden flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="community-deleted-sheet-title">
+    <div class="flex max-h-[min(70vh,32rem)] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-gray-900 sm:rounded-2xl">
+        <div class="flex items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+            <h3 id="community-deleted-sheet-title" class="flex-1 text-sm font-black text-gray-900 dark:text-white">Deleted message</h3>
+            <button type="button" id="community-deleted-sheet-close" class="rounded-full p-2 text-gray-500 hover:bg-gray-100 focus:outline-none dark:hover:bg-gray-800" aria-label="Close">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <p id="community-deleted-sheet-name" class="px-4 pt-3 text-xs font-bold text-gray-500 dark:text-gray-400"></p>
+        <p id="community-deleted-sheet-body" class="overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 text-sm text-gray-900 dark:text-gray-100"></p>
+    </div>
+</div>
+
 <div id="community-delete-modal" class="fixed inset-0 z-[170] hidden flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="community-delete-title">
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5">
         <h3 id="community-delete-title" class="text-base font-black text-gray-900 dark:text-white mb-2">Delete this message?</h3>
@@ -257,6 +299,24 @@
   }
   #view-community .community-feed-scroll {
     overflow-anchor: none;
+  }
+  /* Stay hidden until the open position is set, so the first paint is not a scroll.
+     The spinner sits outside this scroller, so the wait is not a blank wallpaper. */
+  #view-community .community-feed-scroll.is-parking {
+    visibility: hidden;
+  }
+  #view-community .community-feed-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #view-community .community-feed-loading.hidden {
+    display: none;
+  }
+  #view-community.view-section {
+    transform: none;
+    transition: none;
   }
   /* A little darker than the shared wash so the bubbles sit forward.
      Alerts and Feedback Hub keep their own wallpaper. */
@@ -488,7 +548,8 @@
   }
   .community-bubble-name {
     min-width: 0;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -537,7 +598,10 @@
     font-size: 0.84rem;
     line-height: 1.35;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     word-break: break-word;
+    max-width: 100%;
+    min-width: 0;
   }
   #community-char-hint.is-over {
     color: #dc2626;
@@ -676,9 +740,12 @@
   .community-msg-link {
     display: block;
     margin-bottom: 0.25rem;
+    max-width: 100%;
+    min-width: 0;
     font-size: 0.75rem;
     font-weight: 700;
     text-decoration: underline;
+    overflow-wrap: anywhere;
     word-break: break-all;
   }
   .community-attach-chip {
@@ -739,9 +806,10 @@
     right: 0;
     left: auto;
   }
-  /* The list slides down to close. The blue bar stays in front of that card. */
-  #community-reactions-modal {
-    z-index: 100;
+  /* Under the side menu (z-100) and its scrim (z-90). The blue bar stays in front. */
+  #community-reactions-modal,
+  #community-profile-card {
+    z-index: 85;
   }
   html:has(#community-reactions-modal:not(.hidden)) #bottom-nav.bottom-nav-bar {
     z-index: 160;

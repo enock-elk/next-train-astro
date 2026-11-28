@@ -2468,7 +2468,7 @@ export function setImmersiveChrome(on) {
     });
 }
 
-/** Reactions and the emoji tray belong to Community. Leaving the tab hides them. */
+/** Community sheets belong to that tab. Leaving it hides reactions and the account card. */
 function dismissCommunityTabSheets() {
     const tray = document.getElementById('community-reaction-sheet');
     if (tray) {
@@ -2477,6 +2477,10 @@ function dismissCommunityTabSheets() {
     }
     hideFixedModal('community-reactions-modal');
     hideFixedModal('community-attach-modal');
+    const profileCard = document.getElementById('community-profile-card');
+    const profileSheet = profileCard?.querySelector('[data-sheet-card]');
+    if (profileSheet) profileSheet.style.transform = '';
+    hideFixedModal('community-profile-card');
     if (location.hash === '#community-reactions') {
         try { history.replaceState(history.state || { tab: 'community' }, '', '#community'); } catch { /* ignore */ }
     }
@@ -2562,6 +2566,9 @@ export function switchTab(tab, opts = null) {
     // Presence only while Community is visible. Bind first so a cold Community
     // tab (before hub idle-import) still has click handlers.
     if (tab === 'community') {
+        document.querySelector('#view-community .community-feed-scroll')?.classList.add('is-parking');
+        document.getElementById('community-feed-loading')?.classList.remove('hidden');
+        if (typeof window.parkCommunityOpen === 'function') window.parkCommunityOpen();
         import('./community.js').then((m) => {
             m.bindCommunityUi?.();
             m.openRouteCommunity?.();
@@ -3311,6 +3318,7 @@ function maintenanceToneClass(raw) {
     const key = String(raw || '').trim().toLowerCase();
     if (key === 'green') return 'nt-maint-tone-green';
     if (key === 'blue') return 'nt-maint-tone-blue';
+    if (key === 'red') return 'nt-maint-tone-red';
     return '';
 }
 
@@ -3777,6 +3785,7 @@ function bindBlurBackdropDismiss() {
 const BOTTOM_SHEET_CLOSE = {
     'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
     'community-reactions-modal': () => closeSmoothModal('community-reactions-modal'),
+    'community-profile-card': () => closeSmoothModal('community-profile-card'),
     'inbox-reactions-modal': () => closeSmoothModal('inbox-reactions-modal'),
     'alerts-reaction-breakdown': () => window.__ntHideAlertReactionBreakdown?.(),
     'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),

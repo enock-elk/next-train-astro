@@ -14,13 +14,14 @@ import {
     DELETED_BY_ADMIN,
     DELETED_MESSAGE,
     communityIdsPastBucket,
+    communityDeletedArchive,
     communityTombstonePatch,
     isCommunityTombstone,
     sanitizeCommunityAttachments,
     sanitizeCommunityBucketImageUrl,
     sanitizeCommunityLinkUrl,
 } from '../src/lib/community-policy.js';
-import { sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
+import { buildDeletedAccountRecord, publicJoinedMs, sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
 import { ALERT_POSTER_MAX, collectNoticeImageUrls, layoutAlertPost } from '../src/lib/alerts-feed.js';
 
 assert.equal(COMMUNITY_BUCKET_DEPTH, 80);
@@ -40,6 +41,14 @@ assert.equal(patch.replyTo, null);
 assert.equal(patch.attachments, null);
 assert.ok(!Object.prototype.hasOwnProperty.call(patch, 'quotes'));
 assert.equal(quote.body, 'trains are running', 'a quote copied earlier is not rewritten by the tombstone patch');
+
+const kept = communityDeletedArchive(
+    { body: 'trains are running', uid: 'u1', timestamp: 9, displayName: 'Katlego L' },
+    { actor: 'author', routeId: 'pta-dewildt', postId: 'cp1', now: 11 },
+);
+assert.equal(kept.body, 'trains are running');
+assert.equal(kept.deletedBy, 'author');
+assert.equal(communityDeletedArchive({ body: 'Deleted message', uid: 'u1' }, { routeId: 'pta-dewildt', postId: 'cp1' }), null);
 
 const adminPatch = communityTombstonePatch('admin', 5);
 assert.equal(adminPatch.body, DELETED_BY_ADMIN);
@@ -119,6 +128,28 @@ assert.doesNotMatch(worker, /Community bucket trim failed/);
 assert.match(worker, /shallow: 'true'/);
 assert.doesNotMatch(worker, /wipeStalePosts/);
 assert.match(worker, /pathname === '\/community\/message'/);
+assert.match(worker, /pathname === '\/account\/delete'/);
+assert.match(worker, /pathname === '\/account\/restore'/);
+const deletedAccount = buildDeletedAccountRecord({
+    uid: 'uid-oldest',
+    profile: { createdAt: 1700000000000, displayName: 'Angelo', email: 'a@example.com' },
+    directory: { createdAt: 1700000005000 },
+    auth: { createdAt: 1690000000000 },
+    now: 1710000000000,
+});
+assert.equal(deletedAccount.uid, 'uid-oldest');
+assert.equal(deletedAccount.status, 'done');
+assert.equal(deletedAccount.accountCreatedAt, 1690000000000);
+assert.equal(deletedAccount.createdAt, 1690000000000);
+assert.equal(publicJoinedMs({
+    profile: {},
+    user: { accountCreatedAt: 1700000000000, createdAt: 1710000000000 },
+    directory: { createdAt: 1695000000000 },
+}), 1695000000000);
+assert.match(worker, /pathname === '\/community\/joined'/);
+assert.match(community, /ensurePublicJoined/);
+assert.match(community, /community-avatar:not\(\.community-avatar-spacer\)/);
+assert.doesNotMatch(community, /community-bubble-name-row, \[data-community-react-person\]/);
 assert.match(worker, /pathname === '\/community\/image'/);
 assert.match(worker, /env\.COMMUNITY_IMAGES/, 'community photos use their own R2 binding');
 assert.doesNotMatch(worker.slice(worker.indexOf('async function storeCommunityImageBytes'), worker.indexOf('async function placeCommunityImage')), /ALERT_IMAGES/, 'community photo bytes are not written to the alerts bucket');

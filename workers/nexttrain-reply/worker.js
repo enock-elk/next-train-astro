@@ -13,9 +13,15 @@
  * PUT  /context   { note }  (both allowlisted operators)
  *
  * POST /speak     same operator token
- *   Body: { text }  max 900 characters
- *   Returns audio/mpeg from Chirp 3 HD. The Cloud key stays on the worker.
+ *   Body: { text, archive?: true }
+ *   A long paste is split into Chirp-sized pieces and returned as one audio/mpeg.
+ *   archive keeps that audio in R2 and the text in KV. The Cloud key stays on the worker.
+ *   GET  /speak/archive
+ *   GET  /speak/archive/:id
+ *   GET  /speak/archive/:id/audio
+ *   DELETE /speak/archive/:id
  *   Secret: GOOGLE_TTS_API_KEY, or GEMINI_API_KEY if that key can call Text-to-Speech.
+ *   R2: READALOUD (nexttrain-readaloud). Archive is skipped when that bucket is not bound.
  *
  * Secret: GEMINI_API_KEY
  * Var: FIREBASE_WEB_API_KEY
@@ -93,7 +99,8 @@ export function corsOriginAllowed(origin, env) {
 function corsHeaders(env, request) {
     const origin = request.headers.get('Origin') || '';
     const headers = {
-        'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, PUT, POST, DELETE, OPTIONS',
+        'Access-Control-Expose-Headers': 'X-Readaloud-Id, X-Readaloud-Saved',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '86400',
         Vary: 'Origin',
@@ -245,7 +252,8 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/unfurl' && request.method === 'GET') {
         return unfurlLink(request, env, url);
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft' && url.pathname !== '/speak' && url.pathname !== '/voice') {
+    const archiveRoute = url.pathname === '/speak/archive' || /^\/speak\/archive\/[a-f0-9]{16}(\/audio)?$/.test(url.pathname);
+    if (!archiveRoute && url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft' && url.pathname !== '/speak' && url.pathname !== '/voice') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -300,6 +308,7 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/suggest' && request.method === 'POST') {
         return suggestReply(request, env);
     }
+    if (archiveRoute) return handleReadAloudArchive(request, env, url);
     if (url.pathname === '/speak' && request.method === 'POST') {
         return speakText(request, env, auth.user);
     }
@@ -318,9 +327,30 @@ export async function handleRequest(request, env) {
     return json(env, request, 405, { error: 'Method not allowed' });
 }
 
-const SPEAK_MAX = 900;
-const SPEAK_HOUR_CHARS = 8000;
-const SPEAK_DAY_CHARS = 40000;
+const SPEAK_MAX = 24000;
+/** Chirp 3 HD rejects an input past 4,000 bytes. Pause markup needs room under that. */
+const SPEAK_PIECE = 3000;
+const SPEAK_HOUR_CHARS = 50000;
+const SPEAK_DAY_CHARS = 150000;
+const READALOUD_INDEX = 'readaloud:index';
+const READALOUD_KEEP = 60;
+
+/** Split on a sentence, then a space, so a long paste is still read in full. */
+export function speechPieces(text, max = SPEAK_PIECE) {
+    const parts = [];
+    let rest = String(text || '').trim();
+    const limit = Math.max(80, Number(max) || SPEAK_PIECE);
+    while (rest.length > limit) {
+        let cut = rest.lastIndexOf('. ', limit);
+        if (cut < Math.floor(limit * 0.4)) cut = rest.lastIndexOf(' ', limit);
+        if (cut < 40) cut = limit;
+        const piece = rest.slice(0, cut + 1).trim();
+        if (piece) parts.push(piece);
+        rest = rest.slice(cut + 1).trim();
+    }
+    if (rest) parts.push(rest);
+    return parts;
+}
 
 function plainSpeech(value) {
     return String(value || '')
@@ -331,14 +361,32 @@ function plainSpeech(value) {
         .slice(0, SPEAK_MAX);
 }
 
-function audioResponse(env, request, b64) {
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+function bytesFromB64(b64) {
+    const bin = atob(String(b64 || ''));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+    return out;
+}
+
+function concatBytes(parts) {
+    const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const part of parts) {
+        out.set(part, offset);
+        offset += part.byteLength;
+    }
+    return out;
+}
+
+function audioBytesResponse(env, request, bytes, extra = {}) {
     return new Response(bytes, {
         status: 200,
         headers: {
             ...corsHeaders(env, request),
             'Content-Type': 'audio/mpeg',
             'Cache-Control': 'private, max-age=3600',
+            ...extra,
         },
     });
 }
@@ -347,6 +395,148 @@ function speechInput(text, pause) {
     if (pause === 'off') return { text };
     const tag = pause === 'short' ? '[pause short]' : pause === 'long' ? '[pause long]' : '[pause]';
     return { markup: text.replace(/([.!?])\s+/g, `$1 ${tag} `) };
+}
+
+async function shaHex(value) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function readChunkAudio(env, cacheKey) {
+    if (!env.REPLY_CONTEXT) return null;
+    const hit = await env.REPLY_CONTEXT.get(cacheKey);
+    return hit ? bytesFromB64(hit) : null;
+}
+
+async function writeChunkAudio(env, cacheKey, b64) {
+    if (!env.REPLY_CONTEXT || !b64) return;
+    await env.REPLY_CONTEXT.put(cacheKey, b64, { expirationTtl: 60 * 60 * 24 * 14 });
+}
+
+async function synthPiece(env, key, piece, prefs) {
+    const hex = await shaHex(`chirp3:${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${piece}`);
+    const cacheKey = `tts:audio:${hex}`;
+    const cached = await readChunkAudio(env, cacheKey);
+    if (cached) return { bytes: cached, fresh: false };
+    let res;
+    try {
+        res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': key,
+            },
+            body: JSON.stringify({
+                input: speechInput(piece, prefs.pause),
+                voice: { languageCode: prefs.languageCode, name: prefs.voice || DEFAULT_VOICE },
+                audioConfig: {
+                    audioEncoding: 'MP3',
+                    speakingRate: prefs.speakingRate,
+                    volumeGainDb: prefs.volumeGainDb,
+                },
+            }),
+        });
+    } catch {
+        throw new Error('reach');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.audioContent) throw new Error('play');
+    await writeChunkAudio(env, cacheKey, data.audioContent);
+    return { bytes: bytesFromB64(data.audioContent), fresh: true };
+}
+
+async function readAloudIndex(env) {
+    if (!env.REPLY_CONTEXT) return [];
+    try {
+        const rows = JSON.parse(await env.REPLY_CONTEXT.get(READALOUD_INDEX) || '[]');
+        return Array.isArray(rows) ? rows : [];
+    } catch {
+        return [];
+    }
+}
+
+async function writeAloudIndex(env, rows) {
+    if (!env.REPLY_CONTEXT) return;
+    await env.REPLY_CONTEXT.put(READALOUD_INDEX, JSON.stringify(rows));
+}
+
+async function dropAloudClip(env, id) {
+    if (!id) return;
+    if (env.READALOUD) {
+        try { await env.READALOUD.delete(`clips/${id}.mp3`); } catch { /* already gone */ }
+    }
+    if (env.REPLY_CONTEXT) {
+        try { await env.REPLY_CONTEXT.delete(`readaloud:text:${id}`); } catch { /* already gone */ }
+    }
+}
+
+async function saveReadAloud(env, text, audio, prefs) {
+    if (!env.READALOUD || !env.REPLY_CONTEXT) return '';
+    const hash = await shaHex(`${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${text}`);
+    const previous = await readAloudIndex(env);
+    const same = previous.find((row) => row && row.hash === hash);
+    if (same?.id) {
+        const hit = await env.READALOUD.head(`clips/${same.id}.mp3`);
+        if (hit) return same.id;
+    }
+    const id = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await env.READALOUD.put(`clips/${id}.mp3`, audio, { httpMetadata: { contentType: 'audio/mpeg' } });
+    await env.REPLY_CONTEXT.put(`readaloud:text:${id}`, text);
+    const title = text.replace(/\s+/g, ' ').trim().slice(0, 80);
+    const next = [{ id, title, created: Date.now(), chars: text.length, hash }, ...previous.filter((row) => row?.id && row.id !== id && row.hash !== hash)];
+    const kept = next.slice(0, READALOUD_KEEP);
+    await writeAloudIndex(env, kept);
+    const keepIds = new Set(kept.map((row) => row.id));
+    await Promise.all(previous.filter((row) => row?.id && !keepIds.has(row.id)).map((row) => dropAloudClip(env, row.id)));
+    return id;
+}
+
+async function handleReadAloudArchive(request, env, url) {
+    if (!env.READALOUD || !env.REPLY_CONTEXT) {
+        return json(env, request, 503, { error: 'Archive storage is not configured.' });
+    }
+    if (url.pathname === '/speak/archive' && request.method === 'GET') {
+        const items = (await readAloudIndex(env)).map((row) => ({
+            id: row.id,
+            title: row.title || '',
+            created: Number(row.created) || 0,
+            chars: Number(row.chars) || 0,
+        }));
+        return json(env, request, 200, { items });
+    }
+    const match = url.pathname.match(/^\/speak\/archive\/([a-f0-9]{16})(\/audio)?$/);
+    if (!match) return json(env, request, 404, { error: 'Not found' });
+    const id = match[1];
+    const index = await readAloudIndex(env);
+    const row = index.find((item) => item?.id === id);
+    if (!row) return json(env, request, 404, { error: 'That reading is gone.' });
+    if (request.method === 'DELETE' && !match[2]) {
+        await dropAloudClip(env, id);
+        await writeAloudIndex(env, index.filter((item) => item?.id !== id));
+        return json(env, request, 200, { ok: true });
+    }
+    if (request.method === 'GET' && match[2]) {
+        const obj = await env.READALOUD.get(`clips/${id}.mp3`);
+        if (!obj) return json(env, request, 404, { error: 'That audio is gone.' });
+        return new Response(obj.body, {
+            status: 200,
+            headers: {
+                ...corsHeaders(env, request),
+                'Content-Type': 'audio/mpeg',
+                'Cache-Control': 'private, max-age=3600',
+            },
+        });
+    }
+    if (request.method === 'GET') {
+        const text = String(await env.REPLY_CONTEXT.get(`readaloud:text:${id}`) || '');
+        return json(env, request, 200, {
+            id,
+            title: row.title || '',
+            created: Number(row.created) || 0,
+            text,
+        });
+    }
+    return json(env, request, 405, { error: 'Method not allowed' });
 }
 
 /** Chirp 3 HD. Operator token already checked. The key stays on the worker. */
@@ -359,55 +549,55 @@ async function speakText(request, env, user) {
     if (!key) return json(env, request, 503, { error: 'Voice is not configured.' });
     const saved = await readVoicePrefs(env, user);
     const prefs = body.preview && typeof body.preview === 'object' ? normalizeVoicePrefs(body.preview) : saved;
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chirp3:${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${text}`));
-    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-    const cacheKey = `tts:audio:${hex}`;
-    if (env.REPLY_CONTEXT) {
-        const hit = await env.REPLY_CONTEXT.get(cacheKey);
-        if (hit) return audioResponse(env, request, hit);
+    const pieces = speechPieces(text);
+    const ready = [];
+    for (const piece of pieces) {
+        const hex = await shaHex(`chirp3:${prefs.voice}:${prefs.speakingRate}:${prefs.volumeGainDb}:${prefs.pause}:${piece}`);
+        ready.push({ piece, cacheKey: `tts:audio:${hex}`, bytes: await readChunkAudio(env, `tts:audio:${hex}`) });
+    }
+    const freshChars = ready.reduce((sum, row) => sum + (row.bytes ? 0 : row.piece.length), 0);
+    if (freshChars && env.REPLY_CONTEXT) {
         const hour = new Date().toISOString().slice(0, 13);
         const day = hour.slice(0, 10);
         const usedHour = Number(await env.REPLY_CONTEXT.get(`tts:hour:${hour}`)) || 0;
         const usedDay = Number(await env.REPLY_CONTEXT.get(`tts:day:${day}`)) || 0;
-        if (usedHour + text.length > SPEAK_HOUR_CHARS || usedDay + text.length > SPEAK_DAY_CHARS) {
+        if (usedHour + freshChars > SPEAK_HOUR_CHARS || usedDay + freshChars > SPEAK_DAY_CHARS) {
             return json(env, request, 429, { error: 'Voice is paused for this hour.' });
         }
     }
-    let res;
+    const buffers = [];
     try {
-        res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': key,
-            },
-            body: JSON.stringify({
-                input: speechInput(text, prefs.pause),
-                voice: { languageCode: prefs.languageCode, name: prefs.voice || DEFAULT_VOICE },
-                audioConfig: {
-                    audioEncoding: 'MP3',
-                    speakingRate: prefs.speakingRate,
-                    volumeGainDb: prefs.volumeGainDb,
-                },
-            }),
-        });
-    } catch {
-        return json(env, request, 502, { error: 'Could not reach voice.' });
+        for (const row of ready) {
+            if (row.bytes) {
+                buffers.push(row.bytes);
+                continue;
+            }
+            const made = await synthPiece(env, key, row.piece, prefs);
+            buffers.push(made.bytes);
+        }
+    } catch (err) {
+        return json(env, request, err?.message === 'reach' ? 502 : 502, { error: err?.message === 'reach' ? 'Could not reach voice.' : 'Could not play that.' });
     }
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.audioContent) {
-        return json(env, request, 502, { error: 'Could not play that.' });
-    }
-    if (env.REPLY_CONTEXT) {
+    if (freshChars && env.REPLY_CONTEXT) {
         const hour = new Date().toISOString().slice(0, 13);
         const day = hour.slice(0, 10);
         const usedHour = Number(await env.REPLY_CONTEXT.get(`tts:hour:${hour}`)) || 0;
         const usedDay = Number(await env.REPLY_CONTEXT.get(`tts:day:${day}`)) || 0;
-        await env.REPLY_CONTEXT.put(`tts:hour:${hour}`, String(usedHour + text.length), { expirationTtl: 60 * 60 * 3 });
-        await env.REPLY_CONTEXT.put(`tts:day:${day}`, String(usedDay + text.length), { expirationTtl: 60 * 60 * 48 });
-        await env.REPLY_CONTEXT.put(cacheKey, data.audioContent, { expirationTtl: 60 * 60 * 24 * 14 });
+        await env.REPLY_CONTEXT.put(`tts:hour:${hour}`, String(usedHour + freshChars), { expirationTtl: 60 * 60 * 3 });
+        await env.REPLY_CONTEXT.put(`tts:day:${day}`, String(usedDay + freshChars), { expirationTtl: 60 * 60 * 48 });
     }
-    return audioResponse(env, request, data.audioContent);
+    const audio = concatBytes(buffers);
+    let clipId = '';
+    if (body.archive === true) {
+        const stored = String(body.source || text).replace(/\u0000/g, '').slice(0, SPEAK_MAX);
+        try { clipId = await saveReadAloud(env, stored || text, audio, prefs); } catch { clipId = ''; }
+    }
+    const extra = {};
+    if (body.archive === true) {
+        extra['X-Readaloud-Saved'] = clipId ? '1' : '0';
+        if (clipId) extra['X-Readaloud-Id'] = clipId;
+    }
+    return audioBytesResponse(env, request, audio, extra);
 }
 
 function draftIdOk(value) {
@@ -602,7 +792,10 @@ async function suggestReply(request, env) {
     }
     const gemini = await callGemini(env, geminiBody);
     if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
-    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread, { surface: payload.surface });
+    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread, {
+        surface: payload.surface,
+        alias: payload.alias,
+    });
     return json(env, request, 200, {
         action: parsed.action,
         reply: parsed.action === 'draft' ? parsed.reply : '',

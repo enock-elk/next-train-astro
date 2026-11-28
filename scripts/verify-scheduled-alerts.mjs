@@ -272,9 +272,19 @@ assert.match(wranglerSource, /"0 \* \* \* \*"/);
 assert.match(wranglerSource, /enock-elk\.github\.io/);
 assert.match(workerSource, /polls\/\$\{payload\.id\}\/_meta/);
 assert.match(workerSource, /closesInMs/);
-assert.match(workerSource, /await Promise\.all\(tasks\)/);
+assert.match(workerSource, /await runScheduledAlerts\(env\)\.catch/, 'the worker cron publishes due alerts');
 assert.match(workerSource, /Cloudflare can normalize/);
 assert.match(workerSource, /enock-elk\.github\.io/);
+assert.match(workerSource, /RTDB conditional write failed \(\$\{res\.status\}\) at \$\{path\}/, 'a denied scheduled write names the RTDB path');
+assert.match(workerSource, /as \$\{email\}/, 'a denied scheduled write names the service account');
+assert.match(workerSource, /const RTDB_ADMIN_SCOPE = 'https:\/\/www\.googleapis\.com\/auth\/userinfo\.email https:\/\/www\.googleapis\.com\/auth\/firebase\.database'/);
+assert.match(workerSource, /const FCM_SCOPE = 'https:\/\/www\.googleapis\.com\/auth\/firebase\.messaging'/);
+assert.match(workerSource, /getGoogleAccessToken\(env\.FIREBASE_CLIENT_EMAIL, env\.FIREBASE_PRIVATE_KEY, FCM_SCOPE\)/);
+assert.doesNotMatch(
+    workerSource.slice(workerSource.indexOf('scope: scope || RTDB_ADMIN_SCOPE'), workerSource.indexOf('scope: scope || RTDB_ADMIN_SCOPE') + 80),
+    /firebase\.messaging/,
+    'the RTDB admin token does not request messaging'
+);
 assert.match(workerSource, /\/cron\/scheduled-alerts/);
 assert.match(workerSource, /X-Cron-Secret/);
 assert.match(workerSource, /ALERT_CRON_SECRET/);

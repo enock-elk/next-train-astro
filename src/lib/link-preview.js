@@ -412,16 +412,16 @@ export async function fetchLinkPreview(url, workerBase) {
 }
 
 export function hydrateLinkPreviews(root, workerBase) {
+    import('./share-chips.js').then((m) => {
+        m.hydrateAlertShareCards?.(root);
+        m.hydrateCommunityShareCards?.(root);
+    }).catch(() => {});
     if (!linkCardsOn()) {
         root?.querySelectorAll?.('.nt-link-preview, [data-link-preview-url]').forEach((el) => el.remove());
         return;
     }
     if (!root || typeof root.querySelectorAll !== 'function') return;
     settleDeferredPictures(root);
-    import('./share-chips.js').then((m) => {
-        m.hydrateAlertShareCards?.(root);
-        m.hydrateCommunityShareCards?.(root);
-    }).catch(() => {});
     root.querySelectorAll('[data-link-preview-url]').forEach((el) => {
         if (el.getAttribute('data-link-preview-state') === 'ready') return;
         const url = el.getAttribute('data-link-preview-url') || '';

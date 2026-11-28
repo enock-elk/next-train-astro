@@ -363,6 +363,14 @@ export function prepareRichHtml(dirtyHtml) {
     const sanitized = sanitizeRichHtml(dirtyHtml);
     const doc = new DOMParser().parseFromString(sanitized, 'text/html');
     autolinkContactsIn(doc.body);
+    doc.body.querySelectorAll('a[href]').forEach((anchor) => {
+        const visible = String(anchor.textContent || '').trim();
+        const href = String(anchor.getAttribute('href') || '').trim();
+        const bare = (value) => value.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+        if (/^link$/i.test(visible) || (href && (visible === href || bare(visible) === bare(href)))) {
+            anchor.classList.add('nt-placeholder-link');
+        }
+    });
     return doc.body.innerHTML;
 }
 

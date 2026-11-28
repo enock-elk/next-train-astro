@@ -8,7 +8,7 @@ import { REPLY_WORKER_URL } from './config.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { bootFirebase } from './firebase-boot.js';
 
-const SPEAK_MAX = 900;
+const SPEAK_MAX = 24000;
 const CLIP_CACHE_MAX = 20;
 const PLAY_ICON = '<svg data-speech-icon class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_ICON = '<svg data-speech-icon class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
@@ -34,7 +34,8 @@ function paintSpeechControls() {
         const label = btn.querySelector('[data-speech-label]');
         if (label) label.textContent = playingNow ? 'Pause' : 'Play';
         if (icon) {
-            icon.outerHTML = playingNow ? PAUSE_ICON : PLAY_ICON;
+            const size = [...icon.classList].filter((name) => name.startsWith('h-') || name.startsWith('w-')).join(' ') || 'h-4 w-4';
+            icon.outerHTML = (playingNow ? PAUSE_ICON : PLAY_ICON).replace('h-4 w-4', size);
             return;
         }
         if (!label) btn.innerHTML = playingNow ? PAUSE_ICON : PLAY_ICON;
@@ -100,12 +101,22 @@ function setSpeechStatus(text) {
     if (label) label.textContent = text;
 }
 
+function resetSpeechDock() {
+    const elapsed = document.getElementById('alert-speech-elapsed');
+    const total = document.getElementById('alert-speech-total');
+    const seek = document.getElementById('alert-speech-seek');
+    if (elapsed) elapsed.textContent = '0:00';
+    if (total) total.textContent = '0:00';
+    if (seek) seek.value = '0';
+}
+
 function hideSpeechBar() {
     document.getElementById('nt-operator-speech')?.classList.add('hidden');
     const trayLabel = document.getElementById('admin-reply-speech')?.querySelector('[data-speech-status]');
     if (trayLabel) trayLabel.textContent = 'Not playing';
     const alertLabel = document.getElementById('alert-speech-status');
     if (alertLabel) alertLabel.textContent = 'Not playing';
+    resetSpeechDock();
     paintSpeechControls();
 }
 
@@ -113,6 +124,16 @@ function paintClock() {
     if (!playing) return;
     const total = Number.isFinite(playing.duration) ? playing.duration : 0;
     const now = playing.currentTime || 0;
+    const elapsed = document.getElementById('alert-speech-elapsed');
+    const totalEl = document.getElementById('alert-speech-total');
+    const seek = document.getElementById('alert-speech-seek');
+    if (elapsed) elapsed.textContent = clock(now);
+    if (totalEl) totalEl.textContent = total ? clock(total) : '0:00';
+    if (seek && document.activeElement !== seek) seek.value = total ? String(Math.round((now / total) * 1000)) : '0';
+    if (readAloudPanel() && elapsed) {
+        setSpeechStatus(playing.paused ? 'Paused' : 'Playing');
+        return;
+    }
     setSpeechStatus(playing.paused ? `Paused ${clock(now)}` : (total ? `${clock(now)} / ${clock(total)}` : `Playing ${clock(now)}`));
 }
 
@@ -121,8 +142,7 @@ function plainSpeech(value) {
         .replace(/<[^>]+>/g, ' ')
         .replace(/&(?:#x[0-9a-f]+|#\d+|[a-z]+);/gi, ' ')
         .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, SPEAK_MAX);
+        .trim();
 }
 
 async function operatorToken() {
@@ -212,6 +232,16 @@ export function resumeOperatorSpeech() {
     return { ok: true };
 }
 
+export function seekOperatorSpeech(ratio) {
+    if (!playing) return { ok: false };
+    const total = Number(playing.duration);
+    if (!Number.isFinite(total) || total <= 0) return { ok: false };
+    const next = Math.min(1, Math.max(0, Number(ratio) || 0)) * total;
+    playing.currentTime = next;
+    paintClock();
+    return { ok: true };
+}
+
 export function restartOperatorSpeech() {
     if (!playing) return { ok: false, message: 'Nothing is ready to play.' };
     playing.currentTime = 0;
@@ -239,8 +269,12 @@ export function operatorSpeechState() {
  */
 export async function speakOperatorCopy(value, options = {}) {
     if (!isAdminAuthed()) return { ok: false, hidden: true };
-    const text = plainSpeech(value);
+    let text = plainSpeech(value);
     if (text.length < 2) return { ok: false, message: 'Nothing to read.' };
+    if (text.length > SPEAK_MAX) {
+        text = text.slice(0, SPEAK_MAX);
+        if (typeof window.showToast === 'function') window.showToast('Reading the first 24,000 characters.', 'info');
+    }
     if ((playing || pending) && !options.fresh) {
         generation += 1;
         pending = false;
@@ -262,6 +296,21 @@ export async function speakOperatorCopy(value, options = {}) {
         if (gen !== generation) {
             pending = false;
             return { ok: true, stopped: true };
+        }
+        if (options.archive) {
+            const base = String(REPLY_WORKER_URL || '').replace(/\/$/, '');
+            if (base) {
+                operatorToken().then((token) => {
+                    if (!token) return null;
+                    return fetch(`${base}/speak`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ text, archive: true, source: String(value || '').slice(0, SPEAK_MAX), ...(options.preview ? { preview: options.preview } : {}) }),
+                    });
+                }).then((res) => {
+                    if (res?.headers?.get('X-Readaloud-Id')) window.dispatchEvent(new CustomEvent('nt-readaloud-saved'));
+                }).catch(() => {});
+            }
         }
         const played = await startClip(cached, gen);
         return played.ok ? { ...played, cached: true } : played;
@@ -287,7 +336,11 @@ export async function speakOperatorCopy(value, options = {}) {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify(options.preview ? { text, preview: options.preview } : { text }),
+            body: JSON.stringify({
+                text,
+                ...(options.archive ? { archive: true, source: String(value || '').slice(0, SPEAK_MAX) } : {}),
+                ...(options.preview ? { preview: options.preview } : {}),
+            }),
         });
     } catch {
         pending = false;
@@ -305,6 +358,11 @@ export async function speakOperatorCopy(value, options = {}) {
         return { ok: false, message: data.error || 'Could not play that.' };
     }
     const blob = await res.blob();
+    if (options.archive && res.headers.get('X-Readaloud-Saved') === '0' && typeof window.showToast === 'function') {
+        window.showToast('Played. Archive storage is not on the voice worker yet.', 'info');
+    } else if (options.archive && res.headers.get('X-Readaloud-Id')) {
+        window.dispatchEvent(new CustomEvent('nt-readaloud-saved'));
+    }
     if (gen !== generation) {
         pending = false;
         return { ok: true, stopped: true };
@@ -318,11 +376,77 @@ export async function speakOperatorCopy(value, options = {}) {
     return startClip(url, gen);
 }
 
+export async function playOperatorBlob(blob) {
+    if (!isAdminAuthed()) return { ok: false, hidden: true };
+    if (!blob?.size) return { ok: false, message: 'Could not play that.' };
+    generation += 1;
+    pending = false;
+    stopSpeech();
+    const gen = generation;
+    return startClip(URL.createObjectURL(blob), gen);
+}
+
+async function readAloudFetch(path, init = {}) {
+    const token = await operatorToken();
+    const base = String(REPLY_WORKER_URL || '').replace(/\/$/, '');
+    if (!token || !base) return null;
+    const res = await fetch(`${base}${path}`, {
+        ...init,
+        headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` },
+    });
+    return res;
+}
+
+export async function listReadAloudArchive() {
+    if (!isAdminAuthed()) return { ok: false, hidden: true, items: [] };
+    const res = await readAloudFetch('/speak/archive');
+    if (!res) return { ok: false, message: 'Sign in again to open the archive.', items: [] };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, message: data.error || 'Could not open the archive.', items: [] };
+    return { ok: true, items: Array.isArray(data.items) ? data.items : [] };
+}
+
+export async function openReadAloudArchive(id) {
+    if (!isAdminAuthed()) return { ok: false, hidden: true };
+    const safe = String(id || '');
+    if (!/^[a-f0-9]{16}$/.test(safe)) return { ok: false, message: 'That reading is gone.' };
+    const [textRes, audioRes] = await Promise.all([
+        readAloudFetch(`/speak/archive/${safe}`),
+        readAloudFetch(`/speak/archive/${safe}/audio`),
+    ]);
+    if (!textRes || !audioRes) return { ok: false, message: 'Sign in again to play this.' };
+    const data = await textRes.json().catch(() => ({}));
+    if (!textRes.ok) return { ok: false, message: data.error || 'Could not open that reading.' };
+    if (!audioRes.ok) {
+        const err = await audioRes.json().catch(() => ({}));
+        return { ok: false, message: err.error || 'Could not play that.' };
+    }
+    const box = document.getElementById('alert-speech-text');
+    if (box) box.value = String(data.text || '');
+    const blob = await audioRes.blob();
+    return playOperatorBlob(blob);
+}
+
+export async function deleteReadAloudArchive(id) {
+    if (!isAdminAuthed()) return { ok: false, hidden: true };
+    const safe = String(id || '');
+    if (!/^[a-f0-9]{16}$/.test(safe)) return { ok: false, message: 'That reading is gone.' };
+    const res = await readAloudFetch(`/speak/archive/${safe}`, { method: 'DELETE' });
+    if (!res) return { ok: false, message: 'Sign in again to remove this.' };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, message: data.error || 'Could not remove that reading.' };
+    return { ok: true };
+}
+
 if (typeof window !== 'undefined') {
     window.ntSpeakOperatorCopy = speakOperatorCopy;
     window.ntStopOperatorSpeech = stopOperatorSpeech;
     window.ntPauseOperatorSpeech = pauseOperatorSpeech;
     window.ntResumeOperatorSpeech = resumeOperatorSpeech;
     window.ntRestartOperatorSpeech = restartOperatorSpeech;
+    window.ntSeekOperatorSpeech = seekOperatorSpeech;
     window.ntOperatorSpeechState = operatorSpeechState;
+    window.ntListReadAloudArchive = listReadAloudArchive;
+    window.ntOpenReadAloudArchive = openReadAloudArchive;
+    window.ntDeleteReadAloudArchive = deleteReadAloudArchive;
 }

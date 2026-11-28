@@ -2628,8 +2628,18 @@ const Admin = {
         }
         const body = child.querySelector('[id$="-body"]');
         if (body) body.classList.add('hidden');
-        child.querySelector('#alert-speech')?.classList.add('hidden');
+        const speechPane = child.querySelector('#alert-speech');
+        if (speechPane) {
+            speechPane.classList.add('hidden');
+            speechPane.style.display = '';
+        }
         child.querySelector('#alert-hub')?.classList.add('hidden');
+        if (child.id === 'alert-panel') {
+            child.style.height = '';
+            child.style.overflow = '';
+            child.style.display = '';
+            child.style.flexDirection = '';
+        }
         const header = child.querySelector('[id$="-header-btn"]');
         if (header) header.style.removeProperty('display');
     },
@@ -8777,10 +8787,27 @@ const Admin = {
         const speech = document.getElementById('alert-speech');
         if (hub) hub.classList.toggle('hidden', mode !== 'hub');
         if (body) body.classList.toggle('hidden', mode !== 'inapp');
-        if (speech) speech.classList.toggle('hidden', mode !== 'speech');
+        if (speech) {
+            speech.classList.toggle('hidden', mode !== 'speech');
+            speech.style.display = mode === 'speech' ? 'flex' : '';
+        }
+        const panel = document.getElementById('alert-panel');
+        if (panel) {
+            if (mode === 'speech') {
+                panel.style.height = 'calc(100dvh - 5.5rem)';
+                panel.style.overflow = 'hidden';
+                panel.style.display = 'flex';
+                panel.style.flexDirection = 'column';
+            } else {
+                panel.style.height = '';
+                panel.style.overflow = '';
+                panel.style.display = '';
+                panel.style.flexDirection = '';
+            }
+        }
         const title = mode === 'inapp' ? 'In-app alerts' : (mode === 'speech' ? 'Read aloud' : 'Service Alerts');
         Admin.paintDrillTitle(title);
-        if (mode === 'speech') document.getElementById('alert-speech-text')?.focus();
+        if (mode === 'speech') Admin.showSpeechTab(Admin._speechTab || 'current');
         if (mode === 'inapp' && typeof window.injectRichTextStyles === 'function') {
             window.injectRichTextStyles();
         }
@@ -8810,6 +8837,62 @@ const Admin = {
             );
         } catch (_) { /* ignore */ }
         Admin.showDrilledPanel('alert-panel--speech');
+    },
+
+    _speechEsc: (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[ch])),
+
+    showSpeechTab: (tab) => {
+        const next = tab === 'archive' ? 'archive' : 'current';
+        Admin._speechTab = next;
+        const currentPane = document.getElementById('alert-speech-current');
+        const archivePane = document.getElementById('alert-speech-archive');
+        if (currentPane) currentPane.style.display = next === 'current' ? 'flex' : 'none';
+        if (archivePane) archivePane.style.display = next === 'archive' ? 'block' : 'none';
+        const on = 'flex-1 py-3 text-sm font-bold border-b-2 border-gray-900 text-gray-900 dark:border-white dark:text-white focus:outline-none';
+        const off = 'flex-1 py-3 text-sm font-bold border-b-2 border-transparent text-gray-400 focus:outline-none';
+        const currentBtn = document.getElementById('alert-speech-tab-current');
+        const archiveBtn = document.getElementById('alert-speech-tab-archive');
+        if (currentBtn) {
+            currentBtn.className = next === 'current' ? on : off;
+            currentBtn.setAttribute('aria-selected', next === 'current' ? 'true' : 'false');
+        }
+        if (archiveBtn) {
+            archiveBtn.className = next === 'archive' ? on : off;
+            archiveBtn.setAttribute('aria-selected', next === 'archive' ? 'true' : 'false');
+        }
+        if (next === 'archive') Admin.loadSpeechArchive();
+    },
+
+    loadSpeechArchive: async () => {
+        const list = document.getElementById('alert-speech-archive');
+        if (!list) return;
+        list.innerHTML = '<p class="px-5 py-6 text-sm text-gray-500">Loading archive...</p>';
+        const result = typeof window.ntListReadAloudArchive === 'function'
+            ? await window.ntListReadAloudArchive()
+            : { ok: false, message: 'Archive is not ready.' };
+        if (Admin._speechTab !== 'archive') return;
+        if (!result?.ok) {
+            list.innerHTML = `<p class="px-5 py-6 text-sm text-gray-500">${Admin._speechEsc(result?.message || 'Could not open the archive.')}</p>`;
+            return;
+        }
+        const items = Array.isArray(result.items) ? result.items : [];
+        if (!items.length) {
+            list.innerHTML = '<p class="px-5 py-6 text-sm text-gray-500">Nothing saved yet. Play a reading and it is kept here.</p>';
+            return;
+        }
+        list.innerHTML = items.map((row) => {
+            const id = String(row.id || '');
+            const when = row.created && typeof Admin.formatDate === 'function' ? Admin.formatDate(row.created) : '';
+            return `<div class="flex items-stretch border-b border-gray-100 dark:border-gray-800" role="listitem">
+                <button type="button" class="min-w-0 flex-1 px-5 py-3 text-left focus:outline-none" data-speech-open="${Admin._speechEsc(id)}">
+                    <span class="block truncate text-sm font-semibold text-gray-900 dark:text-white">${Admin._speechEsc(row.title || 'Reading')}</span>
+                    <span class="mt-0.5 block text-xs text-gray-500">${Admin._speechEsc(when)}</span>
+                </button>
+                <button type="button" class="px-4 text-xs font-bold text-gray-400 focus:outline-none" data-speech-remove="${Admin._speechEsc(id)}" aria-label="Remove this reading">Remove</button>
+            </div>`;
+        }).join('');
     },
 
     /** Back/←: previous drilled panel when there is one, otherwise the Dev Mode grid. */
@@ -21917,19 +22000,34 @@ const Admin = {
                     </span>
                 </button>
             </div>
-            <div id="alert-speech" class="hidden mt-3 space-y-3">
-                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase" for="alert-speech-text">Paste any text</label>
-                <textarea id="alert-speech-text" rows="10" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white outline-none" placeholder="Paste the notice, the briefing, or any other words to read."></textarea>
-                <div class="flex gap-2">
-                    <button type="button" id="alert-speech-play" data-speech="toggle" class="inline-flex flex-1 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-violet-600 text-white text-[12px] font-black uppercase tracking-wider focus:outline-none" aria-label="Play">
-                        <svg data-speech-icon class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-                        <span data-speech-label>Play</span>
-                    </button>
-                    <button type="button" id="alert-speech-stop" class="inline-flex min-h-[44px] w-14 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-800 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100" aria-label="Stop">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-                    </button>
+            <div id="alert-speech" class="hidden min-h-0 flex-1 flex-col overflow-hidden">
+                <div class="flex shrink-0 border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="Read aloud">
+                    <button type="button" id="alert-speech-tab-current" class="flex-1 py-3 text-sm font-bold border-b-2 border-gray-900 text-gray-900 dark:border-white dark:text-white focus:outline-none" role="tab" aria-selected="true">Current</button>
+                    <button type="button" id="alert-speech-tab-archive" class="flex-1 py-3 text-sm font-bold border-b-2 border-transparent text-gray-400 focus:outline-none" role="tab" aria-selected="false">Archive</button>
                 </div>
-                <p id="alert-speech-status" class="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Not playing</p>
+                <div id="alert-speech-current" class="min-h-0 flex-1 flex flex-col">
+                    <textarea id="alert-speech-text" class="min-h-0 w-full flex-1 resize-none border-0 bg-transparent px-5 py-4 text-[15px] leading-relaxed text-gray-900 outline-none dark:text-white" placeholder="Paste the notice, the briefing, or any other words to read."></textarea>
+                </div>
+                <div id="alert-speech-archive" class="hidden min-h-0 flex-1 overflow-y-auto" role="list"></div>
+                <div id="alert-speech-dock" class="shrink-0 border-t border-gray-200 bg-white px-5 pt-4 dark:border-gray-700 dark:bg-gray-900" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
+                    <div class="flex items-center gap-3">
+                        <span id="alert-speech-elapsed" class="w-10 text-xs font-semibold tabular-nums text-gray-500">0:00</span>
+                        <input id="alert-speech-seek" type="range" min="0" max="1000" value="0" step="1" class="h-7 flex-1 accent-gray-900 dark:accent-white" aria-label="Position">
+                        <span id="alert-speech-total" class="w-10 text-right text-xs font-semibold tabular-nums text-gray-500">0:00</span>
+                    </div>
+                    <div class="mt-3 flex items-center justify-center gap-10">
+                        <button type="button" id="alert-speech-restart" class="flex h-11 w-11 items-center justify-center rounded-full text-gray-800 focus:outline-none dark:text-gray-100" aria-label="Start again">
+                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zM10 12l9 6V6z"/></svg>
+                        </button>
+                        <button type="button" id="alert-speech-play" data-speech="toggle" class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-900 text-white focus:outline-none dark:bg-white dark:text-gray-900" aria-label="Play">
+                            <svg data-speech-icon class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                        </button>
+                        <button type="button" id="alert-speech-stop" class="flex h-11 w-11 items-center justify-center rounded-full text-gray-800 focus:outline-none dark:text-gray-100" aria-label="Stop">
+                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+                        </button>
+                    </div>
+                    <p id="alert-speech-status" class="mt-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">Not playing</p>
+                </div>
             </div>
             
             <div id="alert-body" class="hidden mt-4 space-y-4">
@@ -23119,6 +23217,43 @@ const Admin = {
             };
         }
         const speechText = document.getElementById('alert-speech-text');
+        document.getElementById('alert-speech-tab-current')?.addEventListener('click', () => Admin.showSpeechTab('current'));
+        document.getElementById('alert-speech-tab-archive')?.addEventListener('click', () => Admin.showSpeechTab('archive'));
+        document.getElementById('alert-speech-archive')?.addEventListener('click', async (event) => {
+            const removeId = event.target?.closest?.('[data-speech-remove]')?.getAttribute('data-speech-remove');
+            if (removeId) {
+                event.preventDefault();
+                const yes = await Admin.secureChoice('Remove this reading', 'The saved audio and the text are deleted.', [
+                    { id: 'remove', label: 'Remove', primary: true },
+                ]);
+                if (yes !== 'remove') return;
+                const gone = await window.ntDeleteReadAloudArchive?.(removeId);
+                if (!gone?.ok && gone?.message && typeof showToast === 'function') showToast(gone.message, 'error');
+                if (Admin._speechTab === 'archive') Admin.loadSpeechArchive();
+                return;
+            }
+            const openId = event.target?.closest?.('[data-speech-open]')?.getAttribute('data-speech-open');
+            if (!openId) return;
+            Admin.showSpeechTab('current');
+            const opened = await window.ntOpenReadAloudArchive?.(openId);
+            if (!opened?.ok && opened?.message && typeof showToast === 'function') showToast(opened.message, 'error');
+        });
+        document.getElementById('alert-speech-seek')?.addEventListener('input', (event) => {
+            const ratio = Number(event.target?.value || 0) / 1000;
+            window.ntSeekOperatorSpeech?.(ratio);
+        });
+        document.getElementById('alert-speech-restart')?.addEventListener('click', () => {
+            const restarted = window.ntRestartOperatorSpeech?.();
+            if (restarted && restarted.ok === false && restarted.message && typeof showToast === 'function') {
+                showToast(restarted.message, 'info');
+            }
+        });
+        if (!window.__ntReadAloudArchiveRefresh) {
+            window.__ntReadAloudArchiveRefresh = true;
+            window.addEventListener('nt-readaloud-saved', () => {
+                if (Admin._speechTab === 'archive') Admin.loadSpeechArchive();
+            });
+        }
         document.getElementById('alert-speech-play')?.addEventListener('click', () => {
             const words = speechText?.value || '';
             const state = typeof window.ntOperatorSpeechState === 'function' ? window.ntOperatorSpeechState() : 'idle';
@@ -23132,7 +23267,7 @@ const Admin = {
             }
             const speak = window.ntSpeakOperatorCopy;
             if (typeof speak !== 'function') return;
-            speak(words).then((result) => {
+            speak(words, { archive: true }).then((result) => {
                 if (result?.hidden) return;
                 if (!result?.ok && result?.message && typeof showToast === 'function') showToast(result.message, 'error');
             });

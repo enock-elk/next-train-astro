@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.9': [
+        'Read aloud was stopping after 900 characters. A long paste is read in full, up to 24,000 characters. The text fills the screen and the play controls stay along the bottom. Current and Archive sit at the top. Playing from Current keeps the audio and the text. An archive row opens that reading in Current and plays the saved audio. The audio is stored in Cloudflare R2. Deploy the reply worker so the archive bucket is created. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.8': [
         'Ad and user graph titles put the date range on its own line. Admin dates that were 30/04/2026 now read 30 Apr 2026. The ad tile that showed the first hit opens the average impressions and revenue for the searched days, in dollars and rands. The rand rate loads when Live Telemetry opens. Landscape keeps the weekly or monthly ad graph that was on screen. No commuter What\'s New. forceShow stays false.',
     ],

@@ -50,4 +50,13 @@ jobs:
             sed '/"kv_namespaces"/,/],/d' wrangler.jsonc > wrangler.deploy.jsonc
             CONFIG=wrangler.deploy.jsonc
           fi
+          set +e
+          CREATE_OUT=$(npx --yes wrangler r2 bucket create nexttrain-readaloud 2>&1)
+          CREATE_CODE=$?
+          set -e
+          echo "$CREATE_OUT"
+          if [ "$CREATE_CODE" -ne 0 ] && ! echo "$CREATE_OUT" | grep -Eqi 'already exist'; then
+            echo "::warning::Read-aloud archive bucket was not created. Deploying without it."
+            node -e "const fs=require('fs'); const p=process.argv[1]; const t=fs.readFileSync(p,'utf8').replace(/\\n\\t\"r2_buckets\": \\[[\\s\\S]*?\\n\\t\\],/,''); fs.writeFileSync(p,t);" "$CONFIG"
+          fi
           npx --yes wrangler deploy --config "$CONFIG"

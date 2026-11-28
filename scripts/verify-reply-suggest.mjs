@@ -48,7 +48,7 @@ import {
     comfortAssistText,
     assistHtmlFromText,
 } from '../src/lib/text-assist.js';
-import { handleRequest } from '../workers/nexttrain-reply/worker.js';
+import { handleRequest, speechPieces } from '../workers/nexttrain-reply/worker.js';
 import { fetchLinkPreview, isPublicPreviewUrl, parseLinkPreviewHtml, previewFromMicrolink } from '../src/lib/link-preview.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -476,6 +476,10 @@ ok(worker.includes('gemini-3.5-flash-lite'), 'reply worker uses 3.5 Flash-Lite')
 ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 Flash-Lite');
 ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
 ok(worker.includes("pathname === '/speak'"), 'read-aloud has its own operator route');
+ok(worker.includes('const SPEAK_MAX = 24000'), 'a long paste is not cut at 900 characters');
+ok(worker.includes('export function speechPieces'), 'a long paste is split into Chirp-sized pieces');
+ok(worker.includes('READALOUD'), 'saved readings go to the read-aloud bucket');
+ok(worker.includes('/speak/archive'), 'saved readings have an operator archive');
 ok(worker.includes('en-US-Chirp3-HD-Achernar'), 'read-aloud uses Chirp 3 HD Achernar');
 ok(worker.includes("pathname === '/voice'"), 'each operator can save a Chirp voice');
 ok(worker.includes('normalizeVoicePrefs'), 'an unknown voice falls back on the worker');
@@ -648,6 +652,16 @@ ok(loadedPng?.mimeType === 'image/png' && loadedPng.data, 'a chat photo is read 
 const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]);
 const loadedPdf = await loadSuggestFile({ url: pdfUrl, from: 'commuter' }, async () => new Response(pdfBytes, { status: 200 }));
 ok(loadedPdf?.mimeType === 'application/pdf', 'a chat PDF is read from its bytes');
+const longPaste = `${'Word. '.repeat(400)}${'Tail. '.repeat(400)}`;
+const pieces = speechPieces(longPaste);
+ok(pieces.length > 1, 'a paste past one Chirp request is more than one piece');
+ok(pieces.every((part) => part.length <= 3000), 'each piece stays inside the Chirp limit');
+ok(pieces.join(' ').replace(/\s+/g, ' ').trim() === longPaste.replace(/\s+/g, ' ').trim(), 'splitting a paste does not drop words');
+const shortCut = speechPieces('Admin sign-in is a real gate. The browser check opens the login box.');
+ok(shortCut.length === 1 && shortCut[0].includes('login box'), 'a short note stays one piece');
+ok(readFileSync(join(ROOT, 'src/lib/operator-speech.js'), 'utf8').includes('const SPEAK_MAX = 24000'), 'the phone sends the whole paste');
+ok(adminJs.includes('id="alert-speech-dock"') && adminJs.includes('id="alert-speech-tab-archive"'), 'read aloud keeps the controls under the text and has an archive');
+ok(adminJs.includes('archive: true'), 'playing from read aloud keeps the audio');
 
 if (failures.length) {
     console.error('verify-reply-suggest FAILED:\n - ' + failures.join('\n - '));

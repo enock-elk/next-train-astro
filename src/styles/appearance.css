@@ -13,6 +13,8 @@
  *   --nt-chrome-header-border
  *   --nt-chrome-nav       Bottom nav (must differ from header and CTA)
  *   --nt-chrome-nav-border
+ *   --nt-nav-fg           Active tab ink. Header title stays --nt-chrome-fg.
+ *   --nt-nav-fg-idle      Inactive tab ink.
  *   --nt-text             Primary copy
  *   --nt-text-muted       Secondary copy (gray-500 / gray-600)
  *   --nt-text-faint       Tertiary copy (gray-400 only)
@@ -28,7 +30,7 @@
  */
 
 :root {
-  /* Classic light — blue header + nav, white title */
+  /* Classic light. Blue header, white title, light nav. */
   --nt-primary: #2563eb;
   --nt-primary-hover: #1d4ed8;
   --nt-primary-fg: #ffffff;
@@ -38,9 +40,11 @@
   --nt-surface-muted: #f3f6f9;
   --nt-chrome-header: #1d4ed8;
   --nt-chrome-header-border: #1e40af;
-  --nt-chrome-nav: #163d96;
-  --nt-chrome-nav-border: #1e3a8a;
+  --nt-chrome-nav: #ffffff;
+  --nt-chrome-nav-border: #e5e7eb;
   --nt-chrome-fg: #ffffff;
+  --nt-nav-fg: #111827;
+  --nt-nav-fg-idle: #6b7280;
   --nt-chrome-muted: rgba(255, 255, 255, 0.82);
   --nt-text: #1e293b;
   --nt-text-muted: #475569;
@@ -54,7 +58,7 @@
   --nt-shell-top: 0px;
   /* 10% shorter than the prior 4rem bar. Tab columns stay equal. */
   --nt-nav-h: 3.6rem;
-  --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
+  --nt-chrome-nav-active: #e5e7eb;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -86,13 +90,15 @@ html[data-colour-pack="classic"].dark {
   --nt-chrome-nav: #061428;
   --nt-chrome-nav-border: #163258;
   --nt-chrome-fg: #93c5fd;
+  --nt-nav-fg: #93c5fd;
+  --nt-nav-fg-idle: #7d92ad;
   --nt-chrome-muted: #9fb4cc;
   --nt-text: #e8eef6;
   --nt-text-muted: #9fb0c8;
   --nt-text-faint: #7d8fa6;
   --nt-border: #2a3d5c;
   --nt-theme-meta: #0b1f3a;
-  --nt-chrome-nav-active: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
+  --nt-chrome-nav-active: color-mix(in srgb, #93c5fd 24%, var(--nt-chrome-nav));
 }
 
 /* Explicit classic light (optional clarity) */
@@ -106,16 +112,18 @@ html[data-colour-pack="classic"]:not(.dark) {
   --nt-surface-muted: #f3f6f9;
   --nt-chrome-header: #1d4ed8;
   --nt-chrome-header-border: #1e40af;
-  --nt-chrome-nav: #163d96;
-  --nt-chrome-nav-border: #1e3a8a;
+  --nt-chrome-nav: #ffffff;
+  --nt-chrome-nav-border: #e5e7eb;
   --nt-chrome-fg: #ffffff;
+  --nt-nav-fg: #111827;
+  --nt-nav-fg-idle: #6b7280;
   --nt-chrome-muted: rgba(255, 255, 255, 0.82);
   --nt-text: #1e293b;
   --nt-text-muted: #475569;
   --nt-text-faint: #64748b;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
-  --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
+  --nt-chrome-nav-active: #e5e7eb;
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
   --nt-blue-200: 191 219 254;
@@ -142,6 +150,8 @@ html[data-colour-pack="midnight"] {
   --nt-chrome-nav: #cfd8e3;
   --nt-chrome-nav-border: #b7c3d0;
   --nt-chrome-fg: #0e7490;
+  --nt-nav-fg: var(--nt-chrome-fg);
+  --nt-nav-fg-idle: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent);
   --nt-chrome-muted: #475569;
   --nt-text: #0f172a;
   --nt-text-muted: #475569;
@@ -176,6 +186,9 @@ html[data-colour-pack="midnight"].dark {
   --nt-chrome-nav: #121c2e;
   --nt-chrome-nav-border: #24344c;
   --nt-chrome-fg: #7dd3fc;
+  --nt-nav-fg: var(--nt-chrome-fg);
+  --nt-nav-fg-idle: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent);
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent);
   --nt-chrome-muted: #94a3b8;
   --nt-text: #e8eef6;
   --nt-text-muted: #94a3b8;
@@ -198,6 +211,8 @@ html[data-colour-pack="contrast"] {
   --nt-chrome-nav: #d4d4d4;
   --nt-chrome-nav-border: #262626;
   --nt-chrome-fg: #1e4fc2;
+  --nt-nav-fg: var(--nt-chrome-fg);
+  --nt-nav-fg-idle: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent);
   --nt-chrome-muted: #262626;
   --nt-text: #0a0a0a;
   --nt-text-muted: #262626;
@@ -232,6 +247,9 @@ html[data-colour-pack="contrast"].dark {
   --nt-chrome-nav: #1a1a1a;
   --nt-chrome-nav-border: #d4d4d4;
   --nt-chrome-fg: #93c5fd;
+  --nt-nav-fg: var(--nt-chrome-fg);
+  --nt-nav-fg-idle: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent);
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent);
   --nt-chrome-muted: #e5e5e5;
   --nt-text: #fafafa;
   --nt-text-muted: #e5e5e5;
@@ -265,6 +283,8 @@ html[data-colour-pack="signal"] {
   --nt-chrome-nav: #c9ddd2;
   --nt-chrome-nav-border: #b3cbbd;
   --nt-chrome-fg: #2f7d5b;
+  --nt-nav-fg: var(--nt-chrome-fg);
+  --nt-nav-fg-idle: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent);
   --nt-chrome-muted: #3d5248;
   --nt-text: #123024;
   --nt-text-muted: #3d5248;
@@ -299,6 +319,9 @@ html[data-colour-pack="signal"].dark {
   --nt-chrome-nav: #0d2c22;
   --nt-chrome-nav-border: #1a4a3a;
   --nt-chrome-fg: #6ee7b7;
+  --nt-nav-fg: var(--nt-chrome-fg);
+  --nt-nav-fg-idle: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent);
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent);
   --nt-chrome-muted: #a7f3d0;
   --nt-text: #ecfdf5;
   --nt-text-muted: #a7f3d0;
@@ -325,6 +348,8 @@ html[data-colour-pack="earthy"] {
   --nt-chrome-nav: #ecebe6;
   --nt-chrome-nav-border: #d8d6ce;
   --nt-chrome-fg: #353535;
+  --nt-nav-fg: #2c2822;
+  --nt-nav-fg-idle: #6f675c;
   --nt-chrome-muted: #2c2822;
   --nt-text: #2c2822;
   --nt-text-muted: #2c2822;
@@ -360,6 +385,8 @@ html[data-colour-pack="earthy"].dark {
   --nt-chrome-nav: #0e0d0c;
   --nt-chrome-nav-border: #2c2a26;
   --nt-chrome-fg: #e7e5e0;
+  --nt-nav-fg: #f5f1e9;
+  --nt-nav-fg-idle: #a89f91;
   --nt-chrome-muted: #c9c1b5;
   --nt-text: #F5F1E9;
   --nt-text-muted: #C9C1B5;
@@ -420,7 +447,7 @@ html, body, #nt-shell {
 #bottom-nav.bottom-nav-bar {
   background-color: var(--nt-chrome-nav) !important;
   border: none !important;
-  border-top: 1px solid color-mix(in srgb, var(--nt-chrome-fg) 15%, transparent) !important;
+  border-top: 1px solid var(--nt-chrome-nav-border) !important;
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -484,10 +511,10 @@ html[data-pilot-community="1"] #bottom-nav-community {
   box-shadow: none !important;
 }
 #bottom-nav .bottom-nav-item:not(.is-active) {
-  color: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent) !important;
+  color: var(--nt-nav-fg-idle, color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)) !important;
 }
 #bottom-nav .bottom-nav-item.is-active {
-  color: var(--nt-chrome-fg) !important;
+  color: var(--nt-nav-fg, var(--nt-chrome-fg)) !important;
   font-weight: 700;
   background: transparent !important;
 }
@@ -503,7 +530,7 @@ html[data-pilot-community="1"] #bottom-nav-community {
   background: transparent;
 }
 #bottom-nav .bottom-nav-item.is-active .nt-nav-glyph {
-  background: color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent);
+  background: var(--nt-chrome-nav-active, color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent));
 }
 #bottom-nav .bottom-nav-item svg {
   width: 1.625rem !important;
@@ -521,7 +548,7 @@ html[data-pilot-community="1"] #bottom-nav-community {
 }
 #bottom-nav .bottom-nav-item.is-active .nt-nav-label {
   font-weight: 700 !important;
-  color: var(--nt-chrome-fg) !important;
+  color: var(--nt-nav-fg, var(--nt-chrome-fg)) !important;
 }
 
 html.dark #bottom-nav .bottom-nav-item.is-active {
@@ -4053,12 +4080,12 @@ html.dark p#current-day span.dark\:text-red-400 {
 
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item:not(.is-active) {
-  color: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent) !important;
+  color: var(--nt-nav-fg-idle, color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)) !important;
 }
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
 html[data-colour-pack="classic"] .bottom-nav-item.is-active {
-  color: var(--nt-chrome-fg) !important;
+  color: var(--nt-nav-fg, var(--nt-chrome-fg)) !important;
   font-weight: 700;
   background: transparent !important;
   border-radius: 0;

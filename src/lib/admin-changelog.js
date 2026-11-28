@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.10': [
+        'Classic light bottom nav is a white bar. Idle tabs are gray, and the active tab is near-black on a light gray chip. Earthy light stays a cream bar, with a quieter idle tab and ink on a warm chip. Classic dark and Earthy dark stay dark bars. The active tab is a filled icon, a heavier label, and a chip you can see on that bar. The header title stays on its own colour. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.9': [
         'Read aloud was stopping after 900 characters. A long paste is read in full, up to 24,000 characters. The text fills the screen and the play controls stay along the bottom. Current and Archive sit at the top. Playing from Current keeps the audio and the text. An archive row opens that reading in Current and plays the saved audio. The audio is stored in Cloudflare R2. Deploy the reply worker so the archive bucket is created. No commuter What\'s New. forceShow stays false.',
     ],

@@ -3469,14 +3469,15 @@ function communityMediaParts(post) {
 }
 
 function communityBubbleTextHtml(body, clock, receipt, tombstone) {
-    const time = `<span class="community-msg-time">${clock}${receipt}</span>`;
-    if (!body) return `<div class="community-msg-text">${time}</div>`;
+    const time = `<span class="community-msg-time-gap" aria-hidden="true"></span><span class="community-msg-time">${clock}${receipt}</span>`;
+    const line = (inner) => `<div class="community-msg-line">${inner}${time}</div>`;
+    if (!body) return `<div class="community-msg-text">${line('')}</div>`;
     if (tombstone || communityTextLength(body) <= COMMUNITY_SEE_MORE_WINDOW) {
         const shown = tombstone ? body : renderTextWithShareChips(body);
-        return `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${shown}${time}</div>`;
+        return `<div class="community-msg-text${tombstone ? ' community-msg-deleted' : ''}">${line(shown)}</div>`;
     }
     const clipped = renderTextWithShareChips(clipCommunityText(body, COMMUNITY_SEE_MORE_WINDOW));
-    return `<div class="community-msg-text" data-community-see-step="1"><span class="community-msg-copy">${clipped}</span>${time}<button type="button" class="nt-alert-see-more community-see-more" data-community-see-more>See more...</button><template data-community-full>${escapeHTML(body)}</template></div>`;
+    return `<div class="community-msg-text" data-community-see-step="1">${line(`<span class="community-msg-copy">${clipped}</span>`)}<button type="button" class="nt-alert-see-more community-see-more" data-community-see-more>See more...</button><template data-community-full>${escapeHTML(body)}</template></div>`;
 }
 
 function expandCommunitySeeMore(button) {

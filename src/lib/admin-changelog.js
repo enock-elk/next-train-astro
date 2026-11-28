@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.11': [
+        'Community message times sit the same distance above the bottom corner of the bubble. The Per day tile shows the average rand amount for this month as soon as Live Telemetry opens. Tapping it still lists impressions, dollars, and rands. The ad graph opens on this month. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.10': [
         'Classic light bottom nav is a white bar. Idle tabs are gray, and the active tab is near-black on a light gray chip. Earthy light stays a cream bar, with a quieter idle tab and ink on a warm chip. Classic dark and Earthy dark stay dark bars. The active tab is a filled icon, a heavier label, and a chip you can see on that bar. The header title stays on its own colour. No commuter What\'s New. forceShow stays false.',
     ],

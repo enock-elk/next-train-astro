@@ -22,6 +22,8 @@ const MARKS_COMMUNITY_PREF_KEY = 'ntShowMarksInCommunity';
 export const MARK_POINTS = {
     first_community_post: 5,
     community_message: 2,
+    community_reaction: 1,
+    alert_reaction: 1,
     first_share_day: 2,
     join_confirm: 1,
     delay_report: 2,
@@ -50,6 +52,20 @@ export const MARK_CATALOG = [
         title: 'Community message',
         how: 'Post or reply in a route room. Points once per service day.',
         points: MARK_POINTS.community_message,
+        badge: false,
+    },
+    {
+        id: 'community_reaction',
+        title: 'Community reaction',
+        how: 'React to someone else’s message. One point for each message, not your own.',
+        points: MARK_POINTS.community_reaction,
+        badge: false,
+    },
+    {
+        id: 'alert_reaction',
+        title: 'Alert reaction',
+        how: 'React to a service alert. One point for each alert.',
+        points: MARK_POINTS.alert_reaction,
         badge: false,
     },
     {

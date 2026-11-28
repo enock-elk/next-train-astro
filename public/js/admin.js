@@ -4592,7 +4592,15 @@ const Admin = {
     },
 
     _paintAdChart: (series, labels, mini) => {
-        const short = (labels || []).map((day) => `${String(day).slice(8, 10)}/${String(day).slice(5, 7)}`);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const short = (labels || []).map((day) => {
+            const text = String(day || '');
+            if (/^\d{4}-\d{2}$/.test(text)) {
+                const name = months[Number(text.slice(5, 7)) - 1] || text;
+                return `${name} ${text.slice(2, 4)}`;
+            }
+            return `${text.slice(8, 10)}/${text.slice(5, 7)}`;
+        });
         const todayIdx = series.length ? series.length - 1 : -1;
         return series.length
             ? Admin._buildLineGraphSVG(series, short, 'Viewable impressions', todayIdx, mini, null, {
@@ -4602,16 +4610,55 @@ const Admin = {
             : '<span class="text-xs text-gray-400">No impressions in this period.</span>';
     },
 
-    openAdImpressions: () => {
+    _adWeekStart: (isoDay) => {
+        const [y, m, d] = String(isoDay || '').split('-').map(Number);
+        if (!y || !m || !d) return '';
+        const date = new Date(Date.UTC(y, m - 1, d));
+        const weekday = date.getUTCDay() || 7;
+        date.setUTCDate(date.getUTCDate() - weekday + 1);
+        return date.toISOString().slice(0, 10);
+    },
+
+    /** Cluster the searched days. The search stays the window. DAU is one day, WAU sums those days into weeks, MAU into months. */
+    _clusterAdDays: (labels, series, bucket) => {
+        const days = Array.isArray(labels) ? labels : [];
+        const values = Array.isArray(series) ? series : [];
+        const mode = bucket === 'WAU' || bucket === 'MAU' ? bucket : 'DAU';
+        if (mode === 'DAU') return { labels: days, series: values };
+        const groups = new Map();
+        days.forEach((day, index) => {
+            const key = mode === 'MAU' ? String(day).slice(0, 7) : Admin._adWeekStart(day);
+            if (!key) return;
+            const row = groups.get(key) || 0;
+            groups.set(key, row + (Number(values[index]) || 0));
+        });
+        return { labels: [...groups.keys()], series: [...groups.values()] };
+    },
+
+    paintAdImpressions: () => {
         const chart = Admin._adChart;
+        const bucket = Admin._adBucket === 'WAU' || Admin._adBucket === 'MAU' ? Admin._adBucket : 'DAU';
+        Admin._adBucket = bucket;
+        document.querySelectorAll('[data-ad-bucket]').forEach((btn) => {
+            const on = btn.getAttribute('data-ad-bucket') === bucket;
+            btn.classList.toggle('is-on', on);
+            btn.classList.toggle('nt-chart-tool-primary', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
         const slot = document.getElementById('ad-impressions-svg');
         const title = document.getElementById('ad-impressions-title');
-        if (title) title.textContent = chart?.title || 'Viewable impressions';
-        if (slot) {
-            slot.innerHTML = chart?.series?.length
-                ? Admin._paintAdChart(chart.series, chart.labels, false)
-                : '<span class="text-sm text-gray-400">Search a period to see impressions.</span>';
-        }
+        const word = bucket === 'WAU' ? 'weekly' : (bucket === 'MAU' ? 'monthly' : 'daily');
+        const range = String(chart?.title || '').replace(/^Viewable impressions\s*/i, '').trim();
+        if (title) title.textContent = range ? `Viewable impressions, ${word} ${range}` : `Viewable impressions, ${word}`;
+        if (!slot) return;
+        const clustered = Admin._clusterAdDays(chart?.labels, chart?.series, bucket);
+        slot.innerHTML = clustered.series.length
+            ? Admin._paintAdChart(clustered.series, clustered.labels, false)
+            : '<span class="text-sm text-gray-400">Search a period to see impressions.</span>';
+    },
+
+    openAdImpressions: () => {
+        Admin.paintAdImpressions();
         Admin.deepLinkToPanel('ad-impressions-panel');
     },
 
@@ -4782,13 +4829,8 @@ const Admin = {
             };
             const chart = document.getElementById('ad-revenue-chart');
             if (chart) chart.innerHTML = Admin._paintAdChart(series, labels, true);
-            const fullSlot = document.getElementById('ad-impressions-svg');
             const fullOpen = document.getElementById('ad-impressions-panel')?.style.display !== 'none';
-            if (fullSlot && fullOpen && series.length) {
-                const titleEl = document.getElementById('ad-impressions-title');
-                if (titleEl) titleEl.textContent = Admin._adChart.title;
-                fullSlot.innerHTML = Admin._paintAdChart(series, labels, false);
-            }
+            if (fullOpen) Admin.paintAdImpressions();
             const geos = document.getElementById('ad-revenue-geos');
             if (geos) {
                 const names = (typeof Intl !== 'undefined' && Intl.DisplayNames)
@@ -5109,20 +5151,45 @@ const Admin = {
                     adChart.innerHTML = `
                         <button id="ad-impressions-header-btn" class="hidden" type="button"><span>Ad impressions</span></button>
                         <div class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-                            <div class="p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 flex justify-end bg-gray-50 dark:bg-gray-900 shrink-0">
-                                <button type="button" id="ad-impressions-landscape" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none" title="Landscape" aria-label="Open impressions landscape">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"></rect></svg>
-                                </button>
-                                <button type="button" id="ad-impressions-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none" title="Export Chart" aria-label="Export impressions chart">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </button>
-                            </div>
                             <div class="flex-grow p-2 sm:p-4 flex flex-col min-h-0">
                                 <div id="ad-impressions-svg" class="w-full flex-1 min-h-0"></div>
                                 <h3 id="ad-impressions-title" class="text-base font-black text-gray-900 dark:text-white text-center shrink-0">Viewable impressions</h3>
                             </div>
+                            <div class="nt-chart-toolbar" role="toolbar" aria-label="Ad impressions">
+                                <div class="nt-chart-toolbar-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                                    <button type="button" class="nt-chart-tool nt-chart-tool-primary is-on" data-ad-bucket="DAU" aria-pressed="true" aria-label="Daily ads">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 19V5M4 19h16"/><path stroke-linecap="round" d="M8 16l3-5 3 3 5-7"/></svg>
+                                        <span>DAU</span>
+                                    </button>
+                                    <button type="button" class="nt-chart-tool" data-ad-bucket="WAU" aria-pressed="false" aria-label="Weekly ads">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 19V5M4 19h16"/><path stroke-linecap="round" d="M7 16v-3M12 16V8M17 16v-5"/></svg>
+                                        <span>WAU</span>
+                                    </button>
+                                    <button type="button" class="nt-chart-tool" data-ad-bucket="MAU" aria-pressed="false" aria-label="Monthly ads">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 19V5M4 19h16"/><path stroke-linecap="round" d="M8 16V9M16 16V7"/></svg>
+                                        <span>MAU</span>
+                                    </button>
+                                </div>
+                                <div class="nt-chart-toolbar-pair">
+                                    <button type="button" id="ad-impressions-landscape" class="nt-chart-tool" aria-label="Landscape">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/></svg>
+                                        <span>Landscape</span>
+                                    </button>
+                                    <button type="button" id="ad-impressions-export" class="nt-chart-tool" aria-label="Export">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
+                                        <span>Export</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>`;
                     adminContainer?.appendChild(adChart);
+                    adChart.querySelector('.nt-chart-toolbar')?.addEventListener('click', (event) => {
+                        const bucket = event.target?.closest?.('[data-ad-bucket]')?.getAttribute('data-ad-bucket');
+                        if (!bucket) return;
+                        event.preventDefault();
+                        Admin._adBucket = bucket;
+                        Admin.paintAdImpressions();
+                    });
                     document.getElementById('ad-impressions-landscape').onclick = () => Admin.openGraphLandscape('ads');
                     document.getElementById('ad-impressions-export').onclick = () => Admin.offerChartExport('ads');
                 }
@@ -13347,6 +13414,16 @@ const Admin = {
                                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
                             </button>
                             <p id="mq-thread-title" class="cm-thread-title"></p>
+                            <div id="mq-thread-actions" class="cm-thread-actions hidden" role="toolbar" aria-label="Message options">
+                                <button type="button" class="cm-reply-message" aria-label="Reply"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg></button>
+                                <button type="button" class="cm-mark-unread" aria-label="Mark unread"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h10"/><circle cx="18" cy="16" r="3"/></svg></button>
+                                <button type="button" class="cm-mark-read" aria-label="Mark read"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></button>
+                                <button type="button" class="cm-hide-message" aria-label="Hide"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6A3 3 0 0012 15a3 3 0 002.4-4.4"/><path d="M9.9 5.1A10.8 10.8 0 0112 5c7 0 10 7 10 7a18 18 0 01-3.2 4.4"/><path d="M6.1 6.1C3.7 7.8 2 12 2 12a18 18 0 006.2 6.6"/></svg></button>
+                                <button type="button" class="cm-delete-message" data-mode="purge" aria-label="Remove"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></button>
+                                <button type="button" class="cm-delete-message" data-mode="tombstone" aria-label="Deleted by an Admin"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/></svg></button>
+                                <button type="button" class="cm-shadow-ban" aria-label="Shadow ban"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 19a7 7 0 0114 0"/><path d="M4 4l16 16"/></svg></button>
+                                <button type="button" class="mq-lookup-uid" aria-label="Look up"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg></button>
+                            </div>
                         </div>
                         <div class="nt-pack-wallpaper cm-thread-wallpaper" aria-hidden="true"></div>
                         <div id="mq-thread-held" class="px-2 pt-2 space-y-2"></div>
@@ -13454,7 +13531,10 @@ const Admin = {
             else if (Admin.currentCommunityMonitorTab === 'reports' && Admin._mqCache) Admin.paintCommunityReports?.();
             else Admin.fetchModerationQueue?.();
         };
-        document.getElementById('mq-thread-back')?.addEventListener('click', () => Admin.stepDrillBack?.());
+        document.getElementById('mq-thread-back')?.addEventListener('click', () => {
+            if (Admin._mqClearSelection?.()) return;
+            Admin.stepDrillBack?.();
+        });
         document.getElementById('dev-modal')?.addEventListener('click', (event) => {
             if (!event.target.closest?.('#drill-back-btn')) return;
             if (!document.getElementById('mq-body')?.classList.contains('mq-showing-thread')) return;
@@ -14219,24 +14299,19 @@ const Admin = {
                 };
                 const renderMessage = (message, routeId, isReply = false) => {
                     const category = message.category && message.category !== 'general'
-                        ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
+                        ? `<p class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300 mb-1">${esc(message.category)}</p>`
                         : '';
-                    const authorId = message.uid || message.deviceId || '';
-                    const authorHint = authorId && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(authorId, message.deviceId || '') : '';
-                    const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
-                    const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid, message.replyTo?.deviceId || '') : '';
                     const removed = message.deleted === true
                         || message.body === 'Deleted message'
                         || message.body === 'Deleted by an Admin';
                     const quote = !removed && message.replyTo?.body
-                        ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${shareHtml(message.replyTo.body)}</div>`
+                        ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b><br>${shareHtml(message.replyTo.body)}</div>`
                         : '';
                     const shownBody = removed
                         ? (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin' ? 'Deleted by an Admin' : 'Deleted message')
                         : (message.body || '');
                     const postId = message.postId || '';
                     const mine = Admin.currentUser?.uid && message.uid === Admin.currentUser.uid;
-                    const replyAttr = isReply ? `data-reply="${esc(message.replyId || '')}"` : '';
                     const ts = Number(message.timestamp) || 0;
                     const displayName = message.displayName || 'Passenger';
                     const nameSeed = String(message.uid || displayName || 'x');
@@ -14262,7 +14337,7 @@ const Admin = {
                         : '';
                     const link = /^https:\/\//i.test(String(message.linkUrl || '')) ? String(message.linkUrl) : '';
                     const linkHtml = link ? `<a class="cm-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link.replace(/^https:\/\//, '').slice(0, 64))}</a>` : '';
-                    return `<div class="community-post-row ${mine ? 'justify-end' : 'justify-start gap-1'}${isReply ? ' is-reply' : ''}" data-community-message data-ts="${ts}" data-community-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                    return `<div class="community-post-row ${mine ? 'justify-end' : 'justify-start gap-1'}${isReply ? ' is-reply' : ''}" data-community-message data-ts="${ts}" data-route="${esc(routeId)}" data-community-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${removed ? 'data-removed="1"' : ''} ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
                         ${avatar}
                         <div class="community-bubble-wrap">
                             <div class="community-bubble ${mine ? 'community-bubble-own' : 'community-bubble-other'} ${message.hidden ? 'is-hidden' : ''}">
@@ -14271,21 +14346,9 @@ const Admin = {
                                     ${versionChip}
                                 </div>
                                 <div class="community-bubble-body">
-                                    ${quote}${photoHtml}${linkHtml}<div class="community-msg-text cm-bubble-text${removed ? ' community-msg-deleted cm-msg-deleted' : ''}">${removed ? esc(shownBody) : shareHtml(shownBody)}<span class="community-msg-time cm-bubble-time">${esc(threadClock(message.timestamp))}</span></div>
-                                    <div class="cm-options">
-                                        <div class="cm-options-menu hidden">
-                                            <button type="button" class="cm-reply-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" data-uid="${esc(message.uid || '')}" ${replyAttr}>Reply</button>
-                                            <button type="button" class="cm-mark-unread" data-route="${esc(routeId)}" data-ts="${ts}">Mark unread</button>
-                                            <button type="button" class="cm-mark-read" data-route="${esc(routeId)}" data-ts="${ts}">Mark read</button>
-                                            <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Hide</button>
-                                            <button type="button" class="cm-delete-message" data-mode="purge" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Remove</button>
-                                            ${removed && (message.deletedBy === 'admin' || message.body === 'Deleted by an Admin') ? '' : `<button type="button" class="cm-delete-message" data-mode="tombstone" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${replyAttr}>Deleted by an Admin</button>`}
-                                            ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
-                                        </div>
-                                    </div>
+                                    ${quote}${photoHtml}${linkHtml}${category}<div class="community-msg-text cm-bubble-text${removed ? ' community-msg-deleted cm-msg-deleted' : ''}">${removed ? esc(shownBody) : shareHtml(shownBody)}<span class="community-msg-time cm-bubble-time">${esc(threadClock(message.timestamp))}</span></div>
                                 </div>
                             </div>
-                            <span class="cm-message-tools">${authorHint}${category}<button type="button" class="cm-options-toggle cm-options-side" aria-label="Options"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button></span>
                         </div>
                     </div>`;
                 };
@@ -14454,9 +14517,64 @@ const Admin = {
                         title.textContent = open ? (routeName || 'Community') : title.dataset.mqHomeTitle;
                     }
                 };
+                Admin._mqClearSelection = () => {
+                    const actions = document.getElementById('mq-thread-actions');
+                    const title = document.getElementById('mq-thread-title');
+                    const open = !!(actions && !actions.classList.contains('hidden'));
+                    document.querySelectorAll('#mq-thread-scroll .community-post-row.is-selected').forEach((el) => el.classList.remove('is-selected'));
+                    actions?.classList.add('hidden');
+                    title?.classList.remove('hidden');
+                    document.getElementById('mq-thread-back')?.setAttribute('aria-label', 'Back to routes');
+                    return open;
+                };
+                Admin._mqSelectMessage = (row) => {
+                    if (!row) return;
+                    if (row.classList.contains('is-selected')) {
+                        Admin._mqClearSelection();
+                        return;
+                    }
+                    document.querySelectorAll('#mq-thread-scroll .community-post-row.is-selected').forEach((el) => el.classList.remove('is-selected'));
+                    row.classList.add('is-selected');
+                    const actions = document.getElementById('mq-thread-actions');
+                    const title = document.getElementById('mq-thread-title');
+                    if (!actions) return;
+                    const post = row.getAttribute('data-community-post') || '';
+                    const reply = row.getAttribute('data-community-reply') || '';
+                    const route = row.getAttribute('data-route') || '';
+                    const uid = row.getAttribute('data-uid') || '';
+                    const ts = row.getAttribute('data-ts') || '';
+                    const fill = (selector, attrs) => {
+                        const el = actions.querySelector(selector);
+                        if (!el) return;
+                        Object.entries(attrs).forEach(([key, value]) => {
+                            if (value) el.setAttribute(key, value);
+                            else el.removeAttribute(key);
+                        });
+                    };
+                    const shared = { 'data-route': route, 'data-post': post, 'data-reply': reply, 'data-uid': uid, 'data-ts': ts };
+                    fill('.cm-reply-message', shared);
+                    fill('.cm-mark-unread', shared);
+                    fill('.cm-mark-read', shared);
+                    fill('.cm-hide-message', shared);
+                    actions.querySelectorAll('.cm-delete-message').forEach((el) => {
+                        Object.entries(shared).forEach(([key, value]) => {
+                            if (value) el.setAttribute(key, value);
+                            else el.removeAttribute(key);
+                        });
+                    });
+                    fill('.cm-shadow-ban', { 'data-uid': uid });
+                    fill('.mq-lookup-uid', { 'data-uid': uid });
+                    actions.querySelector('.cm-shadow-ban')?.classList.toggle('hidden', !uid);
+                    actions.querySelector('.mq-lookup-uid')?.classList.toggle('hidden', !uid);
+                    actions.querySelector('[data-mode="tombstone"]')?.classList.toggle('hidden', row.getAttribute('data-removed') === '1');
+                    title?.classList.add('hidden');
+                    actions.classList.remove('hidden');
+                    document.getElementById('mq-thread-back')?.setAttribute('aria-label', 'Clear selection');
+                };
                 Admin._mqCloseThread = (opts = {}) => {
                     const pushed = Admin._mqThreadPushed === true;
                     Admin._mqThreadPushed = false;
+                    Admin._mqClearSelection?.();
                     setMonitorThread(false);
                     if (opts.fromPop || !pushed) return;
                     try { history.back(); } catch { /* the thread is already closed */ }
@@ -14472,6 +14590,9 @@ const Admin = {
                     Admin._mqOpenCard = card;
                     Admin._mqQuote = null;
                     if (threadTitle) threadTitle.textContent = prettyRoute;
+                    const threadHost = document.getElementById('mq-thread');
+                    if (threadHost) threadHost.dataset.route = routeId || '';
+                    Admin._mqClearSelection?.();
                     setMonitorThread(true, prettyRoute);
                     const suggestNote = document.getElementById('mq-suggest-note');
                     if (suggestNote) {
@@ -14583,14 +14704,6 @@ const Admin = {
                         runMonitorLookup(lookupUidBtn.getAttribute('data-uid'));
                         return;
                     }
-                    const optionsToggle = event.target.closest?.('.cm-options-toggle');
-                    const closeMqOptions = () => {
-                        const portal = document.getElementById('mq-options-portal');
-                        if (!portal) return;
-                        portal.hidden = true;
-                        portal.innerHTML = '';
-                        delete portal.dataset.openFor;
-                    };
                     const messageCard = (btn) => {
                         const live = btn?.closest?.('[data-community-message]');
                         if (live) return live;
@@ -14602,40 +14715,6 @@ const Admin = {
                         if (replyId) return scope.querySelector(`[data-community-reply="${safe(replyId)}"]`);
                         return scope.querySelector(`[data-community-post="${safe(postId)}"]:not([data-community-reply])`);
                     };
-                    if (optionsToggle) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const source = optionsToggle.closest('[data-community-message]')?.querySelector('.cm-options-menu');
-                        const portal = document.getElementById('mq-options-portal');
-                        const key = optionsToggle.closest('[data-community-message]')?.getAttribute('data-community-post') || '';
-                        if (!source || !portal) return;
-                        if (portal.dataset.openFor === key && !portal.hidden) {
-                            closeMqOptions();
-                            return;
-                        }
-                        closeMqOptions();
-                        const menu = source.cloneNode(true);
-                        menu.classList.remove('hidden');
-                        const thread = document.getElementById('mq-thread');
-                        const threadRect = thread?.getBoundingClientRect();
-                        const rect = optionsToggle.getBoundingClientRect();
-                        const width = 196;
-                        const left = threadRect
-                            ? Math.max(8, Math.min(rect.right - threadRect.left - width, threadRect.width - width - 8))
-                            : 8;
-                        let top = threadRect ? rect.bottom - threadRect.top + 4 : rect.bottom + 4;
-                        if (threadRect && top + 220 > threadRect.height - 8) {
-                            top = Math.max(8, rect.top - threadRect.top - 220);
-                        }
-                        menu.style.left = `${left}px`;
-                        menu.style.top = `${top}px`;
-                        portal.appendChild(menu);
-                        portal.hidden = false;
-                        portal.dataset.openFor = key;
-                        portal.onclick = list.onclick;
-                        return;
-                    }
-                    closeMqOptions();
                     const replyBtn = event.target.closest?.('.cm-reply-message');
                     if (replyBtn) {
                         event.preventDefault();
@@ -14744,6 +14823,18 @@ const Admin = {
                         await Admin.applyShadowBan(ban.dataset.uid);
                     }
                 };
+                document.getElementById('mq-thread-scroll')?.addEventListener('click', (event) => {
+                    if (event.target.closest('a, button, .fb-version-chip, img, .cm-link')) return;
+                    const row = event.target.closest('[data-community-message]');
+                    if (!row || !document.getElementById('mq-thread-scroll')?.contains(row)) return;
+                    event.preventDefault();
+                    Admin._mqSelectMessage(row);
+                });
+                document.getElementById('mq-thread-actions')?.addEventListener('click', (event) => {
+                    if (!event.target.closest('button')) return;
+                    list.onclick?.(event);
+                    Admin._mqClearSelection?.();
+                });
 
                 const bindHeldActions = (root) => {
                 if (!root) return;
@@ -32475,7 +32566,31 @@ const Admin = {
                 const res = await window.guardianFetch(`${dynamicEndpoint}roadmap.json?auth=${secret}&t=${Date.now()}`, {}, 10000);
                 
                 if (!res.ok) throw new Error("HTTP " + res.status);
-                const data = await res.json();
+                let data = await res.json();
+                const mentionId = 'mention-unread-mark';
+                if (!data || typeof data !== 'object' || !data[mentionId]) {
+                    const mentionTicket = {
+                        title: 'Show @ beside unread when a room mentions you',
+                        description: 'When a person is mentioned and has not seen that message, the community room list shows the unread count and an @. @ 2 means 2 unread messages, and at least one of them mentions you. It must not read as 2 mentions. Keep it readable on a small phone and a large phone. The mark belongs on the room dropdown. Do not build the mention picker yet.',
+                        type: 'feature',
+                        severity: 'medium',
+                        source: 'Community',
+                        status: 'backlog',
+                        timestamp: Date.now(),
+                        updatedAt: Date.now(),
+                    };
+                    try {
+                        const put = await fetch(`${dynamicEndpoint}roadmap/${mentionId}.json?auth=${secret}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(mentionTicket),
+                        });
+                        if (put.ok) {
+                            if (!data || typeof data !== 'object') data = {};
+                            data[mentionId] = mentionTicket;
+                        }
+                    } catch { /* the rest of the board still loads */ }
+                }
                 
                 Admin.cachedRoadmapData = (data && typeof data === 'object') ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
                 

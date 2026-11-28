@@ -2854,9 +2854,21 @@ html.dark .admin-sheet-tabs { background: #111827; }
   background: rgba(255, 255, 255, 0.55);
   color: #14532d;
 }
+.community-bubble-other .community-share-chip,
+.inbox-bubble-other .community-share-chip {
+  background: #e8eef5;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14), inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
 html.dark .community-share-chip {
   background: rgba(15, 23, 42, 0.35);
   color: #bfdbfe;
+}
+html.dark .community-bubble-other .community-share-chip,
+html.dark .inbox-bubble-other .community-share-chip {
+  background: rgba(255, 255, 255, 0.14);
+  color: #dbeafe;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 .nt-ls-session.is-live { border-color: rgba(37, 99, 235, 0.35); }
 .nt-ls-session-chevron {
@@ -3119,6 +3131,29 @@ html.dark .cm-thread-back { color: #aebac1; }
   text-overflow: ellipsis;
 }
 html.dark .cm-thread-title { color: #e9edef; }
+.cm-thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+}
+.cm-thread-actions.hidden { display: none !important; }
+.cm-thread-actions button {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #111b21;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cm-thread-actions button.hidden { display: none !important; }
+html.dark .cm-thread-actions button { color: #e9edef; }
 .cm-thread-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -4148,7 +4183,7 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
   color: #fff;
 }
 
-/* Pull to refresh: an empty ring that closes when the pull is long enough. */
+/* Pull to refresh: the same ring fills as you pull, then turns blue when it is ready. */
 #nt-pull-refresh {
   position: fixed;
   left: 50%;
@@ -4167,19 +4202,11 @@ html.dark #nt-pull-refresh {
 #nt-pull-refresh svg {
   display: block;
 }
-#nt-pull-refresh .nt-pull-ring,
-#nt-pull-refresh .nt-pull-arrow {
+#nt-pull-refresh .nt-pull-ring {
   stroke: #94a3b8;
 }
-#nt-pull-refresh .nt-pull-arrow {
-  opacity: 0;
-}
 #nt-pull-refresh.is-ready .nt-pull-ring {
-  opacity: 0;
-}
-#nt-pull-refresh.is-ready .nt-pull-arrow {
   stroke: #2563eb;
-  opacity: 1;
 }
 
 /* GIF: play, then rest on the frame it reached. Replay sits in the middle. */

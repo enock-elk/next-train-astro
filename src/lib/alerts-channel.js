@@ -11,6 +11,7 @@ import { showCopyToast, showToast, triggerHaptic, openSmoothModal, closeSmoothMo
 import { alertSharePath } from './share-links.js';
 import { embedCommunityShareCards, stripCommunityShareUrls } from './share-chips.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { awardMark } from './rider-marks.js';
 import { $account } from './account.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
@@ -1368,6 +1369,7 @@ export async function submitAlertReaction(notice, emoji) {
         }
         paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
         await writeAlertReactionPerson(path, emoji, token, removing);
+        if (!removing) awardMark('alert_reaction', { key: `react:alert:${path}` });
         triggerHaptic();
         hideAlertReactionPicker();
         clearAlertSelection();

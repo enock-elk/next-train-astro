@@ -47,6 +47,7 @@ import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } 
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isCommunityOpenInRegion, isCommunityTabKilled, isListedCommunityRoute } from './features.js';
 import {
     awardCommunityMarks,
+    awardMark,
     contributionDayKey,
     marksPublicSnapshot,
     readMarks,
@@ -555,11 +556,49 @@ function findCachedPost(postId) {
     return cachedFeedPosts.find((p) => p.postId === postId) || null;
 }
 
+const COMMUNITY_HIDE_KEY = 'ntCommunityHideForMeV1';
+const COMMUNITY_HIDE_CAP = 400;
+
+function communityHideBag() {
+    const uid = myCommunityUid();
+    if (!uid) return null;
+    try {
+        const all = JSON.parse(safeStorage.getItem(COMMUNITY_HIDE_KEY) || '{}');
+        const bag = all && typeof all === 'object' ? all[uid] : null;
+        return bag && typeof bag === 'object' ? bag : {};
+    } catch {
+        return {};
+    }
+}
+
+function communityHiddenForMe(id) {
+    const key = String(id || '');
+    if (!key) return false;
+    const bag = communityHideBag();
+    return !!(bag && bag[key]);
+}
+
+function rememberCommunityHidden(id) {
+    const uid = myCommunityUid();
+    const key = String(id || '');
+    if (!uid || !key) return false;
+    let all = {};
+    try { all = JSON.parse(safeStorage.getItem(COMMUNITY_HIDE_KEY) || '{}') || {}; } catch { all = {}; }
+    if (!all[uid] || typeof all[uid] !== 'object') all[uid] = {};
+    all[uid][key] = Date.now();
+    const ids = Object.entries(all[uid]).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, COMMUNITY_HIDE_CAP);
+    all[uid] = Object.fromEntries(ids);
+    safeStorage.setItem(COMMUNITY_HIDE_KEY, JSON.stringify(all));
+    cachedFeedPosts = cachedFeedPosts.filter((row) => String(row?.postId || '') !== key);
+    return true;
+}
+
 function postsVisibleFilter(list, myUid) {
     return (list || [])
         .filter((p) => p && typeof p === 'object' && (p.body || p.linkUrl || (Array.isArray(p.attachments) && p.attachments.length)))
         .filter((p) => {
             if (p.pendingReview) return false;
+            if (communityHiddenForMe(p.postId)) return false;
             if (p.hidden && p.uid !== myUid && !isCommunityTombstone(p)) return false;
             if (p.shadowOnly && p.uid !== myUid) return false;
             return true;
@@ -1590,6 +1629,10 @@ export async function togglePostReaction(routeId, postId, emojiId) {
         else cachedReactionsByPost[postId][acct.uid] = { emoji: emojiId, at: Date.now() };
 
         void writeReactionInbox(routeId, postId, emojiId, removing);
+        const authorId = findCachedPost(postId)?.uid || '';
+        if (!removing && authorId && authorId !== acct.uid) {
+            awardMark('community_reaction', { key: `react:community:${routeId}:${postId}` });
+        }
         return { ok: true, removed: removing };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not react.' };
@@ -1899,6 +1942,7 @@ function syncCommunitySelectActions(post) {
     const tombstone = isCommunityTombstone(post);
     document.getElementById('community-select-speak')?.classList.toggle('hidden', !isAdminAuthed() || !post);
     document.getElementById('community-select-report')?.classList.toggle('hidden', !post || mine || tombstone);
+    document.getElementById('community-select-hide-me')?.classList.toggle('hidden', !post || mine || tombstone || acct?.status !== 'signed-in');
     document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone || !authorDeleteOpen(post));
     syncCommunityCopyButton(post);
     paintCommunityAdminMenu(post);
@@ -2575,6 +2619,7 @@ function clearCommunitySelection() {
     document.getElementById('community-select-menu')?.classList.add('hidden');
     document.getElementById('community-select-speak')?.classList.add('hidden');
     document.getElementById('community-select-report')?.classList.add('hidden');
+    document.getElementById('community-select-hide-me')?.classList.add('hidden');
     document.getElementById('community-select-delete')?.classList.add('hidden');
     document.getElementById('community-select-menu-btn')?.classList.add('hidden');
     syncCommunityCopyButton(null);
@@ -5483,8 +5528,9 @@ async function expandReplies(postId, routeId, container) {
     container.innerHTML = `<p class="text-[10px] text-gray-400 py-1">Loading…</p>`;
     const replies = await fetchReplies(routeId, postId);
 
-    let html = replies.length
-        ? replies.map((r) => {
+    const visibleReplies = replies.filter((r) => !communityHiddenForMe(r.replyId || r.postId));
+    let html = visibleReplies.length
+        ? visibleReplies.map((r) => {
             const parts = communityMediaParts(r);
             return `
             <div class="text-left">
@@ -5760,9 +5806,16 @@ export function bindCommunityUi() {
         }
     });
     window.addEventListener('resize', () => fitCommunityRouteLabels());
-    document.getElementById('community-refresh-btn')?.addEventListener('click', () => {
+    document.getElementById('community-refresh-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('community-refresh-btn');
+        const icon = btn?.querySelector('svg');
+        icon?.classList.add('animate-spin');
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
-        renderCommunityFeed(rid);
+        try {
+            await renderCommunityFeed(rid, { forceRest: true });
+        } finally {
+            icon?.classList.remove('animate-spin');
+        }
     });
     document.getElementById('community-signin-cta')?.addEventListener('click', async () => {
         const composer = document.getElementById('community-composer');
@@ -5929,6 +5982,20 @@ export function bindCommunityUi() {
             const target = communityActionTarget();
             closeReactionSheet();
             if (target.post) setReplyDraft(target.post, target.routeId);
+            return;
+        }
+
+        const hideForMe = t.closest?.('#community-select-hide-me');
+        if (hideForMe) {
+            e.preventDefault();
+            const target = communityActionTarget();
+            const acct = $account.get();
+            const ownMessage = !!(acct?.status === 'signed-in' && target.post?.uid && target.post.uid === acct.uid);
+            const routeId = target.routeId || document.getElementById('community-route-select')?.value || '';
+            if (!target.postId || ownMessage || acct?.status !== 'signed-in') return;
+            rememberCommunityHidden(target.postId);
+            clearCommunitySelection();
+            if (routeId) applyFeedFilter(routeId);
             return;
         }
 

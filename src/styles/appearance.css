@@ -2433,30 +2433,55 @@ html.dark .cm-extra-field { color: #d1d7db; }
   background: #f9fafb;
 }
 html.dark .nt-chart-toolbar { background: #111827; border-top-color: rgba(255, 255, 255, 0.08); }
-.nt-chart-toolbar-top { display: flex; align-items: center; gap: 0.4rem; }
-.nt-chart-nav { display: flex; gap: 0.4rem; margin-left: auto; }
-.nt-chart-nav.hidden { display: none; }
-.nt-chart-toolbar-grid {
-  display: flex;
-  flex-wrap: wrap;
+.nt-chart-toolbar-top {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr 1fr;
   gap: 0.4rem;
-  margin-top: 0.45rem;
+  align-items: stretch;
+}
+.nt-chart-nav { display: contents; }
+.nt-chart-nav.hidden { display: none !important; }
+#analytics-trend-prev { order: 1; }
+#analytics-trend-cycle { order: 2; }
+#analytics-trend-next { order: 3; }
+.nt-chart-toolbar-top:has(.nt-chart-nav.hidden) #analytics-trend-cycle { grid-column: 1 / -1; }
+.nt-chart-toolbar-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.nt-chart-toolbar-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
 }
 .nt-chart-tool {
-  min-height: 2.25rem;
-  padding: 0 0.8rem;
-  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.35rem 0.15rem;
+  border-radius: 0.9rem;
   border: 1px solid #d1d5db;
   background: #fff;
   color: #111827;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
   touch-action: manipulation;
 }
-.nt-chart-tool.is-on { background: #2563eb; border-color: #2563eb; color: #fff; }
+.nt-chart-tool svg { width: 1.15rem; height: 1.15rem; flex: 0 0 auto; }
+.nt-chart-tool-primary { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+.nt-chart-tool.is-on { background: #2563eb; border-color: #1d4ed8; color: #fff; }
 html.dark .nt-chart-tool { background: #1f2937; border-color: #374151; color: #e5e7eb; }
-html.dark .nt-chart-tool.is-on { background: #2563eb; border-color: #2563eb; color: #fff; }
-#analytics-trend-cycle { flex: 1 1 auto; }
+html.dark .nt-chart-tool-primary,
+html.dark .nt-chart-tool.is-on { background: #2563eb; border-color: #1d4ed8; color: #fff; }
 .cm-guide { resize: vertical; min-height: 2.6rem; font-size: 0.8rem; }
 html.dark .cm-composer-input,
 html.dark .cm-composer-link,

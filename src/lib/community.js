@@ -1886,13 +1886,20 @@ function syncCommunityCopyButton(post) {
     btn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
 }
 
+const AUTHOR_DELETE_MS = 10 * 60 * 60 * 1000;
+
+function authorDeleteOpen(post) {
+    const ts = Number(post?.timestamp) || 0;
+    return ts > 0 && (Date.now() - ts) < AUTHOR_DELETE_MS;
+}
+
 function syncCommunitySelectActions(post) {
     const acct = $account.get();
     const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const tombstone = isCommunityTombstone(post);
     document.getElementById('community-select-speak')?.classList.toggle('hidden', !isAdminAuthed() || !post);
     document.getElementById('community-select-report')?.classList.toggle('hidden', !post || mine || tombstone);
-    document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone);
+    document.getElementById('community-select-delete')?.classList.toggle('hidden', !post || !mine || tombstone || !authorDeleteOpen(post));
     syncCommunityCopyButton(post);
     paintCommunityAdminMenu(post);
 }
@@ -4654,6 +4661,14 @@ function paintCommunityCharHint() {
         : `${left} characters left`;
 }
 
+function syncComposerSpeak() {
+    const btn = document.getElementById('community-composer-speak');
+    const composer = document.getElementById('community-composer');
+    if (!btn || !composer) return;
+    const words = String(composer.value || '').trim();
+    btn.classList.toggle('hidden', !isAdminAuthed() || words.length < 2);
+}
+
 function syncComposerChrome() {
     const composer = document.getElementById('community-composer');
     if (!composer) return;
@@ -4661,10 +4676,10 @@ function syncComposerChrome() {
     const operator = isAdminAuthed();
     composer.maxLength = COMPOSER_HOLD_MAX;
     document.getElementById('community-attach-btn')?.classList.toggle('hidden', !operator);
-    document.getElementById('community-composer-speak')?.classList.toggle('hidden', !operator);
     composer.classList.toggle('community-composer-with-clip', operator);
     syncCommunityCopilot();
     restoreComposerDraft(composer);
+    syncComposerSpeak();
     paintCommunityCharHint();
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
@@ -5533,6 +5548,15 @@ export function bindCommunityUi() {
         e.stopPropagation();
         if (!isAdminAuthed()) return;
         const words = document.getElementById('community-composer')?.value || '';
+        const state = typeof window.ntOperatorSpeechState === 'function' ? window.ntOperatorSpeechState() : 'idle';
+        if (state === 'playing') {
+            window.ntPauseOperatorSpeech?.();
+            return;
+        }
+        if (state === 'paused') {
+            window.ntResumeOperatorSpeech?.();
+            return;
+        }
         speakOperatorCopy(words).then((result) => {
             if (result?.hidden) return;
             if (!result?.ok && result?.message) showToast(result.message, 'error');
@@ -5544,6 +5568,15 @@ export function bindCommunityUi() {
         if (!isAdminAuthed()) return;
         const post = selectedCommunity?.post;
         if (!post) return;
+        const state = typeof window.ntOperatorSpeechState === 'function' ? window.ntOperatorSpeechState() : 'idle';
+        if (state === 'playing') {
+            window.ntPauseOperatorSpeech?.();
+            return;
+        }
+        if (state === 'paused') {
+            window.ntResumeOperatorSpeech?.();
+            return;
+        }
         speakOperatorCopy(communityCaptionText(post)).then((result) => {
             if (result?.hidden) return;
             if (!result?.ok && result?.message) showToast(result.message, 'error');
@@ -5598,6 +5631,7 @@ export function bindCommunityUi() {
     document.getElementById('community-suggest-again')?.addEventListener('click', () => { suggestCommunityReply(); });
     document.getElementById('community-composer')?.addEventListener('input', () => {
         paintCommunityCharHint();
+        syncComposerSpeak();
         if (!document.getElementById('community-composer')?.value) setCommunityGuideReady(false);
     });
     const closeCommunityGuide = () => document.getElementById('community-guide-modal')?.classList.add('hidden');
@@ -5932,7 +5966,7 @@ export function bindCommunityUi() {
             if (as === 'author') {
                 const acct = $account.get();
                 const ownMessage = !!(acct?.status === 'signed-in' && target.post?.uid && target.post.uid === acct.uid);
-                if (!ownMessage) return;
+                if (!ownMessage || !authorDeleteOpen(target.post)) return;
             }
             closeReactionSheet();
             document.getElementById('community-select-menu')?.classList.add('hidden');

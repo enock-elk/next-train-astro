@@ -400,7 +400,9 @@ assert.match(community, /communityScheduleFact/, 'a community draft can include 
 const playAt = communityView.indexOf('id="community-composer-speak"');
 const guideAt = communityView.indexOf('id="community-guide-open"');
 assert.ok(playAt >= 0 && guideAt > playAt, 'Play sits above Guide');
-assert.match(communityView, /id="community-composer-speak"[^>]*>Play</, 'the community composer control is labelled Play');
+assert.match(communityView, /id="community-composer-speak"[^>]*aria-label="Play"/, 'the community composer control is labelled Play');
+assert.match(communityView, /community-composer-plus/, 'the admin attach control sits inside the composer');
+assert.match(community, /AUTHOR_DELETE_MS = 10 \* 60 \* 60 \* 1000/, 'an author can delete their own message for 10 hours');
 assert.match(community, /community-sheet-unread/, 'an operator can mark a message unread');
 assert.match(community, /unreadHoldRoute/, 'mark unread is not stamped read while that room stays open');
 assert.match(community, /dismissCommunitySuggest/, 'the suggestion card closes when the room is left');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.6': [
+        'Schedule QA stays closed and opens from an errors and warnings button. The list is split by region, and each region can be checked on its own. The user graph uses matching icon buttons. Read aloud is its own screen, with one play and pause button and a stop button. A clip that already played on this phone is kept for the next play. Closing Read aloud leaves the Dev Hub home clear. An author can delete their own community message for 10 hours. The attach button sits inside the message field, on the right, and Play appears only when there is text. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.5': [
         'The route community preview type-checks, so the preview build can finish. No commuter What\'s New. forceShow stays false.',
     ],

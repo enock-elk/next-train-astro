@@ -155,7 +155,8 @@ assert.match(community, /navigator\.share\(\{ url \}\)/, 'community share sends 
 assert.doesNotMatch(community, /text: text \|\| shareTitle/, 'community share does not attach the message');
 assert.match(community, /communityInlineControl\(e\.target\)/, 'a share chip touch does not press the whole message');
 assert.match(readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8'), /data-delete-as="author"/, 'the poster can delete their own message');
-assert.match(community, /as === 'author'[\s\S]{0,280}if \(!ownMessage\) return/, 'a rider can delete only their own message');
+assert.match(community, /as === 'author'[\s\S]{0,320}if \(!ownMessage \|\| !authorDeleteOpen\(target\.post\)\) return/, 'a rider can delete only their own message, and only for 10 hours');
+assert.match(community, /AUTHOR_DELETE_MS = 10 \* 60 \* 60 \* 1000/, 'author delete closes after 10 hours');
 assert.match(community, /Remove completely/, 'an operator can still remove a message with no bubble left');
 assert.match(community, /function communityVersionChip/, 'an operator sees the build on a community name');
 assert.match(community, /openAdminChangelogLookup/, 'the community build opens the feedback version card');

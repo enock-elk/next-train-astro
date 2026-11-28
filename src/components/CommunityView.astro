@@ -25,6 +25,22 @@
   #community-composer.community-composer-with-clip {
     padding-right: 2.75rem;
   }
+  .community-composer-plus {
+    position: absolute;
+    right: 0.45rem;
+    bottom: 0.45rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: #111827;
+    color: #fff;
+  }
+  .community-composer-plus.hidden { display: none; }
+  html.dark .community-composer-plus { background: #f3f4f6; color: #111827; }
   #community-composer {
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
@@ -184,13 +200,17 @@
                             <p id="community-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                         </div>
                     </div>
+                    <div class="relative">
                     <textarea id="community-composer" rows="2" maxlength="8000" class="block w-full min-h-[3.75rem] max-h-[10rem] py-2.5 pl-3.5 pr-3 rounded-[1.35rem] bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-auto" placeholder="Please be kind and respectful."></textarea>
+                    <button type="button" id="community-attach-btn" class="community-composer-plus hidden" aria-label="Attach">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    </div>
                 </div>
                 <div class="flex shrink-0 flex-col justify-end gap-1">
-                    <button type="button" id="community-attach-btn" class="hidden h-8 w-full rounded-xl border border-gray-300 bg-white text-gray-700 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" aria-label="Attach">
-                        <svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    <button type="button" id="community-composer-speak" data-speech="toggle" class="hidden h-8 w-8 rounded-xl border border-gray-300 bg-white text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" aria-label="Play">
+                        <svg data-speech-icon class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
                     </button>
-                    <button type="button" id="community-composer-speak" class="hidden h-8 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Play</button>
                     <button type="button" id="community-guide-open" class="hidden h-8 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 shadow-sm focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">Guide</button>
                     <button type="button" id="community-post-btn" class="h-[2.75rem] px-3.5 min-w-[3.25rem] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
                 </div>

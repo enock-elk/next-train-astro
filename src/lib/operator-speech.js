@@ -1,22 +1,44 @@
 /**
  * Operator-only read-aloud. The phone sends the words to the reply worker.
  * The worker checks the allowlisted sign-in, then calls Chirp 3 HD.
- * The Cloud key never reaches the page.
+ * The Cloud key never reaches the page. A clip that already played on this
+ * phone is kept here, so Play again does not ask the worker a second time.
  */
 import { REPLY_WORKER_URL } from './config.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { bootFirebase } from './firebase-boot.js';
 
 const SPEAK_MAX = 900;
+const CLIP_CACHE_MAX = 20;
+const PLAY_ICON = '<svg data-speech-icon class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+const PAUSE_ICON = '<svg data-speech-icon class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
+const STOP_ICON = '<svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
+
 let playing = null;
-let playingUrl = '';
 let pending = false;
 let generation = 0;
 let clockTimer = 0;
+/** @type {Map<string, string>} */
+const clipCache = new Map();
 
 function clock(seconds) {
     const n = Math.max(0, Math.floor(Number(seconds) || 0));
     return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+}
+
+function paintSpeechControls() {
+    const playingNow = operatorSpeechState() === 'playing';
+    document.querySelectorAll('[data-speech="toggle"]').forEach((btn) => {
+        btn.setAttribute('aria-label', playingNow ? 'Pause' : 'Play');
+        const icon = btn.querySelector('[data-speech-icon]');
+        const label = btn.querySelector('[data-speech-label]');
+        if (label) label.textContent = playingNow ? 'Pause' : 'Play';
+        if (icon) {
+            icon.outerHTML = playingNow ? PAUSE_ICON : PLAY_ICON;
+            return;
+        }
+        if (!label) btn.innerHTML = playingNow ? PAUSE_ICON : PLAY_ICON;
+    });
 }
 
 function speechBar() {
@@ -26,17 +48,18 @@ function speechBar() {
     bar.id = 'nt-operator-speech';
     bar.className = 'hidden fixed z-[180] left-1/2 -translate-x-1/2 bottom-[5.5rem] flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-1.5 shadow-2xl dark:border-gray-600 dark:bg-gray-900';
     bar.innerHTML = `
-        <button type="button" data-speech="pause" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Pause"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg></button>
-        <button type="button" data-speech="play" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Play"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
-        <button type="button" data-speech="restart" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Restart"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/></svg></button>
+        <button type="button" data-speech="toggle" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Play">${PLAY_ICON}</button>
+        <button type="button" data-speech="stop" class="h-9 w-9 rounded-full text-gray-800 dark:text-gray-100 focus:outline-none" aria-label="Stop">${STOP_ICON}</button>
         <span data-speech-status class="min-w-[7.5rem] px-1 text-xs font-semibold text-gray-700 dark:text-gray-200">Preparing voice</span>
         <button type="button" data-speech="close" class="h-9 w-9 rounded-full text-gray-500 focus:outline-none" aria-label="Close"><svg class="mx-auto h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
     bar.addEventListener('click', (event) => {
         const act = event.target.closest?.('[data-speech]')?.getAttribute('data-speech');
-        if (act === 'pause') pauseOperatorSpeech();
-        if (act === 'play') resumeOperatorSpeech();
-        if (act === 'restart') restartOperatorSpeech();
-        if (act === 'close') stopOperatorSpeech();
+        if (act === 'toggle') {
+            const state = operatorSpeechState();
+            if (state === 'playing') pauseOperatorSpeech();
+            else if (state === 'paused') resumeOperatorSpeech();
+        }
+        if (act === 'stop' || act === 'close') stopOperatorSpeech();
     });
     document.body.appendChild(bar);
     return bar;
@@ -49,11 +72,25 @@ function copilotTray() {
     return tray;
 }
 
+function readAloudPanel() {
+    const panel = document.getElementById('alert-speech');
+    if (!panel || panel.classList.contains('hidden')) return null;
+    return panel;
+}
+
 function setSpeechStatus(text) {
+    paintSpeechControls();
     const tray = copilotTray();
     if (tray) {
         document.getElementById('nt-operator-speech')?.classList.add('hidden');
         const label = tray.querySelector('[data-speech-status]');
+        if (label) label.textContent = text;
+        return;
+    }
+    const panel = readAloudPanel();
+    if (panel) {
+        document.getElementById('nt-operator-speech')?.classList.add('hidden');
+        const label = document.getElementById('alert-speech-status');
         if (label) label.textContent = text;
         return;
     }
@@ -65,8 +102,11 @@ function setSpeechStatus(text) {
 
 function hideSpeechBar() {
     document.getElementById('nt-operator-speech')?.classList.add('hidden');
-    const label = document.getElementById('admin-reply-speech')?.querySelector('[data-speech-status]');
-    if (label) label.textContent = 'Not playing';
+    const trayLabel = document.getElementById('admin-reply-speech')?.querySelector('[data-speech-status]');
+    if (trayLabel) trayLabel.textContent = 'Not playing';
+    const alertLabel = document.getElementById('alert-speech-status');
+    if (alertLabel) alertLabel.textContent = 'Not playing';
+    paintSpeechControls();
 }
 
 function paintClock() {
@@ -100,6 +140,33 @@ async function operatorToken() {
     return '';
 }
 
+async function clipKey(text, preview) {
+    const raw = preview ? `${text}\n${JSON.stringify(preview)}` : text;
+    if (!globalThis.crypto?.subtle) return raw;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function rememberClip(key, blob) {
+    const existing = clipCache.get(key);
+    if (existing) {
+        clipCache.delete(key);
+        clipCache.set(key, existing);
+        return existing;
+    }
+    const url = URL.createObjectURL(blob);
+    clipCache.set(key, url);
+    while (clipCache.size > CLIP_CACHE_MAX) {
+        const oldest = clipCache.keys().next().value;
+        const gone = clipCache.get(oldest);
+        clipCache.delete(oldest);
+        if (gone && playing?.src !== gone) {
+            try { URL.revokeObjectURL(gone); } catch { /* ignore */ }
+        }
+    }
+    return url;
+}
+
 function stopSpeech() {
     if (clockTimer) {
         clearInterval(clockTimer);
@@ -109,11 +176,27 @@ function stopSpeech() {
         try { playing.pause(); } catch { /* already stopped */ }
         playing = null;
     }
-    if (playingUrl) {
-        try { URL.revokeObjectURL(playingUrl); } catch { /* ignore */ }
-        playingUrl = '';
-    }
     hideSpeechBar();
+}
+
+function startClip(url, gen) {
+    const audio = new Audio(url);
+    pending = false;
+    playing = audio;
+    audio.addEventListener('ended', () => {
+        if (playing === audio) stopSpeech();
+    }, { once: true });
+    audio.addEventListener('timeupdate', paintClock);
+    clockTimer = window.setInterval(paintClock, 500);
+    return audio.play().then(() => {
+        if (gen !== generation) return { ok: true, stopped: true };
+        paintClock();
+        if (typeof window.showToast === 'function') window.showToast('Playing', 'success');
+        return { ok: true };
+    }).catch(() => {
+        if (gen === generation) stopSpeech();
+        return { ok: false, message: 'Could not play that.' };
+    });
 }
 
 export function pauseOperatorSpeech() {
@@ -173,6 +256,16 @@ export async function speakOperatorCopy(value, options = {}) {
     generation = gen;
     pending = true;
     setSpeechStatus('Preparing voice');
+    const key = await clipKey(text, options.preview);
+    const cached = clipCache.get(key);
+    if (cached) {
+        if (gen !== generation) {
+            pending = false;
+            return { ok: true, stopped: true };
+        }
+        const played = await startClip(cached, gen);
+        return played.ok ? { ...played, cached: true } : played;
+    }
     if (typeof window.showToast === 'function') window.showToast('Preparing voice', 'info');
     const token = await operatorToken();
     if (!token || gen !== generation) {
@@ -221,27 +314,8 @@ export async function speakOperatorCopy(value, options = {}) {
         hideSpeechBar();
         return { ok: false, message: 'Could not play that.' };
     }
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    pending = false;
-    playing = audio;
-    playingUrl = url;
-    audio.addEventListener('ended', () => {
-        if (playing === audio) stopSpeech();
-    }, { once: true });
-    audio.addEventListener('timeupdate', paintClock);
-    clockTimer = window.setInterval(paintClock, 500);
-    try {
-        await audio.play();
-        paintClock();
-        if (typeof window.showToast === 'function') window.showToast('Playing', 'success');
-    } catch {
-        stopSpeech();
-        return { ok: false, message: 'Could not play that.' };
-    } finally {
-        if (gen === generation) pending = false;
-    }
-    return { ok: true };
+    const url = rememberClip(key, blob);
+    return startClip(url, gen);
 }
 
 if (typeof window !== 'undefined') {

@@ -228,15 +228,17 @@ assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-pa
 assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a panel');
 assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
 assert(helpers.ntAdminCanonicalPanelId('alert-panel--inapp') === 'alert-panel', 'in-app hub hash still mounts Service Alerts');
+assert(helpers.ntAdminCanonicalPanelId('alert-panel--speech') === 'alert-panel', 'read aloud hash still mounts Service Alerts');
 assert(helpers.ntAdminCanonicalPanelId('account-deletions-panel') === 'user-trust-panel', 'deletion requests open inside User Trust');
 assert(helpers.ntAdminCanonicalPanelId('feedback-panel') === 'feedback-panel', 'other panel ids stay unchanged');
 assert(helpers.ntAdminDrillPanelTitle('push-notifications-panel') === 'Notifications', 'FCM drill title is Notifications, not the panel id');
 assert(helpers.ntAdminDrillPanelTitle('alert-panel--inapp') === 'In-app alerts', 'in-app drill title is In-app alerts');
+assert(helpers.ntAdminDrillPanelTitle('alert-panel--speech') === 'Read aloud', 'read aloud drill title is Read aloud');
 assert(helpers.ntAdminDrillPanelTitle('alert-panel', 'Service Alerts') === 'Service Alerts', 'hub drill title stays Service Alerts');
 assert(admin.includes('id="push-notifications-header-btn"'), 'Notifications header uses -header-btn so the drill title can hide the tile chrome');
 {
     const showAt = admin.indexOf('showDrilledPanel: (panelId, opts = {})');
-    const hubAt = admin.indexOf("Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub')", showAt);
+    const hubAt = admin.indexOf('Admin.applyAlertHubView(alertView)', showAt);
     const quietAt = admin.indexOf('if (quiet) return true;', showAt);
     assert(showAt > -1 && hubAt > showAt && quietAt > hubAt, 'Back restores hub/inapp before the quiet return so tiles do not stack on compose');
 }
@@ -245,6 +247,10 @@ assert(admin.includes('In-app alerts'), 'hub tile for channel posts');
 assert(admin.includes('alert-hub-push'), 'hub tile for FCM notifications');
 assert(admin.includes("data-admin-subview"), 'Notifications is a subview, not a home-grid tile');
 assert(admin.includes('openAlertHubInapp'), 'in-app tile drills into the existing alerts manager');
+assert(admin.includes('openAlertHubSpeech'), 'read aloud opens its own view');
+assert(admin.includes('id="sched-qa-count-btn"'), 'schedule QA count is a button');
+assert(!admin.includes('sched-qa-where'), 'schedule QA does not dump findings into the accordion');
+assert(!admin.includes("body.classList.remove('hidden');\n                chevron?.classList.remove('-rotate-90');"), 'schedule QA does not open itself');
 
 const stacked = helpers.ntAdminPushDrillPanel(['roadmap-panel'], 'feedback-panel');
 assert(stacked.join(',') === 'roadmap-panel,feedback-panel', 'opening original pushes onto the drill stack');

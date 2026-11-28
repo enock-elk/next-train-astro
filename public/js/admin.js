@@ -15290,13 +15290,16 @@ const Admin = {
             hello,
             '',
             'We received your request to delete your Next Train account.',
-            `The request is for ${email}.`,
             '',
-            'We will remove the live profile. Reply to this email if you did not ask for this.',
+            'The request is for:',
             '',
-            'Next Train',
+            `• ${email}`,
+            '',
+            'We have successfully removed the live profile.',
+            '',
+            'Thank you for trying out Next Train!',
         ].join('\n');
-        const href = `mailto:${email}?subject=${encodeURIComponent('Next Train account deletion')}&body=${encodeURIComponent(body)}`;
+        const href = `mailto:${email}?subject=${encodeURIComponent('Next Train | Account Deletion')}&body=${encodeURIComponent(body)}`;
         try { window.location.href = href; } catch { /* ignore */ }
         return true;
     },
@@ -15335,17 +15338,29 @@ const Admin = {
         list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
         const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const esc = (str) => Admin.commuterEsc(str);
-        const pending = new Map();
+        const byUid = new Map();
         const absorb = (uid, row) => {
-            if (!row || row.status === 'done' || row.deletionResolvedAt) return;
+            if (!row || typeof row !== 'object') return;
             const requestedAt = Number(row.requestedAt || row.deletionRequestedAt) || 0;
-            if (!requestedAt) return;
-            pending.set(uid, {
+            const deletedAt = Number(row.deletedAt || row.retainedAt) || 0;
+            const done = row.status === 'done' || !!row.deletionResolvedAt;
+            if (!done && !requestedAt) return;
+            const prev = byUid.get(uid);
+            if (prev?.done && !done) return;
+            const deviceIds = row.deviceIds && typeof row.deviceIds === 'object' ? row.deviceIds : {};
+            byUid.set(uid, {
                 uid,
                 email: row.email || row.deletionRequestedEmail || '',
                 displayName: row.displayName || '',
-                deviceId: row.deviceId || '',
-                requestedAt,
+                deviceId: row.deviceId || Object.keys(deviceIds)[0] || '',
+                requestedAt: requestedAt || deletedAt,
+                deletedAt,
+                createdAt: Number(row.accountCreatedAt || row.createdAt) || 0,
+                region: row.region || '',
+                appVersion: row.appVersion || '',
+                points: Number(row.points) || 0,
+                returnedAt: Number(row.returnedAt) || 0,
+                done,
             });
         };
         try {
@@ -15379,30 +15394,41 @@ const Admin = {
                 }
             } catch { /* profile flags stay on the queue list */ }
         }
-        const rows = [...pending.values()].sort((a, b) => b.requestedAt - a.requestedAt);
+        const rows = [...byUid.values()].sort((a, b) => (b.deletedAt || b.requestedAt) - (a.deletedAt || a.requestedAt));
+        const openRows = rows.filter((row) => !row.done);
+        const deletedRows = rows.filter((row) => row.done);
         const utBadge = document.getElementById('ut-unread-badge');
         if (utBadge) {
-            utBadge.textContent = Admin.formatBadgeCount(rows.length);
-            utBadge.classList.toggle('hidden', rows.length === 0);
+            utBadge.textContent = Admin.formatBadgeCount(openRows.length);
+            utBadge.classList.toggle('hidden', openRows.length === 0);
         }
-        Admin._pendingDeletionCount = rows.length;
-        if (!rows.length) {
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">No open deletion requests.</p>';
-            return;
-        }
-        list.innerHTML = rows.map((row) => `
+        Admin._pendingDeletionCount = openRows.length;
+        const card = (row, actions) => `
             <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5">
                 <p class="text-sm font-black text-gray-900 dark:text-white break-words">${esc(row.displayName || row.email || row.uid)}</p>
                 <p class="text-[11px] text-gray-500 break-all">${esc(row.email || 'No email')}</p>
                 <p class="font-mono text-[10px] text-gray-400 break-all mt-0.5">${esc(row.uid)}</p>
                 ${row.deviceId ? `<p class="font-mono text-[10px] text-gray-400 break-all">device ${esc(row.deviceId)}</p>` : ''}
-                <p class="text-[10px] text-gray-400 mt-1">${esc(Admin.formatDate(row.requestedAt))}</p>
-                <div class="mt-2 flex flex-wrap gap-2">
-                    <button type="button" data-ad-email="${esc(row.email || '')}" data-ad-name="${esc(row.displayName || '')}" data-ad-uid="${esc(row.uid)}" class="text-[10px] font-black uppercase tracking-wider text-white bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-lg">Draft email</button>
-                    <button type="button" data-ad-delete="${esc(row.uid)}" data-ad-device="${esc(row.deviceId || '')}" class="text-[10px] font-black uppercase tracking-wider text-white bg-rose-700 hover:bg-rose-800 px-3 py-1.5 rounded-lg">Delete data</button>
-                </div>
+                ${row.createdAt ? `<p class="text-[10px] text-gray-400 mt-1">Created ${esc(Admin.formatDate(row.createdAt))}</p>` : ''}
+                <p class="text-[10px] text-gray-400">${row.done ? 'Deleted' : 'Requested'} ${esc(Admin.formatDate(row.deletedAt || row.requestedAt))}</p>
+                ${row.returnedAt ? `<p class="text-[10px] text-gray-400">Signed in again ${esc(Admin.formatDate(row.returnedAt))}</p>` : ''}
+                ${row.region || row.appVersion || row.points ? `<p class="text-[10px] text-gray-400">${esc([row.region, row.appVersion, row.points ? `${row.points} points` : ''].filter(Boolean).join(' · '))}</p>` : ''}
+                <div class="mt-2 flex flex-wrap gap-2">${actions}</div>
             </div>
-        `).join('');
+        `;
+        const emailBtn = (row) => `<button type="button" data-ad-email="${esc(row.email || '')}" data-ad-name="${esc(row.displayName || '')}" data-ad-uid="${esc(row.uid)}" class="text-[10px] font-black uppercase tracking-wider text-white bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-lg">Draft email</button>`;
+        const openHtml = openRows.length
+            ? openRows.map((row) => card(row, `${emailBtn(row)}<button type="button" data-ad-delete="${esc(row.uid)}" data-ad-device="${esc(row.deviceId || '')}" class="text-[10px] font-black uppercase tracking-wider text-white bg-rose-700 hover:bg-rose-800 px-3 py-1.5 rounded-lg">Delete data</button>`)).join('')
+            : '<p class="text-xs text-gray-400 text-center py-3">No open deletion requests.</p>';
+        const deletedHtml = deletedRows.length
+            ? deletedRows.map((row) => card(row, emailBtn(row))).join('')
+            : '<p class="text-xs text-gray-400 text-center py-3">No deleted accounts yet.</p>';
+        list.innerHTML = `
+            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 px-1 mb-1">Open requests</p>
+            ${openHtml}
+            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 px-1 mt-4 mb-1">Deleted accounts</p>
+            ${deletedHtml}
+        `;
         list.querySelectorAll('[data-ad-email]').forEach((btn) => {
             btn.addEventListener('click', () => Admin.openDeletionDraft({
                 email: btn.getAttribute('data-ad-email') || '',
@@ -15416,7 +15442,7 @@ const Admin = {
                 btn.getAttribute('data-ad-device') || '',
             ));
         });
-        Admin.promptDeletionDrafts(rows);
+        Admin.promptDeletionDrafts(openRows);
     },
 
     purgeAccountDeletion: async (uid, deviceId = '') => {
@@ -15468,15 +15494,27 @@ const Admin = {
                 const alias = Admin.commuterAlias(item);
                 if (item && alias) aliases[item] = alias;
             });
+            const createdCandidates = [user?.accountCreatedAt, user?.createdAt, prior?.accountCreatedAt, prior?.createdAt]
+                .map(Number)
+                .filter((n) => Number.isFinite(n) && n > 1e11);
+            const createdAt = createdCandidates.length ? Math.min(...createdCandidates) : Date.now();
             const tomb = {
                 uid: id,
                 email: user?.email || prior?.email || null,
                 displayName: user?.displayName || prior?.displayName || null,
+                provider: user?.provider || prior?.provider || null,
+                region: user?.region || prior?.region || null,
+                appVersion: user?.appVersion || prior?.appVersion || null,
                 deviceId: did || prior?.deviceId || Object.keys(deviceIds)[0] || null,
                 deviceIds,
                 aliases,
                 retainedNames: names,
+                points: Math.max(Number(user?.marks?.points) || 0, Number(prior?.points) || 0),
+                createdAt,
+                accountCreatedAt: createdAt,
+                joinedAt: Number(user?.joinedAt || prior?.joinedAt) || createdAt,
                 requestedAt: Number(prior?.requestedAt || user?.deletionRequestedAt) || Date.now(),
+                deletedAt: Date.now(),
                 status: 'done',
                 retainedAt: Date.now(),
                 reason: prior?.reason || user?.deletionRequestedReason || 'user_request',
@@ -15489,6 +15527,8 @@ const Admin = {
             if (!saved.ok) throw new Error('could not keep the name');
             const removed = await fetch(`${base}users/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' });
             if (!removed.ok && removed.status !== 404) throw new Error('delete failed');
+            await fetch(`${base}account_directory/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }).catch(() => {});
+            await fetch(`${base}public_profile/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }).catch(() => {});
             if (Admin._identityCache) {
                 Admin._identityCache.delete(id);
                 Object.keys(deviceIds).forEach((item) => Admin._identityCache.delete(item));
@@ -15539,7 +15579,7 @@ const Admin = {
         },
         'account-deletions': {
             title: 'Deletion requests',
-            body: 'Requests sent from Account. Delete data removes the live profile. The name, earlier names, email, and alias stay on the deletion record.',
+            body: 'A person who deletes their own account leaves the active list and stays here, on the same user ID. Open requests are the ones still waiting. Deleted accounts keep the name, email, and the original created time. Draft email opens the same letter. Sending it from enock@nexttrain.co.za is the mailbox on this phone.',
         },
         'live-share': {
             title: 'Live sharing',
@@ -16016,6 +16056,14 @@ const Admin = {
                 if (!users) {
                     try { users = await readJson(`${dynamicEndpoint}users.json?${auth}`); } catch { users = null; }
                 }
+                let deletions = {};
+                try { deletions = await readJson(`${dynamicEndpoint}account_deletions.json?${auth}`); } catch { deletions = {}; }
+                const hidden = new Set();
+                Object.entries(deletions || {}).forEach(([uid, row]) => {
+                    const live = users && users[uid] && typeof users[uid] === 'object';
+                    if (users && row && row.status === 'done' && !row.returnedAt && !live) hidden.add(uid);
+                });
+                Admin._deletedAccountUids = hidden;
                 const rows = Object.entries(data)
                     .filter(([, row]) => row && typeof row === 'object')
                     .map(([uid, row]) => {
@@ -16049,10 +16097,14 @@ const Admin = {
                         };
                     })
                     .filter((row) => row.displayName || row.email)
-                    .filter((row) => String(row.provider || '') !== 'anonymous');
+                    .filter((row) => String(row.provider || '') !== 'anonymous')
+                    .filter((row) => !hidden.has(row.uid));
                 const keyCount = shallow && typeof shallow === 'object' ? Object.keys(shallow).length : null;
+                const hiddenInDirectory = shallow && typeof shallow === 'object'
+                    ? [...hidden].filter((uid) => Object.prototype.hasOwnProperty.call(shallow, uid)).length
+                    : 0;
                 Admin._accountRows = rows;
-                Admin._accountTotal = keyCount;
+                Admin._accountTotal = keyCount == null ? null : Math.max(0, keyCount - hiddenInDirectory);
                 Admin._accountHasMore = keyCount != null ? rows.length < keyCount : rows.length >= 200;
                 Admin._accountEndpoint = dynamicEndpoint;
                 Admin._accountAuth = auth;
@@ -16182,7 +16234,8 @@ const Admin = {
                         deviceIds: {},
                         chatDeviceId: '',
                     }))
-                    .filter((row) => (row.displayName || row.email) && String(row.provider || '') !== 'anonymous');
+                    .filter((row) => (row.displayName || row.email) && String(row.provider || '') !== 'anonymous')
+                    .filter((row) => !(Admin._deletedAccountUids && Admin._deletedAccountUids.has(row.uid)));
                 let data = await readPage(oldest);
                 let extra = mapPage(data);
                 if (!extra.length && Object.keys(data).length) {
@@ -16478,10 +16531,35 @@ const Admin = {
                 return res.json();
             };
 
+            const userFromDeletion = (tomb, id) => ({
+                displayName: tomb.displayName || '',
+                email: tomb.email || null,
+                provider: tomb.provider || '',
+                providerName: tomb.providerName || '',
+                region: tomb.region || '',
+                appVersion: tomb.appVersion || '',
+                createdAt: tomb.createdAt || tomb.accountCreatedAt || 0,
+                accountCreatedAt: tomb.accountCreatedAt || tomb.createdAt || 0,
+                joinedAt: tomb.joinedAt || tomb.createdAt || 0,
+                deviceIds: tomb.deviceIds && typeof tomb.deviceIds === 'object' ? tomb.deviceIds : {},
+                lastSeenAt: tomb.deletedAt || tomb.retainedAt || 0,
+                flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
+                trustScore: 0,
+                _deletedAccount: true,
+                uid: tomb.uid || id,
+            });
+
             // 1) Direct users/{id}
             let user = await fetchJson(`users/${encodeURIComponent(resolvedQuery)}.json`);
             if (user) {
                 return { uid: resolvedQuery, user, via: viaHint || 'uid', deviceId: /^usr_/i.test(resolvedQuery) ? resolvedQuery : null };
+            }
+            if (!resolvedQuery.includes('@') && !/^usr_/i.test(resolvedQuery)) {
+                let tomb = null;
+                try { tomb = await fetchJson(`account_deletions/${encodeURIComponent(resolvedQuery)}.json`); } catch { tomb = null; }
+                if (tomb && typeof tomb === 'object' && (tomb.uid || tomb.email || tomb.displayName)) {
+                    return { uid: tomb.uid || resolvedQuery, user: userFromDeletion(tomb, resolvedQuery), via: 'deleted', deviceId: tomb.deviceId || null, deleted: true };
+                }
             }
 
             // 2) Device ID ? linked Firebase uid (devices/{deviceId}.uid)
@@ -16492,6 +16570,11 @@ const Admin = {
                     user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
                     if (user) {
                         return { uid: device.uid, user, via: viaHint || 'device?uid', deviceId: resolvedQuery, device };
+                    }
+                    let tomb = null;
+                    try { tomb = await fetchJson(`account_deletions/${encodeURIComponent(device.uid)}.json`); } catch { tomb = null; }
+                    if (tomb && typeof tomb === 'object') {
+                        return { uid: device.uid, user: userFromDeletion(tomb, device.uid), via: 'deleted', deviceId: resolvedQuery, device, deleted: true };
                     }
                 }
                 // Guest / pre-account: allow banning the device id itself
@@ -16523,6 +16606,16 @@ const Admin = {
                         }
                     }
                 }
+                let deletions = null;
+                try { deletions = await fetchJson('account_deletions.json'); } catch { deletions = null; }
+                if (deletions && typeof deletions === 'object') {
+                    const needleEmail = q.toLowerCase();
+                    for (const [uid, tomb] of Object.entries(deletions)) {
+                        if (tomb && String(tomb.email || '').toLowerCase() === needleEmail) {
+                            return { uid: tomb.uid || uid, user: userFromDeletion(tomb, uid), via: 'deleted', deviceId: tomb.deviceId || null, deleted: true };
+                        }
+                    }
+                }
             }
 
             return null;
@@ -16550,7 +16643,8 @@ const Admin = {
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
                 const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '-')).toString().replace(/</g, '&lt;');
                 const email = (user.email || '-').toString().replace(/</g, '&lt;');
-                const viaLabel = via === 'email' ? 'matched by email'
+                const viaLabel = via === 'deleted' ? 'deleted account'
+                    : via === 'email' ? 'matched by email'
                     : (via === 'alias' ? 'feedback alias'
                     : (via === 'device' ? 'device record'
                     : (via === 'device?uid' ? 'device → account' : 'user id')));
@@ -16735,7 +16829,7 @@ const Admin = {
                                 <span class="ut-k" style="margin-left:auto">${Admin.commuterEsc(viaLabel)}</span>
                             </div>
                             <div class="ut-chip-row">
-                                <span class="ut-chip ${banned && !expired ? 'ut-chip-hot' : 'ut-chip-ok'}">${banned ? (expired ? 'Ban expired' : 'Banned') : 'No ban'}</span>
+                                ${user._deletedAccount ? '<span class="ut-chip">Deleted account</span>' : `<span class="ut-chip ${banned && !expired ? 'ut-chip-hot' : 'ut-chip-ok'}">${banned ? (expired ? 'Ban expired' : 'Banned') : 'No ban'}</span>`}
                                 ${appOpen ? '<span class="ut-chip">App open now</span>' : ''}
                                 <span class="ut-chip">Role: ${Admin.commuterEsc(flags.role || 'user')} · ${score}</span>
                             </div>

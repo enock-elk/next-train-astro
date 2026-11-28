@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.2': [
+        'A person who deletes their own account leaves the active account list and stays on Deleted accounts, on the same user ID. Signing in again uses that original ID and the original created time. The deletion letter is one text. It still opens in the mail app, so it sends from enock@nexttrain.co.za when that mailbox is the one on the phone. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.1': [
         'An admin who selects a deleted community message can open View deleted message. The copy is kept privately from this build on. A message removed before that has no copy. Opening a community room shows the messages already saved on this phone while the live room catches up. The opening spinner stays only when this phone has nothing saved for that room. Deploy firebase-database.rules.json before an admin can read a saved copy. No commuter What\'s New. forceShow stays false.',
     ],

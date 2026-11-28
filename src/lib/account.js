@@ -18,7 +18,7 @@
  */
 import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
-import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION } from './config.js';
+import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION, COMMUNITY_WORKER_URL, COMMUNITY_WORKER_FALLBACK_URL } from './config.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { safeStorage, applyCanonicalDeviceId } from './utils.js';
 import {
@@ -537,6 +537,7 @@ export async function ensureUserProfile(user, opts = {}) {
     const customName = refused.ok ? refused.name : '';
 
     try {
+        const deletedRecord = await restoreDeletedAccount(user);
         const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, userPath));
         const existing = snap.exists() ? (snap.val() || {}) : null;
         const storedName = clampDisplayName(existing?.displayName);
@@ -575,7 +576,11 @@ export async function ensureUserProfile(user, opts = {}) {
             if (age === Number.MAX_SAFE_INTEGER) return;
             if (!presenceMs || age < presenceMs) presenceMs = age;
         });
-        const accountCreatedAt = stampMs(existing?.accountCreatedAt) || stampMs(existing?.createdAt) || now;
+        const accountCreatedAt = stampMs(existing?.accountCreatedAt)
+            || stampMs(existing?.createdAt)
+            || stampMs(deletedRecord?.accountCreatedAt)
+            || stampMs(deletedRecord?.createdAt)
+            || now;
         const joinedAt = Math.min(accountCreatedAt, presenceMs || accountCreatedAt);
         const chatDeviceId = adopted || pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
@@ -591,8 +596,8 @@ export async function ensureUserProfile(user, opts = {}) {
                 ...(provider ? { provider } : {}),
                 photoURL,
                 email: user.email || null,
-                createdAt: now,
-                accountCreatedAt: now,
+                createdAt: accountCreatedAt,
+                accountCreatedAt,
                 joinedAt,
                 deviceIds: { ...mergedDeviceIds },
                 flags: {
@@ -668,7 +673,7 @@ export async function ensureUserProfile(user, opts = {}) {
                     displayName: displayName || null,
                     ...(legalName ? { providerName: legalName } : {}),
                     email: user.email || existing?.email || null,
-                    createdAt: existing?.createdAt || now,
+                    createdAt: existing?.createdAt || accountCreatedAt,
                     accountCreatedAt,
                     joinedAt,
                     provider: String(provider || '').slice(0, 40) || null,
@@ -897,7 +902,42 @@ function notifyOperatorsOfDeletion(draft) {
     openDeletionMail(draft);
 }
 
-/** Flag the profile and email operators. Does not wipe Firebase Auth. */
+function accountWorkerBase() {
+    return COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
+}
+
+async function accountIdToken(user) {
+    if (window.firebaseGetIdToken && user) {
+        try { return await window.firebaseGetIdToken(user, true); } catch { return ''; }
+    }
+    return '';
+}
+
+/** A deleted account signs in again on the same Firebase uid. The history row stays. */
+async function restoreDeletedAccount(user) {
+    if (!user?.uid || user.isAnonymous) return null;
+    let row = null;
+    try {
+        const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, `account_deletions/${user.uid}`));
+        row = snap.exists() ? (snap.val() || null) : null;
+    } catch { return null; }
+    if (!row || row.status !== 'done' || row.returnedAt) return row;
+    const token = await accountIdToken(user);
+    if (!token) return row;
+    try {
+        await fetch(`${accountWorkerBase()}/account/restore`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: '{}',
+        });
+    } catch { /* the profile write below still keeps the original time */ }
+    return row;
+}
+
+/** Move the live profile onto the deleted list. Does not wipe Firebase Auth, so the uid stays. */
 export async function requestAccountDeletion() {
     const state = $account.get();
     if (isAdminEmail(state.email)) {
@@ -913,6 +953,26 @@ export async function requestAccountDeletion() {
     }
     const now = Date.now();
     const draft = deletionRequestDraft(user);
+    const token = await accountIdToken(user);
+    if (token) {
+        try {
+            const res = await fetch(`${accountWorkerBase()}/account/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: '{}',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.ok) {
+                trackAnalyticsEvent('account_delete', { location: 'account_delete' });
+                await signOutAccount();
+                closeAccountModal();
+                return { removed: true };
+            }
+        } catch { /* the request stays on the operator queue */ }
+    }
     const deviceId = getDeviceId();
     let existing = null;
     try {
@@ -957,6 +1017,7 @@ export async function requestAccountDeletion() {
     await signOutAccount();
     closeAccountModal();
     if (!wrote) openDeletionMail(draft);
+    return { removed: false };
 }
 
 export async function signInWithEmail(email, password) {
@@ -2391,8 +2452,10 @@ export function bindAccountUi() {
         if ((deleteType?.value || '') !== 'DELETE') return;
         setBusy(true);
         try {
-            await requestAccountDeletion();
-            if (typeof window.showToast === 'function') window.showToast('Deletion request sent');
+            const result = await requestAccountDeletion();
+            if (typeof window.showToast === 'function') {
+                window.showToast(result?.removed ? 'Account deleted' : 'Deletion request sent');
+            }
         } catch (e) {
             showErr(e?.message || 'Could not send the deletion request.');
         } finally {

@@ -21,7 +21,7 @@ import {
     sanitizeCommunityBucketImageUrl,
     sanitizeCommunityLinkUrl,
 } from '../src/lib/community-policy.js';
-import { sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
+import { buildDeletedAccountRecord, sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
 import { ALERT_POSTER_MAX, collectNoticeImageUrls, layoutAlertPost } from '../src/lib/alerts-feed.js';
 
 assert.equal(COMMUNITY_BUCKET_DEPTH, 80);
@@ -128,6 +128,19 @@ assert.doesNotMatch(worker, /Community bucket trim failed/);
 assert.match(worker, /shallow: 'true'/);
 assert.doesNotMatch(worker, /wipeStalePosts/);
 assert.match(worker, /pathname === '\/community\/message'/);
+assert.match(worker, /pathname === '\/account\/delete'/);
+assert.match(worker, /pathname === '\/account\/restore'/);
+const deletedAccount = buildDeletedAccountRecord({
+    uid: 'uid-oldest',
+    profile: { createdAt: 1700000000000, displayName: 'Angelo', email: 'a@example.com' },
+    directory: { createdAt: 1700000005000 },
+    auth: { createdAt: 1690000000000 },
+    now: 1710000000000,
+});
+assert.equal(deletedAccount.uid, 'uid-oldest');
+assert.equal(deletedAccount.status, 'done');
+assert.equal(deletedAccount.accountCreatedAt, 1690000000000);
+assert.equal(deletedAccount.createdAt, 1690000000000);
 assert.match(worker, /pathname === '\/community\/image'/);
 assert.match(worker, /env\.COMMUNITY_IMAGES/, 'community photos use their own R2 binding');
 assert.doesNotMatch(worker.slice(worker.indexOf('async function storeCommunityImageBytes'), worker.indexOf('async function placeCommunityImage')), /ALERT_IMAGES/, 'community photo bytes are not written to the alerts bucket');

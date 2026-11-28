@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.5': [
+        'The route community preview type-checks, so the preview build can finish. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.4': [
         'Ad revenue uses one menu: All, This month, Last month, then each older month by name back to May 2026. On the first of a new month, This month covers that month and the month before last month is added by name. A community account card opens from the name and the avatar. It pulls down to close, and it closes when you leave Community. The card shows the day the account was created. A route page community preview shows a trip link as the same chip as the app. No commuter What\'s New. forceShow stays false.',
     ],

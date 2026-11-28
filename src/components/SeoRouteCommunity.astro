@@ -568,6 +568,7 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
       };
       el.addEventListener('click', openFromFrame);
       el.addEventListener('keydown', (e) => {
+        if (!(e instanceof KeyboardEvent)) return;
         if (e.key !== 'Enter' && e.key !== ' ') return;
         openFromFrame(e);
       });

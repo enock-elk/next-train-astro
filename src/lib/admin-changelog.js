@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.8': [
+        'Ad and user graph titles put the date range on its own line. Admin dates that were 30/04/2026 now read 30 Apr 2026. The ad tile that showed the first hit opens the average impressions and revenue for the searched days, in dollars and rands. The rand rate loads when Live Telemetry opens. Landscape keeps the weekly or monthly ad graph that was on screen. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.28.7': [
         'Community Monitor selects a message from the route header. The floating i and options control is gone. The community refresh button reloads the open room. Pull to refresh keeps the same circle and turns it blue when the pull is long enough. Ad impressions cluster the searched period into daily, weekly, or monthly. A trip link on someone else’s message has the same shaded button as the sender’s. A reaction on an alert, or on someone else’s community message, adds 1 point once for that item. Delete for me hides another person’s message on this phone only. The roadmap has a to-do for an @ mark beside unread when a room mentions you. No commuter What\'s New. forceShow stays false.',
     ],

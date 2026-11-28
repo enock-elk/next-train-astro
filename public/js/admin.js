@@ -4438,12 +4438,20 @@ const Admin = {
     // --- 0.2 TELEMETRY REFRESH ENGINE & EXPORT ---
     _align: () => (typeof window !== 'undefined' && window.ntAdChartAlign) || null,
 
+    _primeUsdZar: () => {
+        Admin._usdZarRate().then((fx) => {
+            Admin._fx = fx;
+            Admin._paintAdMoney();
+        }).catch(() => {});
+    },
+
     _usdZarRate: async () => {
         const key = 'ntUsdZarV1';
         try {
             const cached = JSON.parse(sessionStorage.getItem(key) || 'null');
             if (cached && Number(cached.rate) > 0 && Date.now() - Number(cached.at) < 12 * 60 * 60 * 1000) return cached;
         } catch { /* fetch a fresh rate */ }
+        if (Admin._usdZarFlight) return Admin._usdZarFlight;
         const sources = [
             async () => {
                 const res = await fetch('https://api.frankfurter.dev/v1/latest?from=USD&to=ZAR');
@@ -4460,16 +4468,23 @@ const Admin = {
                 return { rate, date: String(data.time_last_update_utc || '').slice(0, 16), source: 'open.er-api' };
             },
         ];
-        let lastErr = null;
-        for (const load of sources) {
-            try {
-                const got = await load();
-                const row = { ...got, at: Date.now() };
-                try { sessionStorage.setItem(key, JSON.stringify(row)); } catch { /* private mode */ }
-                return row;
-            } catch (e) { lastErr = e; }
+        Admin._usdZarFlight = (async () => {
+            let lastErr = null;
+            for (const load of sources) {
+                try {
+                    const got = await load();
+                    const row = { ...got, at: Date.now() };
+                    try { sessionStorage.setItem(key, JSON.stringify(row)); } catch { /* private mode */ }
+                    return row;
+                } catch (e) { lastErr = e; }
+            }
+            throw lastErr || new Error('rate');
+        })();
+        try {
+            return await Admin._usdZarFlight;
+        } finally {
+            Admin._usdZarFlight = null;
         }
-        throw lastErr || new Error('rate');
     },
 
     _formatZar: (usd, rate) => {
@@ -4496,8 +4511,9 @@ const Admin = {
         }
         if (fxEl) {
             const showing = (Admin._revenueInZar || Admin._dealInZar) && rate > 0;
+            const fxWhen = Admin._prettyIsoDay(Admin._fx.date) || Admin._fx.date || '';
             fxEl.textContent = showing
-                ? `R${rate.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per US dollar${Admin._fx.date ? ` · ${Admin._fx.date}` : ''}`
+                ? `R${rate.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per US dollar${fxWhen ? ` · ${fxWhen}` : ''}`
                 : '';
         }
     },
@@ -4514,6 +4530,82 @@ const Admin = {
             Admin._paintAdMoney();
         } catch {
             if (typeof showToast === 'function') showToast('Could not load the exchange rate.', 'error');
+        }
+    },
+
+    _paintAdPeriodTile: () => {
+        const el = document.getElementById('ad-revenue-period');
+        if (!el) return;
+        const data = Admin._adRevenue || {};
+        const days = Admin._inclusiveIsoDays(data.start, data.end);
+        const hits = Number(data.hits) || 0;
+        el.textContent = days > 0 ? Admin.formatNumber(Math.round(hits / days)) : '--';
+    },
+
+    openAdPeriodStats: async () => {
+        const data = Admin._adRevenue || {};
+        const days = Admin._inclusiveIsoDays(data.start, data.end);
+        if (!days || !Number.isFinite(Number(data.hits))) {
+            if (typeof showToast === 'function') showToast('Search a period first.', 'info');
+            return;
+        }
+        let modal = document.getElementById('ad-period-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ad-period-modal';
+            modal.className = 'fixed inset-0 bg-black/80 z-[160] hidden flex items-end sm:items-center justify-center p-4 backdrop-blur-sm';
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div class="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white">This period</h3>
+                            <p id="ad-period-range" class="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-300"></p>
+                        </div>
+                        <button type="button" id="ad-period-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <div id="ad-period-body" class="px-5 pb-5 space-y-2"></div>
+                </div>`;
+            document.body.appendChild(modal);
+            document.getElementById('ad-period-close').onclick = () => {
+                if (typeof closeSmoothModal === 'function') closeSmoothModal('ad-period-modal');
+                else modal.classList.add('hidden');
+            };
+            modal.addEventListener('click', (event) => {
+                if (event.target !== modal) return;
+                if (typeof closeSmoothModal === 'function') closeSmoothModal('ad-period-modal');
+                else modal.classList.add('hidden');
+            });
+        }
+        if (typeof openSmoothModal === 'function') openSmoothModal('ad-period-modal');
+        else modal.classList.remove('hidden');
+        const rangeEl = document.getElementById('ad-period-range');
+        const body = document.getElementById('ad-period-body');
+        if (rangeEl) rangeEl.textContent = Admin._prettyIsoSpan(data.start, data.end);
+        const hits = Number(data.hits) || 0;
+        const revenue = Number(data.revenue) || 0;
+        const perHits = hits / days;
+        const perUsd = revenue / days;
+        let perZar = '';
+        try {
+            const fx = Admin._fx?.rate ? Admin._fx : await Admin._usdZarRate();
+            Admin._fx = fx;
+            if (fx?.rate) perZar = Admin._formatZar(perUsd, fx.rate);
+        } catch { /* dollars still show */ }
+        const usd = perUsd.toLocaleString('en-US', { style: 'currency', currency: data.coin || 'USD' });
+        const card = (label, value, note) => `
+            <div class="rounded-2xl bg-gray-50 dark:bg-gray-900/70 border border-gray-200 dark:border-gray-700 px-4 py-3">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">${label}</p>
+                <p class="mt-1 text-2xl font-black text-gray-900 dark:text-white tabular-nums">${value}</p>
+                <p class="text-[12px] text-gray-500 dark:text-gray-400">${note}</p>
+            </div>`;
+        if (body) {
+            body.innerHTML = `
+                ${card('Impressions', Admin.formatNumber(Math.round(perHits)), 'Average viewable impressions each day')}
+                ${card('Dollars', usd, 'Average revenue each day')}
+                ${card('Rands', perZar || '--', perZar ? 'Average revenue each day, at the latest rate' : 'The exchange rate is still loading')}
+                <p class="text-[11px] text-gray-400 px-1">${days} day${days === 1 ? '' : 's'} in this search</p>`;
         }
     },
 
@@ -4591,16 +4683,57 @@ const Admin = {
         Admin.refreshTelemetry();
     },
 
+    _adMonths: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+
+    /** 2026-04-30 becomes 30 Apr 2026. A month key stays Apr 26. */
+    _adAxisLabel: (day) => {
+        const text = String(day || '');
+        const months = Admin._adMonths;
+        if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+            const name = months[Number(text.slice(5, 7)) - 1] || '';
+            return `${Number(text.slice(8, 10))} ${name}`;
+        }
+        if (/^\d{4}-\d{2}$/.test(text)) {
+            const name = months[Number(text.slice(5, 7)) - 1] || text;
+            return `${name} ${text.slice(2, 4)}`;
+        }
+        return text;
+    },
+
+    _prettyIsoDay: (iso) => {
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+        if (!match) return '';
+        const name = Admin._adMonths[Number(match[2]) - 1] || '';
+        return `${Number(match[3])} ${name} ${match[1]}`;
+    },
+
+    _prettyIsoSpan: (start, end) => {
+        const a = Admin._prettyIsoDay(start);
+        const b = Admin._prettyIsoDay(end);
+        if (a && b && a !== b) return `${a} - ${b}`;
+        return a || b || '';
+    },
+
+    _inclusiveIsoDays: (start, end) => {
+        const a = Date.parse(`${String(start || '').slice(0, 10)}T00:00:00Z`);
+        const b = Date.parse(`${String(end || '').slice(0, 10)}T00:00:00Z`);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+        const span = Math.abs(b - a);
+        return Math.round(span / 86400000) + 1;
+    },
+
+    _adTitleParts: () => {
+        const bucket = Admin._adBucket === 'WAU' || Admin._adBucket === 'MAU' ? Admin._adBucket : 'DAU';
+        const word = bucket === 'WAU' ? 'Weekly' : (bucket === 'MAU' ? 'Monthly' : 'Daily');
+        const chart = Admin._adChart || {};
+        return {
+            heading: `Viewable ${word} Impressions`,
+            range: Admin._prettyIsoSpan(chart.start, chart.end),
+        };
+    },
+
     _paintAdChart: (series, labels, mini) => {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const short = (labels || []).map((day) => {
-            const text = String(day || '');
-            if (/^\d{4}-\d{2}$/.test(text)) {
-                const name = months[Number(text.slice(5, 7)) - 1] || text;
-                return `${name} ${text.slice(2, 4)}`;
-            }
-            return `${text.slice(8, 10)}/${text.slice(5, 7)}`;
-        });
+        const short = (labels || []).map((day) => Admin._adAxisLabel(day));
         const todayIdx = series.length ? series.length - 1 : -1;
         return series.length
             ? Admin._buildLineGraphSVG(series, short, 'Viewable impressions', todayIdx, mini, null, {
@@ -4646,10 +4779,11 @@ const Admin = {
             btn.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
         const slot = document.getElementById('ad-impressions-svg');
-        const title = document.getElementById('ad-impressions-title');
-        const word = bucket === 'WAU' ? 'weekly' : (bucket === 'MAU' ? 'monthly' : 'daily');
-        const range = String(chart?.title || '').replace(/^Viewable impressions\s*/i, '').trim();
-        if (title) title.textContent = range ? `Viewable impressions, ${word} ${range}` : `Viewable impressions, ${word}`;
+        const parts = Admin._adTitleParts();
+        const heading = document.getElementById('ad-impressions-heading');
+        const rangeEl = document.getElementById('ad-impressions-range');
+        if (heading) heading.textContent = parts.heading;
+        if (rangeEl) rangeEl.textContent = parts.range;
         if (!slot) return;
         const clustered = Admin._clusterAdDays(chart?.labels, chart?.series, bucket);
         slot.innerHTML = clustered.series.length
@@ -4798,8 +4932,7 @@ const Admin = {
             Admin._adRevenue = data;
             set('ad-revenue-hits', Admin.formatNumber(data.hits || 0));
             Admin._paintAdMoney();
-            const first = String(data.firstHit || '');
-            set('ad-revenue-first', first ? `${first.slice(8, 10)}/${first.slice(5, 7)}/${first.slice(0, 4)}` : '--');
+            Admin._paintAdPeriodTile();
             const sync = document.getElementById('ad-revenue-sync');
             if (sync) {
                 const synced = data.lastSyncedAt ? new Date(data.lastSyncedAt) : null;
@@ -4825,7 +4958,8 @@ const Admin = {
             Admin._adChart = {
                 series,
                 labels,
-                title: startLabel && endLabel ? `Viewable impressions (${startLabel} - ${endLabel})` : 'Viewable impressions',
+                start: startLabel,
+                end: endLabel,
             };
             const chart = document.getElementById('ad-revenue-chart');
             if (chart) chart.innerHTML = Admin._paintAdChart(series, labels, true);
@@ -4964,9 +5098,9 @@ const Admin = {
                             <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Deal</span>
                             <span id="ad-revenue-deal" class="text-lg font-black text-gray-800 dark:text-gray-200">$4 CPM</span>
                         </div>
-                        <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
-                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">First hit</span>
-                            <span id="ad-revenue-first" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
+                        <div id="ad-revenue-period-tile" role="button" tabindex="0" class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center cursor-pointer hover:border-blue-400" title="Averages for this search">
+                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Per day</span>
+                            <span id="ad-revenue-period" class="text-lg font-black text-gray-800 dark:text-gray-200">--</span>
                         </div>
                     </div>
                     <p id="ad-revenue-fx" class="text-[10px] font-semibold text-gray-400 px-1"></p>
@@ -5066,6 +5200,14 @@ const Admin = {
                 };
                 bindMoney('ad-revenue-value-tile', 'revenue');
                 bindMoney('ad-revenue-deal-tile', 'deal');
+                const periodTile = document.getElementById('ad-revenue-period-tile');
+                periodTile?.addEventListener('click', () => Admin.openAdPeriodStats());
+                periodTile?.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        Admin.openAdPeriodStats();
+                    }
+                });
                 document.getElementById('ad-revenue-expand')?.addEventListener('click', () => Admin.openAdImpressions());
                 document.getElementById('ad-revenue-landscape')?.addEventListener('click', () => Admin.openGraphLandscape('ads'));
                 document.getElementById('ad-revenue-export')?.addEventListener('click', () => Admin.offerChartExport('ads'));
@@ -5089,7 +5231,7 @@ const Admin = {
                             <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
                             <div class="text-center shrink-0 pb-2 landscape:pb-0">
                                 <h3 class="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
-                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
+                                <p id="analytics-trend-range" class="text-sm font-semibold text-gray-600 dark:text-gray-300 mt-1"></p>
                             </div>
                         </div>
                         <div class="nt-chart-toolbar" role="toolbar" aria-label="Graph">
@@ -5153,7 +5295,10 @@ const Admin = {
                         <div class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
                             <div class="flex-grow p-2 sm:p-4 flex flex-col min-h-0">
                                 <div id="ad-impressions-svg" class="w-full flex-1 min-h-0"></div>
-                                <h3 id="ad-impressions-title" class="text-base font-black text-gray-900 dark:text-white text-center shrink-0">Viewable impressions</h3>
+                                <h3 id="ad-impressions-title" class="text-base font-black text-gray-900 dark:text-white text-center shrink-0 leading-tight">
+                                    <span id="ad-impressions-heading" class="block">Viewable Daily Impressions</span>
+                                    <span id="ad-impressions-range" class="block mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300"></span>
+                                </h3>
                             </div>
                             <div class="nt-chart-toolbar" role="toolbar" aria-label="Ad impressions">
                                 <div class="nt-chart-toolbar-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -5976,31 +6121,38 @@ const Admin = {
 
                 const titleStart = formatDateLabel(firstValidRaw);
                 const titleEnd = formatDateLabel(lastValidRaw);
-                const rangeStr = (titleStart && titleEnd && titleStart !== titleEnd) ? ` (${titleStart} - ${titleEnd})` : (titleStart ? ` (${titleStart})` : '');
+                const rangeLine = (titleStart && titleEnd && titleStart !== titleEnd) ? `${titleStart} - ${titleEnd}` : (titleStart || '');
 
+                let heading = '';
                 if (Admin.telemetryRange === 'INTRADAY') {
-                    if (Admin.telemetryWeeksAgo === 0) {
-                        titleStr = "Intraday activity / 30 min (Today)";
-                    } else if (Admin.telemetryWeeksAgo === 1) {
-                        titleStr = "Intraday activity / 30 min (Yesterday)";
-                    } else {
+                    heading = 'Intraday activity / 30 min';
+                    if (Admin.telemetryWeeksAgo === 0) titleStr = 'Today';
+                    else if (Admin.telemetryWeeksAgo === 1) titleStr = 'Yesterday';
+                    else {
                         const d = new Date();
                         d.setDate(d.getDate() - Admin.telemetryWeeksAgo);
                         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
-                        titleStr = `Intraday activity / 30 min (${d.getDate()} ${monthNames[d.getMonth()]})`;
+                        titleStr = `${d.getDate()} ${monthNames[d.getMonth()]}`;
                     }
                 } else if (Admin.telemetryRange === 'DAU' || !Admin.telemetryRange) {
-                    titleStr = `Daily Active Users${rangeStr}`;
+                    heading = 'Daily Active Users';
+                    titleStr = rangeLine;
                 } else if (Admin.telemetryRange === 'WAU') {
-                    titleStr = `Weekly Active Users${rangeStr}`;
+                    heading = 'Weekly Active Users';
+                    titleStr = rangeLine;
                 } else if (Admin.telemetryRange === 'MAU') {
-                    titleStr = `Monthly Active Users${rangeStr}`;
+                    heading = 'Monthly Active Users';
+                    titleStr = rangeLine;
                 } else {
-                    titleStr = `All-Time Active Users${rangeStr || ' (from Jan 2026)'}`;
+                    heading = 'All-Time Active Users';
+                    titleStr = rangeLine || 'from Jan 2026';
                 }
                 
                 const drillTitleEl = document.getElementById('analytics-trend-title');
-                if (drillTitleEl) drillTitleEl.textContent = titleStr;
+                const drillRangeEl = document.getElementById('analytics-trend-range');
+                if (drillTitleEl) drillTitleEl.textContent = heading;
+                if (drillRangeEl) drillRangeEl.textContent = titleStr;
+                titleStr = titleStr ? `${heading}\n${titleStr}` : heading;
                 
                 const nextBtn = document.getElementById('analytics-trend-next');
                 const inlineNextBtn = document.getElementById('trend-next-btn');
@@ -6441,9 +6593,12 @@ const Admin = {
     _wideChartSvg: (which) => {
         if (which === 'ads') {
             const chart = Admin._adChart;
-            if (!chart?.series?.length) return '';
-            const short = (chart.labels || []).map((day) => `${String(day).slice(8, 10)}/${String(day).slice(5, 7)}`);
-            return Admin._buildLineGraphSVG(chart.series, short, 'Viewable impressions', chart.series.length - 1, false, null, {
+            const bucket = Admin._adBucket === 'WAU' || Admin._adBucket === 'MAU' ? Admin._adBucket : 'DAU';
+            const clustered = Admin._clusterAdDays(chart?.labels, chart?.series, bucket);
+            if (!clustered.series?.length) return '';
+            const short = clustered.labels.map((day) => Admin._adAxisLabel(day));
+            const parts = Admin._adTitleParts();
+            return Admin._buildLineGraphSVG(clustered.series, short, parts.heading, clustered.series.length - 1, false, null, {
                 metricWord: 'Viewable impressions',
                 gradTag: 'adsWide',
                 wide: true,
@@ -6539,10 +6694,11 @@ const Admin = {
             return;
         }
         const chart = ads ? Admin._adChart : Admin._lastChart;
+        const adParts = Admin._adTitleParts();
         Admin.exportTrendGraph({
             wideSource: ads ? 'ads' : 'users',
-            title: chart?.title || (ads ? 'Viewable impressions' : 'Telemetry'),
-            detail: ads ? 'Viewable impressions' : 'Activity on this graph',
+            title: ads ? adParts.heading : (chart?.title || 'Telemetry'),
+            detail: ads ? (adParts.range || 'Viewable impressions') : 'Activity on this graph',
         });
     },
 
@@ -6577,11 +6733,15 @@ const Admin = {
             document.getElementById('telemetry-landscape-export').onclick = () => Admin.offerChartExport(stage.dataset.which || 'users');
         }
         stage.dataset.which = which === 'ads' ? 'ads' : 'users';
+        const adParts = Admin._adTitleParts();
         const title = which === 'ads'
-            ? (Admin._adChart?.title || 'Viewable impressions')
+            ? (adParts.range ? `${adParts.heading}\n${adParts.range}` : adParts.heading)
             : (Admin._lastChart?.title || 'Telemetry');
         const titleEl = document.getElementById('telemetry-landscape-title');
-        if (titleEl) titleEl.textContent = title;
+        if (titleEl) {
+            titleEl.style.whiteSpace = 'pre-line';
+            titleEl.textContent = title;
+        }
         const slot = document.getElementById('telemetry-landscape-svg');
         if (slot) slot.innerHTML = svg;
         stage.classList.remove('hidden');
@@ -8481,6 +8641,7 @@ const Admin = {
         const targetPanel = document.getElementById(domId);
         const container = document.getElementById('admin-modules-container');
         if (!targetPanel || !container) return false;
+        if (domId === 'telemetry-panel') Admin._primeUsdZar();
         const quiet = !!opts.quiet;
 
         Admin.isGridMode = false;

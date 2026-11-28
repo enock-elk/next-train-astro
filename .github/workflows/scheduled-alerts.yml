@@ -1,6 +1,8 @@
 # Rare backup publisher for notices_scheduled.
 # Cloudflare Worker cron (every 5 minutes) is the primary producer.
 # GitHub only pokes hourly so a Worker outage does not leave due posts waiting all day.
+# ALERT_CRON_SECRET is an optional fallback. Sign-in is the GitHub OIDC token.
+# Writes succeed only when nexttrain-telemetry has roles/firebasedatabase.admin.
 name: Publish due scheduled alerts
 
 on:
@@ -34,37 +36,48 @@ jobs:
           set -u
           URL="https://nexttrain-community.enock.workers.dev/cron/scheduled-alerts"
           SECRET="${ALERT_CRON_SECRET:-${TTL_WIPE_SECRET:-}}"
+          RESP_CODE=""
+          RESP_BODY=""
+          mkdir -p "$RUNNER_TEMP"
+          printf '%s' '{}' > "$RUNNER_TEMP/cron-request.json"
           post() {
-            curl -fsS --max-time 30 -X POST \
-              -H "$1" \
+            local header="$1"
+            local outfile="$RUNNER_TEMP/cron-response.json"
+            RESP_CODE="$(curl -sS --max-time 30 -o "$outfile" -w '%{http_code}' -X POST \
+              -H "$header" \
               -H "Content-Type: application/json" \
-              --data '{}' \
-              "$URL"
+              --data-binary @"$RUNNER_TEMP/cron-request.json" \
+              "$URL")" || RESP_CODE="${RESP_CODE:-000}"
+            RESP_BODY="$(cat "$outfile" 2>/dev/null || true)"
+            echo "HTTP ${RESP_CODE}"
+            printf '%s\n' "$RESP_BODY"
+            printf '%s\n' "$RESP_BODY" >> "$GITHUB_STEP_SUMMARY"
+            export RESP_BODY
+            python3 -c 'import os; s=os.environ.get("RESP_BODY","")[:400].replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::notice::"+s)'
+            [ "$RESP_CODE" = "200" ]
+          }
+          finish() {
+            python3 -c 'import json,os,sys; data=json.loads(os.environ.get("RESP_BODY","")); failed=int(data.get("failed") or 0); sys.exit(print("::error::Scheduled alerts worker reported %s failed job(s)."%failed) or 1) if failed>0 else 0'
           }
           if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
             OIDC="$(curl -fsS --max-time 20 -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')" || OIDC=""
             if [ -n "$OIDC" ]; then
-              BODY="$(post "Authorization: Bearer ${OIDC}")" && {
-                echo "$BODY"
-                echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
-                export BODY
-                python3 -c 'import os; s=os.environ.get("BODY","")[:400].replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::notice::"+s)'
-                python3 -c 'import json,os,sys; data=json.loads(os.environ.get("BODY","")); failed=int(data.get("failed") or 0); sys.exit(print("::error::Scheduled alerts worker reported %s failed job(s)."%failed) or 1) if failed>0 else 0'
-                exit 0
-              }
+              if post "Authorization: Bearer ${OIDC}"; then
+                finish
+                exit $?
+              fi
+              echo "::warning::Worker rejected the OIDC call with HTTP ${RESP_CODE}. Trying shared secret."
+            else
+              echo "::warning::OIDC cron call failed. Trying shared secret."
             fi
-            echo "::warning::OIDC cron call failed. Trying shared secret."
           fi
           if [ -n "$SECRET" ]; then
-            BODY="$(post "X-Cron-Secret: ${SECRET}")" && {
-              echo "$BODY"
-              echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
-              export BODY
-              python3 -c 'import json,os,sys; data=json.loads(os.environ.get("BODY","")); failed=int(data.get("failed") or 0); sys.exit(print("::error::Scheduled alerts worker reported %s failed job(s)."%failed) or 1) if failed>0 else 0'
-              exit 0
-            }
+            if post "X-Cron-Secret: ${SECRET}"; then
+              finish
+              exit $?
+            fi
           fi
-          echo "::error::Scheduled alerts did not publish. OIDC failed and ALERT_CRON_SECRET is not set."
+          echo "::error::Scheduled alerts did not publish. Last worker HTTP ${RESP_CODE:-none}."
           exit 1

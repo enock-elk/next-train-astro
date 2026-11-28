@@ -308,6 +308,15 @@ assert.match(cronWorkflow, /GITHUB_STEP_SUMMARY/);
 assert.doesNotMatch(cronWorkflow, /sleep 60/);
 assert.match(cronWorkflow, /timeout-minutes: 10/);
 assert.match(cronWorkflow, /failed job/);
+assert.match(cronWorkflow, /Last worker HTTP/);
+assert.match(cronWorkflow, /roles\/firebasedatabase\.admin/);
+const qaWorkflow = await readFile(new URL('../.github/workflows/scheduled-schedule-qa.yml', import.meta.url), 'utf8');
+assert.match(qaWorkflow, /\/cron\/schedule-qa/);
+assert.match(qaWorkflow, /audience=nexttrain-community/);
+assert.match(qaWorkflow, /Last worker HTTP/);
+assert.match(qaWorkflow, /roles\/firebasedatabase\.admin/);
+assert.match(qaWorkflow, /--data-binary @/);
+assert.doesNotMatch(qaWorkflow, /ALERT_CRON_SECRET is not set/);
 const rules = JSON.parse(await readFile(new URL('../firebase-database.rules.json', import.meta.url), 'utf8')).rules;
 const workerAccount = 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com';
 for (const expr of [

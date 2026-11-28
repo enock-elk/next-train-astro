@@ -1,5 +1,8 @@
 # Hourly timetable scan. The job reads the public dump, then stores a short
 # summary on schedule_qa_status. Dev Hub turns the QA header red when errors > 0.
+# ALERT_CRON_SECRET is an optional fallback. Sign-in is the GitHub OIDC token.
+# A 400 from the worker is a database write failure, not a missing secret.
+# The worker account needs roles/firebasedatabase.admin.
 name: Schedule data QA
 
 on:
@@ -41,25 +44,40 @@ jobs:
           set -u
           URL="https://nexttrain-community.enock.workers.dev/cron/schedule-qa"
           SECRET="${ALERT_CRON_SECRET:-${TTL_WIPE_SECRET:-}}"
-          BODY="$(cat "$RUNNER_TEMP/schedule-qa.json")"
+          RESP_CODE=""
+          RESP_BODY=""
           post() {
-            curl -fsS --max-time 30 -X POST \
-              -H "$1" \
+            local header="$1"
+            local outfile="$RUNNER_TEMP/schedule-qa-response.json"
+            RESP_CODE="$(curl -sS --max-time 30 -o "$outfile" -w '%{http_code}' -X POST \
+              -H "$header" \
               -H "Content-Type: application/json" \
-              --data "$BODY" \
-              "$URL"
+              --data-binary @"$RUNNER_TEMP/schedule-qa.json" \
+              "$URL")" || RESP_CODE="${RESP_CODE:-000}"
+            RESP_BODY="$(cat "$outfile" 2>/dev/null || true)"
+            echo "HTTP ${RESP_CODE}"
+            printf '%s\n' "$RESP_BODY"
+            printf '%s\n' "$RESP_BODY" >> "$GITHUB_STEP_SUMMARY"
+            [ "$RESP_CODE" = "200" ]
           }
           if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
             OIDC="$(curl -fsS --max-time 20 -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')" || OIDC=""
             if [ -n "$OIDC" ]; then
-              post "Authorization: Bearer ${OIDC}" && exit 0
+              if post "Authorization: Bearer ${OIDC}"; then
+                exit 0
+              fi
+              echo "::warning::Worker rejected the schedule QA call with HTTP ${RESP_CODE}. Trying shared secret."
+            else
+              echo "::warning::OIDC schedule QA call failed. Trying shared secret."
             fi
-            echo "::warning::OIDC schedule QA call failed. Trying shared secret."
           fi
           if [ -n "$SECRET" ]; then
-            post "X-Cron-Secret: ${SECRET}" && exit 0
+            if post "X-Cron-Secret: ${SECRET}"; then
+              exit 0
+            fi
           fi
-          echo "::error::Schedule QA summary was not stored. OIDC failed and ALERT_CRON_SECRET is not set."
+          echo "::error::Schedule QA summary was not stored. Last worker HTTP ${RESP_CODE:-none}."
+          printf '%s\n' "${RESP_BODY:-}"
           exit 1

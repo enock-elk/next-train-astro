@@ -14,6 +14,7 @@ import {
     DELETED_BY_ADMIN,
     DELETED_MESSAGE,
     communityIdsPastBucket,
+    communityDeletedArchive,
     communityTombstonePatch,
     isCommunityTombstone,
     sanitizeCommunityAttachments,
@@ -40,6 +41,14 @@ assert.equal(patch.replyTo, null);
 assert.equal(patch.attachments, null);
 assert.ok(!Object.prototype.hasOwnProperty.call(patch, 'quotes'));
 assert.equal(quote.body, 'trains are running', 'a quote copied earlier is not rewritten by the tombstone patch');
+
+const kept = communityDeletedArchive(
+    { body: 'trains are running', uid: 'u1', timestamp: 9, displayName: 'Katlego L' },
+    { actor: 'author', routeId: 'pta-dewildt', postId: 'cp1', now: 11 },
+);
+assert.equal(kept.body, 'trains are running');
+assert.equal(kept.deletedBy, 'author');
+assert.equal(communityDeletedArchive({ body: 'Deleted message', uid: 'u1' }, { routeId: 'pta-dewildt', postId: 'cp1' }), null);
 
 const adminPatch = communityTombstonePatch('admin', 5);
 assert.equal(adminPatch.body, DELETED_BY_ADMIN);

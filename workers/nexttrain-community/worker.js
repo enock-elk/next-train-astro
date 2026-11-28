@@ -23,6 +23,7 @@ import {
     COMMUNITY_ADMIN_BODY_MAX,
     COMMUNITY_BODY_MAX,
     COMMUNITY_BUCKET_DEPTH,
+    communityDeletedArchive,
     communityTombstonePatch,
     sanitizeCommunityAttachments,
     sanitizeCommunityBucketImageUrl,
@@ -2244,6 +2245,11 @@ async function handleCommunityDelete(request, env) {
         return json(env, request, 403, { ok: false, error: 'You can only delete your own message.' });
     }
     const actor = !isAdmin || body.as === 'author' ? 'author' : 'admin';
+    const archiveKey = replyId || postId;
+    const archivePath = `community_deleted/${routeId}/${archiveKey}`;
+    const archive = mode === 'tombstone'
+        ? communityDeletedArchive(current, { actor, routeId, postId, replyId, now: Date.now() })
+        : null;
     try {
         if (isAdmin) {
             if (mode === 'purge') {
@@ -2253,16 +2259,23 @@ async function handleCommunityDelete(request, env) {
                     throw new Error(`RTDB delete failed (${removed.status}): ${t.slice(0, 200)}`);
                 }
                 const extras = replyId
-                    ? [`community_activity/${routeId}/${replyId}`]
+                    ? [`community_activity/${routeId}/${replyId}`, archivePath]
                     : [
                         `route_community/${routeId}/post_reactions/${postId}`,
                         `community_activity/${routeId}/${postId}`,
-                        ...Object.keys(current.replies || {}).filter((id) => isSafeRtdbKey(id)).map((id) => `community_activity/${routeId}/${id}`),
+                        archivePath,
+                        ...Object.keys(current.replies || {}).filter((id) => isSafeRtdbKey(id)).flatMap((id) => [
+                            `community_activity/${routeId}/${id}`,
+                            `community_deleted/${routeId}/${id}`,
+                        ]),
                     ];
                 await Promise.all(extras.map((extra) => rtdbUserRequest(env, extra, idToken, { method: 'DELETE' }).catch(() => {})));
                 return json(env, request, 200, { ok: true, mode: 'purge' });
             }
             const patch = communityTombstonePatch(actor);
+            if (archive && hasFirebaseAdminEnv(env)) {
+                await rtdbUpdate(env, { [archivePath]: archive });
+            }
             const patched = await rtdbUserRequest(env, path, idToken, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -2279,6 +2292,7 @@ async function handleCommunityDelete(request, env) {
         }
         const patch = communityTombstonePatch(actor);
         const updates = {};
+        if (archive) updates[archivePath] = archive;
         Object.entries(patch).forEach(([key, value]) => {
             updates[`${path}/${key}`] = value;
         });

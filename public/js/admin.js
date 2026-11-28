@@ -920,7 +920,33 @@ async function ntAdminTombstoneCommunityMessage(routeId, postId, replyId) {
         }
     }
     const path = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}${replyId ? `/replies/${encodeURIComponent(replyId)}` : ''}`;
-    const patch = await fetch(`${dynamicEndpoint}${path}.json?auth=${encodeURIComponent(token)}`, {
+    const authQ = `auth=${encodeURIComponent(token)}`;
+    const currentRes = await fetch(`${dynamicEndpoint}${path}.json?${authQ}`);
+    const current = currentRes.ok ? await currentRes.json() : null;
+    const kept = current && typeof current === 'object' ? String(current.body || '') : '';
+    if (kept && kept !== 'Deleted message' && kept !== 'Deleted by an Admin' && current.uid) {
+        const archiveId = replyId || postId;
+        const archive = {
+            body: kept.slice(0, 4000),
+            uid: String(current.uid).slice(0, 128),
+            timestamp: Number(current.timestamp) || Date.now(),
+            deletedAt: Date.now(),
+            deletedBy: 'admin',
+            routeId,
+            postId,
+        };
+        const name = String(current.displayName || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (name) archive.displayName = name;
+        const link = String(current.linkUrl || '').trim().slice(0, 400);
+        if (link.startsWith('https://')) archive.linkUrl = link;
+        if (replyId) archive.replyId = replyId;
+        await fetch(`${dynamicEndpoint}community_deleted/${encodeURIComponent(routeId)}/${encodeURIComponent(archiveId)}.json?${authQ}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(archive),
+        }).catch(() => {});
+    }
+    const patch = await fetch(`${dynamicEndpoint}${path}.json?${authQ}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -952,6 +978,7 @@ async function ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId) 
     if (replyId) {
         await deleteJson(`${postPath}/replies/${encodeURIComponent(replyId)}`);
         await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
+        await deleteJson(`community_deleted/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
         return;
     }
     let replyIds = [];
@@ -964,9 +991,11 @@ async function ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId) 
     }
     await deleteJson(postPath);
     await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
-    await Promise.all(replyIds.map((id) =>
-        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {})
-    ));
+    await deleteJson(`community_deleted/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
+    await Promise.all(replyIds.flatMap((id) => [
+        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {}),
+        deleteJson(`community_deleted/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {}),
+    ]));
 }
 
 function ntBindAdminTabSwipe(el, { getOrder, getActive, setActive, ignoreTarget } = {}) {

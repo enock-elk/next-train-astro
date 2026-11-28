@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.28.1': [
+        'An admin who selects a deleted community message can open View deleted message. The copy is kept privately from this build on. A message removed before that has no copy. Opening a community room shows the messages already saved on this phone while the live room catches up. The opening spinner stays only when this phone has nothing saved for that room. Deploy firebase-database.rules.json before an admin can read a saved copy. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.27.2': [
         'A reaction on your own community message toasts when you are away from that room, and gives a short haptic while you are looking at it. The stuck-start help page comes back to the app when the app is ready. An in-app browser is asked once to open the phone browser. A community room that is already read stays still. It follows the bottom only for a new message while you are there, or when you send. Roadmap cards read the description out loud, with pause and play. Service Alerts has a Read aloud tile for any pasted text. Schedule Data QA lists the route and issue behind the error count. One alert posted to several routes stays one card, and an edit updates every selected route. Archived alerts keep their reaction counts. Maintenance banners can be red. The route Community preview is a little taller, and the guide bar leaves when a timetable page opens. Deploy firebase-database.rules.json so a reaction toast can be saved. No commuter What\'s New. forceShow stays false.',
     ],

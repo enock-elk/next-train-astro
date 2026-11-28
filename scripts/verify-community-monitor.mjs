@@ -267,6 +267,11 @@ assert.match(worker, /isSafeRtdbKey\(postId\)/);
 assert.match(admin, /\[`community_activity\/\$\{routeId\}\//, 'admin approval indexes approved messages');
 
 const rootRules = rules.rules;
+assert.ok(rootRules.community_deleted, 'a deleted community message is kept off the public post');
+assert.match(rootRules.community_deleted['.read'], /enockelk@gmail\.com/);
+assert.match(rootRules.community_deleted['.read'], /thandeka05nxumalo@gmail\.com/);
+assert.doesNotMatch(rootRules.community_deleted['.read'], /\btrue\b/);
+assert.match(worker, /community_deleted\/\$\{routeId\}\/\$\{archiveKey\}/);
 assert.ok(rootRules.community_activity, 'community activity rules exist');
 assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /root\.child\('route_community'\)/);
 assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
@@ -298,6 +303,9 @@ assert.match(community, /left > 3/, 'quota hint stays hidden until 3 messages re
 assert.match(community, /viewing\) cachedUnreadByRoute\[viewing\] = 0/, 'the open room is cleared before a slower unread count returns');
 assert.match(community, /ntCommunityRoomV1:/, 'a community room is kept on this phone');
 assert.match(community, /readRoomCache\(routeId\)/, 'opening a room paints the saved messages first');
+assert.match(community, /function paintCachedRoomNow/, 'a saved room is shown before the live sync');
+assert.match(community, /View deleted message/, 'an admin can open a deleted message');
+assert.match(communityView, /id="community-deleted-sheet"/, 'the deleted message opens in its own sheet');
 assert.match(community, /UNREAD_DIVIDER_MS = 45000/, 'the unread count leaves after 45 seconds');
 assert.match(community, /unread messages/, 'the room shows how many messages are unread');
 assert.match(community, /data-community-unread-divider/, 'unread messages start under a divider');

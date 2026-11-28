@@ -6,6 +6,7 @@
  *   route_community/{routeId}/posts/{postId}/replies/{replyId}
  *   route_community/{routeId}/post_reactions/{postId}/{uid} = { emoji, at }
  *   reaction_inbox/{authorUid}/{postId} = { emoji, at, from, routeId, name }
+ *   community_deleted/{routeId}/{messageId}  admin-only copy of a removed message
  *   moderation_queue/{reportId}
  *
  * Shadow-ban policy: rules reject writes; client still shows the author's
@@ -1816,6 +1817,7 @@ function paintCommunityAdminMenu(post) {
     const mine = !!(acct?.status === 'signed-in' && post?.uid && post.uid === acct.uid);
     const item = (cls, label, icon, extra = '') => `<button type="button" class="${cls} flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none dark:text-gray-100 dark:hover:bg-gray-700" ${extra} role="menuitem">${icon}<span>${label}</span></button>`;
     menu.innerHTML = [
+        tombstone ? item('community-sheet-deleted-view', 'View deleted message', communityMenuIcon('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')) : '',
         mine && !tombstone ? item('community-sheet-edit', 'Edit', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')) : '',
         tombstone ? '' : item('community-sheet-suggest', 'Suggest reply', communityMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z"/>')),
         item('community-sheet-lookup', 'Look up rider', communityMenuIcon('<circle cx="11" cy="8" r="3"/><path d="M5 19a6 6 0 0112 0"/><circle cx="18" cy="18" r="3"/><path d="M20.2 20.2L22 22"/>')),
@@ -1826,6 +1828,43 @@ function paintCommunityAdminMenu(post) {
             : '',
     ].filter(Boolean).join('');
     btn.classList.remove('hidden');
+}
+
+function closeDeletedCommunitySheet() {
+    document.getElementById('community-deleted-sheet')?.classList.add('hidden');
+}
+
+async function showDeletedCommunityMessage(post, routeId) {
+    const sheet = document.getElementById('community-deleted-sheet');
+    const nameEl = document.getElementById('community-deleted-sheet-name');
+    const bodyEl = document.getElementById('community-deleted-sheet-body');
+    if (!sheet || !bodyEl || !isAdminAuthed() || !post) return;
+    const id = String(post.postId || '');
+    const route = String(routeId || post.routeId || '');
+    if (nameEl) nameEl.textContent = String(post.displayName || '');
+    bodyEl.textContent = 'Loading…';
+    sheet.classList.remove('hidden');
+    if (!id || !route) {
+        bodyEl.textContent = 'No copy was saved for this message.';
+        return;
+    }
+    const token = await ensureAuthToken();
+    if (!token) {
+        bodyEl.textContent = 'Sign in again to read this.';
+        return;
+    }
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}community_deleted/${encodeURIComponent(route)}/${encodeURIComponent(id)}.json?auth=${encodeURIComponent(token)}`);
+        const data = res.ok ? await res.json() : null;
+        if (!data || typeof data.body !== 'string' || !data.body.trim()) {
+            bodyEl.textContent = 'No copy was saved for this message.';
+            return;
+        }
+        if (nameEl && data.displayName) nameEl.textContent = String(data.displayName);
+        bodyEl.textContent = data.body;
+    } catch {
+        bodyEl.textContent = 'Could not load that message.';
+    }
 }
 
 function communityCaptionText(post) {
@@ -3218,20 +3257,44 @@ function revealCommunityOpen(routeId) {
     setCommunityRoomLoading(false);
 }
 
+/** Paint the saved room and drop the cover. A live sync still follows. */
+function paintCachedRoomNow(routeId) {
+    if (!routeId || feedSilentRepaint) return false;
+    if (
+        communityOpenAnchor?.routeId === routeId
+        && communityOpenAnchor.placed
+        && cachedFeedPosts.length
+    ) {
+        if (communityFeedIsOpen()) revealCommunityOpen(routeId);
+        return true;
+    }
+    const stored = readRoomCache(routeId);
+    if (!stored.length) return false;
+    if (!communityOpenAnchor || communityOpenAnchor.routeId !== routeId) beginCommunityOpenAnchor(routeId);
+    cachedFeedPosts = mergeOverlayPosts(routeId, stored);
+    communityFeedPinned = !unreadBannerFor(routeId, cachedFeedPosts);
+    applyFeedFilter(routeId);
+    if (communityFeedIsOpen()) revealCommunityOpen(routeId);
+    return true;
+}
+
 /** Set the open position in this turn, before the tab paints. */
 export function parkCommunityOpen() {
     const scroller = communityFeedScroller();
     if (!scroller) return;
-    scroller.classList.add('is-parking');
     const routeId = communityOpenAnchor?.routeId
         || communityPreloadRoute
         || document.getElementById('community-route-select')?.value
+        || getLastCommunityRoom()
         || '';
-    if (!routeId || !isCommunityWarm(routeId)) {
-        setCommunityRoomLoading(true);
-        return;
-    }
-    revealCommunityOpen(routeId);
+    try {
+        if (routeId && (isCommunityWarm(routeId) || paintCachedRoomNow(routeId))) {
+            if (isCommunityWarm(routeId)) revealCommunityOpen(routeId);
+            return;
+        }
+    } catch { /* a bad saved room still opens from the live sync */ }
+    scroller.classList.add('is-parking');
+    setCommunityRoomLoading(true);
 }
 
 function bindCommunityFeedPin() {
@@ -4236,8 +4299,10 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
     const titleEl = document.getElementById('community-route-title');
     if (!listEl) return;
     if (communityFeedIsOpen() && routeId && communityOpenAnchor?.routeId && communityOpenAnchor.routeId !== routeId) {
-        armCommunityParking();
         stopRealtimePosts();
+        if (!paintCachedRoomNow(routeId)) armCommunityParking();
+    } else if (communityFeedIsOpen() && routeId) {
+        paintCachedRoomNow(routeId);
     }
     try { await fetchFeatures(); } catch { /* defaults */ }
     if (!communityRoomAllowed(routeId)) routeId = resolveCommunityRoute('');
@@ -4967,11 +5032,12 @@ async function openRouteCommunityNow(opts = {}) {
 
     revealSeoCommunityGuestHint(guestHint);
     prepareCommunityOpen(activeRoute);
-    armCommunityParking();
     const warm = isCommunityWarm(activeRoute);
     if (warm) {
         applyFeedFilter(activeRoute);
         revealCommunityOpen(activeRoute);
+    } else if (!paintCachedRoomNow(activeRoute)) {
+        armCommunityParking();
     }
 
     publishOwnCommunityName();
@@ -5410,6 +5476,13 @@ export function bindCommunityUi() {
         e.preventDefault();
         clearCommunitySelection();
     });
+    document.getElementById('community-deleted-sheet-close')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeDeletedCommunitySheet();
+    });
+    document.getElementById('community-deleted-sheet')?.addEventListener('click', (e) => {
+        if (e.target?.id === 'community-deleted-sheet') closeDeletedCommunitySheet();
+    });
     document.getElementById('community-composer-speak')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -5847,6 +5920,17 @@ export function bindCommunityUi() {
             } catch (err) {
                 showToast(err?.message || 'Could not delete this message.', 'error');
             }
+            return;
+        }
+
+        const sheetDeleted = t.closest?.('.community-sheet-deleted-view');
+        if (sheetDeleted) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const target = communityActionTarget();
+            closeReactionSheet();
+            document.getElementById('community-select-menu')?.classList.add('hidden');
+            void showDeletedCommunityMessage(target.post, target.routeId);
             return;
         }
 

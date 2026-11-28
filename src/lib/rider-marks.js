@@ -508,7 +508,12 @@ export async function publishPublicProfile(extra = {}) {
         else if (!showPhoto) body.photoURL = null;
         if (emoji) body.avatarEmoji = emoji;
         else if (extra.avatarEmoji != null) body.avatarEmoji = null;
-        const created = Number(remote?.createdAt) || Number(extra.createdAt) || 0;
+        const authRaw = window.firebaseAuth?.currentUser?.metadata?.creationTime;
+        const fromAuth = authRaw ? Date.parse(authRaw) : 0;
+        const stamps = [remote?.createdAt, extra.createdAt, fromAuth]
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value) && value > 0);
+        const created = stamps.length ? Math.min(...stamps) : 0;
         if (created > 0) body.createdAt = created;
         const name = String(extra.displayName || remote?.displayName || '').trim();
         if (name) body.displayName = name.slice(0, 80);

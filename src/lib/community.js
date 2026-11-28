@@ -2015,6 +2015,49 @@ function accountCreatedMs() {
     return Number.isFinite(ms) && ms > 0 ? ms : 0;
 }
 
+async function ensurePublicJoined(uid) {
+    const id = String(uid || '').trim();
+    if (!id) return 0;
+    const have = Number(publicProfiles.get(id)?.createdAt) || 0;
+    if (have > 0) return have;
+    const acct = $account.get();
+    const own = acct?.status === 'signed-in' && acct.uid === id;
+    let ms = own ? accountCreatedMs() : 0;
+    if (!ms && isAdminAuthed()) {
+        try {
+            const q = await authQuery();
+            if (q) {
+                const res = await fetch(`${DYNAMIC_BASE_URL}users/${encodeURIComponent(id)}.json${q}`);
+                if (res.ok) {
+                    const row = await res.json();
+                    const stamps = [row?.accountCreatedAt, row?.createdAt]
+                        .map((value) => Number(value))
+                        .filter((value) => Number.isFinite(value) && value > 0);
+                    if (stamps.length) ms = Math.min(...stamps);
+                }
+            }
+        } catch { /* the public card still asks the worker */ }
+    }
+    if (!ms) {
+        try {
+            const base = communityWorkerBase();
+            if (base) {
+                const res = await fetch(`${base}/community/joined?uid=${encodeURIComponent(id)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const created = Number(data?.createdAt) || 0;
+                    if (created > 0) ms = created;
+                }
+            }
+        } catch { /* the name still shows */ }
+    }
+    if (ms > 0) {
+        const prev = publicProfiles.get(id) || {};
+        publicProfiles.set(id, { ...prev, createdAt: ms, missing: false, fetchedAt: prev.fetchedAt || Date.now() });
+    }
+    return ms;
+}
+
 function formatJoinedDate(ms) {
     const n = Number(ms);
     if (!n) return '';
@@ -2099,8 +2142,8 @@ function openPublicProfileCard(uid) {
     if (sheet.classList.contains('hidden')) openSmoothModal('community-profile-card');
     placeSheetAboveNav(sheet);
     requestAnimationFrame(() => placeSheetAboveNav(sheet));
-    loadPublicProfiles([id]).then((changed) => {
-        if (!changed || !sheet.isConnected || sheet.classList.contains('hidden')) return;
+    loadPublicProfiles([id]).catch(() => false).then(() => ensurePublicJoined(id)).then(() => {
+        if (!sheet.isConnected || sheet.classList.contains('hidden')) return;
         paintPublicProfileCard(id);
     }).catch(() => {});
 }
@@ -3083,8 +3126,10 @@ async function loadPublicProfiles(uids) {
             if (row.displayName) rememberPublicName(uid, row.displayName, Number(row.updatedAt) || Date.now());
             if (Number(row.points) > 0) rememberPublicPoints(uid, row.points);
             else if ((bestPublicPoints.get(uid) || 0) > Number(row.points || 0)) hintPublicPoints(uid, bestPublicPoints.get(uid));
+            const prev = publicProfiles.get(uid);
             publicProfiles.set(uid, {
                 ...row,
+                createdAt: Number(row.createdAt) || Number(prev?.createdAt) || 0,
                 missing: !data,
                 fetchedAt: Date.now(),
             });
@@ -5777,7 +5822,7 @@ export function bindCommunityUi() {
 
         const profileHit = t.closest?.('#community-profile-card')
             ? null
-            : t.closest?.('.community-avatar, .community-bubble-name, .community-bubble-name-row, [data-community-react-person]');
+            : t.closest?.('.community-avatar:not(.community-avatar-spacer), .community-bubble-name, [data-community-react-person]');
         if (profileHit && !t.closest?.('.cm-options-toggle, .cm-message-tools, .fb-version-chip, [data-admin-changelog]') && Date.now() >= reactionGuardUntil) {
             const person = t.closest?.('[data-community-react-person]');
             const row = t.closest?.('.community-post-row');

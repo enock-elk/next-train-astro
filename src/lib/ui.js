@@ -2468,7 +2468,7 @@ export function setImmersiveChrome(on) {
     });
 }
 
-/** Reactions and the emoji tray belong to Community. Leaving the tab hides them. */
+/** Community sheets belong to that tab. Leaving it hides reactions and the account card. */
 function dismissCommunityTabSheets() {
     const tray = document.getElementById('community-reaction-sheet');
     if (tray) {
@@ -2477,6 +2477,10 @@ function dismissCommunityTabSheets() {
     }
     hideFixedModal('community-reactions-modal');
     hideFixedModal('community-attach-modal');
+    const profileCard = document.getElementById('community-profile-card');
+    const profileSheet = profileCard?.querySelector('[data-sheet-card]');
+    if (profileSheet) profileSheet.style.transform = '';
+    hideFixedModal('community-profile-card');
     if (location.hash === '#community-reactions') {
         try { history.replaceState(history.state || { tab: 'community' }, '', '#community'); } catch { /* ignore */ }
     }
@@ -3781,6 +3785,7 @@ function bindBlurBackdropDismiss() {
 const BOTTOM_SHEET_CLOSE = {
     'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
     'community-reactions-modal': () => closeSmoothModal('community-reactions-modal'),
+    'community-profile-card': () => closeSmoothModal('community-profile-card'),
     'inbox-reactions-modal': () => closeSmoothModal('inbox-reactions-modal'),
     'alerts-reaction-breakdown': () => window.__ntHideAlertReactionBreakdown?.(),
     'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),

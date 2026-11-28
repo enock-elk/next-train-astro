@@ -1758,6 +1758,18 @@ async function lookupAuthAccountName(env, uid) {
     };
 }
 
+/** The day on the public card. The earliest stamp we still have for that account. */
+export function publicJoinedMs({ profile, user, directory, auth } = {}) {
+    return earliestAccountMs(
+        profile?.createdAt,
+        user?.accountCreatedAt,
+        user?.createdAt,
+        directory?.accountCreatedAt,
+        directory?.createdAt,
+        auth?.createdAt,
+    );
+}
+
 function earliestAccountMs(...values) {
     const nums = values.map((value) => Number(value)).filter((n) => Number.isFinite(n) && n > 1e11);
     return nums.length ? Math.min(...nums) : 0;
@@ -2493,6 +2505,28 @@ async function handleCommunityDelete(request, env) {
     }
 }
 
+async function handlePublicJoined(request, env) {
+    const uid = String(new URL(request.url).searchParams.get('uid') || '').trim();
+    if (!isSafeRtdbKey(uid) || uid.length > 128) return json(env, request, 400, { createdAt: 0 });
+    if (!hasFirebaseAdminEnv(env)) return json(env, request, 200, { createdAt: 0 });
+    const profile = await rtdbGet(env, `public_profile/${uid}`).catch(() => null);
+    const have = Number(profile?.createdAt) || 0;
+    if (have > 1e11) return json(env, request, 200, { createdAt: have });
+    const [user, directory] = await Promise.all([
+        rtdbGet(env, `users/${uid}`).catch(() => null),
+        rtdbGet(env, `account_directory/${uid}`).catch(() => null),
+    ]);
+    let ms = publicJoinedMs({ profile, user, directory });
+    if (!ms) {
+        const auth = await lookupAuthAccountName(env, uid).catch(() => null);
+        ms = publicJoinedMs({ profile, user, directory, auth });
+    }
+    if (ms && profile && typeof profile === 'object') {
+        await rtdbUpdate(env, { [`public_profile/${uid}/createdAt`]: ms }).catch(() => {});
+    }
+    return json(env, request, 200, { createdAt: ms || 0 });
+}
+
 export default {
     async fetch(request, env) {
         if (request.method === 'OPTIONS') {
@@ -2501,6 +2535,9 @@ export default {
         const url = new URL(request.url);
         if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
             return json(env, request, 200, { ok: true, service: 'nexttrain-community' });
+        }
+        if (request.method === 'GET' && url.pathname === '/community/joined') {
+            return handlePublicJoined(request, env);
         }
         if (request.method === 'POST' && url.pathname === '/alerts/image') {
             return handleAlertImageUpload(request, env);

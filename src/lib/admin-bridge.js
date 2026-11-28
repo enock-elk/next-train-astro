@@ -50,6 +50,7 @@ import {
     seriesTrend,
     viewabilityTrend,
 } from '../../workers/nexttrain-telemetry/chart-math.js';
+import { adRevenueRangeBounds, adRevenueRangeChoices } from './ad-range.js';
 import { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl } from './link-preview.js';
 import {
     alertDraftFromBriefCard,
@@ -171,6 +172,7 @@ export function exposeAdminGlobals() {
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
     window.ntAdChartAlign = { adSpanForLabels, alignAdSeries, equivalentPeriodTrend, equivalentViewability, seriesTrend, viewabilityTrend };
+    window.ntAdRange = { adRevenueRangeBounds, adRevenueRangeChoices };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl, listHttpUrls, samePreviewUrl };
     window.samePreviewUrl = samePreviewUrl;
     window.ntOperatorBrief = {

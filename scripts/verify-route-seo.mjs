@@ -449,6 +449,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!communityBlock.includes('data-seo-community-open') || !communityBlock.includes('Tap to open this room')) {
     fail('route community preview opens like the station map');
   }
+  if (!communityBlock.includes('renderTextWithShareChips(body, { asLink: true })')) {
+    fail('route community preview shows trip links as the in-app chips');
+  }
   const gridSrc = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
   if (!gridSrc.includes("link.view === 'community'") || !gridSrc.includes("noteDeeplinkSurface('community'")) {
     fail('community handoff must open the room before Welcome can swallow it');

@@ -247,6 +247,8 @@ const rendered = renderTextWithShareChips('See https://nexttrain.co.za/og/share?
 const visible = rendered.replace(/<[^>]+>/g, '');
 ok(rendered.includes('JHB ↔ Randfontein') && rendered.includes('Saturday') && !visible.includes('https://'), 'the pasted timetable URL is replaced by the route chip');
 ok(rendered.includes('data-share-url='), 'the route chip stays clickable');
+const seoShare = renderTextWithShareChips('https://nexttrain.co.za/og/share?plan=AKASIABOOM%7EWALTOO&t=16%3A05&d=wd&r=GP', { asLink: true });
+ok(seoShare.startsWith('<a class="community-share-chip"') && seoShare.includes('Akasiaboom → Waltoo • 16:05') && !seoShare.replace(/<[^>]+>/g, '').includes('https://'), 'an SEO community preview uses the same trip chip as the app');
 const communityLink = renderTextWithShareChips('See https://nexttrain.co.za/og/c/jhb-germiston/cp_mwn84zjm_4cze9f');
 ok(communityLink.includes('nt-community-share-card'), 'a community message link becomes a text card');
 ok(communityLink.includes('data-community-share-route="jhb-germiston"'), 'the card keeps the room');

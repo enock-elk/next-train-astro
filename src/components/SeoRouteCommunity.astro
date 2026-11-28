@@ -18,10 +18,11 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
       <a href={communityHref} class="seo-room-lead-link">Open Next Train for this route</a>.
     </p>
     <figure class="seo-room-frame">
-      <button
-        type="button"
+      <div
         class="seo-room-open"
         data-seo-community-open
+        role="button"
+        tabindex="0"
         aria-label={`Open the ${routeName} community room`}
       >
         <div class="seo-room-stage">
@@ -56,7 +57,7 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
             Tap to open this room
           </span>
         </div>
-      </button>
+      </div>
       <figcaption class="seo-room-caption">
         {routeName} on Community. Messages update on this page. Open the room to read and reply.
       </figcaption>
@@ -402,6 +403,8 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
 </style>
 
 <script>
+  import { renderTextWithShareChips } from '../lib/share-chips.js';
+
   function bindSeoCommunity() {
     const root = document.querySelector('[data-seo-community]');
     const overlay = document.getElementById('seo-community-lightbox');
@@ -466,7 +469,7 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
         <div class="community-avatar"><span class="community-avatar-disc" style="--nt-avatar:${ink}">${avatar}</span></div>
         <div class="seo-room-bubble">
           <div class="seo-room-name" style="color:${ink}"><span>${esc(name)}</span>${when ? `<time>${esc(when)}</time>` : ''}</div>
-          <p class="seo-room-text">${esc(body)}</p>
+          <p class="seo-room-text">${renderTextWithShareChips(body, { asLink: true })}</p>
         </div>
       </div>`;
     };
@@ -558,9 +561,15 @@ const { routeId = '', routeName = 'this route', communityHref = '/' } = Astro.pr
     };
 
     document.querySelectorAll('[data-seo-community-open]').forEach((el) => {
-      el.addEventListener('click', (e) => {
+      const openFromFrame = (e) => {
+        if (e.target.closest?.('a')) return;
         e.preventDefault();
         openRoom();
+      };
+      el.addEventListener('click', openFromFrame);
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        openFromFrame(e);
       });
     });
     overlay.querySelectorAll('[data-seo-community-close]').forEach((btn) => {

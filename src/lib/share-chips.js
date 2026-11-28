@@ -332,17 +332,24 @@ export function hydrateAlertShareCards(root) {
     });
 }
 
-export function shareChipHtml(href) {
+export function shareChipHtml(href, opts = null) {
     const described = describeShareUrl(href);
     if (!described) return '';
-    return `<button type="button" class="community-share-chip" data-share-url="${escapeAttr(described.href)}" data-share-kind="${described.kind}">${escapeAttr(described.label)}</button>`;
+    const label = escapeAttr(described.label);
+    const url = escapeAttr(described.href);
+    const kind = escapeAttr(described.kind);
+    if (opts?.asLink) {
+        return `<a class="community-share-chip" href="${url}" data-share-url="${url}" data-share-kind="${kind}">${label}</a>`;
+    }
+    return `<button type="button" class="community-share-chip" data-share-url="${url}" data-share-kind="${kind}">${label}</button>`;
 }
 
 const URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
 /** Escape plain text and turn Next Train shares into chips. Other https links stay links. */
-export function renderTextWithShareChips(text) {
+export function renderTextWithShareChips(text, opts = null) {
     const raw = String(text || '');
+    const asLink = !!opts?.asLink;
     let html = '';
     let last = 0;
     for (const match of raw.matchAll(URL_RE)) {
@@ -350,9 +357,9 @@ export function renderTextWithShareChips(text) {
         const url = full.replace(/[),.;]+$/, '');
         const trail = full.slice(url.length);
         html += escapeAttr(raw.slice(last, match.index));
-        const alert = alertShareFromHref(url);
-        const communityCard = communityShareCardHtml(url);
-        const chip = alert ? alertShareCardHtml(url, alert) : (communityCard || shareChipHtml(url));
+        const alert = asLink ? null : alertShareFromHref(url);
+        const communityCard = asLink ? '' : communityShareCardHtml(url);
+        const chip = alert ? alertShareCardHtml(url, alert) : (communityCard || shareChipHtml(url, opts));
         if (chip) html += chip;
         else if (/^https:\/\//i.test(url)) {
             html += `<a class="community-msg-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeAttr(url.replace(/^https:\/\//, ''))}</a>`;
@@ -442,7 +449,7 @@ if (typeof window !== 'undefined' && !window.__ntShareChipBound) {
             return;
         }
         const chip = event.target?.closest?.('.community-share-chip');
-        if (!chip) return;
+        if (!chip || chip.tagName === 'A') return;
         event.preventDefault();
         event.stopPropagation();
         chip.closest('.community-post-row')?.classList.remove('is-pressing');

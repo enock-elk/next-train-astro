@@ -20,6 +20,7 @@ import {
     seriesTrend,
     viewabilityTrend,
 } from '../workers/nexttrain-telemetry/chart-math.js';
+import { adRevenueRangeBounds, adRevenueRangeChoices } from '../src/lib/ad-range.js';
 import {
     assignReportingDevice,
     countsForDay,
@@ -557,6 +558,16 @@ ok(mergedAds.series.length === 2 && mergedAds.geos[0].hits === 150, 'stitched ad
 ok(!workerJs.includes('ZmI0MWI3') && !workerJs.includes('cleverwebserver.com/dashboard'), 'the Clever dashboard token is not in the worker');
 ok(workerJs.includes("url.pathname === '/admin/ads'") && workerJs.includes('CLEVER_SCRIPT_ID'), 'ad stats are an admin route that reads the worker secret');
 ok(adminJs.includes("adPanel.id = 'ad-revenue-panel'") && adminJs.includes('loadAdRevenue'), 'live telemetry draws its own ad revenue search');
+ok(adminJs.includes('id="ad-revenue-range"') && adminJs.includes('adRevenueRangeChoices') && !adminJs.includes('data-ad-preset='), 'ad revenue uses one range menu instead of month pills');
+const novChoices = adRevenueRangeChoices('2026-11-28');
+ok(novChoices[0].label === 'All' && novChoices[1].label === 'This month' && novChoices[2].label === 'Last month', 'the ad menu starts with All, this month, and last month');
+ok(novChoices.at(-1).label === 'May 2026' && !novChoices.some((row) => row.label === 'November 2026' || row.label === 'October 2026'), 'named months stop at May 2026 and leave this month and last month unlabelled');
+const decChoices = adRevenueRangeChoices('2026-12-01');
+ok(decChoices.some((row) => row.id === '2026-10') && decChoices.at(-1).id === '2026-05' && decChoices[1].label === 'This month', '1 December adds the month before last by name and keeps This month for December');
+const novBounds = adRevenueRangeBounds('month', '2026-11-28', '');
+ok(novBounds.start === '2026-11-01' && novBounds.end === '2026-11-28', 'This month runs from the first of the month through today');
+const mayBounds = adRevenueRangeBounds('2026-05', '2026-11-28', '');
+ok(mayBounds.start === '2026-05-01' && mayBounds.end === '2026-05-31', 'a named month is that whole month');
 ok(adminJs.includes('$4 CPM') && adminJs.includes('api.frankfurter.dev') && adminJs.includes('open.er-api.com'), 'revenue and the $4 CPM deal convert with an open dollar rate');
 ok(adminJs.includes('analytics-trend-ads') && adminJs.includes('data-chart-action="ads"') && adminJs.includes('alignAdSeries') && adminJs.includes('showAdOverlay'), 'the full graph can draw ad counts for the same buckets');
 ok(adminJs.includes('analytics-trend-total') && adminJs.includes('data-chart-action="total"') && adminJs.includes('cumulativeSeries') && adminJs.includes('telemetryCumulative = false'), 'the full graph can add up the buckets on screen and resets that when the range changes');
@@ -569,6 +580,7 @@ ok(adminJs.includes("showToast(Admin._telemetryLoadToast") && adminJs.includes('
 const bridgeJs = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
 const toastJs = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
 ok(bridgeJs.includes('window.ntAdChartAlign'), 'the chart align helpers are on the admin bridge');
+ok(bridgeJs.includes('window.ntAdRange'), 'the ad range menu is on the admin bridge');
 ok(toastJs.includes('options.untilDismiss') && toastJs.includes('untilDismiss'), 'a loading toast can stay until it is dismissed');
 ok(isoWeekKey('2026-01-01') === '202601', '1 Jan 2026 is ISO week 202601');
 const week = isoWeekKey('2026-11-10');

@@ -4903,11 +4903,15 @@ const Admin = {
                         <input id="ad-revenue-start" type="date" class="${field}" aria-label="From">
                         <input id="ad-revenue-end" type="date" class="${field}" aria-label="To">
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button type="button" data-ad-preset="month" class="${pill}">This month</button>
-                        <button type="button" data-ad-preset="last" class="${pill}">Last month</button>
-                        <button type="button" data-ad-preset="all" class="${pill}">All</button>
-                        <button type="button" id="ad-revenue-search" class="${pill} ml-auto bg-blue-600 text-white border-blue-600">Search</button>
+                    <div class="flex items-center gap-2">
+                        <div class="relative min-w-0 flex-1" id="ad-revenue-range">
+                            <button type="button" id="ad-revenue-range-btn" class="w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] font-semibold text-gray-800 dark:text-gray-100 flex items-center justify-between gap-2 focus:outline-none" aria-haspopup="listbox" aria-expanded="false" aria-controls="ad-revenue-range-list">
+                                <span id="ad-revenue-range-label" class="truncate">This month</span>
+                                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <ul id="ad-revenue-range-list" class="absolute z-[200] left-0 right-0 mt-1 hidden max-h-60 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl text-left" role="listbox"></ul>
+                        </div>
+                        <button type="button" id="ad-revenue-search" class="${pill} shrink-0 bg-blue-600 text-white border-blue-600">Search</button>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div id="ad-revenue-value-tile" role="button" tabindex="0" class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-center cursor-pointer hover:border-blue-400" title="Tap to convert to rands">
@@ -4941,26 +4945,76 @@ const Admin = {
                 const endInput = document.getElementById('ad-revenue-end');
                 if (startInput) startInput.value = `${today.slice(0, 8)}01`;
                 if (endInput) endInput.value = today;
-                adPanel.addEventListener('click', (event) => {
-                    const preset = event.target?.closest?.('[data-ad-preset]')?.getAttribute('data-ad-preset');
-                    if (!preset) return;
-                    const end = Admin.johannesburgDayOffset(0);
-                    if (preset === 'month') {
-                        if (startInput) startInput.value = `${end.slice(0, 8)}01`;
-                        if (endInput) endInput.value = end;
-                    } else if (preset === 'last') {
-                        const [y, m] = end.split('-').map(Number);
-                        const first = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
-                        const last = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
-                        if (startInput) startInput.value = first;
-                        if (endInput) endInput.value = last;
-                    } else if (preset === 'all') {
-                        if (startInput) startInput.value = Admin._adFirstHit || '2026-01-01';
-                        if (endInput) endInput.value = end;
+                const rangeBtn = document.getElementById('ad-revenue-range-btn');
+                const rangeList = document.getElementById('ad-revenue-range-list');
+                const rangeLabel = document.getElementById('ad-revenue-range-label');
+                const paintAdRange = (selected) => {
+                    const today = Admin.johannesburgDayOffset(0);
+                    const choices = window.ntAdRange?.adRevenueRangeChoices?.(today) || [
+                        { id: 'all', label: 'All' },
+                        { id: 'month', label: 'This month' },
+                        { id: 'last', label: 'Last month' },
+                    ];
+                    if (rangeLabel) {
+                        rangeLabel.textContent = choices.find((row) => row.id === selected)?.label || 'Custom';
                     }
+                    if (!rangeList) return;
+                    rangeList.innerHTML = choices.map((row) => {
+                        const on = row.id === selected;
+                        return `<li><button type="button" class="w-full text-left px-3 py-2 text-[12px] font-semibold ${on ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200' : 'text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'}" role="option" aria-selected="${on ? 'true' : 'false'}" data-ad-range="${row.id}">${row.label}</button></li>`;
+                    }).join('');
+                };
+                const applyAdRange = (id) => {
+                    const today = Admin.johannesburgDayOffset(0);
+                    const bounds = window.ntAdRange?.adRevenueRangeBounds?.(id, today, Admin._adFirstHit || '');
+                    if (!bounds) return;
+                    Admin._adRangeId = id;
+                    if (startInput) startInput.value = bounds.start;
+                    if (endInput) endInput.value = bounds.end;
+                    paintAdRange(id);
+                    Admin.loadAdRevenue();
+                };
+                Admin._adRangeId = 'month';
+                paintAdRange('month');
+                rangeBtn?.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!rangeList) return;
+                    const open = rangeList.classList.toggle('hidden') === false;
+                    rangeBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                rangeList?.addEventListener('click', (event) => {
+                    const id = event.target?.closest?.('[data-ad-range]')?.getAttribute('data-ad-range');
+                    if (!id) return;
+                    event.preventDefault();
+                    rangeList.classList.add('hidden');
+                    rangeBtn?.setAttribute('aria-expanded', 'false');
+                    applyAdRange(id);
+                });
+                if (!window.__ntAdRangeCloser) {
+                    window.__ntAdRangeCloser = true;
+                    document.addEventListener('click', (event) => {
+                        const box = document.getElementById('ad-revenue-range');
+                        const list = document.getElementById('ad-revenue-range-list');
+                        const btn = document.getElementById('ad-revenue-range-btn');
+                        if (!box || !list || list.classList.contains('hidden')) return;
+                        if (box.contains(event.target)) return;
+                        list.classList.add('hidden');
+                        btn?.setAttribute('aria-expanded', 'false');
+                    });
+                }
+                document.getElementById('ad-revenue-search')?.addEventListener('click', () => {
+                    const today = Admin.johannesburgDayOffset(0);
+                    const bounds = window.ntAdRange?.adRevenueRangeBounds?.(Admin._adRangeId || 'month', today, Admin._adFirstHit || '');
+                    const same = !!(bounds && startInput?.value === bounds.start && endInput?.value === bounds.end);
+                    if (!same) {
+                        Admin._adRangeId = 'custom';
+                        if (rangeLabel) rangeLabel.textContent = 'Custom';
+                    }
+                    rangeList?.classList.add('hidden');
+                    rangeBtn?.setAttribute('aria-expanded', 'false');
                     Admin.loadAdRevenue();
                 });
-                document.getElementById('ad-revenue-search')?.addEventListener('click', () => Admin.loadAdRevenue());
                 const bindMoney = (id, which) => {
                     const tile = document.getElementById(id);
                     if (!tile) return;

@@ -21,7 +21,7 @@ import {
     sanitizeCommunityBucketImageUrl,
     sanitizeCommunityLinkUrl,
 } from '../src/lib/community-policy.js';
-import { buildDeletedAccountRecord, sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
+import { buildDeletedAccountRecord, publicJoinedMs, sanitizeAdminBody, sanitizeBody } from '../workers/nexttrain-community/worker.js';
 import { ALERT_POSTER_MAX, collectNoticeImageUrls, layoutAlertPost } from '../src/lib/alerts-feed.js';
 
 assert.equal(COMMUNITY_BUCKET_DEPTH, 80);
@@ -141,6 +141,15 @@ assert.equal(deletedAccount.uid, 'uid-oldest');
 assert.equal(deletedAccount.status, 'done');
 assert.equal(deletedAccount.accountCreatedAt, 1690000000000);
 assert.equal(deletedAccount.createdAt, 1690000000000);
+assert.equal(publicJoinedMs({
+    profile: {},
+    user: { accountCreatedAt: 1700000000000, createdAt: 1710000000000 },
+    directory: { createdAt: 1695000000000 },
+}), 1695000000000);
+assert.match(worker, /pathname === '\/community\/joined'/);
+assert.match(community, /ensurePublicJoined/);
+assert.match(community, /community-avatar:not\(\.community-avatar-spacer\)/);
+assert.doesNotMatch(community, /community-bubble-name-row, \[data-community-react-person\]/);
 assert.match(worker, /pathname === '\/community\/image'/);
 assert.match(worker, /env\.COMMUNITY_IMAGES/, 'community photos use their own R2 binding');
 assert.doesNotMatch(worker.slice(worker.indexOf('async function storeCommunityImageBytes'), worker.indexOf('async function placeCommunityImage')), /ALERT_IMAGES/, 'community photo bytes are not written to the alerts bucket');
